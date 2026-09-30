@@ -5,3 +5,9 @@ First-party source, player and agent integrations use PolyForm Shield 1.0.0.
 The licence terms are included in LICENSE.
 Third-party components retain their own licences and notices.
 Previously published SDK and plugin artifacts retain their distributed terms.
+
+The README header contains outlined glyphs from Outfit and JetBrains Mono.
+Outfit: Copyright 2021 The Outfit Project Authors.
+JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors.
+Both are licensed under the SIL Open Font License 1.1; see
+assets/readme-font-licenses/ for their licence texts.

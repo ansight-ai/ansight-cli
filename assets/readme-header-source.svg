@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title description">
+  <!-- Editable source. The published header outlines text in the website fonts. -->
+  <title id="title">Ansight — agents that verify their own work</title>
+  <desc id="description">A branded illustration of an app session replay beside screenshots, logs, network activity, and a timeline.</desc>
+  <defs>
+    <clipPath id="screen">
+      <rect x="690" y="114" width="148" height="225" rx="13"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1200" height="420" fill="#f5f5ef"/>
+  <rect x="0" y="0" width="1200" height="6" fill="#fa441f"/>
+  <path d="M0 58H1200M0 364H1200" stroke="#d8d6cd"/>
+
+  <text x="54" y="42" fill="#fa441f" font-family="Outfit, Arial, sans-serif" font-size="30" font-weight="700">ansight</text>
+  <text x="1146" y="38" text-anchor="end" fill="#6c6c73" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="700">MOBILE RUNTIME EVIDENCE</text>
+
+  <text x="54" y="130" fill="#202024" font-family="Outfit, Arial, sans-serif" font-size="52" font-weight="700">Agents that verify</text>
+  <text x="54" y="186" fill="#202024" font-family="Outfit, Arial, sans-serif" font-size="52" font-weight="700">their own work.</text>
+  <rect x="54" y="210" width="178" height="29" fill="#fa441f"/>
+  <text x="66" y="230" fill="#ffffff" font-family="JetBrains Mono, Menlo, monospace" font-size="13" font-weight="700">WITH EVIDENCE</text>
+  <text x="54" y="276" fill="#515159" font-family="Outfit, Arial, sans-serif" font-size="20">Capture every connected run. Replay what happened.</text>
+  <text x="54" y="305" fill="#515159" font-family="Outfit, Arial, sans-serif" font-size="20">Hand the proof to your team or agent.</text>
+
+  <rect x="647" y="84" width="491" height="264" rx="3" fill="#ffffff" stroke="#202024" stroke-width="2"/>
+  <rect x="647" y="84" width="491" height="29" fill="#202024"/>
+  <circle cx="665" cy="99" r="4" fill="#fa441f"/>
+  <circle cx="680" cy="99" r="4" fill="#77777d"/>
+  <circle cx="695" cy="99" r="4" fill="#77777d"/>
+  <text x="1122" y="103" text-anchor="end" fill="#ecece7" font-family="JetBrains Mono, Menlo, monospace" font-size="10">SESSION REPLAY</text>
+
+  <rect x="688" y="112" width="152" height="229" rx="15" fill="#202024"/>
+  <rect x="690" y="114" width="148" height="225" rx="13" fill="#e9eee8"/>
+  <g clip-path="url(#screen)">
+    <path d="M680 183C731 142 770 161 846 144M669 262C743 213 794 245 854 201M718 105C716 201 756 251 789 353M806 106C793 176 788 252 834 349" fill="none" stroke="#bdc9bd" stroke-width="9"/>
+    <path d="M680 183C731 142 770 161 846 144M669 262C743 213 794 245 854 201M718 105C716 201 756 251 789 353M806 106C793 176 788 252 834 349" fill="none" stroke="#ffffff" stroke-width="5"/>
+    <circle cx="764" cy="206" r="16" fill="#fa441f" opacity=".18"/>
+    <circle cx="764" cy="206" r="8" fill="#fa441f"/>
+    <path d="M695 281H832V330H695Z" fill="#ffffff"/>
+    <rect x="707" y="292" width="78" height="7" rx="3" fill="#202024"/>
+    <rect x="707" y="307" width="110" height="5" rx="2" fill="#a8aaa6"/>
+  </g>
+  <rect x="743" y="118" width="41" height="5" rx="2" fill="#202024"/>
+
+  <text x="860" y="139" fill="#202024" font-family="Outfit, Arial, sans-serif" font-size="16" font-weight="700">What happened</text>
+  <text x="860" y="160" fill="#6c6c73" font-family="JetBrains Mono, Menlo, monospace" font-size="10">00:18 — 00:42  /  TEST SESSION</text>
+  <path d="M860 190H1108" stroke="#d8d6cd" stroke-width="2"/>
+  <path d="M860 190H971" stroke="#fa441f" stroke-width="4"/>
+  <path d="M952 179V201" stroke="#fa441f" stroke-width="2"/>
+  <circle cx="952" cy="190" r="5" fill="#fa441f"/>
+  <circle cx="889" cy="190" r="3" fill="#202024"/>
+  <circle cx="1006" cy="190" r="3" fill="#202024"/>
+  <circle cx="1075" cy="190" r="3" fill="#202024"/>
+
+  <rect x="860" y="214" width="76" height="23" fill="#f5f5ef" stroke="#d8d6cd"/>
+  <text x="898" y="229" text-anchor="middle" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="10" font-weight="700">LOGS</text>
+  <rect x="943" y="214" width="93" height="23" fill="#f5f5ef" stroke="#d8d6cd"/>
+  <text x="989" y="229" text-anchor="middle" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="10" font-weight="700">NETWORK</text>
+  <rect x="1043" y="214" width="65" height="23" fill="#fa441f"/>
+  <text x="1075" y="229" text-anchor="middle" fill="#ffffff" font-family="JetBrains Mono, Menlo, monospace" font-size="10" font-weight="700">TREE</text>
+  <path d="M860 255H1108M860 280H1108M860 305H1108" stroke="#e6e4dc"/>
+  <circle cx="868" cy="267" r="3" fill="#fa441f"/>
+  <circle cx="868" cy="292" r="3" fill="#77777d"/>
+  <circle cx="868" cy="317" r="3" fill="#77777d"/>
+  <text x="880" y="271" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="10">tap  ·  Open guide</text>
+  <text x="880" y="296" fill="#515159" font-family="JetBrains Mono, Menlo, monospace" font-size="10">GET  /routes  ·  200</text>
+  <text x="880" y="321" fill="#515159" font-family="JetBrains Mono, Menlo, monospace" font-size="10">assert  ·  40 routes visible</text>
+
+  <text x="54" y="394" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="700">01 CAPTURE</text>
+  <circle cx="208" cy="390" r="3" fill="#fa441f"/>
+  <text x="231" y="394" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="700">02 REVIEW</text>
+  <circle cx="380" cy="390" r="3" fill="#fa441f"/>
+  <text x="403" y="394" fill="#202024" font-family="JetBrains Mono, Menlo, monospace" font-size="12" font-weight="700">03 TEST</text>
+  <text x="1146" y="394" text-anchor="end" fill="#6c6c73" font-family="JetBrains Mono, Menlo, monospace" font-size="11" font-weight="700">ANSIGHT.AI</text>
+</svg>
