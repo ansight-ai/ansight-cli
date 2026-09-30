@@ -42,7 +42,7 @@ public static class TaskUtilities
 	/// Attempts to await on the task and catches exception
 	/// </summary>
 	public static async void SafeFireAndForget(this Task task,
-		Action<Exception> onException = null,
+		Action<Exception>? onException = null,
 		bool continueOnCapturedContext = false,
 		[CallerMemberName] string context = "",
 		[CallerFilePath] string filePath = "")

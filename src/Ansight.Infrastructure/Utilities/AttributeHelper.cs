@@ -18,18 +18,19 @@ public static class AttributeHelper
     /// <summary>
     /// Gets the <typeparamref name="TAttribute"/> attribute on <paramref name="value"/>.
     /// </summary>
-    public static TAttribute GetAttribute<TAttribute>(Enum value, bool inherit = true) where TAttribute : Attribute
+    public static TAttribute? GetAttribute<TAttribute>(Enum value, bool inherit = true) where TAttribute : Attribute
     {
         var enumType = value.GetType();
         var name = Enum.GetName(enumType, value);
-        return enumType.GetField(name).GetCustomAttributes(false).OfType<TAttribute>().FirstOrDefault();
+        var field = name is null ? null : enumType.GetField(name);
+        return field?.GetCustomAttributes(inherit).OfType<TAttribute>().FirstOrDefault();
     }
 
     /// <summary>
     /// Gets the first <typeparamref name="TAttribute"/> attribute on <paramref name="type"/>.
     /// </summary>
     /// <returns>The attribute.</returns>
-    public static TAttribute GetAttribute<TAttribute>(Type type, bool inherit = true) where TAttribute : Attribute
+    public static TAttribute? GetAttribute<TAttribute>(Type type, bool inherit = true) where TAttribute : Attribute
     {
         var matches = type.GetCustomAttributes(typeof(TAttribute), inherit);
 
@@ -53,6 +54,7 @@ public static class AttributeHelper
     {
         var enumType = value.GetType();
         var name = Enum.GetName(enumType, value);
-        return enumType.GetField(name).GetCustomAttributes(false).OfType<TAttribute>().ToList();
+        var field = name is null ? null : enumType.GetField(name);
+        return field?.GetCustomAttributes(inherit).OfType<TAttribute>().ToList() ?? [];
     }
 }

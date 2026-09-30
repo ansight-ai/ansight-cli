@@ -7,13 +7,13 @@ namespace Ansight.Infrastructure.Utilities;
 public class TextInputDebouncer
 {
     private readonly Action<string, Exception> logError;
-    private readonly Func<string, Task> onText;
+    private readonly Func<string?, Task> onText;
     private readonly int debounceMilliseconds;
-    private volatile CancellationTokenSource searchThrottleCancelllationToken;
-    private volatile string latestSearchText;
+    private CancellationTokenSource? searchThrottleCancelllationToken;
+    private volatile string? latestSearchText;
 
     public TextInputDebouncer(Action<string, Exception> logError,
-        Func<string, Task> onText,
+        Func<string?, Task> onText,
         int debounceMilliseconds = 600)
     {
         this.logError = logError ?? throw new ArgumentNullException(nameof(logError));
@@ -21,12 +21,12 @@ public class TextInputDebouncer
         this.debounceMilliseconds = debounceMilliseconds;
     }
 
-    public async Task Debounce(string text)
+    public async Task Debounce(string? text)
     {
         try
         {
-            var oldToken =
-                Interlocked.Exchange(ref searchThrottleCancelllationToken, new CancellationTokenSource());
+            var currentToken = new CancellationTokenSource();
+            var oldToken = Interlocked.Exchange(ref searchThrottleCancelllationToken, currentToken);
 
             oldToken?.Cancel();
             oldToken?.Dispose();
@@ -35,7 +35,7 @@ public class TextInputDebouncer
             text = string.IsNullOrEmpty(text) ? null : text;
             latestSearchText = text;
 
-            await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), searchThrottleCancelllationToken.Token)
+            await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), currentToken.Token)
                 .ContinueWith(async task => await Filter(text),
                     CancellationToken.None,
                     TaskContinuationOptions.OnlyOnRanToCompletion,
@@ -55,7 +55,7 @@ public class TextInputDebouncer
         }
     }
 
-    private async Task Filter(string searchText)
+    private async Task Filter(string? searchText)
     {
         if (latestSearchText == searchText)
         {

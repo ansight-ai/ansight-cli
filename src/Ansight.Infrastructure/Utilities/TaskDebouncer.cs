@@ -5,7 +5,7 @@ public class TaskDebouncer
     private readonly Action<string, Exception> logError;
     private readonly Func<Task> onDebounce;
     private readonly int debounceMilliseconds;
-    private CancellationTokenSource searchThrottleCancellationToken;
+    private CancellationTokenSource? searchThrottleCancellationToken;
 
     public TaskDebouncer(Action<string, Exception> logError,
         Func<Task> onDebounce,
@@ -20,13 +20,13 @@ public class TaskDebouncer
     {
         try
         {
-            var oldToken =
-                Interlocked.Exchange(ref searchThrottleCancellationToken, new CancellationTokenSource());
+            var currentToken = new CancellationTokenSource();
+            var oldToken = Interlocked.Exchange(ref searchThrottleCancellationToken, currentToken);
 
             oldToken?.Cancel();
             oldToken?.Dispose();
 
-            await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), searchThrottleCancellationToken.Token)
+            await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), currentToken.Token)
                 .ContinueWith(async task => await onDebounce(),
                     CancellationToken.None,
                     TaskContinuationOptions.OnlyOnRanToCompletion,
