@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ansight.dev/schema/test-definition.v1.schema.json",
+  "title": "Ansight workspace test",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appId", "prompt", "validation"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "enabled": {
+      "description": "Whether this test may be executed. Defaults to true.",
+      "type": "boolean",
+      "default": true
+    },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "appId": { "type": "string", "minLength": 1 },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional repository task whose target metadata the CLI runner validates before executing this test."
+    },
+    "prompt": { "type": "string", "minLength": 1 },
+    "validation": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "anyOf": [
+            { "required": ["prompt"], "properties": { "prompt": { "minLength": 1 } } },
+            { "required": ["assertions"], "properties": { "assertions": { "minItems": 1 } } }
+          ],
+          "properties": {
+            "prompt": { "type": "string" },
+            "assertions": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "requiredSecrets": {
+      "description": "Aliases resolved from the app-scoped secret store first, then from environment variables with the exact same names.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    }
+  }
+}

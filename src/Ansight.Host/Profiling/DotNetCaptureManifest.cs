@@ -1,0 +1,25 @@
+namespace Ansight.Host.Profiling;
+
+public sealed record DotNetCaptureManifest(
+    string Schema,
+    string CaptureId,
+    string AppId,
+    string ApplicationPath,
+    string? Platform,
+    string? ArtifactKind,
+    string? LaunchAdapter,
+    string? DeviceId,
+    string CapturePreset,
+    int RequestedDurationSeconds,
+    string State,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset? StartedUtc,
+    DateTimeOffset? CompletedUtc,
+    string? StopReason,
+    string? FailureMessage,
+    string? DotNetTraceVersion,
+    string? DotNetDsRouterVersion,
+    string? AdbVersion,
+    string? XcodeVersion,
+    IReadOnlyList<DotNetCaptureArtifact> Artifacts,
+    IReadOnlyList<string> Warnings);

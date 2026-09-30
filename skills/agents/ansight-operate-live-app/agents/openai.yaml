@@ -1,0 +1,7 @@
+interface:
+  display_name: "Operate A Live Ansight App"
+  short_description: "Control a live app with structured evidence"
+  default_prompt: "Use $ansight-operate-live-app to connect to this app, interact through Ansight, and verify the resulting state with before-and-after evidence."
+
+policy:
+  allow_implicit_invocation: true

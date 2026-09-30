@@ -1,0 +1,22 @@
+<Project DefaultTargets="PreparePlayerAssets">
+  <PropertyGroup>
+    <AnsightCliRepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</AnsightCliRepositoryRoot>
+    <AnsightPlayerRepository Condition="'$(ANSIGHT_PLAYER_REPOSITORY)' != ''">$([System.IO.Path]::GetFullPath('$(ANSIGHT_PLAYER_REPOSITORY)', '$(AnsightCliRepositoryRoot)'))</AnsightPlayerRepository>
+    <AnsightPlayerRepository Condition="'$(AnsightPlayerRepository)' == ''">$(AnsightCliRepositoryRoot)/node_modules/@ansight/player</AnsightPlayerRepository>
+    <AnsightPlayerAssets>$([System.IO.Path]::GetFullPath('$(AnsightPlayerRepository)/dist/local', '$(AnsightCliRepositoryRoot)'))</AnsightPlayerAssets>
+    <AnsightEmbeddedPlayerAssets>$(AnsightCliRepositoryRoot)/src/Ansight.Host/Replay/Assets</AnsightEmbeddedPlayerAssets>
+  </PropertyGroup>
+
+  <Target Name="PreparePlayerAssets">
+    <Error Condition="!Exists('$(AnsightPlayerAssets)/session-replay.html') or !Exists('$(AnsightPlayerAssets)/session-replay.js') or !Exists('$(AnsightPlayerAssets)/session-replay.css')"
+           Text="Missing player build in $(AnsightPlayerAssets). Build ansight-player or install its release package with npm ci." />
+    <ItemGroup>
+      <PlayerAsset Include="$(AnsightPlayerAssets)/**/*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(AnsightEmbeddedPlayerAssets)" />
+    <MakeDir Directories="$(AnsightEmbeddedPlayerAssets)" />
+    <Copy SourceFiles="@(PlayerAsset)"
+          DestinationFiles="@(PlayerAsset->'$(AnsightEmbeddedPlayerAssets)/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Message Text="Embedded player assets prepared from $(AnsightPlayerRepository)" Importance="high" />
+  </Target>
+</Project>

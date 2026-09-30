@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ansight.dev/schemas/repository-task.v2.schema.json",
+  "title": "Ansight Repository Task Definition",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "default": 1,
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this task may be executed.",
+      "default": true
+    },
+    "appId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "keywords": {
+      "type": "array",
+      "description": "App-specific discovery terms and synonyms.",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "platforms": {
+      "type": "array",
+      "description": "Optional platforms on which this task is supported. The CLI test runner validates this metadata against its target.",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ios",
+          "android"
+        ]
+      }
+    },
+    "deviceKinds": {
+      "type": "array",
+      "description": "Optional device kinds on which this task is supported. The CLI test runner validates this metadata against its target.",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "virtual",
+          "physical"
+        ]
+      }
+    },
+    "frameworks": {
+      "type": "array",
+      "description": "Optional app frameworks on which this task is supported. The CLI test runner validates this metadata against the connected session.",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "dotnet-maui",
+          "dotnet-ios",
+          "dotnet-android",
+          "react-native",
+          "flutter",
+          "capacitor",
+          "ios-uikit",
+          "ios-swiftui",
+          "android-views",
+          "android-compose",
+          "native-unknown"
+        ]
+      }
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the object passed to invocation.input.",
+      "properties": {
+        "type": {
+          "const": "object"
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the value returned by the task function."
+    },
+    "hostTools": {
+      "type": "array",
+      "description": "Extra registered host tool names used through ansight.callTool. Standard typed APIs, including ansight.keyboard, do not need to be declared.",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300,
+      "default": 120
+    },
+    "maximumActions": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 64
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "appTools": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "title",
+    "description"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "requires"
+        ]
+      },
+      "then": {
+        "required": [
+          "schemaVersion"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
+    <AudioInjectionMacArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</AudioInjectionMacArchitecture>
+    <AudioInjectionMacArchitecture Condition="'$(RuntimeIdentifier)' == '' and '$(NETCoreSdkRuntimeIdentifier)' == 'osx-x64'">x86_64</AudioInjectionMacArchitecture>
+    <AudioInjectionMacArchitecture Condition="'$(AudioInjectionMacArchitecture)' == ''">arm64</AudioInjectionMacArchitecture>
+    <AudioInjectionMacNativeDirectory>$(MSBuildProjectDirectory)/obj/native-audio-injection/osx-$(AudioInjectionMacArchitecture)</AudioInjectionMacNativeDirectory>
+    <SimulatorAppIconHelper>$(MSBuildProjectDirectory)/obj/native-app-icon/$(AudioInjectionMacArchitecture)/ansight-app-icon-ios-simulator</SimulatorAppIconHelper>
+    <AudioInjectionMacNativeLibrary>$(AudioInjectionMacNativeDirectory)/libAnsightAudioInjection.dylib</AudioInjectionMacNativeLibrary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AnsightMapboxAccessToken" Value="$(AnsightMapboxAccessToken)" />
+    <AssemblyMetadata Include="AnsightPostHogProjectToken" Value="$(AnsightPostHogProjectToken)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ansight.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(AnsightProtocolProject)' != ''">
+    <ProjectReference Include="$(AnsightProtocolProject)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(AnsightProtocolProject)' == ''">
+    <PackageReference Include="Ansight.Protocol" Version="1.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent"
+                      Version="3.2.5"
+                      ExcludeAssets="build;buildTransitive" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.10" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.1" />
+    <PackageReference Include="System.ComponentModel.Composition" Version="7.0.0" />
+    <PackageReference Include="System.Formats.Nrbf" Version="10.0.10" />
+    <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
+    <PackageReference Include="System.Security.Permissions" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.provider.sqlite3" Version="3.0.5" />
+    <PackageReference Include="SQLitePCLRaw.provider.winsqlite3" Version="3.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ansight.Adb\Ansight.Adb.csproj" />
+    <ProjectReference Include="..\Ansight.Infrastructure\Ansight.Infrastructure.csproj" />
+    <ProjectReference Include="..\Ansight.RemoteSimulator.Core\Ansight.RemoteSimulator.Core.csproj" />
+    <ProjectReference Include="..\Ansight.SimCtl\Ansight.SimCtl.csproj" />
+    <ProjectReference Include="..\Ansight.MacSimulatorHid\Ansight.MacSimulatorHid.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Workspaces/ReadmeTemplates/*.md" />
+    <EmbeddedResource Include="Workspaces/Authoring/Resources/**/*" />
+    <EmbeddedResource Include="Workspaces/Catalog/Prompts/**/*" />
+    <EmbeddedResource Include="Runtime/RepositoryContracts/*.json" />
+    <EmbeddedResource Include="Runtime/RepositoryContracts/*.d.ts" />
+    <EmbeddedResource Include="Runtime/RepositoryContracts/ansight-task.js" />
+    <EmbeddedResource Include="Runtime/Automation/Resources/**/*" />
+    <EmbeddedResource Include="Runtime/Sanitization/Resources/**/*" />
+    <EmbeddedResource Include="Runtime/Tasks/Resources/**/*" />
+    <EmbeddedResource Include="SimulatorAgent/Prompts/**/*" />
+    <EmbeddedResource Include="Replay/Assets/**/*" />
+    <EmbeddedResource Include="Runtime/DeviceExecution/Icons/android-app-icon.dex" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))">
+    <Content Include="$(SimulatorAppIconHelper)" Link="ansight-app-icon-ios-simulator" Visible="false"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="$(AudioInjectionMacNativeLibrary)" Link="libAnsightAudioInjection.dylib" Visible="false"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+             ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <Target Name="BuildSimulatorAppIconHelper" BeforeTargets="CoreCompile"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+          Inputs="$(MSBuildProjectDirectory)/Runtime/DeviceExecution/Icons/SimulatorAppIcon.m"
+          Outputs="$(SimulatorAppIconHelper)">
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(SimulatorAppIconHelper)'))" />
+    <Exec Command="/usr/bin/xcrun --sdk iphonesimulator clang -arch $(AudioInjectionMacArchitecture) -mios-simulator-version-min=15.0 -fobjc-arc -O2 -framework UIKit -framework Foundation &quot;$(MSBuildProjectDirectory)/Runtime/DeviceExecution/Icons/SimulatorAppIcon.m&quot; -o &quot;$(SimulatorAppIconHelper)&quot;" />
+    <Exec Command="/usr/bin/codesign --force --sign - &quot;$(SimulatorAppIconHelper)&quot;" />
+  </Target>
+
+  <Target Name="BuildMacAudioInjectionLibrary" BeforeTargets="CoreCompile"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+          Inputs="$(MSBuildProjectDirectory)/Audio/Ios/Native/AnsightAudioInjection.swift"
+          Outputs="$(AudioInjectionMacNativeLibrary)">
+    <MakeDir Directories="$(AudioInjectionMacNativeDirectory)" />
+    <Exec Command="&quot;/usr/bin/xcrun&quot; --sdk macosx swiftc -emit-library -module-name AnsightAudioInjection -Xlinker -install_name -Xlinker @rpath/libAnsightAudioInjection.dylib -target $(AudioInjectionMacArchitecture)-apple-macos12.0 -O -warnings-as-errors &quot;$(MSBuildProjectDirectory)/Audio/Ios/Native/AnsightAudioInjection.swift&quot; -o &quot;$(AudioInjectionMacNativeLibrary)&quot;"
+          IgnoreStandardErrorWarningFormat="true" />
+  </Target>
+
+  <Target Name="ValidateConfiguredMapboxAccessToken"
+          BeforeTargets="CoreCompile"
+          Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="'$(AnsightMapboxAccessToken)' != '' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(AnsightMapboxAccessToken)', '^pk\.'))"
+           Text="AnsightMapboxAccessToken must be a Mapbox public token beginning with 'pk.'. Secret 'sk.' tokens must never be bundled into the host." />
+  </Target>
+
+  <Target Name="ValidateConfiguredPostHogProjectToken"
+          BeforeTargets="CoreCompile"
+          Condition="'$(AnsightPostHogProjectToken)' != ''">
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(AnsightPostHogProjectToken)', '^phc_[A-Za-z0-9_-]+$'))"
+           Text="AnsightPostHogProjectToken must be a client-side PostHog project token beginning with 'phc_'. Never embed a personal or secret API key." />
+  </Target>
+
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Host" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /></ItemGroup>
+</Project>

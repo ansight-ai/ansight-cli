@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ansight.dev/schemas/repository-trigger.v2.schema.json",
+  "title": "Ansight Repository Trigger Definition",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "default": 1,
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this trigger may match events and execute.",
+      "default": true
+    },
+    "appId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventKind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventSchema": {
+      "type": "object",
+      "description": "JSON Schema for invocation.event.payload."
+    },
+    "functionTimeoutMs": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1000
+    },
+    "actionTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300
+    },
+    "retry": {
+      "type": "object",
+      "properties": {
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "initialDelayMs": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 60000
+        },
+        "backoffMultiplier": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "maxDelayMs": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 60000
+        }
+      },
+      "additionalProperties": false
+    },
+    "conditions": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operator": {
+            "enum": [
+              "equals",
+              "notEquals",
+              "contains",
+              "startsWith",
+              "endsWith",
+              "exists",
+              "notExists"
+            ]
+          },
+          "value": {},
+          "ignoreCase": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "field",
+          "operator"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "appTools": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "eventKind"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "requires"
+        ]
+      },
+      "then": {
+        "required": [
+          "schemaVersion"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      }
+    }
+  ]
+}

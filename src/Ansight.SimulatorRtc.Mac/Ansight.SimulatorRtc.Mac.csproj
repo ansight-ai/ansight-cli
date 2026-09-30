@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeMacArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</NativeMacArchitecture>
+    <NativeMacArchitecture Condition="'$(NativeMacArchitecture)' == ''">arm64</NativeMacArchitecture>
+    <NativeTargetTriple>$(NativeMacArchitecture)-apple-macos12.0</NativeTargetTriple>
+    <NativeDependencyRoot>$(MSBuildProjectDirectory)/obj/native-rtc/osx-$(NativeMacArchitecture)</NativeDependencyRoot>
+    <NativeDependencyScript>$(MSBuildProjectDirectory)/Native/build-native-dependencies.sh</NativeDependencyScript>
+    <NativeWrapperSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorRtc/AnsightSimulatorRtc.mm</NativeWrapperSource>
+    <NativeWrapperHeader>$(MSBuildProjectDirectory)/Native/AnsightSimulatorRtc/AnsightSimulatorRtc.h</NativeWrapperHeader>
+    <NativeWrapperLibrary>$(NativeDependencyRoot)/libAnsightSimulatorRtc.dylib</NativeWrapperLibrary>
+    <LibDataChannelInstall>$(NativeDependencyRoot)/libdatachannel-install</LibDataChannelInstall>
+    <MbedTlsInstall>$(NativeDependencyRoot)/mbedtls-install</MbedTlsInstall>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(NativeWrapperLibrary)"
+             Link="libAnsightSimulatorRtc.dylib"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
+    <Content Include="THIRD-PARTY-NOTICES.md"
+             Link="Ansight.SimulatorRtc.THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target
+      Name="BuildAnsightSimulatorRtcDependencies"
+      BeforeTargets="CoreCompile"
+      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+      Inputs="$(NativeDependencyScript)"
+      Outputs="$(LibDataChannelInstall)/lib/libdatachannel.a;$(MbedTlsInstall)/lib/libmbedtls.a">
+    <Exec Command="/bin/zsh &quot;$(NativeDependencyScript)&quot; &quot;$(NativeDependencyRoot)&quot; &quot;$(NativeTargetTriple)&quot;" />
+  </Target>
+
+  <Target
+      Name="BuildAnsightSimulatorRtcDynamicLibrary"
+      BeforeTargets="CoreCompile"
+      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+      DependsOnTargets="BuildAnsightSimulatorRtcDependencies"
+      Inputs="$(NativeWrapperSource);$(NativeWrapperHeader);$(LibDataChannelInstall)/lib/libdatachannel.a;$(MbedTlsInstall)/lib/libmbedtls.a"
+      Outputs="$(NativeWrapperLibrary)">
+    <Exec
+        Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang++ -target $(NativeTargetTriple) -std=c++17 -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -DRTC_STATIC=1 -DRTC_ENABLE_MEDIA=1 -DRTC_ENABLE_WEBSOCKET=0 -I&quot;$(LibDataChannelInstall)/include&quot; -Wall -Wextra &quot;$(NativeWrapperSource)&quot; &quot;$(LibDataChannelInstall)/lib/libdatachannel.a&quot; &quot;$(LibDataChannelInstall)/lib/libjuice.a&quot; &quot;$(LibDataChannelInstall)/lib/libsrtp2.a&quot; &quot;$(LibDataChannelInstall)/lib/libusrsctp.a&quot; &quot;$(MbedTlsInstall)/lib/libmbedtls.a&quot; &quot;$(MbedTlsInstall)/lib/libmbedx509.a&quot; &quot;$(MbedTlsInstall)/lib/libmbedcrypto.a&quot; &quot;$(MbedTlsInstall)/lib/libeverest.a&quot; &quot;$(MbedTlsInstall)/lib/libp256m.a&quot; -framework Foundation -framework AVFoundation -framework CoreGraphics -framework CoreImage -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Metal -framework QuartzCore -framework ScreenCaptureKit -framework Security -framework VideoToolbox -lc++ -lresolv -install_name @rpath/libAnsightSimulatorRtc.dylib -o &quot;$(NativeWrapperLibrary)&quot;"
+        IgnoreStandardErrorWarningFormat="true" />
+  </Target>
+
+</Project>

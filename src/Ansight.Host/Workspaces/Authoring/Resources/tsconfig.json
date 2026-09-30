@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "target": "ES2022",
+    "strict": true
+  },
+  "include": ["*.ts", "*.d.ts", "**/*.ts", "**/*.d.ts"]
+}

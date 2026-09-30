@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ansight.dev/schema/trends-definition.v1.schema.json",
+  "title": "Ansight trends monitor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appId", "span", "metrics"],
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [{ "required": ["event"] }, { "required": ["log"] }],
+      "properties": {
+        "log": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["streamId", "message"],
+          "properties": {
+            "streamId": { "type": "string", "minLength": 1 },
+            "message": { "type": "string", "minLength": 1 },
+            "match": { "enum": ["exact", "contains"], "default": "exact" },
+            "priority": { "enum": ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal", "Unknown"] },
+            "source": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 },
+            "processId": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "event": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["label"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "eventType": { "type": "string", "minLength": 1 },
+            "channelId": { "type": "integer", "minimum": 0, "maximum": 255 }
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "enabled": {
+      "description": "Whether this trends definition may be evaluated. Defaults to true.",
+      "type": "boolean",
+      "default": true
+    },
+    "id": { "type": "string", "minLength": 1 },
+    "appId": { "type": "string", "minLength": 1 },
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/anchor" },
+        "end": { "$ref": "#/$defs/anchor" },
+        "selection": { "enum": ["firstCompleted", "lastCompleted", "exactlyOne", "all"] },
+        "maximumDurationMs": { "type": "integer", "minimum": 1, "maximum": 1800000 }
+      }
+    },
+    "required": { "type": "boolean" },
+    "missingDataOutcome": { "enum": ["inconclusive", "fail", "warn"] },
+    "metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "channel", "statistic", "budget"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "platform": { "enum": ["android", "ios", "macos", "windows", "other"] },
+          "channel": {
+            "type": "object",
+            "additionalProperties": false,
+            "anyOf": [
+              { "required": ["type"] }, { "required": ["name"] },
+              { "required": ["source"] }, { "required": ["kind"] }
+            ],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string", "minLength": 1 },
+              "match": { "enum": ["exactlyOne", "any"] }
+            }
+          },
+          "statistic": {
+            "oneOf": [
+              { "enum": ["min", "max", "average", "p05", "p10", "p50", "p95", "memoryPeakIncreaseMiB", "memoryRetainedIncreaseMiB", "tailSlopeMiBPerSecond", "tailSpreadMiB"] },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "threshold"],
+                "properties": {
+                  "type": { "const": "timeBelowRatio" },
+                  "threshold": { "type": "number" }
+                }
+              }
+            ]
+          },
+          "budget": {
+            "type": "object",
+            "additionalProperties": false,
+            "anyOf": [{ "required": ["gte"] }, { "required": ["lte"] }, { "required": ["absoluteLte"] }],
+            "properties": {
+              "gte": { "type": "number" },
+              "lte": { "type": "number" },
+              "absoluteLte": { "type": "number" }
+            }
+          },
+          "minimumSamples": { "type": "integer", "minimum": 1, "maximum": 100000 },
+          "maximumSampleGapMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+          "baselineBeforeStartMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+          "tailAfterEndMs": { "type": "integer", "minimum": 0, "maximum": 60000 },
+          "regression": {
+            "type": "object",
+            "additionalProperties": false,
+            "anyOf": [
+              { "required": ["percent"] },
+              { "required": ["absolute"] }
+            ],
+            "properties": {
+              "percent": { "type": "number", "minimum": 0 },
+              "absolute": { "type": "number", "minimum": 0 },
+              "worseWhen": { "enum": ["higher", "lower"] },
+              "confirmRuns": { "type": "integer", "minimum": 1, "maximum": 20 },
+              "baselineRuns": { "type": "integer", "minimum": 1, "maximum": 200 },
+              "minimumBaselineRuns": { "type": "integer", "minimum": 1, "maximum": 200 },
+              "seriesBy": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "enum": ["buildNumber", "platform", "deviceModel", "operatingSystemMajor", "buildConfiguration"] }
+              },
+              "blocking": { "type": "boolean" }
+            }
+          },
+          "display": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "unit": { "type": "string", "minLength": 1, "maxLength": 24 },
+              "scale": { "type": "number", "exclusiveMinimum": 0 },
+              "fractionDigits": { "type": "integer", "minimum": 0, "maximum": 6 },
+              "minimum": { "type": "number" },
+              "maximum": { "type": "number" },
+              "includeZero": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

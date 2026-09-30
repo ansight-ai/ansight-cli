@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ansight.Adb\Ansight.Adb.csproj" />
+    <ProjectReference Include="..\Ansight.SimCtl\Ansight.SimCtl.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.31.1" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
+    <Protobuf Include="Simulator/Android/Grpc/Audio/emulator_audio_v1.proto" GrpcServices="Client" />
+  </ItemGroup>
+
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Host" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /></ItemGroup>
+</Project>

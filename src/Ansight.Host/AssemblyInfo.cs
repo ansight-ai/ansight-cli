@@ -1,0 +1,5 @@
+[assembly: ExportAssembly]
+[assembly: DeclareExportResolver(typeof(ExportResolver))]
+[assembly: InternalsVisibleTo("Ansight.Host.Tests")]
+[assembly: InternalsVisibleTo("Ansight.Cli.Tests")]
+[assembly: InternalsVisibleTo("ansight")]

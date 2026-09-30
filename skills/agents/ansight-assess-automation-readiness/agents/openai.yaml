@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ansight Automation Readiness"
+  short_description: "Score Ansight integration and automation readiness"
+  default_prompt: "Use $ansight-assess-automation-readiness to audit this app and report its Ansight integration strength, automation readiness, blockers, and prioritized fixes."

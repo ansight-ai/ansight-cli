@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 2,
+  "scope": "current-published-skill-files",
+  "generated": "2026-09-28T06:37:10.483Z",
+  "count": 27,
+  "skills": [
+    {
+      "title": "Annotate An Ansight Session",
+      "description": "Add, update, verify, or remove timeline and UI-anchored annotations on one Ansight session. Use for requested review metadata, screenshot geometry, or visual-tree target binding; do not use merely to read annotations, investigate evidence, or operate the live app.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-annotate-session/SKILL.md",
+      "directory": "agents/ansight-annotate-session"
+    },
+    {
+      "title": "Ansight App Inspection Router Skill",
+      "description": "Route an ambiguous Ansight app request to the narrowest live-operation, remote-tool, session-investigation, annotation, readiness-audit, workspace-automation, or platform-inspection skill. Use only when the request does not already identify the required Ansight workflow.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-app-inspection.md",
+      "directory": "agents"
+    },
+    {
+      "title": "Assess Ansight Automation Readiness",
+      "description": "Audit and score an app's Ansight integration strength and automation readiness. Use for a requested evidence-backed readiness score, automation-ID coverage assessment, blocker analysis, comparison, or prioritized remediation plan; do not use for routine app inspection or workspace authoring.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-assess-automation-readiness/SKILL.md",
+      "directory": "agents/ansight-assess-automation-readiness"
+    },
+    {
+      "title": "Investigate An Ansight Session",
+      "description": "Investigate one live or recorded Ansight session through retained evidence. Use to bracket and correlate logs, network, telemetry, screenshots, trees, touches, artifacts, and annotations or create an evidence slice; do not use to prepare the workstation, drive the live UI, or write annotations.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-investigate-session/SKILL.md",
+      "directory": "agents/ansight-investigate-session"
+    },
+    {
+      "title": "Operate A Live App With Ansight",
+      "description": "Operate an app through an Ansight SDK or external device session while preserving before-and-after evidence. Use to choose a capture mode, monitor an installed app without an SDK, boot a target, launch or stop an app, interact, or verify visible state; do not use merely to prepare the CLI, analyze a recording, or call app-internal remote tools.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-operate-live-app/SKILL.md",
+      "directory": "agents/ansight-operate-live-app"
+    },
+    {
+      "title": "Ansight Workspace Automation",
+      "description": "Initialize, author, extract, debug, validate, run, or maintain source-controlled Ansight workspace automation. Use for tests, tasks, triggers, trends, sanitizers, schemas, or workspace registration; do not use for routine live interaction, session investigation, or readiness scoring unless needed to build or verify a workspace asset.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-ui-testing/SKILL.md",
+      "directory": "agents/ansight-ui-testing"
+    },
+    {
+      "title": "Use Ansight Remote App Tools",
+      "description": "Discover and call bundled or app-specific remote tools exposed by one connected Ansight session. Use for authoritative in-process framework or domain state and authorized remote operations; do not use merely to establish the host/session, implement new tools, or replace a visible UI workflow.",
+      "url": "https://www.ansight.ai/skills/agents/ansight-use-remote-app-tools/SKILL.md",
+      "directory": "agents/ansight-use-remote-app-tools"
+    },
+    {
+      "title": "Ansight Android Inspection Semantics",
+      "description": "Add native Android Kotlin and Java semantics to an Ansight operation. Use alongside a selected core Ansight workflow when Android view or Compose rendering, preferences, storage, reflection, ADB fallback, or Android tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/android/ansight-app-inspection-android.md",
+      "directory": "android"
+    },
+    {
+      "title": "Ansight Android Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a native Android Kotlin or Java app. Create a narrow androidSimpleTool or AndroidTool with a stable id, explicit read/write/critical ToolPolicy, structured JSON results, local-development build-variant gating, runtime ToolGuard access, registration through AnsightOptions.addTool/addTools or AnsightRuntime.registerTool, and verification through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/android/ansight-create-remote-tool-android.md",
+      "directory": "android"
+    },
+    {
+      "title": "Ansight Android Install Skill",
+      "description": "Install the native Android Ansight SDK with automatic emulator registration and one-shot CLI QR enrollment for physical devices. Add the aggregate dependency, initialize from Application, expose the SDK scanner from a developer-only surface, keep remote tools development-only, verify the Gradle build, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/android/ansight-install-android.md",
+      "directory": "android"
+    },
+    {
+      "title": "Ansight CLI Setup Skill",
+      "description": "Prepare a developer workstation or agent to use the Ansight CLI by verifying the executable and dependencies, starting or reusing the resident host, and proving structured discovery. Use when setup or setup troubleshooting is requested; do not use for ordinary app operation once they work.",
+      "url": "https://www.ansight.ai/skills/ansight-cli-setup.md",
+      "directory": "root"
+    },
+    {
+      "title": "Ansight Install Router Skill",
+      "description": "Configure Ansight when the capture mode or SDK platform is not yet selected. Explain SDK and external device capture choices, verify CLI dependencies, route external monitoring to live operation or SDK integration to the matching platform install skill, and verify the selected session.",
+      "url": "https://www.ansight.ai/skills/ansight-install.md",
+      "directory": "root"
+    },
+    {
+      "title": "Ansight Cordova / Capacitor Inspection Semantics",
+      "description": "Add Capacitor DOM and native-platform semantics to an Ansight operation. Use alongside a selected core Ansight workflow when WebView DOM, JavaScript errors, native hierarchy, bridge state, or DOM tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-app-inspection-cordova.md",
+      "directory": "cordova"
+    },
+    {
+      "title": "Ansight Cordova / Capacitor Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a Cordova-family Capacitor app. Create a narrow JavaScript registerTool handler with a stable id, explicit read/write/critical policy, structured results, development-only registration, runtime guard access, and CLI verification.",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-create-remote-tool-cordova.md",
+      "directory": "cordova"
+    },
+    {
+      "title": "Ansight Cordova / Capacitor Install Skill",
+      "description": "Install @ansight/capacitor with automatic simulator or emulator registration and one-shot CLI QR enrollment for physical devices. Add and sync the Capacitor bridge, initialize native defaults, expose enrollFromQrCode from a developer-only surface, keep remote tools development-only, verify web and native builds, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-install-cordova.md",
+      "directory": "cordova"
+    },
+    {
+      "title": "Ansight .NET Inspection Semantics",
+      "description": "Add .NET MAUI and .NET mobile platform semantics to an Ansight operation. Use alongside a selected core Ansight workflow when MAUI hierarchy, bindings, handlers, native rendering, reflection, or .NET tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-app-inspection-dotnet.md",
+      "directory": "dotnet"
+    },
+    {
+      "title": "Ansight .NET Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a .NET MAUI, .NET for Android, .NET for iOS, or .NET Mac Catalyst app. Create a narrow Ansight.Tools.ITool implementation with stable tool ids, ToolSchema arguments and results, the shared read/write/critical ToolPolicy, local-development MSBuild gating with AnsightRemoteToolsPolicy, registration through AddTool/AddTools or a WithMyAppTools extension, and verification through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-create-remote-tool-dotnet.md",
+      "directory": "dotnet"
+    },
+    {
+      "title": "Ansight .NET Install Skill",
+      "description": "Install Ansight in a .NET MAUI, Android, iOS, or Mac Catalyst app with automatic local CLI-host registration and one-shot QR enrollment for physical devices. Add the all-in-one package, initialize at app startup, expose the SDK scanner from a developer-only surface, keep remote tools development-only, verify target builds, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-install-dotnet.md",
+      "directory": "dotnet"
+    },
+    {
+      "title": "Ansight Flutter Inspection Semantics",
+      "description": "Add Flutter widget and native-platform semantics to an Ansight operation. Use alongside a selected core Ansight workflow when widget hierarchy, navigation, native rendering, physical-device logging, or Flutter tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-app-inspection-flutter.md",
+      "directory": "flutter"
+    },
+    {
+      "title": "Ansight Flutter Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a Flutter app. Create a narrow Dart registerTool handler with a stable id, explicit read/write/critical policy, structured results, development-only registration, runtime guard access, and CLI verification.",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-create-remote-tool-flutter.md",
+      "directory": "flutter"
+    },
+    {
+      "title": "Ansight Flutter Install Skill",
+      "description": "Install ansight_flutter with automatic simulator or emulator registration and one-shot CLI QR enrollment for physical devices. Add the package, initialize the runtime and instrumentation, expose enrollFromQrCode from a developer-only surface, configure required native privacy declarations, verify Flutter and native builds, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-install-flutter.md",
+      "directory": "flutter"
+    },
+    {
+      "title": "Ansight iOS Inspection Semantics",
+      "description": "Add native iOS SwiftUI and UIKit semantics to an Ansight operation. Use alongside a selected core Ansight workflow when UIKit hierarchy, SwiftUI hosting, Apple storage, Simulator control, reflection, or iOS tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/ios/ansight-app-inspection-ios.md",
+      "directory": "ios"
+    },
+    {
+      "title": "Ansight iOS Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a native iOS SwiftUI or UIKit app. Create a narrow AnsightTool with a stable descriptor id, explicit read/write/critical policy, structured result payloads, Debug or local-development build gating, runtime tool guard access, registration through AnsightRuntime.shared.registerTool, and verification through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/ios/ansight-create-remote-tool-ios.md",
+      "directory": "ios"
+    },
+    {
+      "title": "Ansight iOS Install Skill",
+      "description": "Install the native iOS Ansight SDK with automatic Simulator registration and one-shot CLI QR enrollment for physical devices. Add the aggregate SwiftPM product or pod, initialize from app startup, expose the SDK scanner from a developer-only surface, add only Apple-required privacy descriptions, verify the build, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/ios/ansight-install-ios.md",
+      "directory": "ios"
+    },
+    {
+      "title": "Ansight React Native Inspection Semantics",
+      "description": "Add React Native and Expo development-build semantics to an Ansight operation. Use alongside a selected core Ansight workflow when React component, shadow-tree, native hierarchy, navigation, memory, or React tool behavior affects interpretation; do not use as the primary live-operation, remote-tool, session-investigation, or annotation workflow.",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-app-inspection-react-native.md",
+      "directory": "react-native"
+    },
+    {
+      "title": "Ansight React Native Remote Tool Skill",
+      "description": "Use this skill when implementing a custom Ansight remote tool for a React Native app. Create a narrow JavaScript-backed registerTool handler or a native Swift/Kotlin tool, use stable ids, explicit read/write/critical policy, structured results, developer-only registration with __DEV__ or native build gates, runtime ToolGuard access, and verification through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-create-remote-tool-react-native.md",
+      "directory": "react-native"
+    },
+    {
+      "title": "Ansight React Native Install Skill",
+      "description": "Install @ansight/react-native in React Native or Expo development builds with automatic simulator or emulator registration and one-shot CLI QR enrollment for physical devices. Add and link the package, initialize native defaults, expose enrollFromQrCode from a developer-only surface, keep remote tools development-only, verify JavaScript and native builds, and inspect the app through the Ansight CLI.",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-install-react-native.md",
+      "directory": "react-native"
+    }
+  ],
+  "files": [
+    {
+      "path": "agents/ansight-annotate-session/SKILL.md",
+      "bytes": 7502,
+      "sha256": "15bf9a01ca624d5ae6920854dc79fc2bd9622aea54fc288c5fcfd9879c353716",
+      "url": "https://www.ansight.ai/skills/agents/ansight-annotate-session/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-annotate-session/agents/openai.yaml",
+      "bytes": 288,
+      "sha256": "1b9b716173f05236ac282950e76a8b91720bf4cc4f2f67e2bc01a810ec8b7e54",
+      "url": "https://www.ansight.ai/skills/agents/ansight-annotate-session/agents/openai.yaml"
+    },
+    {
+      "path": "agents/ansight-app-inspection.md",
+      "bytes": 8357,
+      "sha256": "71702be1d2126f88357291bf2dba1863699e9cec01c5604995b5a1321a1f025c",
+      "url": "https://www.ansight.ai/skills/agents/ansight-app-inspection.md"
+    },
+    {
+      "path": "agents/ansight-assess-automation-readiness/SKILL.md",
+      "bytes": 20303,
+      "sha256": "ed96b664c1e73efef1b7c5415078c204561b64f0ec48af24415a6c1fab3bcdf8",
+      "url": "https://www.ansight.ai/skills/agents/ansight-assess-automation-readiness/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-assess-automation-readiness/agents/openai.yaml",
+      "bytes": 311,
+      "sha256": "68cd5aabd3d139c9ee8f90a4ccf6633c810148016120d23b04856c4a075c60ee",
+      "url": "https://www.ansight.ai/skills/agents/ansight-assess-automation-readiness/agents/openai.yaml"
+    },
+    {
+      "path": "agents/ansight-assess-automation-readiness/scripts/score_readiness.py",
+      "bytes": 11702,
+      "sha256": "53680648f34df71439762fe057ebcbf2c56a4b1ce2c36fa88f70c70d8e72a0e0",
+      "url": "https://www.ansight.ai/skills/agents/ansight-assess-automation-readiness/scripts/score_readiness.py"
+    },
+    {
+      "path": "agents/ansight-investigate-session/SKILL.md",
+      "bytes": 9697,
+      "sha256": "1a8171673105856387b64ce66ad4fb61a10269bc33d36a38a678363ae00848d7",
+      "url": "https://www.ansight.ai/skills/agents/ansight-investigate-session/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-investigate-session/agents/openai.yaml",
+      "bytes": 328,
+      "sha256": "4eede855419a8fde75d7ad9efdb6c7846b8eb326d94f522ed3f72914afbcf91b",
+      "url": "https://www.ansight.ai/skills/agents/ansight-investigate-session/agents/openai.yaml"
+    },
+    {
+      "path": "agents/ansight-operate-live-app/SKILL.md",
+      "bytes": 21682,
+      "sha256": "64a527de8653aa764a326892adab959a599b1b6c2970351dc25b382a40931915",
+      "url": "https://www.ansight.ai/skills/agents/ansight-operate-live-app/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-operate-live-app/agents/openai.yaml",
+      "bytes": 329,
+      "sha256": "9ca50f98aca4a45c15c9af7ef2d237b4a1e92db4c5f37ea17c6722b5006f9535",
+      "url": "https://www.ansight.ai/skills/agents/ansight-operate-live-app/agents/openai.yaml"
+    },
+    {
+      "path": "agents/ansight-operate-live-app/references/external-capture.md",
+      "bytes": 5100,
+      "sha256": "8c50f823dbcc44d5d7bab3e84c72fbdcd7dad5c34f202e916ce976522b7d73fa",
+      "url": "https://www.ansight.ai/skills/agents/ansight-operate-live-app/references/external-capture.md"
+    },
+    {
+      "path": "agents/ansight-ui-testing/SKILL.md",
+      "bytes": 30203,
+      "sha256": "0295939f464eb3d0d351017d12deace64fe4ed4d735b0bedf090e87b9406fb72",
+      "url": "https://www.ansight.ai/skills/agents/ansight-ui-testing/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-ui-testing/agents/openai.yaml",
+      "bytes": 307,
+      "sha256": "1d0e5724b77334edab0bd7d449b80696bffa47ae56cf6cf8acef4b74ff243efe",
+      "url": "https://www.ansight.ai/skills/agents/ansight-ui-testing/agents/openai.yaml"
+    },
+    {
+      "path": "agents/ansight-use-remote-app-tools/SKILL.md",
+      "bytes": 9732,
+      "sha256": "1bbe28c028ae6e99458de7b7551a5166684640fd34ed53d4719add95c4f7cafe",
+      "url": "https://www.ansight.ai/skills/agents/ansight-use-remote-app-tools/SKILL.md"
+    },
+    {
+      "path": "agents/ansight-use-remote-app-tools/agents/openai.yaml",
+      "bytes": 324,
+      "sha256": "2f0f885bd3155ee269966ddf3582d144c2056c119423740bbd483fa064272ae3",
+      "url": "https://www.ansight.ai/skills/agents/ansight-use-remote-app-tools/agents/openai.yaml"
+    },
+    {
+      "path": "android/ansight-app-inspection-android.md",
+      "bytes": 3989,
+      "sha256": "30200677cffc58308c1323b2d6d02b58bacbe91740f6ed6fd13e0badbc293d56",
+      "url": "https://www.ansight.ai/skills/android/ansight-app-inspection-android.md"
+    },
+    {
+      "path": "android/ansight-create-remote-tool-android.md",
+      "bytes": 8853,
+      "sha256": "8798b99b36342f3bb9210a2863608aef4759970feee1035ccacc72aaf45b20f1",
+      "url": "https://www.ansight.ai/skills/android/ansight-create-remote-tool-android.md"
+    },
+    {
+      "path": "android/ansight-install-android.md",
+      "bytes": 4244,
+      "sha256": "58106ce5736868a7b99399dd409c36c199c25dc160ac10d57a531a9a1a784bc7",
+      "url": "https://www.ansight.ai/skills/android/ansight-install-android.md"
+    },
+    {
+      "path": "ansight-cli-setup.md",
+      "bytes": 8542,
+      "sha256": "7246b7f32fd1cb57849afc575ee56d6b5d59677b6708c6d1c2b1a45c92e8b7be",
+      "url": "https://www.ansight.ai/skills/ansight-cli-setup.md"
+    },
+    {
+      "path": "ansight-install.md",
+      "bytes": 8775,
+      "sha256": "31983f1949d232389117ab32d7fe0f08891ab4bc5595675ee7dad6eceb67df51",
+      "url": "https://www.ansight.ai/skills/ansight-install.md"
+    },
+    {
+      "path": "cordova/ansight-app-inspection-cordova.md",
+      "bytes": 3953,
+      "sha256": "b7f46fb8f7fd6d92c3d31cfbe0ed6c5380fd59b4bc98e33495c586bdde911a23",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-app-inspection-cordova.md"
+    },
+    {
+      "path": "cordova/ansight-create-remote-tool-cordova.md",
+      "bytes": 1542,
+      "sha256": "6ca832b93d0e4781ddd4897354201d7c1de1d25cb3a0427e5ef73489fc27a4e1",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-create-remote-tool-cordova.md"
+    },
+    {
+      "path": "cordova/ansight-install-cordova.md",
+      "bytes": 3763,
+      "sha256": "d7766317deb25cd43c5e6566de66ff8eb685a96cde38cdb7d2308df0717df685",
+      "url": "https://www.ansight.ai/skills/cordova/ansight-install-cordova.md"
+    },
+    {
+      "path": "dotnet/ansight-app-inspection-dotnet.md",
+      "bytes": 4182,
+      "sha256": "49a3041a4f6b1567a3f88018cb6b0dcbff7ce389ded1bc2de389193329998373",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-app-inspection-dotnet.md"
+    },
+    {
+      "path": "dotnet/ansight-create-remote-tool-dotnet.md",
+      "bytes": 12971,
+      "sha256": "db7ff1afff5455df398a7ba52565f8c75940f62332f19180abc941b57f9021d6",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-create-remote-tool-dotnet.md"
+    },
+    {
+      "path": "dotnet/ansight-install-dotnet.md",
+      "bytes": 3733,
+      "sha256": "f3a1eb452df119c1409a1e80cd5fb04f5e8f8d6fcaa765d9f2601fbcd3516e25",
+      "url": "https://www.ansight.ai/skills/dotnet/ansight-install-dotnet.md"
+    },
+    {
+      "path": "flutter/ansight-app-inspection-flutter.md",
+      "bytes": 3674,
+      "sha256": "d816cf94d96da98ee0d5bd054d141099145ffc97dfb56d2ae8900ae1434717ac",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-app-inspection-flutter.md"
+    },
+    {
+      "path": "flutter/ansight-create-remote-tool-flutter.md",
+      "bytes": 1706,
+      "sha256": "3e1da2036ed1759e19b9456cfbdbea3182a07a30828f436acc50c209177a7107",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-create-remote-tool-flutter.md"
+    },
+    {
+      "path": "flutter/ansight-install-flutter.md",
+      "bytes": 3486,
+      "sha256": "347f30e53f6583bbd7f2c91daa517cf526778158f8b488de2b46b2f8934fe533",
+      "url": "https://www.ansight.ai/skills/flutter/ansight-install-flutter.md"
+    },
+    {
+      "path": "ios/ansight-app-inspection-ios.md",
+      "bytes": 4318,
+      "sha256": "62dba8aeb065a15d8f27571647a0aa7b303266962583b326d44cbe5b04a889bf",
+      "url": "https://www.ansight.ai/skills/ios/ansight-app-inspection-ios.md"
+    },
+    {
+      "path": "ios/ansight-create-remote-tool-ios.md",
+      "bytes": 9105,
+      "sha256": "e50d74f32e09bca198ab14aeda3ebd6e562a49cf71af4df4503290e71a2ae1e0",
+      "url": "https://www.ansight.ai/skills/ios/ansight-create-remote-tool-ios.md"
+    },
+    {
+      "path": "ios/ansight-install-ios.md",
+      "bytes": 4265,
+      "sha256": "a3609732e486e76898cf3abd282e4621840dddfc828fea2909eae1dce4dd7fd0",
+      "url": "https://www.ansight.ai/skills/ios/ansight-install-ios.md"
+    },
+    {
+      "path": "react-native/ansight-app-inspection-react-native.md",
+      "bytes": 4614,
+      "sha256": "3f1cb0b98384ae992f4f751618e4cc6e74479d01085f53ce372f9254cb3ad022",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-app-inspection-react-native.md"
+    },
+    {
+      "path": "react-native/ansight-create-remote-tool-react-native.md",
+      "bytes": 8859,
+      "sha256": "36e90cabe89db973118504a756d5884b54c8c3871a7f10d598e27f33a4925954",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-create-remote-tool-react-native.md"
+    },
+    {
+      "path": "react-native/ansight-install-react-native.md",
+      "bytes": 3651,
+      "sha256": "23e6a2b9addca88a36661ffa46a066364c947f7e7c02fef8c8a4f050d77516b1",
+      "url": "https://www.ansight.ai/skills/react-native/ansight-install-react-native.md"
+    }
+  ],
+  "fileCount": 35
+}

@@ -1,0 +1,7 @@
+Ansight CLI and local development harness
+Required Notice: Copyright (c) 2026 Ansight, Inc. (https://www.ansight.ai)
+
+First-party source, player and agent integrations use PolyForm Shield 1.0.0.
+The licence terms are included in LICENSE.
+Third-party components retain their own licences and notices.
+Previously published SDK and plugin artifacts retain their distributed terms.

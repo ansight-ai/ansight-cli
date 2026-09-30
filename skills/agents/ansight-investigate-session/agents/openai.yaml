@@ -1,0 +1,7 @@
+interface:
+  display_name: "Investigate An Ansight Session"
+  short_description: "Correlate session telemetry and evidence"
+  default_prompt: "Use $ansight-investigate-session to inspect this Ansight session, isolate the relevant time window, and report a timestamped evidence trail."
+
+policy:
+  allow_implicit_invocation: true

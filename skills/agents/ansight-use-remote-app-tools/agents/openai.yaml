@@ -1,0 +1,7 @@
+interface:
+  display_name: "Use Ansight Remote App Tools"
+  short_description: "Safely discover and call remote app tools"
+  default_prompt: "Use $ansight-use-remote-app-tools to discover the connected app's tool catalog, call the narrowest permitted tool, and verify the result."
+
+policy:
+  allow_implicit_invocation: true

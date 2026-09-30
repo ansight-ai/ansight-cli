@@ -1,0 +1,57 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_prefer_primary_constructors = false:silent
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+dotnet_naming_rule.non_constant_fields_use_lower_camel.severity = error
+dotnet_naming_rule.non_constant_fields_use_lower_camel.symbols = non_constant_fields
+dotnet_naming_rule.non_constant_fields_use_lower_camel.style = lower_camel
+
+dotnet_naming_symbols.non_constant_fields.applicable_kinds = field
+dotnet_naming_symbols.non_constant_fields.applicable_accessibilities = private, protected, internal, protected_internal, private_protected
+dotnet_naming_symbols.non_constant_fields.required_modifiers =
+
+dotnet_naming_style.lower_camel.capitalization = camel_case
+
+[Ansight.Infrastructure/Utilities/TaskUtilities.cs]
+# Intentionally excluded from the cleanup: retained legacy utility.
+dotnet_diagnostic.CS8625.severity = none
+
+[Ansight.Infrastructure/Utilities/TextInputDebouncer.cs]
+# Intentionally excluded from the cleanup: retained legacy utility.
+dotnet_diagnostic.CS8600.severity = none
+dotnet_diagnostic.CS8601.severity = none
+dotnet_diagnostic.CS8604.severity = none
+dotnet_diagnostic.CS8618.severity = none
+
+[Ansight.Infrastructure/Utilities/TaskDebouncer.cs]
+# Intentionally excluded from the cleanup: retained legacy utility.
+dotnet_diagnostic.CS8618.severity = none
+
+[Ansight.Infrastructure/Utilities/AttributeHelper.cs]
+# Intentionally excluded from the cleanup: retained legacy utility.
+dotnet_diagnostic.CS8602.severity = none
+dotnet_diagnostic.CS8603.severity = none
+dotnet_diagnostic.CS8604.severity = none
+
+[*.{xaml,xml,csproj,props,targets}]
+indent_style = space
+indent_size = 2
+
+[*.{swift,m,mm,h}]
+indent_style = space
+indent_size = 4

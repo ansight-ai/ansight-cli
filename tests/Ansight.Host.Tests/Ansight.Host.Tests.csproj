@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- The host test suite intentionally compiles the remote-tool catalog. -->
+    <AnsightRemoteToolsPolicy>Allowed</AnsightRemoteToolsPolicy>
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.10" />
+    <PackageReference Include="SQLitePCLRaw.provider.sqlite3" Version="3.0.5" />
+    <PackageReference Include="SQLitePCLRaw.provider.winsqlite3" Version="3.0.5" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ansight.Adb\Ansight.Adb.csproj" />
+    <ProjectReference Include="..\..\src\Ansight.Host\Ansight.Host.csproj" />
+    <ProjectReference Include="..\..\src\Ansight.Infrastructure\Ansight.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Ansight.RemoteSimulator.Core\Ansight.RemoteSimulator.Core.csproj" />
+    <ProjectReference Include="..\..\src\Ansight.SimCtl\Ansight.SimCtl.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <Target
+      Name="RunAudioNativeLifecycleTests"
+      BeforeTargets="VSTest"
+      Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/../../src/Ansight.Host/Audio/Ios/Native/Tests/run-tests.sh&quot;" />
+  </Target>
+
+  <Target
+      Name="RunSimulatorHidRecoveryTests"
+      BeforeTargets="VSTest"
+      Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <!-- Run even when compilation is skipped: native input recovery is part of the host test gate. -->
+    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/../../src/Ansight.MacSimulatorHid/Native/Tests/run-tests.sh&quot;" />
+  </Target>
+
+</Project>

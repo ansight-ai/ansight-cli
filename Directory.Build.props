@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <!-- Source override is optional; independent builds use the released Protocol package. -->
+    <AnsightProtocolProject Condition="'$(AnsightProtocolProject)' == '' and '$(UseAnsightProtocolSource)' != 'false' and '$(ANSIGHT_SDK_REPOSITORY)' != ''">$(ANSIGHT_SDK_REPOSITORY)/src/dotnet/Ansight.Protocol/Ansight.Protocol.csproj</AnsightProtocolProject>
+    <AnsightProtocolProject Condition="'$(AnsightProtocolProject)' == '' and '$(UseAnsightProtocolSource)' != 'false' and Exists('$(MSBuildThisFileDirectory)../ansight-sdk/src/dotnet/Ansight.Protocol/Ansight.Protocol.csproj')">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../ansight-sdk/src/dotnet/Ansight.Protocol/Ansight.Protocol.csproj'))</AnsightProtocolProject>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Preserve strict checking for existing build scripts that use the retired property name. -->
+    <TreatWarningsAsErrors Condition="'$(AnsightStrictBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Mapbox public browser token. Never place an sk.* secret token in source or build metadata. -->
+    <AnsightMapboxAccessToken Condition="'$(AnsightMapboxAccessToken)' == ''">$(ANSIGHT_MAPBOX_PUBLIC_TOKEN)</AnsightMapboxAccessToken>
+    <!-- PostHog client-side project token is injected during compilation, never read at runtime. -->
+    <AnsightPostHogProjectToken Condition="'$(AnsightPostHogProjectToken)' == ''">$(ANSIGHT_POSTHOG_PROJECT_TOKEN)</AnsightPostHogProjectToken>
+  </PropertyGroup>
+</Project>

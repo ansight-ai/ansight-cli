@@ -1,0 +1,12 @@
+{
+  "name": "@ansight/cli-build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:player": "dotnet msbuild build/player-assets.proj -verbosity:minimal"
+  },
+  "devDependencies": {
+    "@ansight/player": "0.1.0"
+  }
+}

@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="../../ansight.version.props" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows')) or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">net10.0-windows10.0.19041.0</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ansight</AssemblyName>
+    <AnsightCliVersion Condition="'$(AnsightCliVersion)' == ''">$(AnsightReleaseVersion)</AnsightCliVersion>
+    <AnsightCliBuildNumber Condition="'$(AnsightCliBuildNumber)' == ''">$(AnsightReleaseBuildNumber)</AnsightCliBuildNumber>
+    <AnsightCommitSha Condition="'$(AnsightCommitSha)' == ''">local</AnsightCommitSha>
+    <Version>$(AnsightCliVersion)</Version>
+    <InformationalVersion>$(AnsightCliVersion)+build.$(AnsightCliBuildNumber).$(AnsightCommitSha)</InformationalVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AnsightRemoteToolsPolicy>Allowed</AnsightRemoteToolsPolicy>
+    <SessionVideoMacArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</SessionVideoMacArchitecture>
+    <SessionVideoMacArchitecture Condition="'$(SessionVideoMacArchitecture)' == ''">arm64</SessionVideoMacArchitecture>
+    <SessionVideoMacTargetTriple>$(SessionVideoMacArchitecture)-apple-macos12.0</SessionVideoMacTargetTriple>
+    <SessionVideoMacNativeDirectory>$(MSBuildProjectDirectory)/obj/native-session-video/osx-$(SessionVideoMacArchitecture)</SessionVideoMacNativeDirectory>
+    <SessionVideoMacNativeLibrary>$(SessionVideoMacNativeDirectory)/libAnsightSessionVideoMac.dylib</SessionVideoMacNativeLibrary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AnsightCliVersion" Value="$(AnsightCliVersion)" />
+    <AssemblyMetadata Include="AnsightCliBuildNumber" Value="$(AnsightCliBuildNumber)" />
+    <AssemblyMetadata Include="AnsightCommitSha" Value="$(AnsightCommitSha)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ansight.Adb\Ansight.Adb.csproj" />
+    <ProjectReference Include="..\Ansight.Host\Ansight.Host.csproj" />
+    <ProjectReference Include="..\Ansight.Infrastructure\Ansight.Infrastructure.csproj" />
+    <ProjectReference Include="..\Ansight.SimulatorRtc.Mac\Ansight.SimulatorRtc.Mac.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ansight.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Commands/AppGraph/Resources/**/*" />
+    <Content Include="$(SessionVideoMacNativeLibrary)"
+             Link="libAnsightSessionVideoMac.dylib"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             ExcludeFromSingleFile="true"
+             Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
+  </ItemGroup>
+
+  <Target
+      Name="BuildMacSessionVideoNativeLibrary"
+      BeforeTargets="CoreCompile"
+      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+      Inputs="$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.h"
+      Outputs="$(SessionVideoMacNativeLibrary)">
+    <MakeDir Directories="$(SessionVideoMacNativeDirectory)" />
+    <Exec
+        Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang++ -target $(SessionVideoMacTargetTriple) -std=c++17 -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm&quot; -framework Foundation -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework CoreVideo -framework ImageIO -framework VideoToolbox -install_name @rpath/libAnsightSessionVideoMac.dylib -o &quot;$(SessionVideoMacNativeLibrary)&quot;"
+        IgnoreStandardErrorWarningFormat="true" />
+  </Target>
+
+  <Target
+      Name="IncludeMacSimulatorHidInPublish"
+      AfterTargets="ComputeFilesToPublish"
+      Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
+    <PropertyGroup>
+      <SimulatorHidArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</SimulatorHidArchitecture>
+      <SimulatorHidArchitecture Condition="'$(SimulatorHidArchitecture)' == ''">arm64</SimulatorHidArchitecture>
+    </PropertyGroup>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.MacSimulatorHid/obj/$(Configuration)/net10.0/$(SimulatorHidArchitecture)/native/libAnsightSimulatorHid.dylib'))">
+        <RelativePath>libAnsightSimulatorHid.dylib</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <Target
+      Name="IncludeMacSimulatorRtcInPublish"
+      AfterTargets="ComputeFilesToPublish"
+      Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
+    <PropertyGroup>
+      <SimulatorRtcArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</SimulatorRtcArchitecture>
+      <SimulatorRtcArchitecture Condition="'$(SimulatorRtcArchitecture)' == ''">arm64</SimulatorRtcArchitecture>
+    </PropertyGroup>
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.SimulatorRtc.Mac/obj/native-rtc/osx-$(SimulatorRtcArchitecture)/libAnsightSimulatorRtc.dylib'))">
+        <RelativePath>libAnsightSimulatorRtc.dylib</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /></ItemGroup>
+</Project>

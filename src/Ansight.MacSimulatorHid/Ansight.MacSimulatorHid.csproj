@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NativeMacArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</NativeMacArchitecture>
+    <NativeMacArchitecture Condition="'$(NativeMacArchitecture)' == ''">arm64</NativeMacArchitecture>
+    <NativeMacTargetTriple>$(NativeMacArchitecture)-apple-macos12.0</NativeMacTargetTriple>
+    <NativeWrapperSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/AnsightSimulatorHid.m</NativeWrapperSource>
+    <NativeWrapperHeader>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/AnsightSimulatorHid.h</NativeWrapperHeader>
+    <NativeWrapperDirectory>$(MSBuildProjectDirectory)/obj/$(Configuration)/$(TargetFramework)/$(NativeMacArchitecture)/native</NativeWrapperDirectory>
+    <NativeWrapperDynamicLibrary>$(NativeWrapperDirectory)/libAnsightSimulatorHid.dylib</NativeWrapperDynamicLibrary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ansight.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content
+        Include="$(NativeWrapperDynamicLibrary)"
+        Link="libAnsightSimulatorHid.dylib"
+        CopyToOutputDirectory="PreserveNewest"
+        CopyToPublishDirectory="PreserveNewest"
+        Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
+    <Content
+        Include="$(MSBuildProjectDirectory)/THIRD-PARTY-NOTICES.md"
+        Link="Ansight.SimulatorHid.THIRD-PARTY-NOTICES.md"
+        CopyToOutputDirectory="PreserveNewest"
+        CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target
+      Name="BuildAnsightSimulatorHidDynamicLibrary"
+      BeforeTargets="CoreCompile"
+      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+      Inputs="$(NativeWrapperSource);$(NativeWrapperHeader)"
+      Outputs="$(NativeWrapperDynamicLibrary)">
+    <MakeDir Directories="$(NativeWrapperDirectory)" />
+    <Exec Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang -target $(NativeMacTargetTriple) -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(NativeWrapperSource)&quot; -framework Foundation -framework CoreGraphics -o &quot;$(NativeWrapperDynamicLibrary)&quot;" />
+  </Target>
+
+</Project>

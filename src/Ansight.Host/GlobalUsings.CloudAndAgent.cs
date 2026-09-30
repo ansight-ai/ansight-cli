@@ -1,0 +1,16 @@
+global using Ansight.Host.Cloud.Accounts;
+global using Ansight.Host.Cloud.Apps;
+global using Ansight.Host.Cloud.AppGraphs;
+global using Ansight.Host.Cloud.Runners;
+global using Ansight.Host.Cloud.Trends;
+global using Ansight.Host.Cloud.Tests;
+global using Ansight.Host.SimulatorAgent.AppGraphs;
+global using Ansight.Host.SimulatorAgent.Auditing;
+global using Ansight.Host.SimulatorAgent.Observations;
+global using Ansight.Host.SimulatorAgent.OpenAi;
+global using Ansight.Host.SimulatorAgent.OpenAi.Transport;
+global using Ansight.Host.SimulatorAgent.Runs;
+global using Ansight.Host.SimulatorAgent.Secrets;
+global using Ansight.Host.SimulatorAgent.TaskDiscovery;
+global using Ansight.Host.SimulatorAgent.Tools;
+global using Ansight.Host.UiAutomation.Navigation;
