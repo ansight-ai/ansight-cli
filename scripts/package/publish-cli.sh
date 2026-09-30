@@ -8,7 +8,8 @@ CONFIGURATION="${CONFIGURATION:-Release}"
 RID="${RID:-linux-x64}"
 TARGET_FRAMEWORK="${TARGET_FRAMEWORK:-net10.0}"
 OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/products/cli/${RID}}"
-PROJECT="${PROJECT:-${REPO_ROOT}/src/Ansight.Cli/Ansight.Cli.csproj}"
+CLI_PROJECT="${REPO_ROOT}/src/Ansight.Cli/Ansight.Cli.csproj"
+PROJECT="${PROJECT:-${CLI_PROJECT}}"
 VERSION_FILE="${VERSION_FILE:-${REPO_ROOT}/ansight.version.props}"
 WINDOWS_TRAY_PROJECT="${WINDOWS_TRAY_PROJECT:-${REPO_ROOT}/src/Ansight.Tray.Windows/Ansight.Tray.Windows.csproj}"
 MACOS_SIMULATOR_RTC_PROJECT="${MACOS_SIMULATOR_RTC_PROJECT:-${REPO_ROOT}/src/Ansight.SimulatorRtc.Mac/Ansight.SimulatorRtc.Mac.csproj}"
@@ -72,12 +73,28 @@ esac
 if [[ "${RID}" == win-* && ${#DOTNET_RESTORE_ARGUMENTS[@]} -eq 0 ]]; then
   # The CLI selects its Windows TFM from RuntimeIdentifier. Static graph restore
   # evaluates that property too late on a non-Windows host, so restore the
-  # regular project graph first and then replace only the CLI assets with the
-  # explicit Windows target used by the cross-platform local publisher.
+  # regular project graph first and then restore each conditional Windows TFM
+  # explicitly. Static graph restore misses them on a non-Windows host.
   dotnet restore "${PROJECT}" \
     -r "${RID}" \
     ${DOTNET_BUILD_ARGUMENTS[@]+"${DOTNET_BUILD_ARGUMENTS[@]}"} >&2
-  dotnet restore "${PROJECT}" \
+  if [[ "${PROJECT}" != "${CLI_PROJECT}" ]]; then
+    dotnet restore "${PROJECT}" \
+      --no-dependencies \
+      -r "${RID}" \
+      -p:TargetFramework=net10.0-windows10.0.19041.0 \
+      -p:EnableWindowsTargeting=true \
+      ${DOTNET_BUILD_ARGUMENTS[@]+"${DOTNET_BUILD_ARGUMENTS[@]}"} >&2
+  fi
+  if [[ -n "${ADDITIONAL_WINDOWS_PROJECT:-}" ]]; then
+    dotnet restore "${ADDITIONAL_WINDOWS_PROJECT}" \
+      --no-dependencies \
+      -r "${RID}" \
+      -p:TargetFramework=net10.0-windows10.0.19041.0 \
+      -p:EnableWindowsTargeting=true \
+      ${DOTNET_BUILD_ARGUMENTS[@]+"${DOTNET_BUILD_ARGUMENTS[@]}"} >&2
+  fi
+  dotnet restore "${CLI_PROJECT}" \
     --no-dependencies \
     -r "${RID}" \
     -p:TargetFramework=net10.0-windows10.0.19041.0 \
