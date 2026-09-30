@@ -1,42 +1,49 @@
+<p align="center">
+  <a href="https://www.ansight.ai/"><img src="assets/readme-header.svg" alt="Ansight: agents that verify their own work with captured app sessions and runtime evidence" width="1200"></a>
+</p>
+
 # Ansight
 
-Ansight is a local-host tool for teams and coding agents building iOS and Android
-apps. Once connected, development and test sessions on simulators and devices
-are captured automatically and kept for review. You can go back through what
-happened, inspect the available runtime evidence, and hand the session to the
-person or agent investigating it.
+Ansight connects your coding agent to a running iOS or Android app. Every
+connected development and test session is captured locally, so you can replay
+what the agent did, inspect the runtime evidence around each action, and hand
+the exact moment to a teammate or another agent. Local tools are free and need
+no account.
 
-A screenshot attached to “trust me, it’s done bro” shows one moment of an
-agent's work. Ansight lets you scrub through the session and see what the agent
-actually tested. When QA finds a bug, they can mark the relevant moment and
-hand over the replay instead of reproducing it just to make a screen recording
-and then describing the problem from memory.
+```sh
+curl -fsSL https://www.ansight.ai/install.sh | bash
+ansight host run --open
+```
+
+On Windows, use the [installation guide](https://www.ansight.ai/docs/getting-started).
+
+## Every run, recorded
+
+An agent finishes a feature: review its test session before accepting the
+change. QA finds a bug: mark the moment it happened and give the replay to a
+developer or agent. The recording is already there when you need it.
 
 ## Capture, review, test
 
-- **Capture:** Record sessions from supported simulators and physical devices.
-  Screens, interactions, logs, telemetry, and other evidence are available
-  according to the capture mode and SDK integration. Enrich sessions with
-  custom data from your app.
-- **Review:** Scrub through a session in the local player, inspect its evidence,
-  and annotate a timeline moment or an area of the screen. Export a portable
-  ZIP for handoff.
-- **Test:** Your existing coding agent can inspect and drive the live app with
+- **Capture:** Automatically retain connected sessions. Depending on the
+  capture mode and SDK integration, inspect screens, touches, UI trees, logs,
+  network activity, telemetry, and custom app data.
+- **Review:** Scrub through a session in the local player. Mark a moment on the
+  timeline or an area of the screen, then export a ZIP for a bug report or
+  developer handoff.
+- **Test:** Let your existing coding agent inspect and drive the app with
   [`ansight app interact`](https://www.ansight.ai/docs/cli/commands#app-interact).
-  For a delegated run, hand a plain-language goal to `ansight app execute` or
-  define a UI test with success criteria for Ansight's hosted agent to verify.
-  Extract stable steps into repeatable local tasks.
+  Write UI journeys and success criteria in plain language, or extract stable
+  steps into repeatable local tasks. Use `ansight app execute` or a UI test run
+  to hand execution and verification to Ansight's hosted agent.
 
-## Free local tools
+Local capture, device tools, agent interaction, replay, annotations, ZIP export,
+and local tasks are free. Sign in for cloud sharing, build uploads, hosted agent
+execution, and remote runners.
 
-The CLI and local host need no account or credit card. Local capture, device
-tools, `app interact`, session inspection and replay, annotations, ZIP export,
-and local tasks are free. Sign in for cloud sharing, build uploads, delegated
-agent execution (`app execute` and UI test runs), and remote runners.
-
-Visit the [Ansight website](https://www.ansight.ai), read the
-[documentation](https://www.ansight.ai/docs), or follow the
-[getting-started guide](https://www.ansight.ai/docs/getting-started).
+[Website](https://www.ansight.ai) · [Documentation](https://www.ansight.ai/docs) ·
+[Getting started](https://www.ansight.ai/docs/getting-started) ·
+[Capture modes](https://www.ansight.ai/docs/capture-modes)
 
 ## Build
 
@@ -48,8 +55,7 @@ npm run build:player
 dotnet build src/Ansight.Cli/Ansight.Cli.csproj
 ```
 
-See [CONTRIBUTING](CONTRIBUTING.md) for development commands and
-[the docs](https://www.ansight.ai/docs) for product guidance.
+See [CONTRIBUTING](CONTRIBUTING.md) for development commands.
 
 Licensed under [PolyForm Shield 1.0.0](LICENSE). See [NOTICE](NOTICE) for
 third-party notices.
