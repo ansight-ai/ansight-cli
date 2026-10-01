@@ -15,9 +15,11 @@ present. Set `ANSIGHT_SDK_REPOSITORY` or pass
 `-p:AnsightProtocolProject=/path/to/Ansight.Protocol.csproj` to select another
 checkout; pass `-p:UseAnsightProtocolSource=false` to use the pinned package.
 
-The CLI embeds player assets from its pinned `@ansight/player` npm package.
-Update it with `npm install --save-dev --save-exact @ansight/player@<version>`
-and rerun `npm run build:player`. To embed a locally built sibling player, run
+The CLI embeds player assets from the integrity-pinned `@ansight/player` archive
+in `vendor/`. To update it, run `npm run pack:release` in the player repository,
+copy the new archive into `vendor/`, run
+`npm install --save-dev --save-exact ./vendor/ansight-player-<version>.tgz`,
+remove the old archive, and rerun `npm run build:player`. To embed a locally built sibling player, run
 `npm --prefix ../ansight-player ci`, `npm --prefix ../ansight-player run build`,
 then `dotnet msbuild build/player-assets.proj -p:AnsightPlayerRepository=../ansight-player`
 before building the CLI. `ANSIGHT_PLAYER_REPOSITORY` can also select a checkout
