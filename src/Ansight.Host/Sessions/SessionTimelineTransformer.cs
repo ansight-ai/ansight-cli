@@ -302,7 +302,8 @@ internal static class SessionTimelineTransformer
                 SurfaceHeight = touch.SurfaceHeight,
                 CoordinateSpace = touch.CoordinateSpace,
                 CoordinateUnit = touch.CoordinateUnit,
-                SurfaceScale = touch.SurfaceScale
+                SurfaceScale = touch.SurfaceScale,
+                Details = touch.Details
             },
             cutoffUtc,
             offset);

@@ -223,7 +223,8 @@ internal static class RuntimeSnapshotNormalizer
                 ? "window"
                 : touch.CoordinateSpace.Trim(),
             CoordinateUnit = touch.CoordinateUnit.Trim(),
-            SurfaceScale = NormalizePositiveValue(touch.SurfaceScale)
+            SurfaceScale = NormalizePositiveValue(touch.SurfaceScale),
+            Details = touch.Details
         };
         return true;
     }

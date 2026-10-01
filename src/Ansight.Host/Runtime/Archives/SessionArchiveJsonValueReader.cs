@@ -310,6 +310,9 @@ internal static class SessionArchiveJsonValueReader
             "1" or "move" or "moved" => "move",
             "2" or "ended" or "end" or "up" => "up",
             "3" or "cancelled" or "canceled" or "cancel" => "cancel",
+            "5" or "hoverenter" => "hoverEnter",
+            "6" or "hovermove" => "hoverMove",
+            "7" or "hoverexit" => "hoverExit",
             var normalized when !string.IsNullOrWhiteSpace(normalized) => normalized,
             _ => "unknown"
         };

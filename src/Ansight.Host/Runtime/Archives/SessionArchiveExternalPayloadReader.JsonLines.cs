@@ -493,6 +493,11 @@ internal static partial class SessionArchiveExternalPayloadReader
         var pointerIndex = FirstInt(element, "pointerIndex", "i") ?? 0;
         var pointerCount = Math.Max(pointerIndex + 1, FirstInt(element, "pointerCount", "pc") ?? 1);
         var pointerId = FirstInt64(element, "pointerId", "pointer", "p") ?? 0;
+        SessionTouchSampleDetails? details = null;
+        if (TryGetProperty(element, "details", out var detailsElement))
+        {
+            TryDeserialize(detailsElement, out details);
+        }
 
         touch = new SessionTouchInputRecord
         {
@@ -511,7 +516,8 @@ internal static partial class SessionArchiveExternalPayloadReader
             SurfaceHeight = FirstDouble(element, "surfaceHeight", "height", "h"),
             CoordinateSpace = NormalizeCoordinateSpace(FirstString(element, "coordinateSpace", "space")),
             CoordinateUnit = NormalizeCoordinateUnit(FirstString(element, "coordinateUnit", "unit", "u")),
-            SurfaceScale = FirstDouble(element, "surfaceScale", "scale", "s")
+            SurfaceScale = FirstDouble(element, "surfaceScale", "scale", "s"),
+            Details = details
         };
         return true;
     }

@@ -117,7 +117,13 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             ["surface"] = new JsonArray(482, 480, 2),
             ["rows"] = new JsonArray
             {
-                new JsonArray(0, 0, 1, 120.5, 240.25),
+                new JsonArray(0, 0, 1, 120.5, 240.25, 0, 1, new JsonObject
+                {
+                    ["tool"] = "stylus",
+                    ["sampleKind"] = "coalesced",
+                    ["force"] = 1.25,
+                    ["altitudeRadians"] = 0.8
+                }),
                 new JsonArray(125, 2, 1, 122.5, 241.25)
             }
         });
@@ -280,6 +286,8 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             Assert.Equal(2, rows.GetArrayLength());
             Assert.Equal(0, rows[0][1].GetInt32());
             Assert.Equal(2, rows[1][1].GetInt32());
+            Assert.Equal("stylus", rows[0][7].GetProperty("tool").GetString());
+            Assert.Equal(1.25, rows[0][7].GetProperty("force").GetDouble());
         }
 
         using var appIconStream = appIconEntry!.Open();
