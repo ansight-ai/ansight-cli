@@ -17,6 +17,9 @@ internal static class SessionTouchPacking
     private const int ActionUp = 2;
     private const int ActionCancel = 3;
     private const int ActionUnknown = 4;
+    private const int ActionHoverEnter = 5;
+    private const int ActionHoverMove = 6;
+    private const int ActionHoverExit = 7;
 
     public static List<SessionTouchPackedBatch> Pack(IReadOnlyList<SessionTouchInputRecord> touches)
     {
@@ -88,7 +91,8 @@ internal static class SessionTouchPacking
                     SurfaceHeight = surfaceHeight,
                     CoordinateSpace = coordinateSpace,
                     CoordinateUnit = coordinateUnit,
-                    SurfaceScale = surfaceScale
+                    SurfaceScale = surfaceScale,
+                    Details = ReadDetails(row)
                 });
             }
         }
@@ -130,10 +134,15 @@ internal static class SessionTouchPacking
                 touch.X,
                 touch.Y
             };
-            if (touch.PointerIndex != 0 || touch.PointerCount != 1)
+            if (touch.PointerIndex != 0 || touch.PointerCount != 1 || touch.Details is not null)
             {
                 row.Add(touch.PointerIndex);
                 row.Add(touch.PointerCount);
+            }
+
+            if (touch.Details is not null)
+            {
+                row.Add(touch.Details);
             }
 
             rows.Add(row);
@@ -205,6 +214,9 @@ internal static class SessionTouchPacking
             "move" or "moved" => ActionMove,
             "up" or "released" => ActionUp,
             "cancel" or "cancelled" or "canceled" => ActionCancel,
+            "hoverenter" => ActionHoverEnter,
+            "hovermove" => ActionHoverMove,
+            "hoverexit" => ActionHoverExit,
             _ => ActionUnknown
         };
     }
@@ -217,6 +229,9 @@ internal static class SessionTouchPacking
             ActionMove => "move",
             ActionUp => "up",
             ActionCancel => "cancel",
+            ActionHoverEnter => "hoverEnter",
+            ActionHoverMove => "hoverMove",
+            ActionHoverExit => "hoverExit",
             _ => "unknown"
         };
     }
@@ -226,6 +241,22 @@ internal static class SessionTouchPacking
         return index >= 0 && index < surface.Count && surface[index].GetValueOrDefault() > 0d
             ? surface[index]
             : null;
+    }
+
+    private static SessionTouchSampleDetails? ReadDetails(IReadOnlyList<object?> row)
+    {
+        if (row.Count < 8)
+        {
+            return null;
+        }
+
+        return row[7] switch
+        {
+            SessionTouchSampleDetails details => details,
+            JsonElement { ValueKind: JsonValueKind.Object } element =>
+                element.Deserialize<SessionTouchSampleDetails>(JsonUtil.Compact),
+            _ => null
+        };
     }
 
     private static double? ResolveNormalizedCoordinate(double value, double? surfaceLength, string coordinateUnit)
