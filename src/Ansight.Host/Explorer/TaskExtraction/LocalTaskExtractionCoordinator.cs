@@ -54,9 +54,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             SupportsDirectWebSocket: true,
             TaskTypeDefinitions: RepositoryModuleContractArtifacts.GetTaskTypeDefinitions())
         {
-            CanUseModel = LocalModelAccess.IsCloudSelected
-                ? runtime.Extensions.IsAvailable()
-                : LocalModelAccess.ResolveApiKey() is not null
+            CanUseModel = runtime.Extensions.IsAvailable()
         };
 
     public async Task<LocalTaskAuthoringReferenceCatalog> GetAuthoringReferencesAsync(
@@ -845,10 +843,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         ICollection<SimulatorAgentModelPassUsage> modelPasses,
         Action<SimulatorAgentTokenUsage> addUsage)
     {
-        var apiKey = preparation.ModelTransport is null
-            ? preparation.ApiKey
-            : await preparation.ModelTransport.ResolveAccessKeyAsync(extraction.Cancellation.Token).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("Task extraction requires a model API key or an execution transport.");
+        var transport = preparation.ModelTransport
+            ?? throw new InvalidOperationException("Task extraction requires a brokered model transport.");
+        var apiKey = await transport.ResolveAccessKeyAsync(extraction.Cancellation.Token).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("The brokered model transport returned no access token.");
         if (extraction.Mode == LocalTaskExtractionModes.DirectWebSocket && preparation.ModelTransport?.SupportsWebSockets == false)
             throw new InvalidOperationException("The selected transport does not support WebSockets.");
 

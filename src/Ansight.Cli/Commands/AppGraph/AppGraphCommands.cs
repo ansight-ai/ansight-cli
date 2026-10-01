@@ -965,7 +965,8 @@ internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
     {
         if (gateway is null)
         {
-            return Task.FromResult(WorkspaceTestRunPreparation.Local());
+            return Task.FromResult(WorkspaceTestRunPreparation.Failure(
+                "App Graph execution requires the Ansight cloud gateway. Sign in with 'ansight account login'."));
         }
 
         return gateway.PrepareAsync(

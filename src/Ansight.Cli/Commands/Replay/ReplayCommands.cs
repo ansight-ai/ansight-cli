@@ -445,7 +445,8 @@ internal static class ReplayCommands
     {
         if (gateway is null)
         {
-            return Task.FromResult(WorkspaceTestRunPreparation.Local());
+            return Task.FromResult(WorkspaceTestRunPreparation.Failure(
+                "Replay execution requires the Ansight cloud gateway. Sign in with 'ansight account login'."));
         }
 
         return gateway.PrepareAsync(

@@ -64,8 +64,9 @@ public static class MaestroFlowRefiner
             throw new InvalidOperationException(preparation.Message);
         }
 
-        var apiKey = preparation.ModelTransport is null ? preparation.ApiKey
-            : await preparation.ModelTransport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
+        var transport = preparation.ModelTransport
+            ?? throw new InvalidOperationException("Model-assisted extraction requires a brokered model transport.");
+        var apiKey = await transport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             throw new InvalidOperationException("Model-assisted extraction could not be authorized.");

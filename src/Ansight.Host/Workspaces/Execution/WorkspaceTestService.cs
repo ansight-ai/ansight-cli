@@ -462,7 +462,8 @@ public sealed partial class WorkspaceTestService
                 $"Using Ansight session '{session.SessionId}' for '{test.AppId}'."));
 
             var preparation = runGateway is null
-                ? WorkspaceTestRunPreparation.Local()
+                ? WorkspaceTestRunPreparation.Failure(
+                    "Workspace tests require the Ansight cloud gateway. Sign in with 'ansight account login'.")
                 : await runGateway.PrepareAsync(
                     new WorkspaceTestRunPreparationRequest(
                         request.TeamId,
@@ -530,7 +531,6 @@ public sealed partial class WorkspaceTestService
                     ReasoningConfigurationRevision = reasoningConfiguration.Revision,
                     SecretResolver = request.SecretResolver,
                     MaximumRoundTrips = maximumRoundTrips,
-                    ApiKey = preparation.ApiKey,
                     ModelTransport = preparation.ModelTransport,
                     StartupSteps = launchTiming.Complete().Concat(preparation.StartupSteps).ToArray(),
                     TrackingRunId = preparation.TrackingRunId,

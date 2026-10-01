@@ -23,8 +23,6 @@ public sealed record SimulatorAgentRunRequest(
 
     public int? MaximumModelOutputTokens { get; init; }
 
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string? ApiKey { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public IModelExecutionTransport? ModelTransport { get; init; }

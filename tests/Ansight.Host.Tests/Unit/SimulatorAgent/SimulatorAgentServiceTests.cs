@@ -2936,29 +2936,6 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Empty(client.ApiKeys);
     }
 
-    [Fact]
-    public async Task RunAsync_WithDeveloperApiKey_ExecutesWithoutAccountOrCloudMetering()
-    {
-        var storage = new InMemoryEncryptedStorage();
-        using var client = new FakeOpenAiClient([
-            CreateFunctionTurn("done", "complete_instruction", new JsonObject
-            {
-                ["outcome"] = "succeeded", ["summary"] = "Validated locally."
-            })
-        ]);
-        using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
-        var request = new SimulatorAgentRunRequest("session-123", ["Validate the app."])
-        {
-            ApiKey = "developer-provider-key"
-        };
-        var result = await service.RunAsync(request);
-        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
-        Assert.Equal("developer-provider-key", Assert.Single(client.ApiKeys));
-        Assert.Equal("direct", result.Audit.OpenAiTransport);
-        Assert.DoesNotContain("developer-provider-key", JsonSerializer.Serialize(request));
-        Assert.DoesNotContain("developer-provider-key", JsonSerializer.Serialize(result.Audit));
-    }
-
     private static string CreateAppGraphCompletionSummary(params string[] destinationIds)
         => new JsonObject
         {

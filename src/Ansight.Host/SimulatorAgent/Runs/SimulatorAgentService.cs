@@ -214,9 +214,10 @@ public sealed class SimulatorAgentService : IDisposable
         var credentialTimer = Stopwatch.StartNew();
         var startupSteps = new System.Collections.Concurrent.ConcurrentQueue<SimulatorAgentStartupStep>(request.StartupSteps);
         var apiKey = modelTransport is null
-            ? request.ApiKey?.Trim() ?? LocalModelAccess.ResolveApiKey() ?? defaultModelAccessTokenForTesting
+            ? defaultModelAccessTokenForTesting
             : await modelTransport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException(LocalModelAccess.ConfigurationMessage);
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("Agent execution requires an Ansight brokered model transport. Sign in with 'ansight account login'.");
         startupSteps.Enqueue(new("Resolve run credentials", credentialStartedUtc, credentialTimer.ElapsedMilliseconds, "succeeded"));
         if (request.TrackingRunId == Guid.Empty) throw new ArgumentException("The test tracking run ID cannot be empty.", nameof(request));
         var supportsWebSockets = modelTransport?.SupportsWebSockets ?? true;

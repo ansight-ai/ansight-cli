@@ -7,7 +7,7 @@ public sealed class AppGraphAgentRunTests
 {
 
     [Fact]
-    public async Task PrepareAppGraphAgentRunAsyncFallsBackToLocalExecutionWithoutAGateway()
+    public async Task PrepareAppGraphAgentRunAsyncRejectsMissingCloudGateway()
     {
         var result = await AppGraphCommands.PrepareAppGraphAgentRunAsync(
             gateway: null,
@@ -19,7 +19,8 @@ public sealed class AppGraphAgentRunTests
             "App Graph exploration",
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("cloud gateway", result.Message);
         Assert.False(result.UsesExternalTransport);
     }
 

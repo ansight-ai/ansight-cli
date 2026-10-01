@@ -338,7 +338,7 @@ public sealed class AppExecutionServiceTests
     }
 
     [Fact]
-    public async Task PrepareAppExecutionRunAsyncFallsBackToLocalExecutionWithoutAGateway()
+    public async Task PrepareAppExecutionRunAsyncRejectsMissingCloudGateway()
     {
         var result = await AppExecutionService.PrepareAppExecutionRunAsync(
             gateway: null,
@@ -349,7 +349,8 @@ public sealed class AppExecutionServiceTests
             instructionCount: 1,
             CancellationToken.None);
 
-        Assert.True(result.IsSuccess);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("cloud gateway", result.Message);
         Assert.False(result.UsesExternalTransport);
     }
 
