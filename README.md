@@ -43,10 +43,13 @@ precise starting point for investigating the surrounding runtime evidence.
 
 - **Capture:** Automatically retain connected sessions. Depending on the
   capture mode and SDK integration, inspect screens, touches, UI trees, logs,
-  network activity, telemetry, and custom app data.
+  network activity, telemetry, and custom app data. SDK touch capture also
+  retains available Apple Pencil and Android stylus/eraser pressure, angles,
+  hover, and higher-fidelity move samples.
 - **Review:** Scrub through a session in the local player. Mark a moment on the
   timeline or an area of the screen, then export a ZIP for a bug report or
-  developer handoff.
+  developer handoff. Pen markers show pressure through size and tilt and
+  direction through their shape and rotation; hover over one for exact values.
 - **Test:** Let your existing coding agent inspect and drive the app with
   [`ansight app interact`](https://www.ansight.ai/docs/cli/commands#app-interact).
   Write UI journeys and success criteria in plain language, or extract stable
