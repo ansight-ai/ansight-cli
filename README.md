@@ -23,6 +23,22 @@ An agent finishes a feature: review its test session before accepting the
 change. QA finds a bug: mark the moment it happened and give the replay to a
 developer or agent. The recording is already there when you need it.
 
+### Live capture
+
+<p align="center">
+  <img src="assets/readme-live-capture.gif" alt="Live app session updating in the Ansight player with screenshots, telemetry, touches, and visual trees" width="1200">
+</p>
+
+### Annotate a captured screen
+
+Pin a note to a moment on the timeline or an area of the screen. It directs
+teammates to the part of the recording that matters and gives a coding agent a
+precise starting point for investigating the surrounding runtime evidence.
+
+<p align="center">
+  <img src="assets/readme-annotate-screen.gif" alt="Selecting an area of a recorded app screen, adding a comment, and seeing the saved annotation in the replay" width="1200">
+</p>
+
 ## Capture, review, test
 
 - **Capture:** Automatically retain connected sessions. Depending on the
