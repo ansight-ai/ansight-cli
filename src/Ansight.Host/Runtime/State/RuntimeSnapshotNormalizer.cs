@@ -54,6 +54,7 @@ internal static class RuntimeSnapshotNormalizer
             Label = label,
             Source = NormalizeAnnotationSource(annotation.Source),
             Notes = RuntimeState.NormalizeNotes(annotation.Notes),
+            Status = RuntimeState.NormalizeNotes(annotation.Status),
             CaptureGroupId = RuntimeState.NormalizeNotes(annotation.CaptureGroupId),
             CustomData = annotation.CustomData?.DeepClone() as JsonObject,
             Evidence = NormalizeAnnotationEvidence(annotation.Evidence),
@@ -555,6 +556,7 @@ internal static class RuntimeSnapshotNormalizer
             || !string.Equals(left.Label, right.Label, StringComparison.Ordinal)
             || !string.Equals(left.Source, right.Source, StringComparison.Ordinal)
             || !string.Equals(left.Notes, right.Notes, StringComparison.Ordinal)
+            || !string.Equals(left.Status, right.Status, StringComparison.Ordinal)
             || !string.Equals(left.CaptureGroupId, right.CaptureGroupId, StringComparison.Ordinal)
             || !JsonNode.DeepEquals(left.CustomData, right.CustomData)
             || !left.HookFailures.SequenceEqual(right.HookFailures, StringComparer.Ordinal)

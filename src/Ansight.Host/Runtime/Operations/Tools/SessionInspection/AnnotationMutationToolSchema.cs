@@ -24,6 +24,7 @@ internal static class AnnotationMutationToolSchema
         {
             properties["label"] = ToolSchema.String(isCreate ? "Required non-empty annotation label." : "Replacement non-empty label; omission preserves it.");
             properties["notes"] = ToolSchema.String("Annotation notes. On patch, null clears the notes.", nullable: isPatch);
+            properties["status"] = ToolSchema.String("Free-text annotation status, such as resolved. On patch, null clears it.", nullable: true);
             properties["startUtc"] = ToolSchema.String("ISO-8601 start timestamp with timezone. Creation defaults to the latest captured session timestamp.", format: "date-time");
             properties["endUtc"] = ToolSchema.String("ISO-8601 end timestamp with timezone. Must not precede startUtc. On patch, null clears the end.", nullable: isPatch, format: "date-time");
             properties["geometries"] = ToolSchema.Array(Geometry(), description: "Screenshot shapes; on patch, replaces the array. [] clears it.");

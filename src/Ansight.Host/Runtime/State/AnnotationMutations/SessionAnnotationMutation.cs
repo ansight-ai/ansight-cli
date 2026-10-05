@@ -10,6 +10,8 @@ internal sealed class SessionAnnotationMutation
     public string? Source { get; init; }
     public bool HasNotes { get; init; }
     public string? Notes { get; init; }
+    public bool HasStatus { get; init; }
+    public string? Status { get; init; }
     public DateTimeOffset? StartUtc { get; init; }
     public bool HasEndUtc { get; init; }
     public DateTimeOffset? EndUtc { get; init; }

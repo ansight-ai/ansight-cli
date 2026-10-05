@@ -29,7 +29,7 @@ internal abstract class AnnotationMutationTool : Operation
     protected override string Description => kind switch
     {
         SessionAnnotationMutationKind.Create => "Create a timeline or screenshot annotation. An existing annotation id is an error. Screenshot and visual-tree references must belong to the selected session.",
-        SessionAnnotationMutationKind.Patch => "Patch an existing annotation atomically. Omitted fields and attached evidence are preserved. Null clears notes, endUtc, or target; an empty geometries array clears screenshot shapes.",
+        SessionAnnotationMutationKind.Patch => "Patch an existing annotation atomically. Omitted fields and attached evidence are preserved. Null clears notes, status, endUtc, or target; an empty geometries array clears screenshot shapes.",
         _ => "Delete an existing annotation atomically, optionally guarding its source. Returns the removed annotation."
     };
 

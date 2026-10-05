@@ -66,7 +66,11 @@ internal static class SessionCommands
                 arguments,
                 output,
                 "annotations",
-                static snapshot => snapshot.Annotations,
+                snapshot => snapshot.Annotations
+                    .Where(annotation => arguments.GetOption("status") is not { } status
+                        || string.Equals(annotation.Status, status, StringComparison.OrdinalIgnoreCase))
+                    .Where(annotation => !arguments.HasFlag("without-status") || string.IsNullOrWhiteSpace(annotation.Status))
+                    .ToArray(),
                 cancellationToken),
             "analyses" => await CollectionAsync(
                 runtime,
@@ -1423,6 +1427,7 @@ internal static Task<int> SummaryAsync(
              ansight session trim <session-id> --start <utc> --end <utc> --mode <cut|keep>
              ansight session normalize <session-id>
              ansight session annotation upsert <session-id> [options]
+             ansight session annotation status <session-id> <annotation-id> (--status <text> | --clear-status)
              ansight session annotation delete <session-id> <annotation-id>
              ansight session analysis delete <session-id> <analysis-id>
              ansight session screenshot export <session-id> --output <path> [options]
@@ -1492,7 +1497,8 @@ internal static Task<int> SummaryAsync(
 
            Direct mutation and evidence options:
              annotation upsert accepts --file <annotation.json>, or --label/--start with
-             optional --annotation-id, --end, --notes, and --source.
+             optional --annotation-id, --end, --notes, --status, and --source.
+             annotations accepts --status <text> or --without-status to filter results.
              screenshot export selects --frame-id, --timestamp, or the latest frame.
              artifact export accepts optional --snapshot-id. Pass --force to replace output files.
 

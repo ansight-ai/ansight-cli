@@ -16,6 +16,8 @@ public sealed class SessionAnnotation
 
     public string? Notes { get; init; }
 
+    public string? Status { get; init; }
+
     public string? CaptureGroupId { get; init; }
 
     public JsonObject? CustomData { get; init; }

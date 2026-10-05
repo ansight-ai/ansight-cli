@@ -26,6 +26,7 @@ internal sealed class InjectAnnotationTool : Operation
             ["source"] = ToolSchema.String("Annotation source. Defaults to ansight-operation.", nullable: true),
             ["label"] = ToolSchema.String("Required annotation label."),
             ["notes"] = ToolSchema.String("Optional annotation notes.", nullable: true),
+            ["status"] = ToolSchema.String("Optional free-text annotation status, such as resolved.", nullable: true),
             ["startUtc"] = ToolSchema.String("Optional annotation start timestamp. Defaults to the session's latest timestamp.", nullable: true, format: "date-time"),
             ["endUtc"] = ToolSchema.String("Optional annotation end timestamp for a timespan annotation.", nullable: true, format: "date-time"),
             ["geometries"] = ToolSchema.Array(

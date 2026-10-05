@@ -459,6 +459,7 @@ internal static class PayloadJson
             ["label"] = annotation.Label,
             ["source"] = annotation.Source,
             ["notes"] = annotation.Notes,
+            ["status"] = annotation.Status,
             ["captureGroupId"] = annotation.CaptureGroupId,
             ["customData"] = annotation.CustomData?.DeepClone(),
             ["hookFailures"] = CreateJsonArray(annotation.HookFailures.Select(failure => (JsonNode?)failure)),

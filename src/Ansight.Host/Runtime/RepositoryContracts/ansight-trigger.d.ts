@@ -281,11 +281,17 @@ export interface AppArtifactRequestArguments extends AppToolArguments {
 
 /** Feature component for trigger app artifacts operations. */
 export interface ArtifactsContext {
-  /** Creates the declarative app-tool action that will query available data. */
+  /**
+   * Return this action to have the host query which artifact providers and IDs the app offers
+   * at the matched event. The trigger cannot inspect the result or return a second action.
+   */
   query(
     args?: AppArtifactQueryArguments,
   ): AppToolAction<AppArtifactQueryArguments>;
-  /** Creates the declarative app-tool action that will request an artifact capture. */
+  /**
+   * Return this action to create one provider-owned artifact using a known provider ID and
+   * artifact ID. The host dispatches it for the matched event after the handler returns.
+   */
   request(
     args: AppArtifactRequestArguments,
   ): AppToolAction<AppArtifactRequestArguments>;
@@ -293,218 +299,463 @@ export interface ArtifactsContext {
 
 /** Feature component for trigger app UI operations. */
 export interface UiContext {
-  /** Creates the declarative app-tool action that will get the current visual tree. */
+  /**
+   * Return this action to inspect the app-owned visual hierarchy when visible screen state
+   * needs more detail than a screenshot. The host dispatches it for the matched event after the
+   * handler returns.
+   */
   getVisualTree(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will capture the current screen. */
+  /**
+   * Return this action to capture the current screen through the app SDK for evidence at this
+   * point in the session. The host dispatches it for the matched event after the handler
+   * returns.
+   */
   getScreenshot(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inspect one UI node. */
+  /**
+   * Return this action to read details for a node already identified in a visual tree. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   inspectNode(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will show a diagnostic overlay. */
+  /**
+   * Return this action to highlight an app location or state with a diagnostic overlay. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   showOverlay(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get one diagnostic overlay. */
+  /**
+   * Return this action to read one known overlay before changing or removing it. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   getOverlay(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will query diagnostic overlays. */
+  /**
+   * Return this action to discover active overlays when their IDs are not already known. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   queryOverlays(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will update a diagnostic overlay. */
+  /**
+   * Return this action to change an existing diagnostic overlay without creating another. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   updateOverlay(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will remove a diagnostic overlay. */
+  /**
+   * Return this action to remove one diagnostic overlay after its purpose is complete. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   removeOverlay(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will clear diagnostic overlays. */
+  /**
+   * Return this action to remove all diagnostic overlays to restore a clean app view. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   clearOverlays(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app files operations. */
 export interface FilesContext {
-  /** Creates the declarative app-tool action that will list a directory. */
+  /**
+   * Return this action to discover entries in an app-sandbox directory before selecting a file.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   listDirectory(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will read a file from the app sandbox. */
+  /**
+   * Return this action to inspect the contents of a selected app-sandbox file through the SDK.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   readFile(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will calculate a file checksum. */
+  /**
+   * Return this action to compare a file across steps without transferring its full contents.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   getChecksum(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will download a file. */
+  /**
+   * Return this action to retrieve a selected sandbox file through the app tool response. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   download(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will start a binary file download. */
+  /**
+   * Return this action to transfer a sandbox file as binary evidence that the host can retain
+   * as a session artifact. The host dispatches it for the matched event after the handler
+   * returns.
+   */
   beginBinaryDownload(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will push a file to the app sandbox. */
+  /**
+   * Return this action to write supplied content into an allowed app-sandbox location for a
+   * controlled test. The host dispatches it for the matched event after the handler returns.
+   */
   push(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will copy a file in the app sandbox. */
+  /**
+   * Return this action to duplicate an allowed sandbox file while preserving the original. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   copy(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will move a file in the app sandbox. */
+  /**
+   * Return this action to rename or relocate an allowed sandbox file. The host dispatches it
+   * for the matched event after the handler returns.
+   */
   move(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will delete a file in the app sandbox. */
+  /**
+   * Return this action to remove a selected sandbox file after verifying the target path. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   delete(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app file descriptors operations. */
 export interface FileDescriptorsContext {
-  /** Creates the declarative app-tool action that will list open file descriptors. */
+  /**
+   * Return this action to identify open file descriptors while diagnosing a leak. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   listOpen(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will count open file descriptors. */
+  /**
+   * Return this action to compare a lightweight descriptor count before and after an app
+   * action. The host dispatches it for the matched event after the handler returns.
+   */
   countOpen(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inspect a runtime value. */
+  /**
+   * Return this action to examine one descriptor or related runtime value identified by the
+   * diagnostic suite. The host dispatches it for the matched event after the handler returns.
+   */
   inspect(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get file-descriptor usage. */
+  /**
+   * Return this action to compare current descriptor usage with the process limits. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   getUsage(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app JNI references operations. */
 export interface JniReferencesContext {
-  /** Creates the declarative app-tool action that will capture the JNI reference graph. */
+  /**
+   * Return this action to capture Android JNI references when investigating retained native
+   * objects. The host dispatches it for the matched event after the handler returns.
+   */
   captureGraph(args?: AppToolArguments): AppToolAction;
 }
 
 /** Factories for native system clipboard actions. */
 export interface ClipboardContext {
-  /** Creates an action to read clipboard text (up to 65536 UTF-8 bytes). */
+  /**
+   * Return this action to read exact plain text from the native clipboard; iOS may ask for
+   * paste permission. The host dispatches it for the matched event after the handler returns.
+   */
   getText(): AppToolAction;
-  /** Creates an action to check for clipboard text. */
+  /**
+   * Return this action to check whether plain text exists without returning its contents. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   hasText(): AppToolAction;
-  /** Creates an action to replace clipboard contents with exact plain text. */
+  /**
+   * Return this action to replace clipboard contents with controlled test text of at most
+   * 65,536 UTF-8 bytes. The host dispatches it for the matched event after the handler returns.
+   */
   setText(args: { text: string }): AppToolAction;
-  /** Creates an action to clear all clipboard contents. */
+  /**
+   * Return this action to remove clipboard contents during test setup or cleanup. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   clear(): AppToolAction;
 }
 
 /** Factories for app preference-store actions. */
 export interface PreferencesContext {
-  /** Creates the declarative app-tool action that will list stored keys. */
+  /**
+   * Return this action to discover preference keys exposed by the connected app. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   listKeys(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get the requested values. */
+  /**
+   * Return this action to read selected preferences before asserting or changing app behavior.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   get(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set a stored value. */
+  /**
+   * Return this action to set a selected preference for a controlled development test. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   set(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will remove a stored value. */
+  /**
+   * Return this action to remove a selected preference to exercise its default behavior. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   remove(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app secure storage operations. */
 export interface SecureStorageContext {
-  /** Creates the declarative app-tool action that will get the requested values. */
+  /**
+   * Return this action to inspect a selected secure-storage value when the app explicitly
+   * permits this suite. The host dispatches it for the matched event after the handler returns.
+   */
   get(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set a stored value. */
+  /**
+   * Return this action to write a controlled secure-storage value for a development test. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   set(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will remove a stored value. */
+  /**
+   * Return this action to remove a selected secure-storage value during test cleanup. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   remove(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app data operations. */
 export interface DataContext {
-  /** Creates the declarative app-tool action that will list app databases. */
+  /**
+   * Return this action to discover which app databases are exposed before selecting one. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   listDatabases(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will describe a database schema. */
+  /**
+   * Return this action to inspect tables and columns before constructing a query. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   describeSchema(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will query available data. */
+  /**
+   * Return this action to inspect domain state through the app database tool after choosing a
+   * database and schema. The host dispatches it for the matched event after the handler
+   * returns.
+   */
   query(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app reflection operations. */
 export interface ReflectionContext {
-  /** Creates the declarative app-tool action that will list reflection roots. */
+  /**
+   * Return this action to discover the runtime objects the app has exposed for reflection. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   listRoots(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inspect an object through reflection. */
+  /**
+   * Return this action to read members of an exposed object before choosing a member. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   inspectObject(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will describe a reflected type. */
+  /**
+   * Return this action to inspect type members and signatures before an invocation or mutation.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   describeType(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set a reflected member value. */
+  /**
+   * Return this action to change an exposed member in a controlled development workflow. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   setMemberValue(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will invoke a reflected method. */
+  /**
+   * Return this action to call an exposed runtime method when a narrower app-specific tool is
+   * unavailable. The host dispatches it for the matched event after the handler returns.
+   */
   invokeMethod(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app .NET MAUI operations. */
 export interface MauiContext {
-  /** Creates the declarative app-tool action that will get the current .NET MAUI page. */
+  /**
+   * Return this action to identify the active .NET MAUI page before inspecting its elements.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   getCurrentPage(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get the current visual tree. */
+  /**
+   * Return this action to inspect the current MAUI element hierarchy and locate stable element
+   * IDs. The host dispatches it for the matched event after the handler returns.
+   */
   getVisualTree(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will find .NET MAUI elements. */
+  /**
+   * Return this action to search MAUI elements before reading or acting on one. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   findElements(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get a .NET MAUI element. */
+  /**
+   * Return this action to inspect one MAUI element selected from a tree or search result. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   getElement(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get a .NET MAUI bindable property. */
+  /**
+   * Return this action to read a selected bindable property and its current value. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   getBindableProperty(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set a .NET MAUI bindable property. */
+  /**
+   * Return this action to set a bindable property to reproduce a controlled UI state. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   setBindableProperty(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will clear a .NET MAUI bindable property. */
+  /**
+   * Return this action to clear a local bindable value so its normal source can apply. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   clearBindableProperty(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inflate a .NET MAUI XAML fragment. */
+  /**
+   * Return this action to create a diagnostic MAUI element from a XAML fragment. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   inflateXaml(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will add a .NET MAUI element. */
+  /**
+   * Return this action to insert a diagnostic element into a selected MAUI container. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   addElement(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will remove a .NET MAUI element. */
+  /**
+   * Return this action to remove a selected diagnostic element from the MAUI tree. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   removeElement(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set the .NET MAUI app theme. */
+  /**
+   * Return this action to switch the app theme while reproducing a theme-specific issue. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   setAppTheme(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get a .NET MAUI binding context. */
+  /**
+   * Return this action to inspect the view model bound to a selected MAUI element. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   getBindingContext(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get .NET MAUI bindings. */
+  /**
+   * Return this action to inspect binding expressions and sources for a selected element. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   getBindings(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get .NET MAUI resource state. */
+  /**
+   * Return this action to inspect resolved resources and styles affecting the current UI. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   getResourceState(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get framework navigation state. */
+  /**
+   * Return this action to read the MAUI navigation stack when visible page state is
+   * insufficient. The host dispatches it for the matched event after the handler returns.
+   */
   getNavigationState(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will invoke a .NET MAUI element action. */
+  /**
+   * Return this action to invoke an action exposed by a selected MAUI element. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   invokeElementAction(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will wait for .NET MAUI UI state. */
+  /**
+   * Return this action to wait for a MAUI-specific UI condition before a subsequent action. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   waitForUi(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get .NET MAUI layout diagnostics. */
+  /**
+   * Return this action to inspect layout measurements when an element is misplaced or clipped.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   getLayoutDiagnostics(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get .NET MAUI handler diagnostics. */
+  /**
+   * Return this action to inspect the native handler backing a MAUI view. The host dispatches
+   * it for the matched event after the handler returns.
+   */
   getHandlerDiagnostics(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will invoke a .NET MAUI binding-context command. */
+  /**
+   * Return this action to invoke an exposed view-model command for a controlled test. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   invokeBindingContextCommand(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will set a .NET MAUI binding-context property. */
+  /**
+   * Return this action to change an exposed view-model property to reproduce a state. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   setBindingContextProperty(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app react operations. */
 export interface ReactContext {
-  /** Creates the declarative app-tool action that will get the React component tree. */
+  /**
+   * Return this action to inspect the React component hierarchy behind the current screen. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   getComponentTree(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get the React Native shadow tree. */
+  /**
+   * Return this action to inspect React Native layout and shadow nodes when geometry matters.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   getShadowTree(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will find React components. */
+  /**
+   * Return this action to search components before inspecting or acting on one. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   findComponents(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get a React component. */
+  /**
+   * Return this action to read details for a component found in the React tree. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   getComponent(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get framework navigation state. */
+  /**
+   * Return this action to inspect React navigation state when screen breadcrumbs are
+   * insufficient. The host dispatches it for the matched event after the handler returns.
+   */
   getNavigationState(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will invoke a React component action. */
+  /**
+   * Return this action to invoke an action exposed by a selected React component. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   invokeComponentAction(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app flutter operations. */
 export interface FlutterContext {
-  /** Creates the declarative app-tool action that will get the Flutter widget tree. */
+  /**
+   * Return this action to inspect the Flutter widget hierarchy behind the current screen. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   getWidgetTree(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inspect a Flutter widget. */
+  /**
+   * Return this action to read details for a widget identified in the tree or a search result.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   inspectWidget(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will find Flutter widgets. */
+  /**
+   * Return this action to search Flutter widgets before inspecting one. The host dispatches it
+   * for the matched event after the handler returns.
+   */
   findWidgets(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will get framework navigation state. */
+  /**
+   * Return this action to read Flutter navigation state when the visible route is ambiguous.
+   * The host dispatches it for the matched event after the handler returns.
+   */
   getNavigationState(args?: AppToolArguments): AppToolAction;
 }
 
 /** Feature component for trigger app capacitor operations. */
 export interface CapacitorContext {
-  /** Creates the declarative app-tool action that will get the Capacitor document. */
+  /**
+   * Return this action to inspect the current WebView DOM document. The host dispatches it for
+   * the matched event after the handler returns.
+   */
   getDocument(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will inspect one UI node. */
+  /**
+   * Return this action to read details for a DOM node found in the document or a selector
+   * query. The host dispatches it for the matched event after the handler returns.
+   */
   inspectNode(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will query a Capacitor DOM selector. */
+  /**
+   * Return this action to find WebView elements using the adapter-supported DOM selector. The
+   * host dispatches it for the matched event after the handler returns.
+   */
   querySelector(args?: AppToolArguments): AppToolAction;
-  /** Creates the declarative app-tool action that will invoke a framework UI action. */
+  /**
+   * Return this action to perform an allowed action on a selected WebView control. The host
+   * dispatches it for the matched event after the handler returns.
+   */
   invokeAction(args?: AppToolArguments): AppToolAction;
 }
 
-/** Action factories available to the trigger function. */
+/**
+ * Action factories for tools published by the connected app SDK.
+ *
+ * These methods return descriptions of one action; they do not call the app in
+ * the trigger function. Return one action to the host. The matched session,
+ * app's registered tool, argument schema, guard, and grants are checked when
+ * the host dispatches it. AppContext.available only reports SDK provider
+ * presence, not availability of each individual tool.
+ */
 export interface AppContext {
+  /** False when the matched session has no connected SDK app-tool provider; returning an app action then fails. */
   readonly available: boolean;
   /**
-   * Creates one app-tool action for the CLI to validate and execute.
+   * Create one app-defined tool action when no standard suite method fits.
    *
    * This method does not call the app immediately. Return its result from the
-   * trigger function. The connected app validates the tool ID and arguments.
+   * trigger function. The connected app validates the tool ID and arguments
+   * when the host dispatches the action.
    */
   callTool(toolId: string, args?: AppToolArguments): AppToolAction;
 
@@ -549,13 +800,39 @@ export interface TriggerContext<
   /** Immutable normalized event that matched the trigger. */
   event: Readonly<EventEnvelope<TPayload, TEventKind>>;
 
-  /** Factory for the one optional host-dispatched app-tool action. */
+  /**
+   * Build at most one app-tool action and return it. Factory calls do not execute the app
+   * inside the trigger function.
+   */
   app: AppContext;
+  /**
+   * Host-owned evidence action factories for version 2 triggers. Return one action; these
+   * methods do not execute it in the handler.
+   */
   ansight: {
+    /**
+     * Snapshot supplied with this invocation. Check availability before choosing an optional
+     * host action; unlike the task API, this is not a method.
+     */
     capabilities: { executionMode?: "sdk" | "device"; appAvailable?: boolean; capabilities?: Record<string, { available: boolean; provider: string; reason?: string | null }> };
-    screenshots: { capture(args?: AppToolArguments): HostEvidenceAction };
-    files: { capture(args: { root?: string; path: string; maximumBytes?: number }): HostEvidenceAction };
-    annotations: { create(args: AppToolArguments): HostEvidenceAction };
+    screenshots: {
+      /**
+       * Return an action to capture the live screen at this event. Version 2 requires
+       * ui.screenshot and a live capture provider.
+       */
+      capture(args?: AppToolArguments): HostEvidenceAction
+    };
+    files: {
+      /**
+       * Return an action to retain a known root-relative sandbox file. Version 2 requires
+       * files.capture and an available external provider.
+       */
+      capture(args: { root?: string; path: string; maximumBytes?: number }): HostEvidenceAction
+    };
+    annotations: {
+      /** Return an action to mark the event's time or screenshot with review context. */
+      create(args: AppToolArguments): HostEvidenceAction
+    };
   };
 }
 

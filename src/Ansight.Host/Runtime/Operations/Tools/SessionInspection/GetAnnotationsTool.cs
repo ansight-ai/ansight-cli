@@ -14,7 +14,7 @@ internal sealed class GetAnnotationsTool : Operation
 
     protected override string Title => "Get Session Annotations";
 
-    protected override string Description => "Return session annotations filtered by time range, point-in-time, label text, frame id, and geometry presence.";
+    protected override string Description => "Return session annotations filtered by time range, point-in-time, label text, status, frame id, and geometry presence.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: new Dictionary<string, ToolSchema>
@@ -26,6 +26,8 @@ internal sealed class GetAnnotationsTool : Operation
             ["endUtc"] = ToolSchema.String("Optional inclusive range end in ISO-8601 UTC.", nullable: true, format: "date-time"),
             ["targetUtc"] = ToolSchema.String("Optional point-in-time filter in ISO-8601 UTC; only annotations active at that instant are returned.", nullable: true, format: "date-time"),
             ["labelQuery"] = ToolSchema.String("Optional case-insensitive substring matched against the annotation label and notes.", nullable: true),
+            ["annotationStatus"] = ToolSchema.String("Optional exact annotation status, case-insensitive.", nullable: true),
+            ["hasStatus"] = ToolSchema.Boolean("True selects annotations with a status; false selects those without one.", nullable: true),
             ["frameId"] = ToolSchema.String("Optional screenshot frame id; only annotations with geometry on that frame are returned.", nullable: true),
             ["hasGeometry"] = ToolSchema.Boolean("Optional geometry filter. True returns only annotations with geometry; false returns only annotations without geometry.", nullable: true),
             ["limit"] = ToolSchema.Integer("Maximum number of annotations to return. Defaults to 200, max 2000.", nullable: true)

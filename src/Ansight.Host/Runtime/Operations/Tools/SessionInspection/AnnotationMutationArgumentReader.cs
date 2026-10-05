@@ -17,8 +17,8 @@ internal static class AnnotationMutationArgumentReader
             var input = arguments ?? new JsonObject();
             var allowed = kind switch
             {
-                SessionAnnotationMutationKind.Create => new[] { "annotationId", "label", "notes", "source", "startUtc", "endUtc", "geometries", "target" },
-                SessionAnnotationMutationKind.Patch => new[] { "annotationId", "expectedSource", "label", "notes", "startUtc", "endUtc", "geometries", "target" },
+                SessionAnnotationMutationKind.Create => new[] { "annotationId", "label", "notes", "status", "source", "startUtc", "endUtc", "geometries", "target" },
+                SessionAnnotationMutationKind.Patch => new[] { "annotationId", "expectedSource", "label", "notes", "status", "startUtc", "endUtc", "geometries", "target" },
                 SessionAnnotationMutationKind.Remove => new[] { "annotationId", "expectedSource" },
                 _ => throw new InvalidDataException("Unknown annotation mutation.")
             };
@@ -40,6 +40,8 @@ internal static class AnnotationMutationArgumentReader
                 Source = ReadString(input, "source"),
                 HasNotes = input.ContainsKey("notes"),
                 Notes = ReadString(input, "notes", nullable: isPatch, allowEmpty: true),
+                HasStatus = input.ContainsKey("status"),
+                Status = ReadString(input, "status", nullable: true, allowEmpty: true),
                 StartUtc = ReadTimestamp(input, "startUtc"),
                 HasEndUtc = input.ContainsKey("endUtc"),
                 EndUtc = ReadTimestamp(input, "endUtc", nullable: isPatch),

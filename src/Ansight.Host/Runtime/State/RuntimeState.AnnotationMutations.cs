@@ -163,6 +163,7 @@ internal sealed partial class RuntimeState
             Label = label,
             Source = source,
             Notes = mutation.HasNotes ? mutation.Notes : existing?.Notes,
+            Status = mutation.HasStatus ? mutation.Status : existing?.Status,
             CaptureGroupId = existing?.CaptureGroupId,
             CustomData = existing?.CustomData?.DeepClone() as JsonObject,
             Evidence = existing?.Evidence.Select(SessionSnapshotCloner.CloneAnnotationEvidence).ToArray() ?? [],

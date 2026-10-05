@@ -143,6 +143,7 @@ public sealed partial class SessionCaptureStoreTests
                     EndUtc = createdUtc.AddSeconds(35),
                     Label = "Launch crash",
                     Notes = "App crashed after the onboarding CTA was tapped.",
+                    Status = "resolved",
                     Source = "sdk.annotatedFeedback",
                     CaptureGroupId = "capture-group-001",
                     CustomData = new JsonObject { ["flow"] = "onboarding" },
@@ -362,6 +363,7 @@ public sealed partial class SessionCaptureStoreTests
         var loadedAnnotation = Assert.Single(loaded.Annotations);
         Assert.Equal("Launch crash", loadedAnnotation.Label);
         Assert.Equal("App crashed after the onboarding CTA was tapped.", loadedAnnotation.Notes);
+        Assert.Equal("resolved", loadedAnnotation.Status);
         Assert.Equal("capture-group-001", loadedAnnotation.CaptureGroupId);
         Assert.Equal("onboarding", loadedAnnotation.CustomData?["flow"]?.GetValue<string>());
         Assert.Single(loadedAnnotation.Evidence);

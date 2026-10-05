@@ -85,6 +85,7 @@ public static class SessionSnapshotCloner
             Label = annotation.Label,
             Source = annotation.Source,
             Notes = annotation.Notes,
+            Status = annotation.Status,
             CaptureGroupId = annotation.CaptureGroupId,
             CustomData = annotation.CustomData?.DeepClone() as JsonObject,
             Evidence = annotation.Evidence

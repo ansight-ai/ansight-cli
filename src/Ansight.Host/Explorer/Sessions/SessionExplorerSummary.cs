@@ -12,6 +12,7 @@ public sealed record SessionExplorerSummary(
     bool IsSimulatorOrEmulator,
     string? RuntimeDeviceIdentifier,
     string? RuntimePlatform,
+    string? Technology,
     bool IsHistorical,
     bool IsPinned,
     DateTimeOffset CreatedUtc,

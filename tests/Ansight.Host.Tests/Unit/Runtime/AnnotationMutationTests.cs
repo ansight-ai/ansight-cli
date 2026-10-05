@@ -25,7 +25,7 @@ public sealed class AnnotationMutationTests
     public async Task Patch_ConcurrentDisjointFieldsPreserveEachOthersChanges()
     {
         using var context = new AnnotationMutationTestContext();
-        Assert.True(context.Mutate(SessionAnnotationMutationKind.Create, """{"annotationId":"review","label":"Original","notes":"Before"}""").IsSuccess);
+        Assert.True(context.Mutate(SessionAnnotationMutationKind.Create, """{"annotationId":"review","label":"Original","notes":"Before","status":"needs review"}""").IsSuccess);
         var label = ReadMutation(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","label":"Updated"}""");
         var notes = ReadMutation(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","notes":"After"}""");
 
@@ -37,6 +37,7 @@ public sealed class AnnotationMutationTests
         var annotation = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal("Updated", annotation.Label);
         Assert.Equal("After", annotation.Notes);
+        Assert.Equal("needs review", annotation.Status);
     }
 
     [Fact]
@@ -50,6 +51,7 @@ public sealed class AnnotationMutationTests
             Label = "Before",
             Source = "sdk",
             Notes = "Keep these notes",
+            Status = "open",
             StartUtc = start,
             EndUtc = start.AddSeconds(10),
             CaptureGroupId = "capture-group",
@@ -75,6 +77,7 @@ public sealed class AnnotationMutationTests
         Assert.Equal("After", saved.Label);
         Assert.Equal("sdk", saved.Source);
         Assert.Equal("Keep these notes", saved.Notes);
+        Assert.Equal("open", saved.Status);
         Assert.Equal(start.AddSeconds(1), Assert.Single(saved.Geometry).CapturedAtUtc);
         Assert.Equal(SessionAnnotationGeometryKind.Arrow, saved.Geometry[0].Kind);
         Assert.Equal("capture-group", saved.CaptureGroupId);
@@ -82,10 +85,15 @@ public sealed class AnnotationMutationTests
         Assert.Equal("evidence", Assert.Single(saved.Evidence).Id);
         Assert.Equal("optional capture failed", Assert.Single(saved.HookFailures));
 
-        var cleared = context.Mutate(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","notes":null,"endUtc":null,"target":null,"geometries":[]}""");
+        var resolved = context.Mutate(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","status":"resolved"}""");
+        Assert.True(resolved.IsSuccess, resolved.Message);
+        Assert.Equal("resolved", resolved.Payload?["annotation"]?["status"]?.GetValue<string>());
+
+        var cleared = context.Mutate(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","notes":null,"status":null,"endUtc":null,"target":null,"geometries":[]}""");
         Assert.True(cleared.IsSuccess, cleared.Message);
         saved = Assert.Single(context.Snapshot.Annotations);
         Assert.Null(saved.Notes);
+        Assert.Null(saved.Status);
         Assert.Null(saved.EndUtc);
         Assert.Null(saved.Target);
         Assert.Empty(saved.Geometry);

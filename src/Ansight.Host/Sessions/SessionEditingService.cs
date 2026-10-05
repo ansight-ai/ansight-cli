@@ -59,6 +59,27 @@ public sealed class SessionEditingService
         return sessionEditor.UpsertSessionAnnotation(sessionId.Trim(), annotation);
     }
 
+    public OperationResult SetAnnotationStatus(string sessionId, string annotationId, string? status)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+        if (sessionEditor is not ISessionAnnotationMutator mutator)
+        {
+            return OperationResult.Failure("Annotation status updates are unavailable.");
+        }
+
+        var result = mutator.MutateSessionAnnotation(sessionId.Trim(), new SessionAnnotationMutation
+        {
+            Kind = SessionAnnotationMutationKind.Patch,
+            AnnotationId = annotationId.Trim(),
+            HasStatus = true,
+            Status = status
+        });
+        return result.IsSuccess
+            ? OperationResult.Success($"Annotation '{annotationId}' status updated.")
+            : OperationResult.Failure(result.Message);
+    }
+
     public OperationResult UpsertAgentTaskLink(string sessionId, SessionAgentTaskLink taskLink)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);

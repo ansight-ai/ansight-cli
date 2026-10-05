@@ -108,6 +108,30 @@ internal static class SessionDirectCommands
     {
         var action = arguments.RequirePositional(2, "annotation action").ToLowerInvariant();
         var sessionId = arguments.RequirePositional(3, "session identifier");
+        if (action == "status")
+        {
+            arguments.EnsurePositionalCount(
+                5,
+                "ansight session annotation status <session-id> <annotation-id> (--status <text> | --clear-status)");
+            var status = arguments.GetOption("status");
+            var clearStatus = arguments.HasFlag("clear-status");
+            if (clearStatus == (status is not null))
+            {
+                throw new CliUsageException("Pass either --status <text> or --clear-status.");
+            }
+
+            var annotationId = arguments.RequirePositional(4, "annotation identifier");
+            var statusResult = runtime.SessionEditing.SetAnnotationStatus(sessionId, annotationId, clearStatus ? null : status);
+            output.Write(
+                new SessionAnnotationStatusOutput(
+                    "ansight.session-annotation-status/v1",
+                    sessionId,
+                    annotationId,
+                    clearStatus ? null : status,
+                    statusResult),
+                () => statusResult.Message);
+            return statusResult.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
+        }
         if (action is "delete" or "remove")
         {
             arguments.EnsurePositionalCount(
@@ -125,7 +149,7 @@ internal static class SessionDirectCommands
         if (action is not ("add" or "create" or "update" or "upsert"))
         {
             throw new CliUsageException(
-                $"Unknown annotation action '{action}'. Expected add, update, upsert, or delete.");
+                $"Unknown annotation action '{action}'. Expected add, update, upsert, status, or delete.");
         }
 
         arguments.EnsurePositionalCount(
@@ -161,6 +185,7 @@ internal static class SessionDirectCommands
                 EndUtc = ParseOptionalTimestamp(arguments.GetOption("end"), "end"),
                 Label = arguments.RequireOption("label"),
                 Notes = arguments.GetOption("notes"),
+                Status = arguments.GetOption("status"),
                 Source = arguments.GetOption("source") ?? "cli"
             };
         }
@@ -331,6 +356,13 @@ internal sealed record SessionAnnotationOperationOutput(
     string SessionId,
     OperationResult Result,
     SessionAnnotation Annotation);
+
+internal sealed record SessionAnnotationStatusOutput(
+    string Schema,
+    string SessionId,
+    string AnnotationId,
+    string? Status,
+    OperationResult Result);
 
 internal sealed record SessionScreenshotExportOutput(
     string Schema,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Runtime.Operations.Tools.TouchReview;
@@ -52,7 +53,10 @@ internal static class TouchReviewPayloads
             ["surfaceHeight"] = touch.SurfaceHeight,
             ["surfaceScale"] = touch.SurfaceScale,
             ["coordinateSpace"] = touch.CoordinateSpace,
-            ["coordinateUnit"] = touch.CoordinateUnit
+            ["coordinateUnit"] = touch.CoordinateUnit,
+            ["details"] = touch.Details is null
+                ? null
+                : JsonSerializer.SerializeToNode(touch.Details, JsonUtil.Compact)
         };
     }
 

@@ -19,8 +19,11 @@ export interface OcrResult {
 }
 
 export interface PiiTools {
+  /** Test whether a string matches the configured PII detectors before deciding to keep or remove a field. */
   matches(value: string): boolean;
+  /** Replace detected PII in one string, optionally using a caller-supplied replacement marker. */
   redact(value: string, replacement?: string): string;
+  /** Return a redacted copy of a structured value while preserving its shape. */
   redactObject<T>(value: T, replacement?: string): T;
 }
 
@@ -99,15 +102,25 @@ export type SanitizerOperationContext =
     };
 
 export interface SanitizerTools<T extends Record<string, unknown>> {
+  /** Text and object redaction helpers for fields that may contain personal data. */
   pii: PiiTools;
-  ocr: { scan(screenshot: T): Promise<OcrResult> };
+  ocr: {
+    /** Scan a screenshot for visible text before choosing regions to redact; inspect available before relying on the blocks. */
+    scan(screenshot: T): Promise<OcrResult>
+  };
   image: {
+    /** Keep the screenshot explicitly after evaluating its sensitivity. */
     keep(): T & { sanitization: ScreenshotSanitization };
+    /** Remove this screenshot from the sanitized copy when safe redaction is not possible. */
     remove(): T & { sanitization: ScreenshotSanitization };
+    /** Mask selected pixel bounds, for example regions found through OCR or app-specific layout knowledge. */
     redact(regions: Bounds[]): T & { sanitization: ScreenshotSanitization };
+    /** Mask the entire screenshot while retaining its place in the session sequence. */
     redactAll(): T & { sanitization: ScreenshotSanitization };
   };
+  /** Distinguish local export from sharing and inspect the requested audience before applying stricter rules. */
   operation: SanitizerOperationContext;
+  /** Text blocks already detected in the current visual evidence, when available. */
   visualText: TextBlock[];
 }
 

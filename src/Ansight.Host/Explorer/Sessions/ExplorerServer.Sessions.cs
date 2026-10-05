@@ -314,7 +314,28 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                 runtimePlatform = capturedPlatform == VisualTreeContract.UnknownRuntimePlatform ? null : capturedPlatform;
             }
 
-            return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice && !string.IsNullOrWhiteSpace(runtimeDeviceIdentifier), runtimeDeviceIdentifier, runtimePlatform, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags);
+            var technologyEvidence = string.Join(" ", session.Tags
+                .Concat(session.VisualTreeSnapshots.Select(static tree => tree.VisualTreeKind))
+                .Concat(session.VisualTreeSnapshots.Select(static tree => tree.VisualTreeFormat))
+                .Concat(session.VisualTreeSnapshots.Select(static tree => tree.Source))
+                .Append(session.DeviceProfile?.Sdk?.Name)
+                .Append(session.DeviceProfile?.Sdk?.PackageId)
+                .Append(session.DeviceProfile?.Sdk?.Language)
+                .Append(session.DeviceProfile?.Runtime?.Engine?.Name)
+                .Append(session.CustomProperties?.ToJsonString())
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+            var technology = technologyEvidence.Contains("react-native", StringComparison.OrdinalIgnoreCase) || technologyEvidence.Contains("react native", StringComparison.OrdinalIgnoreCase) || technologyEvidence.Contains("reactNative", StringComparison.OrdinalIgnoreCase) ? "react-native"
+                : technologyEvidence.Contains("flutter", StringComparison.OrdinalIgnoreCase) ? "flutter"
+                : technologyEvidence.Contains("maui", StringComparison.OrdinalIgnoreCase) ? "dotnet-maui"
+                : technologyEvidence.Contains("swiftui", StringComparison.OrdinalIgnoreCase) ? "swiftui"
+                : technologyEvidence.Contains("compose", StringComparison.OrdinalIgnoreCase) ? "jetpack-compose"
+                : technologyEvidence.Contains("dotnet", StringComparison.OrdinalIgnoreCase) || technologyEvidence.Contains(".net", StringComparison.OrdinalIgnoreCase) ? "dotnet"
+                : technologyEvidence.Contains("kotlin", StringComparison.OrdinalIgnoreCase) ? "kotlin"
+                : technologyEvidence.Contains("swift", StringComparison.OrdinalIgnoreCase) ? "swift"
+                : null;
+
+            return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice, runtimeDeviceIdentifier, runtimePlatform, technology, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags);
         }).ToArray();
     }
 

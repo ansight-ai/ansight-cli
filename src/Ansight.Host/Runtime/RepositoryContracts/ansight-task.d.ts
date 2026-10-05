@@ -1910,16 +1910,83 @@ export interface TouchPoint {
 }
 /** One normalized touch event captured on a session timeline. */
 export interface TouchRecord {
-  /** Stable identifier of a captured touch. */
-  touchId?: string;
+  /** Stable captured touch ID. Pass this as `touchId` to `getContext` or `getArtifacts`. */
+  id: string;
+  /** Zero-based index in the filtered touch stream, when this record has one. */
+  touchIndex: number | null;
+  /** Whether this is the selected touch in a context result. */
+  isTarget: boolean;
   /** Normalized touch action reported by the source. */
-  action?: TouchAction;
+  action: TouchAction;
   /** ISO-8601 UTC timestamp at which the value was captured. */
   capturedAtUtc: string;
-  /** Horizontal screen coordinate. */
-  x?: number;
-  /** Vertical screen coordinate. */
-  y?: number;
+  /** Pointer identity assigned by the captured platform. */
+  pointerId: number;
+  /** Index of this pointer in the captured sample. */
+  pointerIndex: number;
+  /** Number of active pointers in the captured sample. */
+  pointerCount: number;
+  /** Horizontal coordinate in `coordinateUnit`. */
+  x: number;
+  /** Vertical coordinate in `coordinateUnit`. */
+  y: number;
+  /** Horizontal coordinate normalized to the captured surface, when available. */
+  normalizedX: number | null;
+  /** Vertical coordinate normalized to the captured surface, when available. */
+  normalizedY: number | null;
+  /** Captured surface width, when supplied by the app. */
+  surfaceWidth: number | null;
+  /** Captured surface height, when supplied by the app. */
+  surfaceHeight: number | null;
+  /** Display scale for the captured surface, when supplied by the app. */
+  surfaceScale: number | null;
+  /** Coordinate space reported by the app, such as `window`. */
+  coordinateSpace: string;
+  /** Unit used by `x`, `y`, and the surface dimensions. */
+  coordinateUnit: string;
+  /** Native stylus or pointer sample metadata, when the SDK captured it. */
+  details: TouchSampleDetails | null;
+}
+/** Platform-specific metadata captured for one touch sample. Null fields were not reported. */
+export interface TouchSampleDetails {
+  /** Input tool, such as `stylus` or `finger`. */
+  tool: string | null;
+  /** Sample kind, such as a coalesced or predicted stylus sample. */
+  sampleKind: string | null;
+  /** Apple stylus force. Compare with `maximumPossibleForce` when available. */
+  force: number | null;
+  /** Maximum Apple stylus force reported for the device. */
+  maximumPossibleForce: number | null;
+  /** Apple stylus altitude above the screen plane, in radians. */
+  altitudeRadians: number | null;
+  /** Apple stylus azimuth direction, in radians. */
+  azimuthRadians: number | null;
+  /** Apple stylus roll angle, in radians. */
+  rollRadians: number | null;
+  /** Bitmask of Apple properties whose values were estimated. */
+  estimatedProperties: number | null;
+  /** Bitmask of estimated Apple properties awaiting updates. */
+  estimatedPropertiesExpectingUpdates: number | null;
+  /** Apple index used to correlate an estimated-property update. */
+  estimationUpdateIndex: number | null;
+  /** Android pointer pressure. */
+  pressure: number | null;
+  /** Android stylus tilt angle, in radians. */
+  tiltRadians: number | null;
+  /** Android pointer orientation, in radians. */
+  orientationRadians: number | null;
+  /** Android hover distance when reported by the device. */
+  distance: number | null;
+  /** Android stylus button-state bitmask. */
+  buttonState: number | null;
+  /** Android contact major axis. */
+  touchMajor: number | null;
+  /** Android contact minor axis. */
+  touchMinor: number | null;
+  /** Android tool major axis. */
+  toolMajor: number | null;
+  /** Android tool minor axis. */
+  toolMinor: number | null;
 }
 /** Structured result returned by the touch timeline operation. */
 export interface TouchTimelineResult {
@@ -2706,146 +2773,188 @@ export interface DeviceLocationClearResult {
 
 /** Feature component for task app session operations. */
 export interface TaskSessionContext {
-  /** Uses the enforced task session to get the current session's app lifecycle state. */
+  /** Read the app lifecycle state observed for this task session before interacting or asserting a transition. */
   getAppState(): Promise<SessionAppStateResult>;
-  /** Uses the enforced task session to get the current session's custom property groups. */
+  /**
+   * Read grouped session properties supplied by the app. Provide TProperties for local typing;
+   * it does not validate the runtime payload.
+   */
   getProperties<TProperties extends object = SessionPropertyBag>(): Promise<
     SessionPropertiesResult<TProperties>
   >;
-  /** Uses the enforced task session to get a bounded session timeline. */
+  /**
+   * Correlate bounded session events across evidence categories or a time window without
+   * issuing separate source queries.
+   */
   getTimeline(args?: SessionTimelineArguments): Promise<SessionTimelineResult>;
 }
 /** Feature component for host UI operations. */
 export interface TaskHostUiContext {
-  /** Uses the enforced task session to find nodes in the current visual tree. */
+  /**
+   * Find nodes in the current visual tree. Prefer a stable automationId; inspect matchCount and
+   * matches before choosing a node.
+   */
   find(args?: UiFindArguments): Promise<UiFindResult>;
-  /** Uses the enforced task session to wait for a UI condition. */
+  /**
+   * Poll for a bounded visible, hidden, or stable UI condition. Check satisfied; a completed
+   * call is not itself a task assertion.
+   */
   waitFor(args?: UiWaitArguments): Promise<UiWaitResult>;
-  /** Uses the enforced task session to evaluate a named UI or data assertion. */
+  /**
+   * Evaluate a UI expectation against the current tree and retain evidence. Check passed with a
+   * named expect to determine task status.
+   */
   assert(args?: UiAssertArguments): Promise<UiAssertResult>;
-  /** Uses the enforced task session to tap a selected UI node or coordinate. */
+  /**
+   * Tap a selected node or coordinate and retain before-and-after evidence. Prefer a stable
+   * selector over coordinates.
+   */
   tap(args?: UiTapArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to type text into a selected UI node. */
+  /** Enter text into a selected input and retain action evidence. Select the intended input explicitly. */
   typeText(args: UiTypeTextArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to perform a swipe gesture. */
+  /** Perform a directional gesture when the drag path matters, then inspect the resulting screen. */
   swipe(args?: UiSwipeArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to perform a scroll gesture. */
+  /** Move a scrollable view to reveal content, then find or wait for the target element. */
   scroll(args?: UiGestureArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to perform a two-contact pinch. */
+  /** Perform a two-contact zoom gesture on a selected region and inspect the resulting scale. */
   pinch(args: UiPinchArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to perform the platform back action. */
+  /** Send the platform back action, then verify the destination state. */
   back(args?: UiBackArguments): Promise<UiActionResult>;
-  /** Uses the enforced task session to batch coordinate gestures under endpoint evidence. */
+  /**
+   * Batch already-known coordinate gestures when no intermediate decision is needed. Use
+   * separate calls for per-step checkpoints.
+   */
   runSequence(args: UiSequenceArguments): Promise<UiSequenceResult>;
-  /** Uses the enforced task session to capture the live app visual tree. */
+  /**
+   * Ask the connected app for its current visual hierarchy. Requires a live registered SDK
+   * visual-tree tool; inspect the tool result envelope.
+   */
   getLiveVisualTree<TResult = LiveVisualTreeResult>(
     args?: VisualTreeArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Uses the enforced task session to read the framework-owned navigation hierarchy. */
+  /**
+   * Read framework navigation state when visible nodes do not explain the route stack. Requires
+   * a live compatible app tool.
+   */
   getLiveNavigationStructure<TResult = Record<string, unknown>>(
     args?: LiveNavigationStructureArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Uses the enforced task session to read a persisted visual-tree snapshot. */
+  /** Read a previously retained visual tree when investigating captured evidence rather than current UI. */
   getVisualTreeSnapshot(
     args?: VisualTreeSnapshotArguments,
   ): Promise<VisualTreeSnapshotResult>;
-  /** Uses the enforced task session to search persisted visual-tree snapshots. */
+  /** Search persisted visual-tree snapshots for a node across captured evidence. */
   searchVisualTree(
     args?: VisualTreeSearchArguments,
   ): Promise<VisualTreeSearchResult>;
 }
 /** Feature component for host software-keyboard operations. */
 export interface TaskHostKeyboardContext {
-  /** Focuses a selected text-input node and verifies that the software keyboard opens. */
+  /**
+   * Focus a selected text input and verify from fresh device accessibility evidence that the
+   * software keyboard opened.
+   */
   open(args: KeyboardOpenArguments): Promise<KeyboardActionResult>;
-  /** Uses fresh device accessibility evidence to report whether the software keyboard is open. */
+  /**
+   * Read current software-keyboard visibility without sending input. Requires device
+   * accessibility evidence that reports keyboard presence.
+   */
   isOpen(): Promise<KeyboardStateResult>;
-  /** Safely dismisses the software keyboard, or succeeds without input when it is already closed. */
+  /** Close an open software keyboard safely. If it is already closed, no back or Escape input is sent. */
   dismiss(args?: KeyboardDismissArguments): Promise<KeyboardActionResult>;
 }
 /** Session-bound inspection of received network capture records. */
 export interface TaskHostNetworkContext {
-  /** Gets bounded newest-first summaries. A new query sees new arrivals; cursors retain the initial snapshot. */
+  /**
+   * Page through retained HTTP request summaries with filters. A cursor keeps the initial
+   * matching snapshot while new traffic arrives.
+   */
   get(args?: NetworkFilterArguments): Promise<NetworkRequestsResult>;
-  /** Gets exact retained details and bounded complete header entries; unknown IDs reject. */
+  /** Read metadata and bounded headers for a request ID returned by get. Unknown IDs reject. */
   getRequest(args: NetworkRequestArguments): Promise<NetworkRequestResult>;
-  /** Reads a bounded body prefix; unavailable bodies return null, while unknown request IDs reject. */
+  /** Read a bounded request or response body prefix by ID and side. body: null means no body was retained. */
   readBody(args: NetworkBodyReadArguments): Promise<NetworkBodyReadResult>;
 }
 /** Feature component for host logs operations. */
 export interface TaskHostLogsContext {
-  /** Uses the enforced task session to get captured logs. */
+  /** Read bounded captured log entries for the enforced session and optional filters. */
   get(args?: LogFilterArguments): Promise<LogsResult>;
-  /** Uses the enforced task session to search matching values. */
+  /** Find captured log entries containing a known term, error, or correlation ID. */
   search(
     args: LogFilterArguments & { query: string },
   ): Promise<LogSearchResult>;
-  /** Uses the enforced task session to get records surrounding a selected item. */
+  /** Read entries surrounding a selected log to see what happened immediately before and after it. */
   getContext(args?: LogContextArguments): Promise<LogContextResult>;
-  /** Uses the enforced task session to calculate facets for matching records. */
+  /** Count matching logs by available dimensions before narrowing a query. */
   getFacets(args?: LogFilterArguments): Promise<LogFacetsResult>;
-  /** Uses the enforced task session to aggregate captured logs into a timeline. */
+  /** Aggregate matching log activity over time to locate spikes or quiet periods. */
   getTimeline(args?: LogFilterArguments): Promise<LogTimelineResult>;
-  /** Uses the enforced task session to summarize matching records in a time window. */
+  /** Summarize a selected log window instead of reading every entry. */
   summarizeWindow(args?: LogFilterArguments): Promise<LogSummaryResult>;
-  /** Uses the enforced task session to extract and group exception-like logs. */
+  /** Group exception-like logs to identify distinct failures in a window. */
   extractExceptions(
     args?: LogFilterArguments,
   ): Promise<ExceptionExtractionResult>;
 }
 /** Feature component for host artifacts operations. */
 export interface TaskHostArtifactsContext {
-  /** Uses the enforced task session to get evidence nearest a target time or event. */
+  /** Find captured evidence closest to a timestamp or event when investigating a particular moment. */
   getNearest(args?: NearestArtifactArguments): Promise<NearestArtifactsResult>;
-  /** Uses the enforced task session to get artifacts captured for the selected session. */
+  /** List artifacts retained for the enforced session before choosing one to inspect. */
   getSession(args?: SessionArtifactsArguments): Promise<SessionArtifactsResult>;
-  /** Uses the enforced task session to list files in captured artifact snapshots. */
+  /** Browse entries inside a captured artifact snapshot. */
   listFiles(args?: ArtifactFileListArguments): Promise<ArtifactFileListResult>;
-  /** Uses the enforced task session to read a file from a captured artifact snapshot. */
+  /** Read a selected file from a retained artifact snapshot, not from the current app sandbox. */
   readFile(args: ArtifactFileReadArguments): Promise<ArtifactFileReadResult>;
 }
 /** Feature component for host screenshots operations. */
 export interface TaskHostScreenshotsContext {
-  /** Uses the enforced task session to capture a screenshot from the live app. */
+  /**
+   * Capture the current live screen for immediate evidence. Inspect the app-tool result
+   * envelope for capture failure.
+   */
   take<TResult = ScreenshotCaptureResult>(
     args?: ScreenshotTakeArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Uses the enforced task session to get a persisted screenshot frame. */
+  /** Read a previously persisted screenshot frame after the live moment has passed. */
   getFrame(args?: ScreenshotFrameArguments): Promise<ScreenshotFrameResult>;
-  /** Uses the enforced task session to compare the current screen with a baseline frame. */
+  /** Compare the current screen with a baseline frame and check the comparison result with a named expect. */
   assert(args?: ScreenshotAssertArguments): Promise<ScreenshotAssertResult>;
 }
 /** Feature component for host database operations. */
 export interface TaskHostDatabaseContext {
-  /** Uses the enforced task session to poll and assert a read-only database query. */
+  /** Poll a read-only database query for an expected condition when UI state alone is insufficient. */
   assert(args: DatabaseAssertArguments): Promise<DatabaseAssertResult>;
 }
 /** Feature component for host telemetry operations. */
 export interface TaskHostTelemetryContext {
-  /** Uses the enforced task session to get captured telemetry samples. */
+  /** Read raw captured performance samples for a selected interval or channel. */
   get(args?: TelemetryArguments): Promise<TelemetryResult>;
-  /** Uses the enforced task session to aggregate captured telemetry into a timeline. */
+  /** Aggregate telemetry samples over time to compare performance around app actions. */
   getTimeline(args?: TelemetryArguments): Promise<TelemetryTimelineResult>;
-  /** Uses the enforced task session to summarize captured telemetry in a time window. */
+  /** Get statistics for a selected telemetry window instead of processing every sample. */
   summarizeWindow(args?: TelemetryArguments): Promise<TelemetrySummaryResult>;
 }
 /** Feature component for host touches operations. */
 export interface TaskHostTouchesContext {
-  /** Uses the enforced task session to aggregate captured touches into a timeline. */
+  /** Read when captured touches occurred relative to other session evidence. */
   getTimeline(args?: TouchArguments): Promise<TouchTimelineResult>;
-  /** Uses the enforced task session to get touches and evidence surrounding a selected touch. */
+  /**
+   * Inspect one touch and nearby evidence. Select it by `touchId`, `touchIndex`, or
+   * `timestampUtc`; read native stylus values from `targetTouch.details` when present.
+   */
   getContext(args?: TouchContextArguments): Promise<TouchContextResult>;
-  /** Uses the enforced task session to segment captured touches into gestures. */
+  /** Group captured touch points into gestures before diagnosing a swipe or drag. */
   getGestureSegments(args?: TouchArguments): Promise<GestureSegmentsResult>;
-  /** Uses the enforced task session to find likely targets for captured taps. */
+  /** Identify likely UI targets for recorded taps. */
   findTapTargets(args?: TouchArguments): Promise<TapTargetsResult>;
-  /** Uses the enforced task session to build a touch-density heatmap. */
+  /** Find screen regions with concentrated touch activity. */
   getHeatmap(args?: TouchArguments): Promise<TouchHeatmapResult>;
-  /** Uses the enforced task session to find touches without a subsequent UI response. */
+  /** Find touches with no apparent subsequent UI response. */
   findDead(args?: TouchArguments): Promise<DeadTouchesResult>;
-  /** Uses the enforced task session to get evidence associated with a selected touch. */
+  /** Retrieve screenshots or other evidence associated with captured touches. */
   getArtifacts(args?: TouchArguments): Promise<TouchArtifactsResult>;
-  /** Uses the enforced task session to summarize the captured touch and gesture flow. */
+  /** Summarize the order of captured touches and gestures for a user flow. */
   summarizeFlow(args?: TouchArguments): Promise<TouchFlowSummaryResult>;
 }
 /**
@@ -2856,29 +2965,33 @@ export interface TaskHostTouchesContext {
  * remain available for large legacy records.
  */
 export interface TaskHostAnnotationsContext {
-  /** Uses the enforced task session to get captured annotations. */
+  /** Read existing timeline and screenshot annotations before creating or changing one. */
   get(args?: AnnotationArguments): Promise<AnnotationsResult>;
-  /** Creates an annotation atomically; an explicit duplicate ID rejects. */
+  /** Add a timeline point, range, or screenshot annotation. An explicit duplicate ID rejects without changing state. */
   create(args: AnnotationCreateArguments): Promise<AnnotationMutationResult>;
-  /** Patches only supplied fields, preserving source and attached evidence; missing IDs reject. */
+  /**
+   * Patch only supplied fields on an existing annotation while preserving its source and
+   * attached evidence.
+   */
   update(args: AnnotationUpdateArguments): Promise<AnnotationMutationResult>;
-  /** Deletes an existing annotation, optionally checking expectedSource atomically. */
+  /** Remove a known annotation; expectedSource can guard against deleting a record from another source. */
   delete(args: AnnotationDeleteArguments): Promise<AnnotationDeleteResult>;
 }
 /** Feature component for host app tools operations. */
 export interface TaskHostAppToolsContext {
-  /** Uses the enforced task session to list tools published by the live app. */
+  /**
+   * Discover tool IDs and availability published by the connected app before calling a standard
+   * suite or custom tool.
+   */
   list(): Promise<AppToolListResult>;
 }
 /** Feature component for workspace task discovery and composition. */
 export interface TaskHostTasksContext {
-  /** Discovers tasks from the caller's exact repository and App ID. */
+  /** Discover tasks in this exact workspace and app scope by query or feature before selecting a child task ID. */
   list(args?: TaskDiscoveryArguments): Promise<TaskDiscoveryResult>;
   /**
-   * Runs another task against the caller's enforced live session.
-   *
-   * The promise rejects when the called task does not pass. Self-calls and
-   * recursive call cycles are rejected by the host.
+   * Run a discovered child task on this same live session. Non-passing child status rejects;
+   * the parent still needs its own named assertion.
    */
   run<TOutput = unknown, TInput extends object = Record<string, unknown>>(
     args: TaskCallArguments<TInput>,
@@ -2887,26 +3000,30 @@ export interface TaskHostTasksContext {
 /** Feature component for host lifecycle operations. */
 export interface TaskHostLifecycleContext {
   /**
-   * Uses the enforced task session to launch the selected application.
+   * Launch the selected application before a cold-start check or after a
+   * permission mutation has ended its process. Verify the resulting app state.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual physical
    */
   launch(): Promise<AppLifecycleResult>;
   /**
-   * Launches or activates the selected application to move it to the foreground.
+   * Bring the selected application to the foreground before UI interaction or
+   * a resume-state assertion.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual physical
    */
   foreground(): Promise<AppLifecycleResult>;
   /**
-   * Presses Home to move the selected application to the background on a simulator or emulator.
+   * Press Home on a simulator or emulator to test background behavior. Use
+   * foreground() to resume and assert the app's recovery.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual
    * @unsupportedDeviceKinds physical
    */
   background(): Promise<AppLifecycleResult>;
   /**
-   * Uses the enforced task session to terminate the selected application.
+   * Terminate the selected process when testing exit handling or a subsequent
+   * cold launch; the captured session identity remains enforced.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual physical
    */
@@ -2915,7 +3032,8 @@ export interface TaskHostLifecycleContext {
 /** Feature component for host device operations. */
 export interface TaskHostDeviceContext {
   /**
-   * Inspects the enforced live session's audio provider and readiness without playing audio.
+   * Check the selected virtual device's audio provider and readiness before
+   * starting a microphone test. This does not play or inject audio.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual
    * @unsupportedDeviceKinds physical
@@ -2929,7 +3047,8 @@ export interface TaskHostDeviceContext {
    */
   injectMicrophoneAudio(args: AudioInjectionArguments): Promise<AudioInjectionResult>;
   /**
-   * Uses the enforced task session to set the selected device's simulated location.
+   * Set one simulated coordinate on the selected virtual device before
+   * asserting location-dependent app behavior.
    * @supportedPlatforms ios android
    * @supportedDeviceKinds virtual
    * @unsupportedDeviceKinds physical
@@ -2947,7 +3066,8 @@ export interface TaskHostDeviceContext {
    */
   playLocation(args: DeviceLocationPlaybackArguments): Promise<DeviceLocationPlaybackResult>;
   /**
-   * Uses the enforced task session to clear the selected device's simulated location.
+   * Clear a simulated coordinate on iOS Simulator during cleanup. This does
+   * not stop an active location route playback.
    * @supportedPlatforms ios
    * @unsupportedPlatforms android
    * @supportedDeviceKinds virtual
@@ -4349,11 +4469,20 @@ export interface PermissionResult {
 }
 
 export interface NativePermissionsContext<TPermission extends string> {
-  /** Grants without prompting. Android permissions must be declared and changeable through pm. */
+  /**
+   * Grant a supported app permission without prompting before testing an authorized flow.
+   * Android permissions must be declared and changeable through pm.
+   */
   grant(args: PermissionArguments<TPermission>): Promise<PermissionResult>;
-  /** Denies access. Native changes can terminate the running app; await calls serially. */
+  /**
+   * Revoke a supported app permission to test denied behavior. Native changes can terminate the
+   * running app; relaunch if needed.
+   */
   revoke(args: PermissionArguments<TPermission>): Promise<PermissionResult>;
-  /** Reads native authorization state; unsupported and unknown are explicit results. */
+  /**
+   * Inspect observed authorization without changing it. Check status, supported, and
+   * nativePermissions; unsupported and unknown are explicit results.
+   */
   query(args: PermissionArguments<TPermission>): Promise<PermissionResult>;
 }
 
@@ -4368,7 +4497,10 @@ export interface TaskHostPermissionsContext extends NativePermissionsContext<App
   readonly ios: NativePermissionsContext<IosPermission> & {
     /** Readonly constants for native iOS service names. */
     readonly names: IosPermissionNames;
-    /** Clears the authorization decision so the next request can prompt again. */
+    /**
+     * Reset an iOS Simulator service after a prior grant or denial so the app can test its own
+     * permission prompt again.
+     */
     reset(args: PermissionArguments<IosPermission>): Promise<PermissionResult>;
   };
   /**
@@ -4387,16 +4519,36 @@ export interface AnsightHost {
   /** Native OS permission control for the session application. Works with SDK and device sessions. */
   readonly permissions: TaskHostPermissionsContext;
   readonly spans: {
-    /** Measures a host-observed operation and emits <name>.started/completed/failed events. Uses two actions. */
+    /**
+     * Wrap an awaited operation with host-observed start, completion, and failure events for
+     * Trends. It uses two task actions and returns the operation's result.
+     */
     measure<T>(name: string, operation: () => Promise<T>, options?: { group?: string }): Promise<T>;
   };
   readonly capabilities: {
+    /**
+     * Inspect the selected session's execution mode, provider availability, and executable app
+     * tools before taking an optional path.
+     */
     snapshot(): Promise<ExecutionCapabilitySnapshot>;
+    /**
+     * Require capabilities or app-tool IDs for a branch at runtime. Unavailable requirements
+     * reject instead of silently skipping the branch.
+     */
     require(requirements: ExecutionRequirements): Promise<ExecutionCapabilitySnapshot>;
   };
   readonly files: {
+    /**
+     * List entries under a host-accessible app sandbox root. Use a root-relative path; this is
+     * distinct from SDK-backed app.files.
+     */
     list(arguments_: SandboxFileArguments): Promise<{ root: string; path: string; entries: string[] }>;
+    /** Read a host-accessible sandbox file as Base64, up to 256 KiB, when inspecting its current contents. */
     read(arguments_: SandboxFileArguments): Promise<SandboxFileResult & { base64: string }>;
+    /**
+     * Retain a host-accessible sandbox file as session evidence and use the returned snapshotId
+     * to find the copy later.
+     */
     capture(arguments_: SandboxFileArguments): Promise<SandboxFileResult & { snapshotId: string }>;
   };
   /** Session annotation inspection and mutation operations. */
@@ -4540,11 +4692,19 @@ export interface AppArtifactRequestArguments extends AppToolArguments {
 
 /** Feature component for task app artifacts operations. */
 export interface TaskArtifactsContext {
-  /** Calls the selected live app to query available data. */
+  /**
+   * Use this to discover which artifact providers and artifact IDs the app currently offers
+   * before requesting an export. Check the AppToolCallResult envelope for success or a tool
+   * error.
+   */
   query<TResult = unknown>(
     args?: AppArtifactQueryArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to request an artifact capture. */
+  /**
+   * Use this to create one provider-owned artifact for the current session, supplying a known
+   * provider ID and artifact ID. Check the AppToolCallResult envelope for success or a tool
+   * error.
+   */
   request<TResult = unknown>(
     args: AppArtifactRequestArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4552,39 +4712,66 @@ export interface TaskArtifactsContext {
 
 /** Feature component for task app UI operations. */
 export interface TaskUiContext {
-  /** Calls the selected live app to get the current visual tree. */
+  /**
+   * Use this to inspect the app-owned visual hierarchy when visible screen state needs more
+   * detail than a screenshot. Check the AppToolCallResult envelope for success or a tool error.
+   */
   getVisualTree<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to capture the current screen. */
+  /**
+   * Use this to capture the current screen through the app SDK for evidence at this point in
+   * the session. Check the AppToolCallResult envelope for success or a tool error.
+   */
   getScreenshot<TResult = ScreenshotCaptureResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inspect one UI node. */
+  /**
+   * Use this to read details for a node already identified in a visual tree. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   inspectNode<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to show a diagnostic overlay. */
+  /**
+   * Use this to highlight an app location or state with a diagnostic overlay. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   showOverlay<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get one diagnostic overlay. */
+  /**
+   * Use this to read one known overlay before changing or removing it. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getOverlay<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to query diagnostic overlays. */
+  /**
+   * Use this to discover active overlays when their IDs are not already known. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   queryOverlays<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to update a diagnostic overlay. */
+  /**
+   * Use this to change an existing diagnostic overlay without creating another. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   updateOverlay<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to remove a diagnostic overlay. */
+  /**
+   * Use this to remove one diagnostic overlay after its purpose is complete. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   removeOverlay<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to clear diagnostic overlays. */
+  /**
+   * Use this to remove all diagnostic overlays to restore a clean app view. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   clearOverlays<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4592,39 +4779,66 @@ export interface TaskUiContext {
 
 /** Feature component for task app files operations. */
 export interface TaskFilesContext {
-  /** Calls the selected live app to list a directory. */
+  /**
+   * Use this to discover entries in an app-sandbox directory before selecting a file. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   listDirectory<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to read a file from the app sandbox. */
+  /**
+   * Use this to inspect the contents of a selected app-sandbox file through the SDK. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   readFile<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to calculate a file checksum. */
+  /**
+   * Use this to compare a file across steps without transferring its full contents. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getChecksum<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to download a file. */
+  /**
+   * Use this to retrieve a selected sandbox file through the app tool response. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   download<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to start a binary file download. */
+  /**
+   * Use this to transfer a sandbox file as binary evidence that the host can retain as a
+   * session artifact. Check the AppToolCallResult envelope for success or a tool error.
+   */
   beginBinaryDownload<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to push a file to the app sandbox. */
+  /**
+   * Use this to write supplied content into an allowed app-sandbox location for a controlled
+   * test. Check the AppToolCallResult envelope for success or a tool error.
+   */
   push<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to copy a file in the app sandbox. */
+  /**
+   * Use this to duplicate an allowed sandbox file while preserving the original. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   copy<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to move a file in the app sandbox. */
+  /**
+   * Use this to rename or relocate an allowed sandbox file. Check the AppToolCallResult
+   * envelope for success or a tool error.
+   */
   move<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to delete a file in the app sandbox. */
+  /**
+   * Use this to remove a selected sandbox file after verifying the target path. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   delete<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4632,19 +4846,31 @@ export interface TaskFilesContext {
 
 /** Feature component for task app file descriptors operations. */
 export interface TaskFileDescriptorsContext {
-  /** Calls the selected live app to list open file descriptors. */
+  /**
+   * Use this to identify open file descriptors while diagnosing a leak. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   listOpen<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to count open file descriptors. */
+  /**
+   * Use this to compare a lightweight descriptor count before and after an app action. Check
+   * the AppToolCallResult envelope for success or a tool error.
+   */
   countOpen<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inspect a runtime value. */
+  /**
+   * Use this to examine one descriptor or related runtime value identified by the diagnostic
+   * suite. Check the AppToolCallResult envelope for success or a tool error.
+   */
   inspect<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get file-descriptor usage. */
+  /**
+   * Use this to compare current descriptor usage with the process limits. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getUsage<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4652,7 +4878,10 @@ export interface TaskFileDescriptorsContext {
 
 /** Feature component for task app JNI references operations. */
 export interface TaskJniReferencesContext {
-  /** Calls the selected live app to capture the JNI reference graph. */
+  /**
+   * Use this to capture Android JNI references when investigating retained native objects.
+   * Check the AppToolCallResult envelope for success or a tool error.
+   */
   captureGraph<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4680,31 +4909,55 @@ export interface ClipboardSetTextArguments {
 
 /** Device system clipboard accessed by the connected app's native SDK. */
 export interface TaskClipboardContext {
-  /** Reads up to 65536 UTF-8 bytes. iOS may require paste permission. */
+  /**
+   * Use this to read exact plain text from the native clipboard; iOS may ask for paste
+   * permission. Check the AppToolCallResult envelope for success or a tool error.
+   */
   getText(): Promise<AppToolCallResult<ClipboardTextResult>>;
-  /** Checks for text; unavailable access is an error, not false. */
+  /**
+   * Use this to check whether plain text exists without returning its contents. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   hasText(): Promise<AppToolCallResult<ClipboardHasTextResult>>;
-  /** Replaces clipboard contents with exact text, at most 65536 UTF-8 bytes. */
+  /**
+   * Use this to replace clipboard contents with controlled test text of at most 65,536 UTF-8
+   * bytes. Check the AppToolCallResult envelope for success or a tool error.
+   */
   setText(args: ClipboardSetTextArguments): Promise<AppToolCallResult<ClipboardWriteResult>>;
-  /** Clears all clipboard contents. Android requires API 28 or later. */
+  /**
+   * Use this to remove clipboard contents during test setup or cleanup. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   clear(): Promise<AppToolCallResult<ClipboardClearResult>>;
 }
 
 /** Feature component for app preferences. */
 export interface TaskPreferencesContext {
-  /** Calls the selected live app to list stored keys. */
+  /**
+   * Use this to discover preference keys exposed by the connected app. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   listKeys<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get the requested values. */
+  /**
+   * Use this to read selected preferences before asserting or changing app behavior. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   get<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set a stored value. */
+  /**
+   * Use this to set a selected preference for a controlled development test. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   set<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to remove a stored value. */
+  /**
+   * Use this to remove a selected preference to exercise its default behavior. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   remove<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4712,15 +4965,24 @@ export interface TaskPreferencesContext {
 
 /** Feature component for task app secure storage operations. */
 export interface TaskSecureStorageContext {
-  /** Calls the selected live app to get the requested values. */
+  /**
+   * Use this to inspect a selected secure-storage value when the app explicitly permits this
+   * suite. Check the AppToolCallResult envelope for success or a tool error.
+   */
   get<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set a stored value. */
+  /**
+   * Use this to write a controlled secure-storage value for a development test. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   set<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to remove a stored value. */
+  /**
+   * Use this to remove a selected secure-storage value during test cleanup. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   remove<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4728,15 +4990,24 @@ export interface TaskSecureStorageContext {
 
 /** Feature component for task app data operations. */
 export interface TaskDataContext {
-  /** Calls the selected live app to list app databases. */
+  /**
+   * Use this to discover which app databases are exposed before selecting one. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   listDatabases<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to describe a database schema. */
+  /**
+   * Use this to inspect tables and columns before constructing a query. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   describeSchema<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to query available data. */
+  /**
+   * Use this to inspect domain state through the app database tool after choosing a database
+   * and schema. Check the AppToolCallResult envelope for success or a tool error.
+   */
   query<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4744,23 +5015,38 @@ export interface TaskDataContext {
 
 /** Feature component for task app reflection operations. */
 export interface TaskReflectionContext {
-  /** Calls the selected live app to list reflection roots. */
+  /**
+   * Use this to discover the runtime objects the app has exposed for reflection. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   listRoots<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inspect an object through reflection. */
+  /**
+   * Use this to read members of an exposed object before choosing a member. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   inspectObject<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to describe a reflected type. */
+  /**
+   * Use this to inspect type members and signatures before an invocation or mutation. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   describeType<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set a reflected member value. */
+  /**
+   * Use this to change an exposed member in a controlled development workflow. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   setMemberValue<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to invoke a reflected method. */
+  /**
+   * Use this to call an exposed runtime method when a narrower app-specific tool is
+   * unavailable. Check the AppToolCallResult envelope for success or a tool error.
+   */
   invokeMethod<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4772,87 +5058,150 @@ export interface TaskReflectionContext {
  * @unsupportedFrameworks dotnet-ios dotnet-android react-native flutter capacitor ios-uikit ios-swiftui android-views android-compose native-unknown
  */
 export interface TaskMauiContext {
-  /** Calls the selected live app to get the current .NET MAUI page. */
+  /**
+   * Use this to identify the active .NET MAUI page before inspecting its elements. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getCurrentPage<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get the current visual tree. */
+  /**
+   * Use this to inspect the current MAUI element hierarchy and locate stable element IDs. Check
+   * the AppToolCallResult envelope for success or a tool error.
+   */
   getVisualTree<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to find .NET MAUI elements. */
+  /**
+   * Use this to search MAUI elements before reading or acting on one. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   findElements<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get a .NET MAUI element. */
+  /**
+   * Use this to inspect one MAUI element selected from a tree or search result. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getElement<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get a .NET MAUI bindable property. */
+  /**
+   * Use this to read a selected bindable property and its current value. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getBindableProperty<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set a .NET MAUI bindable property. */
+  /**
+   * Use this to set a bindable property to reproduce a controlled UI state. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   setBindableProperty<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to clear a .NET MAUI bindable property. */
+  /**
+   * Use this to clear a local bindable value so its normal source can apply. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   clearBindableProperty<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inflate a .NET MAUI XAML fragment. */
+  /**
+   * Use this to create a diagnostic MAUI element from a XAML fragment. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   inflateXaml<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to add a .NET MAUI element. */
+  /**
+   * Use this to insert a diagnostic element into a selected MAUI container. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   addElement<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to remove a .NET MAUI element. */
+  /**
+   * Use this to remove a selected diagnostic element from the MAUI tree. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   removeElement<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set the .NET MAUI app theme. */
+  /**
+   * Use this to switch the app theme while reproducing a theme-specific issue. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   setAppTheme<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get a .NET MAUI binding context. */
+  /**
+   * Use this to inspect the view model bound to a selected MAUI element. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getBindingContext<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get .NET MAUI bindings. */
+  /**
+   * Use this to inspect binding expressions and sources for a selected element. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getBindings<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get .NET MAUI resource state. */
+  /**
+   * Use this to inspect resolved resources and styles affecting the current UI. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getResourceState<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get framework navigation state. */
+  /**
+   * Use this to read the MAUI navigation stack when visible page state is insufficient. Check
+   * the AppToolCallResult envelope for success or a tool error.
+   */
   getNavigationState<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to invoke a .NET MAUI element action. */
+  /**
+   * Use this to invoke an action exposed by a selected MAUI element. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   invokeElementAction<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to wait for .NET MAUI UI state. */
+  /**
+   * Use this to wait for a MAUI-specific UI condition before a subsequent action. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   waitForUi<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get .NET MAUI layout diagnostics. */
+  /**
+   * Use this to inspect layout measurements when an element is misplaced or clipped. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getLayoutDiagnostics<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get .NET MAUI handler diagnostics. */
+  /**
+   * Use this to inspect the native handler backing a MAUI view. Check the AppToolCallResult
+   * envelope for success or a tool error.
+   */
   getHandlerDiagnostics<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to invoke a .NET MAUI binding-context command. */
+  /**
+   * Use this to invoke an exposed view-model command for a controlled test. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   invokeBindingContextCommand<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to set a .NET MAUI binding-context property. */
+  /**
+   * Use this to change an exposed view-model property to reproduce a state. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   setBindingContextProperty<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4864,27 +5213,45 @@ export interface TaskMauiContext {
  * @unsupportedFrameworks dotnet-maui dotnet-ios dotnet-android flutter capacitor ios-uikit ios-swiftui android-views android-compose native-unknown
  */
 export interface TaskReactContext {
-  /** Calls the selected live app to get the React component tree. */
+  /**
+   * Use this to inspect the React component hierarchy behind the current screen. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getComponentTree<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get the React Native shadow tree. */
+  /**
+   * Use this to inspect React Native layout and shadow nodes when geometry matters. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getShadowTree<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to find React components. */
+  /**
+   * Use this to search components before inspecting or acting on one. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   findComponents<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get a React component. */
+  /**
+   * Use this to read details for a component found in the React tree. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getComponent<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get framework navigation state. */
+  /**
+   * Use this to inspect React navigation state when screen breadcrumbs are insufficient. Check
+   * the AppToolCallResult envelope for success or a tool error.
+   */
   getNavigationState<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to invoke a React component action. */
+  /**
+   * Use this to invoke an action exposed by a selected React component. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   invokeComponentAction<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4896,19 +5263,31 @@ export interface TaskReactContext {
  * @unsupportedFrameworks dotnet-maui dotnet-ios dotnet-android react-native capacitor ios-uikit ios-swiftui android-views android-compose native-unknown
  */
 export interface TaskFlutterContext {
-  /** Calls the selected live app to get the Flutter widget tree. */
+  /**
+   * Use this to inspect the Flutter widget hierarchy behind the current screen. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getWidgetTree<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inspect a Flutter widget. */
+  /**
+   * Use this to read details for a widget identified in the tree or a search result. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   inspectWidget<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to find Flutter widgets. */
+  /**
+   * Use this to search Flutter widgets before inspecting one. Check the AppToolCallResult
+   * envelope for success or a tool error.
+   */
   findWidgets<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to get framework navigation state. */
+  /**
+   * Use this to read Flutter navigation state when the visible route is ambiguous. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   getNavigationState<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
@@ -4920,33 +5299,57 @@ export interface TaskFlutterContext {
  * @unsupportedFrameworks dotnet-maui dotnet-ios dotnet-android react-native flutter ios-uikit ios-swiftui android-views android-compose native-unknown
  */
 export interface TaskCapacitorContext {
-  /** Calls the selected live app to get the Capacitor document. */
+  /**
+   * Use this to inspect the current WebView DOM document. Check the AppToolCallResult envelope
+   * for success or a tool error.
+   */
   getDocument<TResult = LiveVisualTreeResult>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to inspect one UI node. */
+  /**
+   * Use this to read details for a DOM node found in the document or a selector query. Check
+   * the AppToolCallResult envelope for success or a tool error.
+   */
   inspectNode<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to query a Capacitor DOM selector. */
+  /**
+   * Use this to find WebView elements using the adapter-supported DOM selector. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   querySelector<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
-  /** Calls the selected live app to invoke a framework UI action. */
+  /**
+   * Use this to perform an allowed action on a selected WebView control. Check the
+   * AppToolCallResult envelope for success or a tool error.
+   */
   invokeAction<TResult = unknown>(
     args?: AppToolArguments,
   ): Promise<AppToolCallResult<TResult>>;
 }
 
-/** Standard app API suites plus the stringly-typed escape hatch for user-defined tools. */
+/**
+ * Tool suites published by the connected app SDK.
+ *
+ * Calls execute immediately in a task and return an AppToolCallResult envelope.
+ * Narrow on responseType before reading payload.result; a TypeScript method
+ * can exist even when the app has not registered or authorized that tool.
+ * Inspect ansight.appTools.list() or declare a required app tool in a version 2
+ * task descriptor when availability is essential.
+ */
 export interface TaskAppContext {
   /** False when no SDK app-tool provider is connected. Every app call then rejects. */
   readonly available: boolean;
   /**
-   * Calls a repository-defined tool published by the selected live app.
+   * Call an app-defined tool when a standard suite does not cover the operation.
    *
-   * `TResult` describes the inner `payload.result`; the returned promise still
-   * includes the stable `AppToolCallResult` envelope.
+   * Use the exact registered tool ID and its JSON argument schema. TResult
+   * describes only payload.result; narrow on responseType before reading it.
+   * @example
+   * const response = await app.callTool<{ count: number }>("app.queue_depth");
+   * if (response.responseType === "tool.error") throw new Error(response.payload.message);
+   * expect(response.payload.result.count, { id: "queue-empty" }).toBe(0);
    */
   callTool<TResult = unknown>(
     toolId: string,
@@ -4993,31 +5396,31 @@ export interface TaskExpectationMetadata {
 
 /** Playwright-style matchers that record one authoritative named assertion. */
 export interface TaskMatchers<T> {
-  /** Negates the following matcher. */
+  /** Negate the next matcher when the expected outcome is absence or inequality. */
   readonly not: TaskMatchers<T>;
 
-  /** Compares primitives or object identity using `Object.is`. */
+  /** Compare scalar values or object identity using Object.is; use toEqual for object contents. */
   toBe(expected: T): T;
 
-  /** Compares values recursively using deterministic deep equality. */
+  /** Compare array or object contents recursively when reference identity is irrelevant. */
   toEqual(expected: unknown): T;
 
-  /** Requires a truthy value. */
+  /** Assert a truthy flag or condition, such as a UI result's passed property. */
   toBeTruthy(): NonNullable<T>;
 
-  /** Requires a falsy value. */
+  /** Assert a falsy flag or condition, such as a dismissed error banner. */
   toBeFalsy(): T;
 
-  /** Requires a value other than `undefined`. */
+  /** Assert that a lookup returned a defined value before using it. */
   toBeDefined(): Exclude<T, undefined>;
 
-  /** Requires `undefined`. */
+  /** Assert that a value is absent specifically as undefined. */
   toBeUndefined(): T;
 
-  /** Requires `null`. */
+  /** Assert an explicit null value rather than an undefined or missing value. */
   toBeNull(): T;
 
-  /** Checks string inclusion or direct collection membership using `Object.is`. */
+  /** Check substring inclusion or direct array membership using Object.is. Use toContainEqual for object members. */
   toContain(
     expected: T extends string
       ? string
@@ -5026,7 +5429,7 @@ export interface TaskMatchers<T> {
         : never,
   ): T;
 
-  /** Checks recursively equal collection membership. */
+  /** Find an array member by recursive value equality, such as an expected record. */
   toContainEqual(
     expected: T extends readonly (infer TItem)[] ? TItem : never,
   ): T;
@@ -5034,10 +5437,16 @@ export interface TaskMatchers<T> {
 
 /** Creates Playwright-style hard or soft named expectations. */
 export interface TaskExpect {
-  /** Creates matchers whose first failure terminates the task function. */
+  /**
+   * Create a named assertion for task pass/fail status. A hard failure stops the task function
+   * and remains recorded even if caught.
+   */
   <T>(actual: T, metadata: TaskExpectationMetadata): TaskMatchers<T>;
 
-  /** Creates matchers that record failure but allow the task function to continue. */
+  /**
+   * Record a named assertion while allowing later task steps to run after a failure. A soft
+   * failure still prevents Passed status.
+   */
   soft<T>(actual: T, metadata: TaskExpectationMetadata): TaskMatchers<T>;
 }
 
@@ -5053,7 +5462,12 @@ export interface TaskInvocation<
 
   /** Secrets explicitly granted to this run. Values are available only to the task process. */
   secrets: Readonly<{
+    /**
+     * Read a granted secret alias, or undefined when it was not granted to this run. Do not
+     * include the value in results or logs.
+     */
     get(alias: string): string | undefined;
+    /** Read a required granted secret alias; throw when absent so the task cannot continue with missing credentials. */
     require(alias: string): string;
   }>;
 

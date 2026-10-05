@@ -27,6 +27,8 @@ internal sealed class UpdateAnnotationTool : Operation
             ["source"] = ToolSchema.String("Optional replacement annotation source. Existing source is preserved when omitted.", nullable: true),
             ["label"] = ToolSchema.String("Optional replacement annotation label.", nullable: true),
             ["notes"] = ToolSchema.String("Optional replacement annotation notes.", nullable: true),
+            ["status"] = ToolSchema.String("Optional free-text annotation status, such as resolved.", nullable: true),
+            ["clearStatus"] = ToolSchema.Boolean("Clear the annotation status.", nullable: true),
             ["clearNotes"] = ToolSchema.Boolean("Clear annotation notes.", nullable: true),
             ["startUtc"] = ToolSchema.String("Optional replacement annotation start timestamp.", nullable: true, format: "date-time"),
             ["endUtc"] = ToolSchema.String("Optional replacement annotation end timestamp.", nullable: true, format: "date-time"),
@@ -73,6 +75,7 @@ internal sealed class UpdateAnnotationTool : Operation
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "startUtc", out var startUtc, out var errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out var endUtc, out errorMessage)
             || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "clearNotes", out var clearNotes, out errorMessage)
+            || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "clearStatus", out var clearStatus, out errorMessage)
             || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "clearEndUtc", out var clearEndUtc, out errorMessage)
             || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "clearTarget", out var clearTarget, out errorMessage))
         {
@@ -88,6 +91,11 @@ internal sealed class UpdateAnnotationTool : Operation
             : arguments?["notes"] is null
                 ? existingAnnotation.Notes
                 : NormalizeOptionalString(arguments?["notes"]?.GetValue<string>());
+        var updatedStatus = clearStatus == true
+            ? null
+            : arguments?.ContainsKey("status") == true
+                ? NormalizeOptionalString(arguments["status"]?.GetValue<string>())
+                : existingAnnotation.Status;
 
         var updatedGeometry = existingAnnotation.Geometry;
         if (arguments?["geometries"] is not null)
@@ -119,6 +127,7 @@ internal sealed class UpdateAnnotationTool : Operation
             Label = NormalizeOptionalString(arguments?["label"]?.GetValue<string>()) ?? existingAnnotation.Label,
             Source = NormalizeOptionalString(arguments?["source"]?.GetValue<string>()) ?? existingAnnotation.Source,
             Notes = updatedNotes,
+            Status = updatedStatus,
             CaptureGroupId = existingAnnotation.CaptureGroupId,
             CustomData = existingAnnotation.CustomData?.DeepClone() as JsonObject,
             Evidence = existingAnnotation.Evidence.Select(SessionSnapshotCloner.CloneAnnotationEvidence).ToArray(),

@@ -15,17 +15,21 @@ internal static class SessionAnnotationInspection
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out var endUtc, out errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "targetUtc", out var targetUtc, out errorMessage)
             || !ArgumentReader.TryReadPositiveLimit(arguments, "limit", OperationDefaults.DefaultAnnotationResultLimit, OperationDefaults.MaxAnnotationResultLimit, out var limit, out errorMessage)
+            || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "hasStatus", out var hasStatus, out errorMessage)
             || !ArgumentReader.TryReadOptionalBooleanArgument(arguments, "hasGeometry", out var hasGeometry, out errorMessage))
         {
             return ToolError(errorMessage ?? "Invalid annotation filters.");
         }
 
         var labelQuery = arguments?["labelQuery"]?.GetValue<string>()?.Trim();
+        var annotationStatus = arguments?["annotationStatus"]?.GetValue<string>()?.Trim();
         var frameId = arguments?["frameId"]?.GetValue<string>()?.Trim();
         var matchedAnnotations = snapshot!.Annotations
             .Where(annotation => MatchesAnnotationTimeRange(annotation, startUtc, endUtc))
             .Where(annotation => !targetUtc.HasValue || MatchesAnnotationPoint(annotation, targetUtc.Value))
             .Where(annotation => string.IsNullOrWhiteSpace(labelQuery) || MatchesAnnotationLabel(annotation, labelQuery))
+            .Where(annotation => string.IsNullOrWhiteSpace(annotationStatus) || string.Equals(annotation.Status, annotationStatus, StringComparison.OrdinalIgnoreCase))
+            .Where(annotation => !hasStatus.HasValue || (!string.IsNullOrWhiteSpace(annotation.Status)) == hasStatus.Value)
             .Where(annotation => string.IsNullOrWhiteSpace(frameId) || annotation.Geometry.Any(geometry => string.Equals(geometry.FrameId, frameId, StringComparison.Ordinal)))
             .Where(annotation => !hasGeometry.HasValue || (annotation.Geometry.Count > 0) == hasGeometry.Value)
             .OrderBy(annotation => annotation.StartUtc)
@@ -50,6 +54,8 @@ internal static class SessionAnnotationInspection
                     ["endUtc"] = endUtc,
                     ["targetUtc"] = targetUtc,
                     ["labelQuery"] = labelQuery,
+                    ["annotationStatus"] = annotationStatus,
+                    ["hasStatus"] = hasStatus,
                     ["frameId"] = frameId,
                     ["hasGeometry"] = hasGeometry
                 },
@@ -99,6 +105,7 @@ internal static class SessionAnnotationInspection
             Label = label,
             Source = source,
             Notes = NormalizeOptionalString(arguments?["notes"]?.GetValue<string>()),
+            Status = NormalizeOptionalString(arguments?["status"]?.GetValue<string>()),
             Geometry = geometries,
             Target = target
         };

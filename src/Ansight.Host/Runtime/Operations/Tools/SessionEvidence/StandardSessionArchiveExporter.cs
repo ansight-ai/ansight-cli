@@ -402,6 +402,7 @@ internal static class StandardSessionArchiveExporter
                     Label = annotation.Label,
                     Source = annotation.Source,
                     Notes = annotation.Notes,
+                    Status = annotation.Status,
                     CaptureGroupId = annotation.CaptureGroupId,
                     CustomData = annotation.CustomData?.DeepClone() as JsonObject,
                     Evidence = annotation.Evidence.Select(SessionSnapshotCloner.CloneAnnotationEvidence).ToArray(),

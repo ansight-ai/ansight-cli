@@ -76,4 +76,39 @@ public sealed class SessionTouchPackingStylusTests
         Assert.Equal("hoverMove", restored.Action);
         Assert.Equal(0.3, restored.Details?.Distance);
     }
+
+    [Fact]
+    public void TouchReviewPayloadExposesCapturedStylusDetails()
+    {
+        var touch = new SessionTouchInputRecord
+        {
+            Id = "pencil-sample",
+            Action = "move",
+            CapturedAtUtc = new DateTimeOffset(2026, 10, 2, 1, 2, 3, TimeSpan.Zero),
+            PointerId = 5,
+            PointerIndex = 0,
+            PointerCount = 1,
+            X = 20,
+            Y = 30,
+            CoordinateUnit = "points",
+            Details = new SessionTouchSampleDetails
+            {
+                Tool = "stylus",
+                Force = 1.25,
+                AltitudeRadians = 0.7,
+                Pressure = 0.5,
+                TiltRadians = 0.4
+            }
+        };
+
+        var payload = TouchReviewPayloads.BuildTouchPayload(touch);
+        var details = Assert.IsType<JsonObject>(payload["details"]);
+
+        Assert.Equal("pencil-sample", payload["id"]?.GetValue<string>());
+        Assert.Equal("stylus", details["tool"]?.GetValue<string>());
+        Assert.Equal(1.25, details["force"]?.GetValue<double>());
+        Assert.Equal(0.7, details["altitudeRadians"]?.GetValue<double>());
+        Assert.Equal(0.5, details["pressure"]?.GetValue<double>());
+        Assert.Equal(0.4, details["tiltRadians"]?.GetValue<double>());
+    }
 }
