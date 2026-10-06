@@ -26,7 +26,7 @@
     <ProjectReference Include="$(AnsightProtocolProject)" />
   </ItemGroup>
   <ItemGroup Condition="'$(AnsightProtocolProject)' == ''">
-    <PackageReference Include="Ansight.Protocol" Version="1.6.1" />
+    <PackageReference Include="Ansight.Protocol" Version="1.7.0" />
   </ItemGroup>
 
   <ItemGroup>
