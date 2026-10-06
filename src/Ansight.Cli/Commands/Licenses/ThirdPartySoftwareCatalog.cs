@@ -264,6 +264,7 @@ internal static class ThirdPartySoftwareCatalog
             NuGet("System.IO.Hashing", "10.0.10", "MIT", "Runtime hashing", "https://github.com/dotnet/runtime"),
             NuGet("System.Security.Permissions", "10.0.10", "MIT", "Runtime compatibility", "https://github.com/dotnet/runtime"),
             NuGet("System.Windows.Extensions", "10.0.10", "MIT", "Windows runtime compatibility", "https://github.com/dotnet/runtime"),
+            NuGet("YamlDotNet", "18.1.0", "MIT", "YAML workspace definition parsing", "https://github.com/aaubry/YamlDotNet"),
             Bundled("SkiaSharp.QrCode lineage", null, "MIT", "QR generation", "https://github.com/guitarrapc/SkiaSharp.QrCode"),
             NuGet("Google.Protobuf", "3.31.1", "BSD-3-Clause", "Android Emulator audio RPC messages", "https://github.com/protocolbuffers/protobuf"),
             NuGet("Grpc.Net.Client", "2.71.0", "Apache-2.0", "Android Emulator audio RPC client", "https://github.com/grpc/grpc-dotnet"),
