@@ -45,11 +45,12 @@ internal static class SessionTimelineBuilder
 
         foreach (var appEvent in snapshot.ApplicationEvents)
         {
+            var isMotion = string.Equals(appEvent.EventType, "Motion", StringComparison.OrdinalIgnoreCase);
             AddEvent(
                 events,
                 appEvent.CapturedAtUtc,
                 sequence++,
-                "applicationEvent",
+                isMotion ? "motion" : "applicationEvent",
                 appEvent.EventType,
                 new JsonObject
                 {

@@ -164,6 +164,7 @@ static const IndigoHIDTarget AnsightMainScreenButtonTarget = 0x33;
                      button:(AnsightSimulatorButton)button
                       phase:(AnsightSimulatorButtonPhase)phase
                       error:(NSError **)error;
+- (BOOL)sendShakeToDevice:(NSString *)deviceUdid error:(NSError **)error;
 - (BOOL)sendKeyToDevice:(NSString *)deviceUdid
                usageCode:(uint32_t)usageCode
                     phase:(AnsightSimulatorKeyPhase)phase
@@ -1362,6 +1363,31 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     return device;
 }
 
+- (BOOL)sendShakeToDevice:(NSString *)deviceUdid error:(NSError **)error
+{
+    @synchronized (self)
+    {
+        id device = [self deviceForUdid:deviceUdid error:error];
+        if (device == nil)
+        {
+            return NO;
+        }
+
+        SEL selector = sel_registerName("postDarwinNotification:error:");
+        if (![device respondsToSelector:selector])
+        {
+            if (error != NULL)
+            {
+                *error = CreateError(25, @"CoreSimulator does not expose device Darwin notifications.");
+            }
+            return NO;
+        }
+
+        return ((BOOL (*)(id, SEL, id, NSError **))objc_msgSend)(
+            device, selector, @"com.apple.UIKit.SimulatorShake", error);
+    }
+}
+
 - (BOOL)getMainScreenMetricsForDevice:(NSString *)deviceUdid
                            pixelWidth:(double *)pixelWidth
                           pixelHeight:(double *)pixelHeight
@@ -1913,6 +1939,32 @@ bool AnsightSimulatorHidSessionSendButton(
                                                   button:button
                                                    phase:phase
                                                    error:&error];
+        if (!success)
+        {
+            CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+        }
+        return success;
+    }
+}
+
+bool AnsightSimulatorHidSessionSendShake(
+    AnsightSimulatorHidSessionRef session,
+    const char *deviceUdid,
+    char *errorBuffer,
+    size_t errorBufferCapacity)
+{
+    @autoreleasepool
+    {
+        if (session == NULL || deviceUdid == NULL)
+        {
+            CopyError(@"A valid HID session and simulator UDID are required.", errorBuffer, errorBufferCapacity);
+            return false;
+        }
+
+        AnsightSimulatorHidSession *sessionValue = (__bridge AnsightSimulatorHidSession *)session;
+        NSString *deviceUdidValue = [NSString stringWithUTF8String:deviceUdid];
+        NSError *error = nil;
+        BOOL success = [sessionValue sendShakeToDevice:deviceUdidValue error:&error];
         if (!success)
         {
             CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);

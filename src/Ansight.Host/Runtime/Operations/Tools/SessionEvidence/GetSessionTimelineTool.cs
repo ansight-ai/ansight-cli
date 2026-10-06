@@ -14,7 +14,7 @@ internal sealed class GetSessionTimelineTool : Operation
 
     protected override string Title => "Get Session Timeline";
 
-    protected override string Description => "Return a unified chronological stream of logs, network requests, screenshots, touches, telemetry, annotations, visual trees, artifact snapshots, and app state.";
+    protected override string Description => "Return a unified chronological stream of logs, network requests, screenshots, touches, motion, telemetry, annotations, visual trees, artifact snapshots, and app state.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: TimelineProperties(),
@@ -75,6 +75,7 @@ internal sealed class GetSessionTimelineTool : Operation
                     "networkRequest",
                     "screenshot",
                     "touch",
+                    "motion",
                     "annotation",
                     "visualTree",
                     "uiAction",

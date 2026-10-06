@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host;
 using Ansight.Infrastructure;
+using Ansight.Host.Runtime.SessionCaptureStorage;
 
 namespace Ansight.Host.Runtime.Operations.Tools.Shared;
 
@@ -12,6 +13,7 @@ internal static class StandardSessionArchiveExporter
     private const string SessionLogsArchiveEntryPath = "session-data/logs.json";
     private const string SessionTelemetryArchiveEntryPath = "session-data/telemetry.json";
     private const string SessionTouchesArchiveEntryPath = "session-data/touches.json";
+    private const string SessionMotionArchiveEntryPath = "session-data/motion/events.json";
 
     private static readonly JsonSerializerOptions SessionArchiveJsonOptions = new()
     {
@@ -127,6 +129,15 @@ internal static class StandardSessionArchiveExporter
                     Batches = SessionTouchPacking.Pack(exportSnapshot.Touches)
                 },
                 JsonUtil.Compact);
+            var motionEvents = exportSnapshot.ApplicationEvents.Where(SessionMotionEvents.IsMotion).ToArray();
+            if (motionEvents.Length > 0)
+            {
+                WriteArchiveJsonEntry(archive, SessionMotionArchiveEntryPath, new SessionApplicationEventsBlobDocument
+                {
+                    SavedAtUtc = savedAtUtc,
+                    Events = motionEvents
+                });
+            }
 
             foreach (var request in exportSnapshot.NetworkRequests
                          .OrderBy(static request => request.StartedAtUtc)

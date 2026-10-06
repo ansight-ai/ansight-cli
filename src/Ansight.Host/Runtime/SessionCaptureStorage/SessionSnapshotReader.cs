@@ -111,7 +111,7 @@ internal static partial class SessionSnapshotReader
                 ? LoadTouches(layout, progress, cancellationToken)
                 : Array.Empty<SessionTouchInputRecord>();
             var applicationEvents = includeHeavyBlobs
-                ? LoadApplicationEvents(layout.ApplicationEventsFilePath, cancellationToken)
+                ? LoadApplicationEvents(layout.ApplicationEventsFilePath, layout.SessionDirectoryPath, cancellationToken)
                 : Array.Empty<SessionApplicationEvent>();
             var networkRequests = includeHeavyBlobs
                 ? LoadNetworkRequests(layout.NetworkRequestsDirectoryPath, progress, cancellationToken)
@@ -242,9 +242,19 @@ internal static partial class SessionSnapshotReader
 
     private static IReadOnlyList<SessionApplicationEvent> LoadApplicationEvents(
         string filePath,
+        string sessionDirectoryPath,
         CancellationToken cancellationToken = default)
-        => TryLoadDocument<SessionApplicationEventsBlobDocument>(filePath, cancellationToken)?.Events
-           ?? Array.Empty<SessionApplicationEvent>();
+    {
+        var appEvents = TryLoadDocument<SessionApplicationEventsBlobDocument>(filePath, cancellationToken)?.Events
+                        ?? Array.Empty<SessionApplicationEvent>();
+        var motionEvents = TryLoadDocument<SessionApplicationEventsBlobDocument>(
+            SessionMotionEvents.GetFilePath(sessionDirectoryPath), cancellationToken)?.Events
+                           ?? Array.Empty<SessionApplicationEvent>();
+        return appEvents.Concat(motionEvents)
+            .DistinctBy(appEvent => appEvent.EventId)
+            .OrderBy(appEvent => appEvent.CapturedAtUtc)
+            .ToArray();
+    }
 
     internal static IReadOnlyList<SessionNetworkRequest> LoadNetworkRequests(
         string directoryPath,

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using Ansight.Adb;
+using Ansight.Host.Devices.Motion;
 using Ansight.Host.Audio;
 using Ansight.Host.Audio.Ios;
 using Ansight.MacSimulatorHid;
@@ -9,7 +10,7 @@ using SkiaSharp;
 
 namespace Ansight.Host.Devices;
 
-public sealed class DeviceService : IDeviceService, IDeviceLocationService
+public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDeviceMotionDriver
 {
     private const string AndroidEnrollmentIntentExtra = "ai.ansight.bootstrap.payload";
     private const string IosEnrollmentEnvironmentVariable = "ANSIGHT_ENROLLMENT_PAYLOAD";
@@ -1011,6 +1012,35 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService
 
                 return $"Terminated '{normalizedApplicationIdentifier}'.";
             });
+    }
+
+    Task IDeviceMotionDriver.PlayMotionAsync(
+        string deviceSerial,
+        IReadOnlyList<DeviceMotionSample> samples,
+        CancellationToken cancellationToken)
+        => new AndroidEmulatorMotionPlayer(CreateAdbClient())
+            .PlayAsync(deviceSerial, samples, cancellationToken);
+
+    async Task IDeviceMotionDriver.ShakeIosSimulatorAsync(
+        string deviceUdid,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+        var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
+        var simulator = (await simCtl.GetDevicesAsync(cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(device => string.Equals(device.Udid, deviceUdid, StringComparison.OrdinalIgnoreCase));
+        if (simulator is null)
+            throw new PlatformNotSupportedException($"'{deviceUdid}' is not an iOS Simulator.");
+        if (!simulator.IsBooted)
+            throw new InvalidOperationException($"iOS Simulator '{deviceUdid}' must be booted to receive a shake.");
+
+        var capability = GetIosSimulatorHidCapability();
+        if (!capability.IsAvailable)
+            throw new PlatformNotSupportedException(capability.Message);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using var session = new MacSimulatorHidSession(capability.Backend);
+        session.SendShake(simulator.Udid);
     }
 
     public Task<DeviceOperationResult> SetLocationAsync(

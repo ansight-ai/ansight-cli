@@ -3,9 +3,9 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.DeviceLocation;
 
-internal abstract class DeviceLocationOperation : Operation
+internal abstract class DeviceHostTargetOperation : Operation
 {
-    protected DeviceLocationOperation(OperationServices services)
+    protected DeviceHostTargetOperation(OperationServices services)
         : base(services)
     {
     }
@@ -26,13 +26,13 @@ internal abstract class DeviceLocationOperation : Operation
 
     protected bool TryResolveTarget(
         JsonObject? arguments,
-        out DeviceLocationTarget target,
+        out DeviceHostTarget target,
         out string error)
     {
         var requestedDeviceIdentifier = NormalizeOptionalString(arguments?["deviceId"]?.GetValue<string>());
         if (requestedDeviceIdentifier is not null)
         {
-            target = new DeviceLocationTarget(
+            target = new DeviceHostTarget(
                 requestedDeviceIdentifier,
                 SessionId: null,
                 AppId: null,
@@ -45,7 +45,7 @@ internal abstract class DeviceLocationOperation : Operation
         var requestedAppId = NormalizeOptionalString(arguments?["appId"]?.GetValue<string>());
         if (requestedSessionId is null && requestedAppId is null)
         {
-            target = new DeviceLocationTarget(
+            target = new DeviceHostTarget(
                 DeviceIdentifier: null,
                 SessionId: null,
                 AppId: null,
@@ -56,19 +56,19 @@ internal abstract class DeviceLocationOperation : Operation
 
         if (!sessionResolver.TryResolveLiveSession(arguments, out var snapshot, out error))
         {
-            target = DeviceLocationTarget.Empty;
+            target = DeviceHostTarget.Empty;
             return false;
         }
 
         var deviceIdentifier = ResolveNativeDeviceIdentifier(snapshot!);
         if (deviceIdentifier is null)
         {
-            target = DeviceLocationTarget.Empty;
+            target = DeviceHostTarget.Empty;
             error = "The live session does not report device.nativeDeviceId, so Ansight cannot safely target its simulator or emulator.";
             return false;
         }
 
-        target = new DeviceLocationTarget(
+        target = new DeviceHostTarget(
             deviceIdentifier,
             snapshot!.SessionId,
             snapshot.AppId,
@@ -78,7 +78,7 @@ internal abstract class DeviceLocationOperation : Operation
 
     protected static JsonObject BuildResultPayload(
         string operation,
-        DeviceLocationTarget target,
+        DeviceHostTarget target,
         DeviceLocationResult result)
         => new()
         {
@@ -98,11 +98,11 @@ internal abstract class DeviceLocationOperation : Operation
         => DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot);
 }
 
-internal sealed record DeviceLocationTarget(
+internal sealed record DeviceHostTarget(
     string? DeviceIdentifier,
     string? SessionId,
     string? AppId,
     string Source)
 {
-    public static DeviceLocationTarget Empty { get; } = new(null, null, null, string.Empty);
+    public static DeviceHostTarget Empty { get; } = new(null, null, null, string.Empty);
 }

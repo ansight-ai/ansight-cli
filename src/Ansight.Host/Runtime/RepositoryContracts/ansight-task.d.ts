@@ -986,6 +986,7 @@ export type SessionTimelineCategory =
   | "session"
   | "appState"
   | "applicationEvent"
+  | "motion"
   | "networkRequest"
   | "log"
   | "screenshot"
@@ -2771,6 +2772,48 @@ export interface DeviceLocationClearResult {
   message: string;
 }
 
+/** One Android Emulator accelerometer value, in metres per second squared. */
+export interface AccelerometerSample {
+  x: number;
+  y: number;
+  z: number;
+  /** Time to hold this value, 10–1000 milliseconds. */
+  holdMs: number;
+}
+
+/** A bounded acceleration sequence. The previous sensor value is restored on completion. */
+export interface AccelerometerPlaybackArguments {
+  /** 1–100 samples, held for at most 10 seconds in total. Each axis must be between -100 and 100 m/s². */
+  samples: AccelerometerSample[];
+}
+
+/** Android-only options for alternating X-axis acceleration pulses. iOS Simulator accepts shake() without options. */
+export interface DeviceShakeArguments {
+  /** Android Emulator peak acceleration in m/s², 5–50; defaults to 20. */
+  intensity?: number;
+  /** Positive/negative pulse pairs, 1–8; defaults to 3. */
+  repetitions?: number;
+  /** Hold each pulse for 40–500 milliseconds; defaults to 80. */
+  intervalMs?: number;
+}
+
+/** Host delivery result. Assert the app's response separately. */
+export interface DeviceMotionResult {
+  isSuccess: true;
+  operation: "shake" | "playAccelerometer";
+  targetSource: Exclude<HostDeviceTargetSource, "capturedSession">;
+  sessionId: string | null;
+  deviceId: string;
+  platform: "android" | "ios";
+  backend: "adb-emulator-console" | "core-simulator-darwin-notification";
+  /** Accelerometer samples sent; zero for an iOS Simulator UIKit shake gesture. */
+  sampleCount: number;
+  /** One for an iOS Simulator UIKit shake gesture; absent for Android acceleration playback. */
+  gestureCount?: number;
+  durationMs: number;
+  message: string;
+}
+
 /** Feature component for task app session operations. */
 export interface TaskSessionContext {
   /** Read the app lifecycle state observed for this task session before interacting or asserting a transition. */
@@ -3031,6 +3074,26 @@ export interface TaskHostLifecycleContext {
 }
 /** Feature component for host device operations. */
 export interface TaskHostDeviceContext {
+  /**
+   * Simulate a shake on the enforced iOS Simulator or Android Emulator.
+   * iOS sends one fixed UIKit shake gesture; omit Android-only intensity, repetitions, and intervalMs.
+   * Android sends acceleration pulses and restores the prior sensor value.
+   * Delivery is not proof that the app observed a shake; assert app behavior separately.
+   * @supportedPlatforms ios android
+   * @supportedDeviceKinds virtual
+   * @unsupportedDeviceKinds physical
+   */
+  shake(args?: DeviceShakeArguments): Promise<DeviceMotionResult>;
+  /**
+   * Play timed accelerometer samples on the enforced Android Emulator and restore its prior value.
+   * The call resolves after the complete sequence and restoration.
+   * This host API does not inject accelerometer samples into iOS Simulator.
+   * @supportedPlatforms android
+   * @unsupportedPlatforms ios
+   * @supportedDeviceKinds virtual
+   * @unsupportedDeviceKinds physical
+   */
+  playAccelerometer(args: AccelerometerPlaybackArguments): Promise<DeviceMotionResult>;
   /**
    * Check the selected virtual device's audio provider and readiness before
    * starting a microphone test. This does not play or inject audio.

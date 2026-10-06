@@ -22,6 +22,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     private readonly AudioInjectionRouter audioInjectionRouter = new();
     private readonly UiInputRouter uiInputRouter = new();
     private readonly DeviceLocationRouter deviceLocationRouter = new();
+    private readonly DeviceMotionRouter deviceMotionRouter = new();
     private readonly DeviceLifecycleRouter deviceLifecycleRouter = new();
     private readonly DevicePermissionsRouter devicePermissionsRouter = new();
     private readonly RepositoryTaskRouter repositoryTaskRouter;
@@ -69,7 +70,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
             audioInjectionRouter,
             deviceEvidence,
             externalSessionScreenshotCaptureManager,
-            devicePermissionsRouter);
+            devicePermissionsRouter,
+            deviceMotionRouter);
         repositoryTaskRouter.ConfigureToolExecutor(CallToolAsync);
         repositoryTaskRouter.PublishEvent = (sessionId, label, eventType, group) =>
             HostSessionEvents.Publish(runtimeState, sessionId, label, eventType, group);
@@ -118,6 +120,9 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     {
         deviceLocationRouter.Configure(driver);
     }
+
+    public void ConfigureDeviceMotionDriver(Ansight.Host.Devices.Motion.IDeviceMotionDriver driver)
+        => deviceMotionRouter.Configure(driver);
 
     public void ConfigureDeviceLifecycleDriver(IDeviceLifecycleDriver? driver)
     {

@@ -26,9 +26,11 @@ internal sealed class OperationServices
         AudioInjectionRouter? audioInjectionRouter = null,
         DeviceSessionEvidence? deviceEvidence = null,
         IExternalSessionScreenshotCaptureManager? externalScreenshots = null,
-        DevicePermissionsRouter? devicePermissionsRouter = null)
+        DevicePermissionsRouter? devicePermissionsRouter = null,
+        DeviceMotionRouter? deviceMotionRouter = null)
     {
         DevicePermissionsRouter = devicePermissionsRouter ?? new DevicePermissionsRouter();
+        DeviceMotionRouter = deviceMotionRouter ?? new DeviceMotionRouter();
         DeviceEvidence = deviceEvidence;
         ExternalScreenshots = externalScreenshots;
         AudioInjectionRouter = audioInjectionRouter ?? new AudioInjectionRouter();
@@ -80,6 +82,8 @@ internal sealed class OperationServices
     public UiInputRouter UiInputRouter { get; }
 
     public DeviceLocationRouter DeviceLocationRouter { get; }
+
+    public DeviceMotionRouter DeviceMotionRouter { get; }
 
     public DevicePermissionsRouter DevicePermissionsRouter { get; }
 

@@ -45,7 +45,9 @@ internal static class RepositoryJavaScriptApiMethods
                 new StandardApiMethod("injectMicrophoneAudio", "ansight_inject_audio"),
                 new StandardApiMethod("playLocation", "ansight_play_device_location"),
                 new StandardApiMethod("setLocation", "ansight_set_device_location"),
-                new StandardApiMethod("clearLocation", "ansight_clear_device_location")),
+                new StandardApiMethod("clearLocation", "ansight_clear_device_location"),
+                new StandardApiMethod("shake", "ansight_shake_device"),
+                new StandardApiMethod("playAccelerometer", "ansight_play_accelerometer")),
             ["lifecycle"] = Suite(
                 new StandardApiMethod("launch", "ansight_launch_app"),
                 new StandardApiMethod("foreground", "ansight_foreground_app"),

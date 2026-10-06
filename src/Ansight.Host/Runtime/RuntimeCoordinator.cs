@@ -105,6 +105,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         this.operationDispatcher.ConfigureUiAccessibilityDriver(headlessDeviceDriver);
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
+        operationDispatcher.ConfigureDeviceMotionDriver(Devices);
         Identity = CreateIdentityInfo(hostIdentityStore.Current);
         Apps = appService ?? throw new ArgumentNullException(nameof(appService));
         AppTools = new AppToolService(this.appToolBridge,
@@ -196,6 +197,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         Audio = new AudioService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
+        operationDispatcher.ConfigureDeviceMotionDriver(Devices);
         var hostIdentity = composition.Get<IIdentityStore>().Current;
         ExtensionStorage = encryptedStorage;
         ExtensionIdentity = hostIdentity;

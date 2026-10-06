@@ -18,6 +18,7 @@ internal abstract class Operation : IOperation
     protected readonly SessionResolver sessionResolver;
     protected readonly UiInputRouter uiInputRouter;
     protected readonly DeviceLocationRouter deviceLocationRouter;
+    protected readonly DeviceMotionRouter deviceMotionRouter;
     protected readonly DeviceLifecycleRouter deviceLifecycleRouter;
     protected readonly RepositoryTaskRouter repositoryTaskRouter;
 
@@ -35,6 +36,7 @@ internal abstract class Operation : IOperation
         sessionResolver = services.SessionResolver;
         uiInputRouter = services.UiInputRouter;
         deviceLocationRouter = services.DeviceLocationRouter;
+        deviceMotionRouter = services.DeviceMotionRouter;
         deviceLifecycleRouter = services.DeviceLifecycleRouter;
         repositoryTaskRouter = services.RepositoryTaskRouter;
     }

@@ -1765,6 +1765,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
         {
         }
 
+        public void ConfigureDeviceMotionDriver(Ansight.Host.Devices.Motion.IDeviceMotionDriver driver)
+        {
+        }
+
         public void ConfigureDeviceLifecycleDriver(IDeviceLifecycleDriver? driver)
         {
         }

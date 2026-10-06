@@ -104,6 +104,19 @@ public sealed class MacSimulatorHidSession : IDisposable
         }
     }
 
+    public void SendShake(string deviceUdid)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+        var errorBuffer = new byte[ErrorBufferSize];
+        if (!NativeMethods.SessionSendShake(handle, deviceUdid, errorBuffer, (nuint)errorBuffer.Length))
+        {
+            throw new MacSimulatorHidException(ReadError(
+                errorBuffer,
+                "Simulator shake delivery failed."));
+        }
+    }
+
     public MacSimulatorDisplayMetrics GetMainScreenMetrics(string deviceUdid)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

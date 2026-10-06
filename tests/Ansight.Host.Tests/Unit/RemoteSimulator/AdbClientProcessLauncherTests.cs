@@ -1,10 +1,60 @@
 using System.Text;
 using Ansight.Adb;
+using Ansight.Host.Devices.Motion;
 
 namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 
 public sealed class AdbClientProcessLauncherTests
 {
+    [Fact]
+    public async Task MotionSequence_RestoresOriginalAccelerationAfterSamples()
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "acceleration = 0:9.81:0\nOK\n", "OK\n", "OK\n", "OK\n");
+        var player = new AndroidEmulatorMotionPlayer(new AdbClient("/fake/adb", launcher));
+
+        await player.PlayAsync("emulator-5554",
+        [
+            new DeviceMotionSample(new EmulatorAcceleration(20, 0, 0), 10),
+            new DeviceMotionSample(new EmulatorAcceleration(-20, 0, 0), 10)
+        ]);
+
+        Assert.Equal(4, launcher.Requests.Count);
+        Assert.Equal(["-s", "emulator-5554", "emu", "sensor", "get", "acceleration"],
+            launcher.Requests[0].Arguments);
+        Assert.Equal("20:0:0", launcher.Requests[1].Arguments[^1]);
+        Assert.Equal("-20:0:0", launcher.Requests[2].Arguments[^1]);
+        Assert.Equal("0:9.81:0", launcher.Requests[3].Arguments[^1]);
+    }
+
+    [Fact]
+    public async Task MotionSequence_RejectsPhysicalDeviceBeforeSendingCommands()
+    {
+        var launcher = new RecordingAdbProcessLauncher();
+        var player = new AndroidEmulatorMotionPlayer(new AdbClient("/fake/adb", launcher));
+
+        await Assert.ThrowsAsync<PlatformNotSupportedException>(() => player.PlayAsync(
+            "physical-device", [new DeviceMotionSample(new EmulatorAcceleration(1, 2, 3), 10)]));
+
+        Assert.Empty(launcher.Requests);
+    }
+
+    [Fact]
+    public async Task MotionSequence_RestoresOriginalAccelerationAfterCancellation()
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "acceleration = 0:9.81:0\nOK\n", "OK\n", "OK\n");
+        var player = new AndroidEmulatorMotionPlayer(new AdbClient("/fake/adb", launcher));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.CancelAfter(TimeSpan.FromMilliseconds(40));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => player.PlayAsync(
+            "emulator-5554", [new DeviceMotionSample(new EmulatorAcceleration(20, 0, 0), 1000)],
+            cancellation.Token));
+
+        Assert.Equal(3, launcher.Requests.Count);
+        Assert.Equal("0:9.81:0", launcher.Requests[2].Arguments[^1]);
+    }
     [Fact]
     public async Task WaitForEmulatorBootAsync_WaitsForMatchingAvdAndPackageManager()
     {

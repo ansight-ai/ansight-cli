@@ -187,7 +187,8 @@ public sealed partial class DeviceLocationOperationTests
         TestAppToolBridge appToolBridge,
         IDeviceLocationDriver? driver,
         DeviceLocationPlaybackService? playback = null,
-        IDeviceService? devices = null)
+        IDeviceService? devices = null,
+        DeviceMotionRouter? motionRouter = null)
     {
         var locationRouter = new DeviceLocationRouter();
         locationRouter.Configure(driver);
@@ -202,7 +203,8 @@ public sealed partial class DeviceLocationOperationTests
             appToolBridge,
             cloudSessionSharingService: null,
             new SessionResolver(runtimeState, appToolBridge),
-            deviceLocationRouter: locationRouter);
+            deviceLocationRouter: locationRouter,
+            deviceMotionRouter: motionRouter);
     }
 
     private static JsonObject GetStructuredContent(RequestResult response, bool expectedToolError = false)

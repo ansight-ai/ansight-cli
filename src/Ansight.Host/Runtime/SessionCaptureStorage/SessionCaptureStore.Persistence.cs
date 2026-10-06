@@ -346,8 +346,9 @@ internal sealed partial class SessionCaptureStore
             new SessionApplicationEventsBlobDocument
             {
                 SavedAtUtc = savedAtUtc,
-                Events = snapshot.ApplicationEvents.ToArray()
+                Events = snapshot.ApplicationEvents.Where(appEvent => !SessionMotionEvents.IsMotion(appEvent)).ToArray()
             });
+        WriteMotionEvents(layout, savedAtUtc, snapshot.ApplicationEvents);
 
         ReconcileNetworkRequestDocuments(layout.NetworkRequestsDirectoryPath, snapshot.NetworkRequests);
 
@@ -582,8 +583,9 @@ internal sealed partial class SessionCaptureStore
                 new SessionApplicationEventsBlobDocument
                 {
                     SavedAtUtc = savedAtUtc,
-                    Events = snapshot.ApplicationEvents.ToArray()
+                    Events = snapshot.ApplicationEvents.Where(appEvent => !SessionMotionEvents.IsMotion(appEvent)).ToArray()
                 });
+            WriteMotionEvents(layout, savedAtUtc, snapshot.ApplicationEvents);
             persistenceState.PersistedApplicationEventsSource = snapshot.ApplicationEvents;
         }
 

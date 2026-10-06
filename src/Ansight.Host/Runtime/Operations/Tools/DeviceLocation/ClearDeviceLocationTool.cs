@@ -4,7 +4,7 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.DeviceLocation;
 
-internal sealed class ClearDeviceLocationTool : DeviceLocationOperation
+internal sealed class ClearDeviceLocationTool : DeviceHostTargetOperation
 {
     public ClearDeviceLocationTool(OperationServices services)
         : base(services)

@@ -356,6 +356,58 @@ public sealed partial class AdbClient
         }
     }
 
+    public async Task<EmulatorAcceleration> GetEmulatorAccelerationAsync(
+        string deviceSerial,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceSerial(deviceSerial);
+        var result = await RunAsync(
+            ["-s", deviceSerial, "emu", "sensor", "get", "acceleration"],
+            cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess || result.StandardOutput.Contains("KO:", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(BuildFailureMessage("read emulator acceleration", result));
+        }
+
+        var line = result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(static value => value.StartsWith("acceleration =", StringComparison.OrdinalIgnoreCase));
+        var components = line?.Split('=', 2)[1].Trim().Split(':');
+        if (components is not { Length: 3 }
+            || !double.TryParse(components[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !double.TryParse(components[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !double.TryParse(components[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var z)
+            || !double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z))
+        {
+            throw new InvalidOperationException("The Android emulator did not return a readable acceleration value.");
+        }
+
+        return new EmulatorAcceleration(x, y, z);
+    }
+
+    public async Task SetEmulatorAccelerationAsync(
+        string deviceSerial,
+        EmulatorAcceleration acceleration,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceSerial(deviceSerial);
+        if (!double.IsFinite(acceleration.X) || !double.IsFinite(acceleration.Y) || !double.IsFinite(acceleration.Z))
+        {
+            throw new ArgumentOutOfRangeException(nameof(acceleration), "Acceleration components must be finite numbers.");
+        }
+
+        var value = string.Join(':',
+            acceleration.X.ToString("R", CultureInfo.InvariantCulture),
+            acceleration.Y.ToString("R", CultureInfo.InvariantCulture),
+            acceleration.Z.ToString("R", CultureInfo.InvariantCulture));
+        var result = await RunAsync(
+            ["-s", deviceSerial, "emu", "sensor", "set", "acceleration", value],
+            cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess || result.StandardOutput.Contains("KO:", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(BuildFailureMessage("set emulator acceleration", result));
+        }
+    }
+
     public async Task LaunchApplicationAsync(
         string deviceSerial,
         string packageIdentifier,

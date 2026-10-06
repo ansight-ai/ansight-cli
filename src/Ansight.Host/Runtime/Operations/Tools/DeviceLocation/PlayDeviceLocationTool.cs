@@ -3,7 +3,7 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.DeviceLocation;
 
-internal sealed class PlayDeviceLocationTool : DeviceLocationOperation
+internal sealed class PlayDeviceLocationTool : DeviceHostTargetOperation
 {
     public PlayDeviceLocationTool(OperationServices services) : base(services)
     {

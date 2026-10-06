@@ -45,6 +45,8 @@ internal interface IOperationDispatcher : IDisposable
 
     void ConfigureDeviceLocationDriver(IDeviceLocationDriver? driver);
 
+    void ConfigureDeviceMotionDriver(Ansight.Host.Devices.Motion.IDeviceMotionDriver driver);
+
     void ConfigureDeviceLifecycleDriver(IDeviceLifecycleDriver? driver);
 
     void ConfigureRepositoryTaskRuntime(string executablePath);

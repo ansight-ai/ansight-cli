@@ -31,7 +31,8 @@ internal sealed class ToolCatalog
         AudioInjectionRouter? audioInjectionRouter = null,
         DeviceSessionEvidence? deviceEvidence = null,
         IExternalSessionScreenshotCaptureManager? externalScreenshots = null,
-        DevicePermissionsRouter? devicePermissionsRouter = null)
+        DevicePermissionsRouter? devicePermissionsRouter = null,
+        DeviceMotionRouter? deviceMotionRouter = null)
     {
         services = new OperationServices(
             runtimeState,
@@ -51,7 +52,8 @@ internal sealed class ToolCatalog
             audioInjectionRouter,
             deviceEvidence,
             externalScreenshots,
-            devicePermissionsRouter);
+            devicePermissionsRouter,
+            deviceMotionRouter);
         tools = CreateToolRegistry(services);
         services.AttachHostToolRegistry(tools);
     }
@@ -206,6 +208,8 @@ internal sealed class ToolCatalog
             TaskSessionBound(new PlayDeviceLocationTool(services)),
             TaskSessionBound(new SetDeviceLocationTool(services)),
             TaskSessionBound(new ClearDeviceLocationTool(services)),
+            TaskSessionBound(new DeviceMotionTool(services, shake: true)),
+            TaskSessionBound(new DeviceMotionTool(services, shake: false)),
             TaskSessionBound(new PermissionTool(services, "grant", null)),
             TaskSessionBound(new PermissionTool(services, "revoke", null)),
             TaskSessionBound(new PermissionTool(services, "query", null)),
