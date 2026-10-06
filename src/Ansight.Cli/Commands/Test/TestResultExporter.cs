@@ -1,11 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Ansight.Infrastructure;
 
 namespace Ansight.Cli.Commands.Test;
 
 internal static class TestResultExporter
 {
     private const string ResultDirectoryName = "workspace-test-results";
+    private const int MaximumGeneratedResults = 100;
+    private const long MaximumGeneratedResultBytes = 256L * 1_024 * 1_024;
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -32,21 +35,36 @@ internal static class TestResultExporter
         return Path.Combine(dataDirectory, "data", ResultDirectoryName, fileName);
     }
 
-    public static void Save(string filePath, object result)
+    public static void Save(string filePath, object result, bool pruneGeneratedResults = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentNullException.ThrowIfNull(result);
         var fullPath = Path.GetFullPath(filePath);
         var directoryPath = Path.GetDirectoryName(fullPath)
             ?? throw new InvalidOperationException("The test result path has no parent directory.");
-        Directory.CreateDirectory(directoryPath);
+        if (pruneGeneratedResults)
+        {
+            PrivateStorageDirectory.Ensure(directoryPath);
+        }
+        else
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
         var temporaryPath = $"{fullPath}.{Guid.NewGuid():N}.tmp";
         try
         {
             File.WriteAllText(temporaryPath, JsonSerializer.Serialize(result, jsonOptions));
             TryRestrictFilePermissions(temporaryPath);
+            if (pruneGeneratedResults && new FileInfo(temporaryPath).Length > MaximumGeneratedResultBytes)
+            {
+                throw new InvalidDataException("The generated test result exceeds the local result cache limit.");
+            }
             File.Move(temporaryPath, fullPath, overwrite: true);
             TryRestrictFilePermissions(fullPath);
+            if (pruneGeneratedResults)
+            {
+                PruneGeneratedResults(directoryPath, fullPath);
+            }
         }
         finally
         {
@@ -54,6 +72,33 @@ internal static class TestResultExporter
             {
                 File.Delete(temporaryPath);
             }
+        }
+    }
+
+    private static void PruneGeneratedResults(string directoryPath, string currentFilePath)
+    {
+        var files = Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
+            .Select(path => new FileInfo(path))
+            .OrderByDescending(static file => file.LastWriteTimeUtc)
+            .ToArray();
+        var totalBytes = files.Sum(static file => file.Length);
+        var remainingCount = files.Length;
+        for (var index = files.Length - 1; index >= 0; index--)
+        {
+            if (remainingCount <= MaximumGeneratedResults && totalBytes <= MaximumGeneratedResultBytes)
+            {
+                break;
+            }
+
+            var file = files[index];
+            if (string.Equals(file.FullName, currentFilePath, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            totalBytes -= file.Length;
+            file.Delete();
+            remainingCount--;
         }
     }
 

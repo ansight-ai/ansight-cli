@@ -78,20 +78,26 @@ public sealed partial class RemoteControlServer
             return;
         }
 
+        if (target.AbsolutePath is "/api/state" or "/api/location/set" or "/api/location/clear"
+            or "/api/webrtc/offer" or "/api/frame" or "/api/input" or "/api/button"
+            or "/api/key" or "/api/text")
+        {
+            await RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         if (request.Method == "GET" && target.AbsolutePath == "/api/state")
         {
             var snapshot = runtimeSource.Current;
-            IReadOnlyList<RemoteBootableDevice> bootableDevices = deviceLifecycleSource is null
-                ? []
-                : await deviceLifecycleSource
-                    .ListBootableDevicesAsync(cancellationToken)
-                    .ConfigureAwait(false);
-            IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>> installedApplications =
-                deviceLifecycleSource is null
-                    ? new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>()
-                    : await deviceLifecycleSource
-                        .ListInstalledApplicationsAsync(cancellationToken)
-                        .ConfigureAwait(false);
+            var inventory = deviceLifecycleSource switch
+            {
+                IRemoteDeviceInventorySource inventorySource =>
+                    await inventorySource.ListInventoryAsync(cancellationToken).ConfigureAwait(false),
+                not null => new RemoteDeviceInventory(
+                    await deviceLifecycleSource.ListBootableDevicesAsync(cancellationToken).ConfigureAwait(false),
+                    await deviceLifecycleSource.ListInstalledApplicationsAsync(cancellationToken).ConfigureAwait(false)),
+                _ => new RemoteDeviceInventory(
+                    [], new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>())
+            };
             IReadOnlyList<RemoteAnnotationSession> annotationSessions = annotationSource is null
                 ? []
                 : await annotationSource
@@ -100,8 +106,8 @@ public sealed partial class RemoteControlServer
             var response = new RemoteStateResponse(
                 snapshot.CapturedAtUtc,
                 snapshot.Devices,
-                bootableDevices,
-                installedApplications,
+                inventory.BootableDevices,
+                inventory.InstalledApplications,
                 annotationSessions,
                 snapshot.Error,
                 inputSink.BackendName,

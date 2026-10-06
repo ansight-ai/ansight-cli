@@ -43,6 +43,7 @@
     <PackageReference Include="System.Formats.Nrbf" Version="10.0.10" />
     <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
     <PackageReference Include="System.Security.Permissions" Version="10.0.10" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
     <PackageReference Include="SQLitePCLRaw.provider.sqlite3" Version="3.0.5" />
     <PackageReference Include="SQLitePCLRaw.provider.winsqlite3" Version="3.0.5" />
   </ItemGroup>

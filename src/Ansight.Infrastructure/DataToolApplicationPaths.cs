@@ -11,10 +11,11 @@ public class DataToolApplicationPaths : IApplicationPaths
 
         BaseFolderPath = baseFolderPath;
 
-        CreateIfNotExists(BaseFolderPath);
-        CreateIfNotExists(ApplicationDataPath);
-        CreateIfNotExists(ApplicationLogsPath);
-        CreateIfNotExists(ApplicationTempPath);
+        PrivateStorageDirectory.Ensure(BaseFolderPath);
+        PrivateStorageDirectory.Ensure(ApplicationDataPath);
+        AppDefinitionStorage.MigrateLegacyFiles(ApplicationDataPath);
+        PrivateStorageDirectory.Ensure(ApplicationLogsPath);
+        PrivateStorageDirectory.Ensure(ApplicationTempPath);
     }
 
     public string BaseFolderPath { get; }
@@ -25,11 +26,4 @@ public class DataToolApplicationPaths : IApplicationPaths
 
     public string ApplicationTempPath => Path.Combine(BaseFolderPath, "temp");
 
-    private static void CreateIfNotExists(string folderPath)
-    {
-        if (!Directory.Exists(folderPath))
-        {
-            Directory.CreateDirectory(folderPath);
-        }
-    }
 }

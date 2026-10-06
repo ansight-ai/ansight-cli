@@ -30,7 +30,7 @@ internal sealed class WorkspaceTestBatchAuditStore
         ArgumentNullException.ThrowIfNull(audit);
         try
         {
-            Directory.CreateDirectory(HistoryDirectoryPath);
+            PrivateStorageDirectory.Ensure(HistoryDirectoryPath);
             var timestamp = audit.StartedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff");
             var filePath = Path.Combine(
                 HistoryDirectoryPath,
@@ -42,6 +42,7 @@ internal sealed class WorkspaceTestBatchAuditStore
                 TryRestrictFilePermissions(temporaryPath);
                 File.Move(temporaryPath, filePath, overwrite: true);
                 TryRestrictFilePermissions(filePath);
+                BoundedAuditHistory.Prune(HistoryDirectoryPath, filePath, includeTraceDirectories: false);
             }
             finally
             {

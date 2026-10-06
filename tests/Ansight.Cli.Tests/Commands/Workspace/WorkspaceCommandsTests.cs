@@ -314,7 +314,7 @@ public sealed class WorkspaceCommandsTests
             directory.Path,
             "ansight",
             "tests",
-            "onboarding-smoke.json")));
+            "onboarding-smoke.yaml")));
         Assert.Equal(string.Empty, standardError.ToString());
     }
 

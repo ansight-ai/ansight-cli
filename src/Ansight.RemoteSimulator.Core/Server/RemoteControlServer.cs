@@ -129,6 +129,16 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         ? string.Empty
         : $"http://127.0.0.1:{Port}/?token={Uri.EscapeDataString(sessionToken)}";
 
+    public Task<RemoteRuntimeSnapshot> RefreshDevicesAsync(CancellationToken cancellationToken = default)
+        => runtimeSource is IRefreshableRemoteRuntimeSource refreshable
+            ? refreshable.RefreshIfStaleAsync(cancellationToken)
+            : Task.FromResult(runtimeSource.Current);
+
+    public Task<RemoteRuntimeSnapshot> RefreshDevicesNowAsync(CancellationToken cancellationToken = default)
+        => runtimeSource is IRefreshableRemoteRuntimeSource refreshable
+            ? refreshable.RefreshAsync(cancellationToken)
+            : Task.FromResult(runtimeSource.Current);
+
     public bool TryResolveBootedDeviceIdentifier(
         string reportedIdentifier,
         out string deviceIdentifier,

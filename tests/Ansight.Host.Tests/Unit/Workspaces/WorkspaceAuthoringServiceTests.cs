@@ -196,6 +196,7 @@ public sealed class WorkspaceAuthoringServiceTests
             directory.RootPath,
             "map-smoke",
             "com.example.app",
+            Prompt: "Open the map.\nSelect the first area.",
             Assertions: ["The map is visible"],
             RequiredSecrets: ["MAP_TOKEN"]));
         var triggerResult = service.AddTrigger(new WorkspaceTriggerCreateRequest(
@@ -209,6 +210,8 @@ public sealed class WorkspaceAuthoringServiceTests
 
         Assert.True(taskResult.IsSuccess, taskResult.Message);
         Assert.True(testResult.IsSuccess, testResult.Message);
+        Assert.EndsWith("map-smoke.yaml", testResult.DefinitionPath, StringComparison.Ordinal);
+        Assert.Contains("prompt: |-", File.ReadAllText(testResult.DefinitionPath!), StringComparison.Ordinal);
         Assert.True(triggerResult.IsSuccess, triggerResult.Message);
         Assert.True(sanitizerResult.IsSuccess, sanitizerResult.Message);
         Assert.EndsWith("team-safe.ts", sanitizerResult.DefinitionPath, StringComparison.Ordinal);
@@ -231,6 +234,7 @@ public sealed class WorkspaceAuthoringServiceTests
         Assert.Empty(testCatalog.Warnings);
         var test = Assert.Single(testCatalog.Tests);
         Assert.Equal("map-smoke", test.TestId);
+        Assert.Equal("Open the map.\nSelect the first area.", test.Prompt);
         Assert.Equal(["MAP_TOKEN"], test.RequiredSecrets);
         var triggerCatalog = RepositoryAutomationTriggerLoader.Load(
             [directory.RootPath],
@@ -266,5 +270,20 @@ public sealed class WorkspaceAuthoringServiceTests
         Assert.Contains("--force", rejected.Message, StringComparison.Ordinal);
         Assert.True(replaced.IsSuccess, replaced.Message);
         Assert.Contains("Replacement", File.ReadAllText(replaced.DefinitionPath!), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddTest_DoesNotCreateYamlBesideExistingJsonWithSameId()
+    {
+        using var directory = new TemporaryDirectory();
+        var testsDirectory = Path.Combine(directory.RootPath, "ansight", "tests");
+        Directory.CreateDirectory(testsDirectory);
+        File.WriteAllText(Path.Combine(testsDirectory, "smoke.json"), """{"appId":"com.example.app","prompt":"Open app","validation":"App is open"}""");
+
+        var result = new WorkspaceAuthoringService().AddTest(new WorkspaceTestCreateRequest(
+            directory.RootPath, "smoke", "com.example.app"));
+
+        Assert.False(result.IsSuccess);
+        Assert.False(File.Exists(Path.Combine(testsDirectory, "smoke.yaml")));
     }
 }

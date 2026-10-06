@@ -1,11 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Ansight.Host.Runtime.Automation;
 
 namespace Ansight.Host.Runtime.Tasks;
 
 internal sealed class RepositoryTaskRunStore
 {
     private const int MaximumRetainedRuns = 2_000;
-    private const long MaximumFileBytesBeforeCompaction = 16 * 1_024 * 1_024;
     private readonly Lock gate = new();
     private readonly string filePath;
     private readonly JsonSerializerOptions json = new(JsonUtil.Compact);
@@ -14,18 +15,28 @@ internal sealed class RepositoryTaskRunStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationDataPath);
         var directoryPath = Path.Combine(applicationDataPath, "automation");
-        Directory.CreateDirectory(directoryPath);
+        PrivateStorageDirectory.Ensure(directoryPath);
         filePath = Path.Combine(directoryPath, "task-runs.jsonl");
+        BoundedRunHistory.RestrictFile(filePath);
+        if (File.Exists(filePath) && new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
+        {
+            Compact();
+        }
     }
 
     public void Append(RepositoryTaskRunResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        var line = JsonSerializer.Serialize(result, json);
+        var line = SerializeBounded(result);
+        if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
+        {
+            throw new IOException("Repository task history record exceeds the local size limit.");
+        }
         lock (gate)
         {
             File.AppendAllText(filePath, line + Environment.NewLine);
-            if (new FileInfo(filePath).Length > MaximumFileBytesBeforeCompaction)
+            BoundedRunHistory.RestrictFile(filePath);
+            if (new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
             {
                 Compact();
             }
@@ -34,16 +45,49 @@ internal sealed class RepositoryTaskRunStore
 
     private void Compact()
     {
-        var retained = ReadAll()
-            .OrderByDescending(item => item.CompletedAtUtc)
-            .Take(MaximumRetainedRuns)
-            .OrderBy(item => item.CompletedAtUtc)
-            .ToArray();
-        var temporaryPath = filePath + ".tmp";
-        File.WriteAllLines(
-            temporaryPath,
-            retained.Select(item => JsonSerializer.Serialize(item, json)));
-        File.Move(temporaryPath, filePath, overwrite: true);
+        BoundedRunHistory.Compact(
+            filePath,
+            ReadAll(),
+            static item => item.CompletedAtUtc,
+            SerializeBounded,
+            MaximumRetainedRuns);
+    }
+
+    private string SerializeBounded(RepositoryTaskRunResult result)
+    {
+        var input = result.Input;
+        if (JsonSerializer.SerializeToUtf8Bytes(input, json).Length > 32 * 1_024)
+        {
+            input = new JsonObject { ["truncated"] = true };
+        }
+
+        var output = result.Output;
+        if (output is not null && JsonSerializer.SerializeToUtf8Bytes(output, json).Length > 32 * 1_024)
+        {
+            output = new JsonObject { ["truncated"] = true };
+        }
+
+        var bounded = result with
+        {
+            Input = input,
+            Output = output,
+            Message = BoundedRunHistory.LimitText(result.Message, 4 * 1_024),
+            StandardError = BoundedRunHistory.LimitText(result.StandardError, 8 * 1_024)
+        };
+        var line = JsonSerializer.Serialize(bounded, json);
+        if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
+        {
+            bounded = bounded with
+            {
+                Input = new JsonObject { ["truncated"] = true },
+                Output = new JsonObject { ["truncated"] = true },
+                ToolCalls = [],
+                SourceTrace = null
+            };
+            line = JsonSerializer.Serialize(bounded, json);
+        }
+
+        return line;
     }
 
     private IReadOnlyList<RepositoryTaskRunResult> ReadAll()

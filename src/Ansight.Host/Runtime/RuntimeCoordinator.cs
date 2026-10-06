@@ -43,6 +43,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     private CancellationTokenSource? shutdownTokenSource;
     private Task? pairingTask;
     private Task? analyticsTask;
+    private Task? maintenanceTask;
     private bool disposed;
     private bool started;
     private string[] startupWarnings = [];
@@ -555,6 +556,16 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         var automationStartResult = await RepositoryAutomations.StartAsync(currentShutdownTokenSource!.Token).ConfigureAwait(false);
         await BackfillIosInstrumentsMetricsAsync(currentShutdownTokenSource.Token).ConfigureAwait(false);
         AppWatches.Start(currentShutdownTokenSource.Token);
+        lock (gate)
+        {
+            if (started && ReferenceEquals(shutdownTokenSource, currentShutdownTokenSource))
+            {
+                var maintenanceLifetime = currentShutdownTokenSource.Token;
+                maintenanceTask = Task.Run(
+                    () => RunSessionCacheMaintenanceAsync(maintenanceLifetime),
+                    CancellationToken.None);
+            }
+        }
         var currentStartupWarnings = CaptureStartupWarnings()
             .Concat(automationStartResult?.Warnings ?? Array.Empty<string>())
             .Distinct(StringComparer.Ordinal)
@@ -588,6 +599,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     {
         Task? currentPairingTask;
         Task? currentAnalyticsTask;
+        Task? currentMaintenanceTask;
         CancellationTokenSource? currentShutdownTokenSource;
 
         lock (gate)
@@ -600,9 +612,11 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             started = false;
             currentPairingTask = pairingTask;
             currentAnalyticsTask = analyticsTask;
+            currentMaintenanceTask = maintenanceTask;
             currentShutdownTokenSource = shutdownTokenSource;
             pairingTask = null;
             analyticsTask = null;
+            maintenanceTask = null;
             shutdownTokenSource = null;
         }
 
@@ -616,13 +630,14 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         {
             await WaitForTasksAsync(currentPairingTask, cancellationToken);
             if (currentAnalyticsTask is not null) await currentAnalyticsTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            if (currentMaintenanceTask is not null) await currentMaintenanceTask.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (currentShutdownTokenSource?.IsCancellationRequested == true)
         {
         }
         catch
         {
-            await ObserveAndIgnoreTaskFailuresAsync(currentPairingTask, currentAnalyticsTask);
+            await ObserveAndIgnoreTaskFailuresAsync(currentPairingTask, currentAnalyticsTask, currentMaintenanceTask);
         }
         finally
         {

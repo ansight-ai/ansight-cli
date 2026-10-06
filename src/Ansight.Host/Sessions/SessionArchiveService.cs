@@ -161,7 +161,7 @@ public sealed class SessionArchiveService
                 File.Delete(archiveFilePath);
             }
 
-            using var stream = File.Create(archiveFilePath);
+            using var stream = PrivateStorageFile.Create(archiveFilePath);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
 
             var sessionCapturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);

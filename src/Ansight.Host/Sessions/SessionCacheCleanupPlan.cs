@@ -13,4 +13,7 @@ public sealed record SessionCacheCleanupPlan(
     IReadOnlyList<SessionCacheCleanupItem> Items)
 {
     public int DeleteCount => Items.Count;
+    public bool AutoCleanupEnabled { get; init; }
+    public DateTimeOffset? LastAutoCleanupUtc { get; init; }
+    public int LastAutoCleanupDeletedCount { get; init; }
 }

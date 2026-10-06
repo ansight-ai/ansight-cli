@@ -271,7 +271,7 @@ internal static class WorkspaceCommands
                ansight-task.js              Named runtime permission constants
                ansight-task.d.ts            Task authoring API and type declarations
                tsconfig.json                TypeScript type-checking configuration
-             ansight/tests/                 JSON end-to-end scenarios used by test list/validate/run
+             ansight/tests/                 YAML test journeys used by test list/validate/run (JSON also supported)
              ansight/trends/           Observation spans, metrics, budgets, and regression policies
              ansight/sanitizers/            Typed PII/content functions for session export and sharing
                ansight-sanitizer.d.ts       Sanitizer inputs, tools, and return types
@@ -291,7 +291,7 @@ internal static class WorkspaceCommands
                assert that the expected areas exist".
 
              test
-               A declarative JSON end-to-end scenario. It identifies the app, tells the Ansight test
+               A declarative YAML test journey. It identifies the app, tells the Ansight test
                runner what user journey to perform, and defines the observable final assertions.
                The all-in-one test command starts the simulator/emulator when needed, launches the
                installed app, waits for its Ansight session, and runs the scenario with Ansight tools.

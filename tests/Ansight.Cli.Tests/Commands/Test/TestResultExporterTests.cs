@@ -45,4 +45,24 @@ public sealed class TestResultExporterTests
 
         Assert.Equal(Path.GetFullPath(requestedPath), resultPath);
     }
+
+    [Fact]
+    public void Save_PrunesGeneratedResultHistory()
+    {
+        using var directory = TestDirectory.Create();
+        string? latestPath = null;
+        for (var index = 0; index < 102; index++)
+        {
+            latestPath = TestResultExporter.CreatePath(
+                directory.Path,
+                requestedPath: null,
+                "generated",
+                $"run-{index:D3}");
+            TestResultExporter.Save(latestPath, new { index }, pruneGeneratedResults: true);
+        }
+
+        var resultDirectory = Path.Combine(directory.Path, "data", "workspace-test-results");
+        Assert.Equal(100, Directory.EnumerateFiles(resultDirectory, "*.json").Count());
+        Assert.True(File.Exists(latestPath));
+    }
 }

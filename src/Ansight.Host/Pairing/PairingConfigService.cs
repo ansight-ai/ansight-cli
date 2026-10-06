@@ -104,14 +104,11 @@ internal sealed class PairingConfigService : IPairingConfigService
         {
             File.WriteAllText(desktopPath, json);
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
         {
-            desktopPath = Path.Combine(applicationPaths.ApplicationDataPath, desktopFileName);
-            File.WriteAllText(desktopPath, json);
-        }
-        catch (IOException)
-        {
-            desktopPath = Path.Combine(applicationPaths.ApplicationDataPath, desktopFileName);
+            var appsPath = AppDefinitionStorage.GetDirectoryPath(applicationPaths.ApplicationDataPath);
+            Directory.CreateDirectory(appsPath);
+            desktopPath = Path.Combine(appsPath, desktopFileName);
             File.WriteAllText(desktopPath, json);
         }
 

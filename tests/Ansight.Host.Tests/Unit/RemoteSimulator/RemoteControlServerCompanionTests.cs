@@ -64,6 +64,25 @@ public sealed class RemoteControlServerCompanionTests
         var annotationSession = Assert.Single(state.AnnotationSessions);
         Assert.Equal("live-session", annotationSession.SessionId);
         Assert.Equal("simulator-active", annotationSession.DeviceUdid);
+        Assert.Equal(1, lifecycleSource.InventoryCalls);
+        Assert.Equal(0, lifecycleSource.SeparateCalls);
+    }
+
+    [Fact]
+    public async Task State_RefreshesDiscoveryWhenRequested()
+    {
+        var runtimeSource = new FakeRuntimeSource();
+        await using var server = CreateServer(
+            new FakeDeviceLifecycleSource(),
+            new FakeAnnotationSource(),
+            runtimeSource: runtimeSource);
+        await server.StartAsync();
+        using var client = new HttpClient();
+
+        var state = await client.GetFromJsonAsync<CompanionStateResponse>(Endpoint(server, "/api/state"));
+
+        Assert.NotNull(state);
+        Assert.Equal(1, runtimeSource.RefreshCount);
     }
 
     [Fact]
@@ -238,9 +257,10 @@ public sealed class RemoteControlServerCompanionTests
         IRemoteDeviceLifecycleSource lifecycleSource,
         IRemoteAnnotationSource annotationSource,
         IRemoteAgentChatSource? agentChatSource = null,
-        IRemoteDeviceLocationSource? deviceLocationSource = null)
+        IRemoteDeviceLocationSource? deviceLocationSource = null,
+        IRemoteRuntimeSource? runtimeSource = null)
         => new(
-            new FakeRuntimeSource(),
+            runtimeSource ?? new FakeRuntimeSource(),
             new FakeRemoteSimulatorFrameSource(),
             new FakeRemoteSimulatorInputSink(),
             requestedPort: 0,
@@ -263,13 +283,19 @@ public sealed class RemoteControlServerCompanionTests
         return client.PostAsync(endpoint, content);
     }
 
-    private sealed class FakeDeviceLifecycleSource : IRemoteDeviceLifecycleSource
+    private sealed class FakeDeviceLifecycleSource : IRemoteDeviceInventorySource
     {
         public string StartedIdentifier { get; private set; } = string.Empty;
 
+        public int InventoryCalls { get; private set; }
+
+        public int SeparateCalls { get; private set; }
+
         public Task<IReadOnlyList<RemoteBootableDevice>> ListBootableDevicesAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<RemoteBootableDevice>>(
+        {
+            SeparateCalls++;
+            return Task.FromResult<IReadOnlyList<RemoteBootableDevice>>(
             [
                 new RemoteBootableDevice(
                     "simulator-stopped",
@@ -277,10 +303,13 @@ public sealed class RemoteControlServerCompanionTests
                     "iOS 26.0",
                     "ios")
             ]);
+        }
 
         public Task<IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>>> ListInstalledApplicationsAsync(
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>>>(
+        {
+            SeparateCalls++;
+            return Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>>>(
                 new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>
                 {
                     ["simulator-stopped"] =
@@ -290,6 +319,19 @@ public sealed class RemoteControlServerCompanionTests
                             "Red-Point")
                     ]
                 });
+        }
+
+        public Task<RemoteDeviceInventory> ListInventoryAsync(CancellationToken cancellationToken = default)
+        {
+            InventoryCalls++;
+            return Task.FromResult(new RemoteDeviceInventory(
+                [new RemoteBootableDevice("simulator-stopped", "iPhone 17 Pro", "iOS 26.0", "ios")],
+                new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>
+                {
+                    ["simulator-stopped"] =
+                    [new RemoteInstalledApplication("com.alphaoutdoors.redpoint", "Red-Point")]
+                }));
+        }
 
         public Task<RemoteOperationResult> StartDeviceAsync(
             string identifier,
@@ -466,8 +508,10 @@ public sealed class RemoteControlServerCompanionTests
         }
     }
 
-    private sealed class FakeRuntimeSource : IRemoteRuntimeSource
+    private sealed class FakeRuntimeSource : IRefreshableRemoteRuntimeSource
     {
+        public int RefreshCount { get; private set; }
+
         public RemoteRuntimeSnapshot Current { get; } = new(
             DateTimeOffset.UtcNow,
             [
@@ -480,6 +524,15 @@ public sealed class RemoteControlServerCompanionTests
                     "ios")
             ],
             null);
+
+        public Task<RemoteRuntimeSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
+        {
+            RefreshCount++;
+            return Task.FromResult(Current);
+        }
+
+        public Task<RemoteRuntimeSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
+            => RefreshIfStaleAsync(cancellationToken);
     }
 
     private sealed record DeviceStartRequest(string Identifier);

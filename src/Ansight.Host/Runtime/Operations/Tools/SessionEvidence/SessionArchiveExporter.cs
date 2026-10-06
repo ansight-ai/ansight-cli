@@ -34,7 +34,7 @@ internal static class SessionArchiveExporter
             File.Delete(archiveFilePath);
         }
 
-        using var stream = File.Create(archiveFilePath);
+        using var stream = PrivateStorageFile.Create(archiveFilePath);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
         WriteJsonEntry(archive, "manifest.json", BuildManifestPayload(snapshot));
         WriteJsonEntry(archive, "session/summary.json", PayloadJson.BuildSessionPayload(snapshot, isLive: !snapshot.IsHistorical));

@@ -1,6 +1,6 @@
 namespace Ansight.RemoteSimulator.Core.Runtime;
 
-public sealed class CompositeRemoteRuntimeSource : IRemoteRuntimeSource
+public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSource
 {
     private readonly IReadOnlyList<IRemoteRuntimeSource> sources;
 
@@ -30,6 +30,20 @@ public sealed class CompositeRemoteRuntimeSource : IRemoteRuntimeSource
                     .ToArray(),
                 JoinErrors(snapshots));
         }
+    }
+
+    public async Task<RemoteRuntimeSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.WhenAll(sources.OfType<IRefreshableRemoteRuntimeSource>()
+            .Select(source => source.RefreshIfStaleAsync(cancellationToken))).ConfigureAwait(false);
+        return Current;
+    }
+
+    public async Task<RemoteRuntimeSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.WhenAll(sources.OfType<IRefreshableRemoteRuntimeSource>()
+            .Select(source => source.RefreshAsync(cancellationToken))).ConfigureAwait(false);
+        return Current;
     }
 
     private static string? JoinErrors(IEnumerable<RemoteRuntimeSnapshot> snapshots)

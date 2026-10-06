@@ -17,17 +17,17 @@ internal sealed class NativeProfileCaptureStore
     {
         ArgumentNullException.ThrowIfNull(applicationPaths);
         capturesPath = Path.Combine(applicationPaths.ApplicationDataPath, "native-profiles");
-        Directory.CreateDirectory(capturesPath);
+        PrivateStorageDirectory.Ensure(capturesPath);
     }
 
     public string CreateCaptureDirectory(string captureId)
     {
         var capturePath = GetCapturePath(captureId);
-        Directory.CreateDirectory(capturePath);
-        Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
-        Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
-        Directory.CreateDirectory(Path.Combine(capturePath, "symbols"));
-        Directory.CreateDirectory(Path.Combine(capturePath, "diagnostics"));
+        PrivateStorageDirectory.Ensure(capturePath);
+        PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "raw"));
+        PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "derived"));
+        PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "symbols"));
+        PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "diagnostics"));
         return capturePath;
     }
 
@@ -61,6 +61,10 @@ internal sealed class NativeProfileCaptureStore
         }
 
         File.Move(temporaryPath, manifestPath, overwrite: true);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(manifestPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 
     public bool TryLoadManifest(string captureId, out NativeProfileCaptureManifest? manifest)

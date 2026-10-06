@@ -3,6 +3,26 @@ namespace Ansight.Host.Tests.Unit.Sessions;
 public sealed class SessionCacheCleanupPlannerTests
 {
     [Fact]
+    public void BuildPlan_AutomaticModeDeletesOnlyEnoughToMeetLimit()
+    {
+        var nowUtc = DateTimeOffset.UtcNow;
+        var plan = SessionCacheCleanupPlanner.BuildPlan(
+            [
+                CreateCandidate("oldest", nowUtc.AddDays(-100), 60),
+                CreateCandidate("older", nowUtc.AddDays(-90), 40),
+                CreateCandidate("recent", nowUtc.AddDays(-1), 20)
+            ],
+            retentionDays: 30,
+            maximumCacheSizeBytes: 100,
+            nowUtc,
+            includeRetentionCandidates: false);
+
+        Assert.Equal("oldest", Assert.Single(plan.Items).SessionId);
+        Assert.Equal(60, plan.ProjectedCacheSizeBytes);
+        Assert.Equal(0, plan.RetentionCandidateCount);
+    }
+
+    [Fact]
     public void BuildPlan_ProtectsPinnedLiveAndExplicitlyProtectedSessions()
     {
         var nowUtc = new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero);

@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 
 namespace Ansight.Host.Workspaces.Catalog;
 
@@ -22,14 +25,13 @@ public static class WorkspaceTestCatalog
         }
 
         var tests = new List<WorkspaceTestDefinition>();
+        var testIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var warnings = new List<string>();
         string[] testPaths;
         try
         {
-            testPaths = Directory.EnumerateFiles(
-                    testsDirectoryPath,
-                    "*.json",
-                    SearchOption.AllDirectories)
+            testPaths = Directory.EnumerateFiles(testsDirectoryPath, "*", SearchOption.AllDirectories)
+                .Where(static path => IsTestExtension(Path.GetExtension(path)))
                 .OrderBy(static path => path, GetPathComparer())
                 .Take(MaximumTestCount + 1)
                 .ToArray();
@@ -54,6 +56,11 @@ public static class WorkspaceTestCatalog
             try
             {
                 var test = LoadTest(testsDirectoryPath, testPath);
+                if (!testIds.Add(test.TestId))
+                {
+                    warnings.Add($"{Path.GetRelativePath(fullWorkspacePath, testPath)}: Duplicate test ID '{test.TestId}'.");
+                    continue;
+                }
                 tests.Add(test);
                 var instructionLength = test.BuildRunnerPrompt().Length;
                 if (instructionLength > SimulatorAgentService.MaximumInstructionCharacters)
@@ -84,6 +91,11 @@ public static class WorkspaceTestCatalog
         ArgumentException.ThrowIfNullOrWhiteSpace(testsDirectoryPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(testPath);
         ArgumentNullException.ThrowIfNull(source);
+
+        if (IsYamlExtension(Path.GetExtension(testPath)))
+        {
+            source = ConvertYamlToJson(source);
+        }
 
         using var document = JsonDocument.Parse(source, new JsonDocumentOptions
         {
@@ -274,4 +286,85 @@ public static class WorkspaceTestCatalog
 
     private static StringComparer GetPathComparer()
         => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    private static bool IsTestExtension(string extension)
+        => extension.Equals(".json", StringComparison.OrdinalIgnoreCase) || IsYamlExtension(extension);
+
+    private static bool IsYamlExtension(string extension)
+        => extension.Equals(".yaml", StringComparison.OrdinalIgnoreCase)
+           || extension.Equals(".yml", StringComparison.OrdinalIgnoreCase);
+
+    private static string ConvertYamlToJson(string source)
+    {
+        try
+        {
+            var stream = new YamlStream();
+            stream.Load(new StringReader(source));
+            if (stream.Documents.Count != 1 || stream.Documents[0].RootNode is not YamlMappingNode root)
+            {
+                throw new InvalidDataException("The test definition must contain one YAML mapping.");
+            }
+            var nodeCount = 0;
+            return ConvertYamlNode(root, string.Empty, 0, ref nodeCount).ToJsonString();
+        }
+        catch (YamlException exception)
+        {
+            throw new InvalidDataException($"Invalid YAML: {exception.Message}", exception);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException($"Invalid YAML: {exception.Message}", exception);
+        }
+    }
+
+    private static JsonNode ConvertYamlNode(YamlNode node, string propertyName, int depth, ref int nodeCount)
+    {
+        if (depth > 32 || ++nodeCount > 4096)
+        {
+            throw new InvalidDataException("YAML test definition is too complex.");
+        }
+        if (node is YamlMappingNode mapping)
+        {
+            var result = new JsonObject();
+            foreach (var (key, value) in mapping.Children)
+            {
+                if (key is not YamlScalarNode { Value: { } name } || result.ContainsKey(name))
+                {
+                    throw new InvalidDataException("YAML mapping keys must be unique strings.");
+                }
+                result[name] = ConvertYamlNode(value, name, depth + 1, ref nodeCount);
+            }
+            return result;
+        }
+        if (node is YamlSequenceNode sequence)
+        {
+            var result = new JsonArray();
+            foreach (var value in sequence.Children)
+            {
+                result.Add(ConvertYamlNode(value, propertyName, depth + 1, ref nodeCount));
+            }
+            return result;
+        }
+        if (node is not YamlScalarNode scalar || scalar.Value is null)
+        {
+            throw new InvalidDataException("YAML test values must be strings, arrays, or mappings.");
+        }
+        if (propertyName == "schemaVersion")
+        {
+            if (scalar.Style != ScalarStyle.Plain || !int.TryParse(scalar.Value, out var version))
+            {
+                throw new InvalidDataException("schemaVersion must be an integer.");
+            }
+            return JsonValue.Create(version)!;
+        }
+        if (propertyName == "enabled")
+        {
+            if (scalar.Style != ScalarStyle.Plain || !bool.TryParse(scalar.Value, out var enabled))
+            {
+                throw new InvalidDataException("enabled must be a boolean.");
+            }
+            return JsonValue.Create(enabled)!;
+        }
+        return JsonValue.Create(scalar.Value)!;
+    }
 }

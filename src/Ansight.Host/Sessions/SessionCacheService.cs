@@ -37,7 +37,8 @@ public sealed class SessionCacheService
         int retentionDays,
         long maximumCacheSizeBytes,
         DateTimeOffset? nowUtc = null,
-        ISet<string>? protectedSessionIds = null)
+        ISet<string>? protectedSessionIds = null,
+        bool includeRetentionCandidates = true)
     {
         var candidates = sessionReader.GetSessionSummaries()
             .Select(session =>
@@ -63,6 +64,7 @@ public sealed class SessionCacheService
             retentionDays,
             maximumCacheSizeBytes,
             nowUtc ?? DateTimeOffset.UtcNow,
-            protectedSessionIds);
+            protectedSessionIds,
+            includeRetentionCandidates);
     }
 }

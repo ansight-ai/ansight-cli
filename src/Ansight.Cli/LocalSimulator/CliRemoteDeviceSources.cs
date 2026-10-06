@@ -4,7 +4,7 @@ using Ansight.RemoteSimulator.Core.Runtime;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed class CliRemoteDeviceLifecycleSource : IRemoteDeviceLifecycleSource
+internal sealed class CliRemoteDeviceLifecycleSource : IRemoteDeviceInventorySource
 {
     private readonly IDeviceLifecycleDriver driver;
 
@@ -36,6 +36,28 @@ internal sealed class CliRemoteDeviceLifecycleSource : IRemoteDeviceLifecycleSou
                         application.Name))
                     .ToArray(),
                 StringComparer.OrdinalIgnoreCase);
+
+    public async Task<RemoteDeviceInventory> ListInventoryAsync(CancellationToken cancellationToken = default)
+    {
+        var devices = await driver.ListDevicesAsync(cancellationToken).ConfigureAwait(false);
+        return new RemoteDeviceInventory(
+            devices.Where(static device => !device.IsBooted && DeviceKinds.IsVirtual(device.Kind))
+                .Select(static device => new RemoteBootableDevice(
+                    device.Identifier,
+                    device.Name,
+                    device.Runtime,
+                    device.Platform))
+                .ToArray(),
+            devices.Where(static device => device.IsBooted)
+                .ToDictionary(
+                    static device => device.Identifier,
+                    static device => (IReadOnlyList<RemoteInstalledApplication>)device.InstalledApplications
+                        .Select(application => new RemoteInstalledApplication(
+                            application.BundleIdentifier,
+                            application.Name))
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase));
+    }
 
     public async Task<RemoteOperationResult> StartDeviceAsync(
         string identifier,

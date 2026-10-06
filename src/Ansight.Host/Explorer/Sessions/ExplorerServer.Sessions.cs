@@ -116,7 +116,13 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     {
         EnsureInRange(retentionDays, SessionCleanupPreferenceDefaults.MinimumRetentionDays, SessionCleanupPreferenceDefaults.MaximumRetentionDays, "Session retention days");
         EnsureInRange(maximumCacheSizeBytes, SessionCleanupPreferenceDefaults.MinimumMaximumCacheBytes, SessionCleanupPreferenceDefaults.MaximumMaximumCacheBytes, "Session cache limit");
-        return runtime.SessionCache.CreateSessionCacheCleanupPlan(retentionDays, maximumCacheSizeBytes);
+        var lastCleanup = runtime.LastSessionCacheCleanup;
+        return runtime.SessionCache.CreateSessionCacheCleanupPlan(retentionDays, maximumCacheSizeBytes) with
+        {
+            AutoCleanupEnabled = runtime.UserPreferences.SessionAutoCleanupEnabled,
+            LastAutoCleanupUtc = lastCleanup?.DeletedSessionCount > 0 ? lastCleanup.CompletedUtc : null,
+            LastAutoCleanupDeletedCount = lastCleanup?.DeletedSessionCount ?? 0
+        };
     }
 
     private LocalSessionCacheApplyResult ApplySessionCacheCleanup(IReadOnlyList<string>? requestedSessionIds)

@@ -103,7 +103,7 @@ public static class ApplicationPathsFactory
 
             try
             {
-                Directory.CreateDirectory(preferredBaseFolderPath);
+                PrivateStorageDirectory.Ensure(preferredBaseFolderPath);
                 CopyDirectoryContents(legacyBaseFolderPath, preferredBaseFolderPath);
                 // Older CLI releases may still have this path cached for
                 // the lifetime of their process. Keep the source available so a

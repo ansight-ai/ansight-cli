@@ -2,7 +2,7 @@ using Ansight.RemoteSimulator.Core.Runtime;
 
 namespace Ansight.RemoteSimulator.Core.Simulator.Apple;
 
-public sealed class SimulatorRuntimeSource : IRemoteRuntimeSource
+public sealed class SimulatorRuntimeSource : IRefreshableRemoteRuntimeSource
 {
     private readonly SimulatorTracker tracker;
 
@@ -31,5 +31,17 @@ public sealed class SimulatorRuntimeSource : IRemoteRuntimeSource
                     .ToArray(),
                 snapshot.Error);
         }
+    }
+
+    public async Task<RemoteRuntimeSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
+    {
+        await tracker.RefreshIfStaleAsync(cancellationToken).ConfigureAwait(false);
+        return Current;
+    }
+
+    public async Task<RemoteRuntimeSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        await tracker.RefreshAsync(cancellationToken).ConfigureAwait(false);
+        return Current;
     }
 }

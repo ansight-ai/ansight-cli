@@ -11,7 +11,7 @@ Build and maintain the repository-owned `ansight/` playbook for one app. Prefer 
 
 | Component | What it accomplishes | Why use it |
 | --- | --- | --- |
-| Test (`ansight/tests/**/*.json`) | Gives a bounded agent a natural-language user journey and observable final-state validation. | Use it when the path requires observation or decisions and success can be proved through Ansight evidence. |
+| Test (`ansight/tests/**/*.yaml`, with `.yml` and legacy `.json` accepted) | Gives a bounded agent a natural-language user journey and observable final-state validation. | Use it when the path requires observation or decisions and success can be proved through Ansight evidence. |
 | Task (`ansight/tasks/**/*.ts`) | Encodes an explicitly invoked, deterministic sequence of known tool calls with named assertions. | Use it to make a stable app-specific workflow faster, cheaper, and repeatable without asking an agent to rediscover every step. |
 | Trigger (`ansight/triggers/**/*.ts`) | Reacts automatically to one matching app or session event and may request one bounded app action. | Use it to enrich future session evidence at a meaningful moment, such as capturing app-owned diagnostics after an error. Do not use it as a scheduler or general background worker. |
 | Trends (`ansight/trends/**/*.json`) | Defines a stable span from SDK/host events or captured logs, calculates deterministic telemetry metrics, evaluates fixed budgets, and optionally compares each metric with comparable historical runs. | Use it for repeatable FPS, memory, duration, evidence, or other numeric trend rules and regression monitoring rather than subjective agent judgment. |
@@ -70,7 +70,7 @@ ansight workspace add sanitizer <repository-root> <id> --json
 
 Then edit the generated definition. Existing files fail safely unless `--force` is supplied; do not replace one silently. There is no `workspace add trends` command, so create strict JSON files from the current [Trends contract](https://www.ansight.ai/docs/workspace/trends).
 
-Derive stable IDs from paths by removing the extension and replacing directory separators with dots. Preserve local naming conventions. Use strict portable JSON and the canonical declarations produced by the installed host. Tests, Trends, and sanitizers use their own version 1 contracts; tasks and triggers use version 2 when capability-aware external execution is intended. Do not invent runtime APIs or schema fields.
+Derive stable IDs from paths by removing the extension and replacing directory separators with dots. Preserve local naming conventions. Use YAML block text for test prompts, strict portable JSON for Trends, and the canonical declarations produced by the installed host. Tests, Trends, and sanitizers use their own version 1 contracts; tasks and triggers use version 2 when capability-aware external execution is intended. Do not invent runtime APIs or schema fields.
 
 ## Tests: Agentic Journeys
 

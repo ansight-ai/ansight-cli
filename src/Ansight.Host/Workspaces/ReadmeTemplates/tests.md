@@ -12,22 +12,24 @@ ansight workspace add test . onboarding.smoke \
   --assertion "The signed-in home screen is visible"
 ```
 
-```json
-{
-  "schemaVersion": 1,
-  "id": "onboarding.smoke",
-  "name": "Onboarding smoke test",
-  "appId": "com.example.app",
-  "prompt": "Launch the app and complete onboarding as a new user.",
-  "validation": {
-    "prompt": "Inspect the final app state.",
-    "assertions": ["The signed-in home screen is visible"]
-  },
-  "requiredSecrets": ["TEST_USER_PASSWORD"]
-}
+```yaml
+schemaVersion: 1
+id: onboarding.smoke
+name: Onboarding smoke test
+appId: com.example.app
+prompt: |-
+  Launch the app and complete onboarding as a new user.
+validation:
+  prompt: |-
+    Inspect the final app state.
+  assertions:
+    - The signed-in home screen is visible
+requiredSecrets:
+  - TEST_USER_PASSWORD
 ```
 
 `requiredSecrets` contains aliases only; values are resolved at run time.
+New tests use `.yaml`; existing `.json` tests remain valid.
 
 ```sh
 ansight test validate .

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Ansight.Host.Workspaces;
 
 namespace Ansight.Host.SimulatorAgent.Auditing;
 
@@ -26,7 +27,7 @@ internal sealed class AuditStore : IAuditStore
         string? traceDirectoryPath = null;
         try
         {
-            Directory.CreateDirectory(auditDirectoryPath);
+            PrivateStorageDirectory.Ensure(auditDirectoryPath);
             var timestamp = audit.StartedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff");
             var filePath = Path.Combine(auditDirectoryPath, $"{timestamp}-{audit.RunId}.json");
             var temporaryPath = filePath + ".tmp";
@@ -44,6 +45,9 @@ internal sealed class AuditStore : IAuditStore
             File.Move(meteringPath + ".tmp", meteringPath, overwrite: true);
             File.WriteAllText(temporaryPath, JsonSerializer.Serialize(persistedAudit, jsonOptions));
             File.Move(temporaryPath, filePath, overwrite: true);
+            RestrictFile(meteringPath);
+            RestrictFile(filePath);
+            BoundedAuditHistory.Prune(auditDirectoryPath, filePath, includeTraceDirectories: true);
             return new AuditSaveResult(filePath, null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -69,7 +73,7 @@ internal sealed class AuditStore : IAuditStore
         traceDirectoryPath = Path.Combine(
             Path.GetDirectoryName(auditFilePath)!,
             traceDirectoryName);
-        Directory.CreateDirectory(traceDirectoryPath);
+        PrivateStorageDirectory.Ensure(traceDirectoryPath);
 
         var toolCalls = new List<SimulatorAgentToolCallAudit>(audit.ToolCalls.Count);
         foreach (var call in audit.ToolCalls)
@@ -92,6 +96,7 @@ internal sealed class AuditStore : IAuditStore
                 var screenshotFileName = fileStem + screenshotExtension;
                 var screenshotDestinationPath = Path.Combine(traceDirectoryPath, screenshotFileName);
                 File.Copy(evidence.SourceScreenshotPath, screenshotDestinationPath, overwrite: true);
+                RestrictFile(screenshotDestinationPath);
                 screenshotRelativePath = $"{traceDirectoryName}/{screenshotFileName}";
             }
 
@@ -99,6 +104,7 @@ internal sealed class AuditStore : IAuditStore
             File.WriteAllText(
                 Path.Combine(traceDirectoryPath, resultsFileName),
                 evidence.Results.Content);
+            RestrictFile(Path.Combine(traceDirectoryPath, resultsFileName));
             var persistedEvidence = evidence with
             {
                 ScreenshotPath = screenshotRelativePath,
@@ -138,6 +144,14 @@ internal sealed class AuditStore : IAuditStore
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // The next retention pass can remove an orphaned trace directory.
+        }
+    }
+
+    private static void RestrictFile(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
     }
 

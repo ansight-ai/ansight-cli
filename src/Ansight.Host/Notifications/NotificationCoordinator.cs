@@ -1,8 +1,12 @@
+using Ansight.Host.Sessions;
+
 namespace Ansight.Host.Notifications;
 
 public sealed class NotificationCoordinator : IDisposable
 {
     internal const string HostStartedNotificationIdentifier = "host-started";
+    internal const string SessionCacheWarningNotificationIdentifier = "session-cache-approaching-limit";
+    internal const string SessionCacheCleanupNotificationIdentifier = "session-cache-auto-cleaned";
     internal const string CompanionAccessReminderIdentifier = "companion-access-still-enabled";
     internal const string DeferCompanionAccessReminderActionIdentifier = "defer-companion-access-reminder";
     internal static readonly TimeSpan CompanionAccessReminderInterval = TimeSpan.FromDays(14);
@@ -14,6 +18,7 @@ public sealed class NotificationCoordinator : IDisposable
     private readonly HashSet<string> analysisIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> companionSessionIds = new(StringComparer.Ordinal);
     private bool? companionAccessReminderScheduled;
+    private bool sessionCacheWarningSent;
     private bool initialized;
     private bool disposed;
 
@@ -58,6 +63,7 @@ public sealed class NotificationCoordinator : IDisposable
             hostRuntime.SessionCaptureEventOccurred += RuntimeOnSessionCaptureEventOccurred;
             hostRuntime.SessionUpdated += RuntimeOnSessionUpdated;
             hostRuntime.SessionDeleted += RuntimeOnSessionDeleted;
+            hostRuntime.SessionCacheMaintenanceCompleted += RuntimeOnSessionCacheMaintenanceCompleted;
             if (hostRuntime.ActiveCompanion is { } activeCompanion)
             {
                 activeCompanion.ConnectionsChanged += CompanionOnConnectionsChanged;
@@ -232,6 +238,49 @@ public sealed class NotificationCoordinator : IDisposable
         }
     }
 
+    internal void HandleSessionCacheMaintenanceCompleted(SessionCacheMaintenanceResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        if (disposed || !hostRuntime.UserPreferences.SessionAutoCleanupEnabled)
+        {
+            return;
+        }
+
+        if (result.DeletedSessionCount > 0)
+        {
+            PublishNotification(new Notification(
+                SessionCacheCleanupNotificationIdentifier,
+                "Session cache cleaned up",
+                $"Ansight removed {result.DeletedSessionCount:N0} old, unpinned recording(s) after the cache exceeded its limit."));
+        }
+
+        lock (gate)
+        {
+            if (!result.IsApproachingLimit)
+            {
+                sessionCacheWarningSent = false;
+                return;
+            }
+
+            if (sessionCacheWarningSent || result.DeletedSessionCount > 0)
+            {
+                sessionCacheWarningSent = true;
+                return;
+            }
+
+            sessionCacheWarningSent = true;
+        }
+
+        var percentage = Math.Min(999, (int)(100.0 * result.CacheSizeBytes / result.MaximumCacheSizeBytes));
+        var body = result.CacheSizeBytes > result.MaximumCacheSizeBytes
+            ? "The session cache is over its limit. Pinned or live recordings may be preventing cleanup."
+            : $"The session cache is {percentage}% full. Ansight will remove old, unpinned recordings when it exceeds the limit.";
+        PublishNotification(new Notification(
+            SessionCacheWarningNotificationIdentifier,
+            "Session cache approaching its limit",
+            body));
+    }
+
     internal void HandleCompanionConnectionsChanged(
         IReadOnlyList<CompanionConnection> connections)
     {
@@ -323,6 +372,9 @@ public sealed class NotificationCoordinator : IDisposable
 
     private void RuntimeOnSessionDeleted(object? sender, string sessionId)
         => HandleSessionDeleted(sessionId);
+
+    private void RuntimeOnSessionCacheMaintenanceCompleted(object? sender, SessionCacheMaintenanceResult result)
+        => HandleSessionCacheMaintenanceCompleted(result);
 
     private void CompanionOnConnectionsChanged(object? sender, EventArgs eventArgs)
     {
@@ -486,6 +538,7 @@ public sealed class NotificationCoordinator : IDisposable
         hostRuntime.SessionCaptureEventOccurred -= RuntimeOnSessionCaptureEventOccurred;
         hostRuntime.SessionUpdated -= RuntimeOnSessionUpdated;
         hostRuntime.SessionDeleted -= RuntimeOnSessionDeleted;
+        hostRuntime.SessionCacheMaintenanceCompleted -= RuntimeOnSessionCacheMaintenanceCompleted;
         if (hostRuntime.ActiveCompanion is { } companion)
         {
             companion.ConnectionsChanged -= CompanionOnConnectionsChanged;

@@ -145,7 +145,7 @@ internal static class TestCommands
             resultFilePath,
             exitCode,
             result);
-        TestResultExporter.Save(resultFilePath, response);
+        TestResultExporter.Save(resultFilePath, response, pruneGeneratedResults: arguments.GetOption("result-file") is null);
         output.Write(response, () => RenderRun(
             result,
             resultFilePath,
@@ -251,7 +251,7 @@ internal static class TestCommands
             resultFilePath,
             exitCode,
             result);
-        TestResultExporter.Save(resultFilePath, response);
+        TestResultExporter.Save(resultFilePath, response, pruneGeneratedResults: arguments.GetOption("result-file") is null);
         output.Write(response, () => RenderBatch(result, resultFilePath, arguments.HasFlag("audit")));
         return exitCode;
     }

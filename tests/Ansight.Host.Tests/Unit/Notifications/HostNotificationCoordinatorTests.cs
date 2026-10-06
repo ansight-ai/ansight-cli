@@ -3,6 +3,32 @@ namespace Ansight.Host.Tests.Unit.Notifications;
 public sealed class HostNotificationCoordinatorTests
 {
     [Fact]
+    public void SessionCachePressure_WarnsOnceAndReportsAutomaticCleanup()
+    {
+        using var environment = new TestSupport.TestEnvironment();
+        using var runtime = environment.CreateRuntime();
+        var sink = new RecordingNotificationSink();
+        using var coordinator = new NotificationCoordinator(runtime, sink);
+        var now = DateTimeOffset.UtcNow;
+
+        coordinator.HandleSessionCacheMaintenanceCompleted(new SessionCacheMaintenanceResult(now, 80, 100, 0, 0));
+        coordinator.HandleSessionCacheMaintenanceCompleted(new SessionCacheMaintenanceResult(now, 90, 100, 0, 0));
+        Assert.Single(sink.Notifications);
+        Assert.Equal(NotificationCoordinator.SessionCacheWarningNotificationIdentifier,
+            sink.Notifications[0].Identifier);
+
+        coordinator.HandleSessionCacheMaintenanceCompleted(new SessionCacheMaintenanceResult(now, 85, 100, 0, 2));
+        Assert.Equal(2, sink.Notifications.Count);
+        Assert.Equal(NotificationCoordinator.SessionCacheCleanupNotificationIdentifier,
+            sink.Notifications[1].Identifier);
+        Assert.Contains("2 old, unpinned", sink.Notifications[1].Body);
+
+        coordinator.HandleSessionCacheMaintenanceCompleted(new SessionCacheMaintenanceResult(now, 79, 100, 0, 0));
+        coordinator.HandleSessionCacheMaintenanceCompleted(new SessionCacheMaintenanceResult(now, 81, 100, 0, 0));
+        Assert.Equal(3, sink.Notifications.Count);
+    }
+
+    [Fact]
     public async Task HostStarted_NotifiesAfterDesktopIntegrationIsReady()
     {
         using var environment = new TestSupport.TestEnvironment();

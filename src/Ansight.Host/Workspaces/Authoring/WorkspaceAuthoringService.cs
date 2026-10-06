@@ -178,7 +178,19 @@ public sealed class WorkspaceAuthoringService
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var testId = NormalizeDefinitionId(request.TestId, "test ID", maximumLength: 160);
         var appId = NormalizeRequired(request.AppId, "app ID");
-        var definitionPath = Path.Combine(workspacePath, "ansight", "tests", $"{testId}.json");
+        var definitionPath = Path.Combine(workspacePath, "ansight", "tests", $"{testId}.yaml");
+        foreach (var extension in new[] { ".json", ".yml" })
+        {
+            var existingPath = Path.ChangeExtension(definitionPath, extension);
+            if (File.Exists(existingPath))
+            {
+                return WorkspaceAuthoringResult.Failure(
+                    $"Test '{testId}' already exists at '{existingPath}'. Move or rename it before creating a YAML definition.",
+                    workspacePath,
+                    definitionPath,
+                    existingFiles: [existingPath]);
+            }
+        }
         var source = CreateTestSource(request, testId, appId);
         WorkspaceTestCatalog.Parse(
             Path.Combine(workspacePath, "ansight", "tests"),
@@ -298,25 +310,42 @@ public sealed class WorkspaceAuthoringService
     {
         var assertions = NormalizeValues(request.Assertions);
         var requiredSecrets = NormalizeValues(request.RequiredSecrets);
-        var root = new JsonObject
+        var source = new StringBuilder();
+        source.AppendLine("# yaml-language-server: $schema=../schema/test-definition.v1.schema.json");
+        source.AppendLine("schemaVersion: 1");
+        source.AppendLine($"id: {JsonSerializer.Serialize(testId)}");
+        source.AppendLine($"name: {JsonSerializer.Serialize(NormalizeOptional(request.Name) ?? Humanize(testId))}");
+        source.AppendLine($"appId: {JsonSerializer.Serialize(appId)}");
+        AppendYamlBlock(source, "prompt", NormalizeOptional(request.Prompt) ?? "Run the scenario using Ansight tools.");
+        source.AppendLine("validation:");
+        AppendYamlBlock(source, "  prompt", NormalizeOptional(request.ValidationPrompt) ?? "Validate the final app state.");
+        if (assertions.Count > 0)
         {
-            ["schemaVersion"] = 1,
-            ["id"] = testId,
-            ["name"] = NormalizeOptional(request.Name) ?? Humanize(testId),
-            ["appId"] = appId,
-            ["prompt"] = NormalizeOptional(request.Prompt) ?? "Run the scenario using Ansight tools.",
-            ["validation"] = new JsonObject
+            source.AppendLine("  assertions:");
+            foreach (var assertion in assertions)
             {
-                ["prompt"] = NormalizeOptional(request.ValidationPrompt) ?? "Validate the final app state.",
-                ["assertions"] = new JsonArray(assertions.Select(value => (JsonNode?)value).ToArray())
+                source.AppendLine($"    - {JsonSerializer.Serialize(assertion)}");
             }
-        };
+        }
         if (requiredSecrets.Count > 0)
         {
-            root["requiredSecrets"] = new JsonArray(
-                requiredSecrets.Select(value => (JsonNode?)value).ToArray());
+            source.AppendLine("requiredSecrets:");
+            foreach (var alias in requiredSecrets)
+            {
+                source.AppendLine($"  - {JsonSerializer.Serialize(alias)}");
+            }
         }
-        return root.ToJsonString(indentedJson);
+        return source.ToString().TrimEnd();
+    }
+
+    private static void AppendYamlBlock(StringBuilder source, string key, string value)
+    {
+        var indentation = new string(' ', key.Length - key.TrimStart().Length + 2);
+        source.AppendLine($"{key}: |-");
+        foreach (var line in value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n'))
+        {
+            source.Append(indentation).AppendLine(line);
+        }
     }
 
     private static string CreateTriggerSource(string eventKind, string? appId)

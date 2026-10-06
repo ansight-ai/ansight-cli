@@ -75,7 +75,19 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
     private async Task ProxySimulatorFrameAsync(HttpListenerResponse response, string sessionId, bool isHead, CancellationToken cancellationToken)
     {
-        if (!TryResolveLiveSimulatorTarget(sessionId, out var target, out var error))
+        var companion = runtime.LocalSimulatorControl;
+        if (companion is not null)
+        {
+            await companion.RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var resolved = TryResolveLiveSimulatorTarget(sessionId, out var target, out var error);
+        if (!resolved && companion is not null)
+        {
+            await companion.RefreshDevicesNowAsync(cancellationToken).ConfigureAwait(false);
+            resolved = TryResolveLiveSimulatorTarget(sessionId, out target, out error);
+        }
+        if (!resolved)
         {
             await WriteTextAsync(response, error, HttpStatusCode.Conflict, isHead, cancellationToken).ConfigureAwait(false);
             return;
@@ -86,7 +98,19 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
     private async Task ProxySimulatorCommandAsync(HttpListenerResponse response, string sessionId, string operation, JsonObject body, CancellationToken cancellationToken)
     {
-        if (!TryResolveLiveSimulatorTarget(sessionId, out var target, out var error))
+        var companion = runtime.LocalSimulatorControl;
+        if (companion is not null)
+        {
+            await companion.RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var resolved = TryResolveLiveSimulatorTarget(sessionId, out var target, out var error);
+        if (!resolved && companion is not null)
+        {
+            await companion.RefreshDevicesNowAsync(cancellationToken).ConfigureAwait(false);
+            resolved = TryResolveLiveSimulatorTarget(sessionId, out target, out error);
+        }
+        if (!resolved)
         {
             await WriteJsonAsync(response, OperationResult.Failure(error), HttpStatusCode.Conflict, false, cancellationToken).ConfigureAwait(false);
             return;

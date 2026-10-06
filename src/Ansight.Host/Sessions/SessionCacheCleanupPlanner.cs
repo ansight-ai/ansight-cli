@@ -7,7 +7,8 @@ public static class SessionCacheCleanupPlanner
         int retentionDays,
         long maximumCacheSizeBytes,
         DateTimeOffset nowUtc,
-        ISet<string>? protectedSessionIds = null)
+        ISet<string>? protectedSessionIds = null,
+        bool includeRetentionCandidates = true)
     {
         candidates ??= Array.Empty<SessionCacheCleanupCandidate>();
 
@@ -20,7 +21,8 @@ public static class SessionCacheCleanupPlanner
         var selectedSessionIds = new HashSet<string>(StringComparer.Ordinal);
 
         var retentionCandidates = candidates
-            .Where(candidate => IsDeletable(candidate, protectedSessionIds)
+            .Where(candidate => includeRetentionCandidates
+                                && IsDeletable(candidate, protectedSessionIds)
                                 && candidate.CreatedUtc < cutoffUtc)
             .OrderBy(static candidate => candidate.CreatedUtc)
             .ThenBy(static candidate => candidate.LastUpdatedUtc)
