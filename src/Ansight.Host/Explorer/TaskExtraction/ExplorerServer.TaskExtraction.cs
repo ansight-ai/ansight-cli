@@ -226,7 +226,12 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     var snapshot = await runtime.Sessions.LoadSnapshotAsync(body.SessionId, cancellationToken: cancellationToken)
                         .ConfigureAwait(false)
                         ?? throw new InvalidDataException($"Session '{body.SessionId}' was not found.");
-                    ValidateWorkspaceTestSource(body.Source, snapshot.AppId);
+                    var definition = ValidateWorkspaceTestSource(body.Source, snapshot.AppId);
+                    var validationWorkspacePath = runtime.Apps.Get(snapshot.AppId)?.CodebasePath;
+                    if (!string.IsNullOrWhiteSpace(validationWorkspacePath))
+                    {
+                        ValidateWorkspaceTestIdAvailable(definition.TestId, validationWorkspacePath);
+                    }
                     await WriteJsonAsync(response, new ExternalDraftResult("passed", "Ansight workspace test YAML is valid.", ""), HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
                     return true;
                 }
@@ -246,6 +251,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     {
                         throw new InvalidDataException($"App '{snapshot.AppId}' must be linked to a workspace before saving an Ansight test.");
                     }
+                    if (!body.Force) ValidateWorkspaceTestIdAvailable(definition.TestId, workspacePath);
 
                     var directoryPath = Path.Combine(workspacePath, "ansight", "tests");
                     Directory.CreateDirectory(directoryPath);
@@ -587,6 +593,16 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             throw new InvalidDataException($"The test appId must match the source session app '{appId}'.");
         }
         return definition;
+    }
+
+    private static void ValidateWorkspaceTestIdAvailable(string testId, string workspacePath)
+    {
+        var existing = WorkspaceTestCatalog.Load(workspacePath).Tests.FirstOrDefault(test =>
+            string.Equals(test.TestId, testId, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            throw new InvalidDataException($"Test ID '{testId}' is already used by '{existing.Name}' at '{existing.FilePath}'. Choose a unique ID.");
+        }
     }
 
     private static string CreateDraftTaskWorkspace(string workspacePath, IReadOnlyList<LocalTaskExtractionSnapshot> drafts)

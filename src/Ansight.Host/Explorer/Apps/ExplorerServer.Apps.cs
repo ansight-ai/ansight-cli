@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Ansight.Host.AppGraphs;
 using Ansight.Host.Files;
 using Ansight.Host.Trends;
+using Ansight.Host.Workspaces.Authoring;
 using Ansight.Host.Runtime.BinaryTransfers;
 using Ansight.Host.Runtime.Operations;
 using Ansight.Host.Runtime.Operations.Tools.UiAutomation;
@@ -29,6 +30,55 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "api/app-watches" when isExplorer:
                 await WriteJsonAsync(response, new { hostRunning = runtime.AppWatches.IsRunning, watches = runtime.AppWatches.List() }, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
+            case "api/apps/workspace/test-schema":
+                await WriteJsonAsync(response, JsonNode.Parse(WorkspaceDefinitionSchemaArtifacts.TestDefinitionV1), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                return true;
+            case "api/apps/workspace/test-ids":
+                {
+                    var appId = request.QueryString["appId"]?.Trim();
+                    var app = string.IsNullOrWhiteSpace(appId) ? null : runtime.Apps.Get(appId);
+                    if (app is null || string.IsNullOrWhiteSpace(app.CodebasePath))
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, "A linked app workspace is required."), HttpStatusCode.NotFound, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+
+                    var tests = runtime.WorkspaceTests.List(app.CodebasePath, cancellationToken).Tests;
+                    await WriteJsonAsync(response, tests.Select(static test => new { test.TestId, test.Name, test.FilePath }).ToArray(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/apps/workspace/task-source":
+                {
+                    var appId = request.QueryString["appId"]?.Trim();
+                    var taskId = request.QueryString["taskId"]?.Trim();
+                    var app = string.IsNullOrWhiteSpace(appId) ? null : runtime.Apps.Get(appId);
+                    if (app is null || string.IsNullOrWhiteSpace(app.CodebasePath) || string.IsNullOrWhiteSpace(taskId))
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, "A linked app and task ID are required."), HttpStatusCode.BadRequest, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+
+                    var task = runtime.InspectRepositoryTasks(app.AppId, app.CodebasePath).Tasks
+                        .FirstOrDefault(candidate => string.Equals(candidate.TaskId, taskId, StringComparison.Ordinal));
+                    if (task is null || !File.Exists(task.ModulePath))
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, $"Task '{taskId}' was not found."), HttpStatusCode.NotFound, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+
+                    var taskRoot = Path.GetFullPath(Path.Combine(app.CodebasePath, "ansight", "tasks")) + Path.DirectorySeparatorChar;
+                    var modulePath = Path.GetFullPath(task.ModulePath);
+                    if (!modulePath.StartsWith(taskRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+                        || new FileInfo(modulePath).Length > 1_048_576)
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, "Task source is outside the workspace or too large to preview."), HttpStatusCode.BadRequest, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+
+                    var source = await File.ReadAllTextAsync(modulePath, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response, new { source, modulePath }, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
             case "api/apps/workspace":
                 {
                     var appId = request.QueryString["appId"]?.Trim();

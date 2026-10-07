@@ -6,19 +6,34 @@
   "additionalProperties": false,
   "required": ["appId", "prompt", "validation"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Test definition format version. Use 1; if omitted, version 1 is assumed."
+    },
     "enabled": {
-      "description": "Whether this test may be executed. Defaults to true.",
+      "description": "Whether this saved test can be run. Defaults to true; set false to keep the definition without running it.",
       "type": "boolean",
       "default": true
     },
-    "id": { "type": "string", "minLength": 1 },
-    "name": { "type": "string", "minLength": 1 },
-    "appId": { "type": "string", "minLength": 1 },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for this test. If omitted, the ID is derived from its path under the tests directory."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable test name shown in test lists and results. If omitted, the filename is turned into a name."
+    },
+    "appId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ID of the app this test runs against. It must match the app linked to the workspace."
+    },
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional repository task whose target metadata the CLI runner validates before executing this test."
+      "description": "Optional repository task to run for this test. The runner loads it from this app's workspace and checks target compatibility before execution."
     },
     "hintTasks": {
       "type": "array",
@@ -27,8 +42,13 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
-    "prompt": { "type": "string", "minLength": 1 },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Scenario and actions the agent should perform in the app during this test."
+    },
     "validation": {
+      "description": "How to check the final app state. Use a validation prompt string, or an object with a prompt, assertions, or both.",
       "oneOf": [
         { "type": "string", "minLength": 1 },
         {
@@ -39,9 +59,13 @@
             { "required": ["assertions"], "properties": { "assertions": { "minItems": 1 } } }
           ],
           "properties": {
-            "prompt": { "type": "string" },
+            "prompt": {
+              "type": "string",
+              "description": "Instructions for checking whether the final app state satisfies the test."
+            },
             "assertions": {
               "type": "array",
+              "description": "Specific outcomes the agent must verify after the scenario. Provide at least one when there is no validation prompt.",
               "items": { "type": "string", "minLength": 1 }
             }
           }
@@ -49,7 +73,7 @@
       ]
     },
     "requiredSecrets": {
-      "description": "Aliases resolved from the app-scoped secret store first, then from environment variables with the exact same names.",
+      "description": "Secret aliases needed by this test at run time. Each alias is resolved from the app-scoped secret store first, then from an environment variable with the same name.",
       "type": "array",
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1, "maxLength": 128 }
