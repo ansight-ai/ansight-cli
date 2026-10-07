@@ -237,7 +237,11 @@ public sealed partial class WorkspaceTestService
         using var startParticipant = request.StartParticipant;
         var deviceMode = WorkspaceExecutionModes.Normalize(request.Target?.ExecutionMode) == WorkspaceExecutionModes.Device;
         var catalog = WorkspaceTestCatalog.Load(request.WorkspacePath, cancellationToken);
-        var test = catalog.Tests.FirstOrDefault(candidate => string.Equals(
+        var draftTest = string.IsNullOrWhiteSpace(request.DraftSource)
+            ? null
+            : WorkspaceTestCatalog.Parse(Path.Combine(catalog.WorkspacePath, "ansight", "tests"),
+                Path.Combine(catalog.WorkspacePath, "ansight", "tests", "draft.yaml"), request.DraftSource);
+        var test = draftTest ?? catalog.Tests.FirstOrDefault(candidate => string.Equals(
             candidate.TestId,
             request.TestId,
             StringComparison.OrdinalIgnoreCase));
@@ -253,6 +257,10 @@ public sealed partial class WorkspaceTestService
                 $"Workspace test '{test.TestId}' is disabled.",
                 test);
         }
+
+        using var draftTaskScope = string.IsNullOrWhiteSpace(request.DraftTaskRootPath)
+            ? null
+            : RepositoryTaskWorkspaceScope.Push(test.AppId, request.DraftTaskRootPath);
 
         if (request.EnableWorkspaceTools)
         {
@@ -270,7 +278,8 @@ public sealed partial class WorkspaceTestService
         RepositoryTask? declaredTask = null;
         if (!string.IsNullOrWhiteSpace(test.TaskId))
         {
-            var taskCatalog = runtime.InspectRepositoryTasks(test.AppId, catalog.WorkspacePath);
+            var taskCatalog = runtime.InspectRepositoryTasks(test.AppId,
+                RepositoryTaskWorkspaceScope.Resolve(test.AppId, catalog.WorkspacePath));
             declaredTask = taskCatalog.Tasks.FirstOrDefault(candidate => string.Equals(
                 candidate.TaskId,
                 test.TaskId,

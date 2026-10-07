@@ -126,6 +126,23 @@ internal static class TaskCommands
         {
             throw new CliUsageException("--assertion and --validation require --format test.");
         }
+        if (format != "test" && arguments.GetOptions("task-section").Count > 0)
+        {
+            throw new CliUsageException("--task-section requires --format test.");
+        }
+
+        var selectedTaskSections = arguments.GetOptions("task-section");
+        if (format == "test" && arguments.HasFlag("ai") && selectedTaskSections.Count == 0)
+        {
+            selectedTaskSections = snapshot.Annotations
+                .Where(annotation => annotation.EndUtc > annotation.StartUtc
+                    && annotation.StartUtc >= startUtc
+                    && annotation.EndUtc <= endUtc
+                    && !string.IsNullOrWhiteSpace(annotation.Label))
+                .OrderBy(annotation => annotation.StartUtc)
+                .Select(annotation => annotation.AnnotationId)
+                .ToArray();
+        }
 
         var extraction = format == "ansight"
             ? TimelineTaskExtractor.Extract(snapshot, startUtc, endUtc, title)
@@ -139,7 +156,7 @@ internal static class TaskCommands
         var test = format == "test"
             ? WorkspaceTestExtractor.Extract(
                 snapshot, startUtc, endUtc, title,
-                arguments.GetOptions("assertion"), arguments.GetOption("validation"))
+                arguments.GetOptions("assertion"), arguments.GetOption("validation"), selectedTaskSections)
             : null;
         var workspacePath = Path.GetFullPath(
             arguments.GetOption("workspace")
@@ -164,24 +181,41 @@ internal static class TaskCommands
         string? refinementModel = null;
         if (arguments.HasFlag("ai"))
         {
-            if (maestro is null)
+            if (maestro is not null)
             {
-                throw new CliUsageException("--ai requires --format maestro.");
+                var refinement = await MaestroFlowRefiner.RefineAsync(
+                    runtime,
+                    snapshot,
+                    startUtc,
+                    endUtc,
+                    title,
+                    maestro.Source,
+                    arguments.GetOption("reasoning") ?? AgentReasoningModes.Fast,
+                    arguments.GetOption("model") ?? string.Empty,
+                    workspacePath,
+                    cancellationToken).ConfigureAwait(false);
+                maestro = maestro with { Source = refinement.Source };
+                refinementModel = refinement.Model;
             }
-
-            var refinement = await MaestroFlowRefiner.RefineAsync(
-                runtime,
-                snapshot,
-                startUtc,
-                endUtc,
-                title,
-                maestro.Source,
-                arguments.GetOption("reasoning") ?? AgentReasoningModes.Fast,
-                arguments.GetOption("model") ?? string.Empty,
-                workspacePath,
-                cancellationToken).ConfigureAwait(false);
-            maestro = maestro with { Source = refinement.Source };
-            refinementModel = refinement.Model;
+            else if (test is not null)
+            {
+                test = await WorkspaceTestRefiner.RefineAsync(
+                    runtime,
+                    snapshot,
+                    startUtc,
+                    endUtc,
+                    title,
+                    test,
+                    selectedTaskSections,
+                    arguments.GetOption("reasoning") ?? AgentReasoningModes.Fast,
+                    arguments.GetOption("model"),
+                    workspacePath,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                throw new CliUsageException("--ai requires --format maestro or --format test.");
+            }
         }
         var directoryPath = Path.GetDirectoryName(outputPath)
                             ?? throw new IOException($"Unable to resolve the parent directory for '{outputPath}'.");
@@ -355,7 +389,8 @@ internal static class TaskCommands
              --format <format>       ansight (default), test, maestro, or appium
              --assertion <text>      Final-state assertion for --format test; repeatable
              --validation <text>     Final-state validation instructions for --format test
-             --ai                    Refine a Maestro draft with the configured OpenAI model
+             --task-section <id>    Use a recorded annotation section for --format test; repeatable
+             --ai                    Refine a Maestro or Ansight test draft with the configured AI model
              --reasoning <mode>      fast, balanced, or deep for --ai
              --model <model>         Optional model override for --ai
              --output <path>         Explicit output file destination

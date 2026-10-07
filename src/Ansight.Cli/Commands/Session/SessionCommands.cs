@@ -1468,7 +1468,7 @@ internal static Task<int> SummaryAsync(
            Summary commands:
              summary       Start Cloud AI extraction for an existing team share
              summary --local | summary-local
-                           Summarize local capture evidence with the brokered agent model;
+                           Summarize local capture evidence with AI;
                            save the result locally without sharing the capture
 
            Session list filters:

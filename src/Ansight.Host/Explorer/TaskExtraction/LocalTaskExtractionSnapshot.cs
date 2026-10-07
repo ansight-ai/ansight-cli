@@ -42,4 +42,6 @@ public sealed record LocalTaskExtractionSnapshot(
     public string? ReasoningEffort { get; init; }
 
     public string? ReasoningConfigurationRevision { get; init; }
+
+    public bool TaskNameIsAuthoritative { get; init; } = true;
 }

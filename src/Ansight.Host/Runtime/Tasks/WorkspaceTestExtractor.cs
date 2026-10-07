@@ -11,7 +11,10 @@ public sealed record WorkspaceTestExtraction(
     string SuggestedName,
     string Source,
     int GeneratedActionCount,
-    IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<string> Diagnostics)
+{
+    public string? TestName { get; init; }
+}
 
 public static class WorkspaceTestExtractor
 {
@@ -51,12 +54,11 @@ public static class WorkspaceTestExtractor
             }
         }
 
-        var prompt = new StringBuilder()
-            .Append("In the ").Append(snapshot.AppId).AppendLine(" app, complete the following user journey using the visible UI.")
-            .AppendLine("Start from the state required for this journey and adapt to minor UI changes.");
-        if (taskSectionIds is { Count: > 0 })
+        var prompt = new StringBuilder();
+        var hasSelectedSections = taskSectionIds is { Count: > 0 };
+        if (hasSelectedSections)
         {
-            var selectedIds = taskSectionIds.ToHashSet(StringComparer.Ordinal);
+            var selectedIds = taskSectionIds!.ToHashSet(StringComparer.Ordinal);
             var sections = snapshot.Annotations
                 .Where(annotation => selectedIds.Contains(annotation.AnnotationId)
                     && annotation.EndUtc > annotation.StartUtc
@@ -70,7 +72,7 @@ public static class WorkspaceTestExtractor
                 throw new ArgumentException("Every selected task section must be a labelled range annotation inside the test period.");
             }
 
-            prompt.AppendLine("The human marked these core sections as candidates for reusable automated tasks. Preserve their order and intent:");
+            prompt.AppendLine("Complete these steps in order:");
             for (var index = 0; index < sections.Length; index++)
             {
                 var section = sections[index];
@@ -79,20 +81,25 @@ public static class WorkspaceTestExtractor
                 prompt.AppendLine();
             }
         }
-        prompt.AppendLine("The recorded sequence is:");
-        if (journey.ReplaySteps.Count == 0)
+        else if (journey.ReplaySteps.Count == 0)
         {
-            prompt.AppendLine("1. Review the selected replay and describe the missing interaction steps before running this test.");
+            prompt.AppendLine("Review the selected replay and add the missing journey steps before running this test.");
             diagnostics.Add("No replayable interactions were found; complete the journey prompt before running this test.");
         }
         else
         {
+            prompt.AppendLine("Use the recorded controls as a guide to complete the journey:");
             for (var index = 0; index < journey.ReplaySteps.Count; index++)
             {
                 var step = journey.ReplaySteps[index];
-                var instruction = step.Kind == "input"
-                    ? "Enter an appropriate test value in the recorded input field. Review the value needed for this journey."
-                    : step.Instruction;
+                var instruction = step.Kind switch
+                {
+                    "input" => "Enter an appropriate test value in the recorded input field. Review the value needed for this journey.",
+                    "swipe" => "Swipe as needed to reveal the next relevant visible control.",
+                    _ when step.Instruction.StartsWith("Replay the recorded tap", StringComparison.Ordinal)
+                        => "Select the relevant visible control at this point in the journey.",
+                    _ => step.Instruction
+                };
                 prompt.Append(index + 1).Append(". ").AppendLine(instruction);
                 if (step.Kind == "input")
                 {
@@ -101,14 +108,21 @@ public static class WorkspaceTestExtractor
             }
         }
 
-        var hasOmittedInput = journey.ReplaySteps.Any(static step => step.Kind == "input");
+        var hasOmittedInput = !hasSelectedSections && journey.ReplaySteps.Any(static step => step.Kind == "input");
+        var hasUnresolvedNavigation = !hasSelectedSections && journey.ReplaySteps.Any(static step =>
+            step.Kind == "swipe" || step.Instruction.StartsWith("Replay the recorded tap", StringComparison.Ordinal));
+        if (hasUnresolvedNavigation)
+        {
+            diagnostics.Add("Some recorded gestures lack a semantic target; describe their purpose before running this test.");
+        }
         var source = new StringBuilder()
             .AppendLine("# REVIEW: Confirm the starting state, recorded steps, and final-state assertions before running.")
             .Append(hasOmittedInput ? "# REVIEW: Recorded input values were omitted; supply suitable test values or secret aliases.\n" : string.Empty)
+            .Append(hasUnresolvedNavigation ? "# REVIEW: Describe the purpose of recorded gestures before enabling this test.\n" : string.Empty)
             .Append(needsOutcomeReview ? "# REVIEW: Replace the generic outcome assertion and enable this test.\n" : string.Empty)
-            .Append(journey.ReplaySteps.Count == 0 ? "# REVIEW: Add the missing journey steps and enable this test.\n" : string.Empty)
+            .Append(!hasSelectedSections && journey.ReplaySteps.Count == 0 ? "# REVIEW: Add the missing journey steps and enable this test.\n" : string.Empty)
             .AppendLine("schemaVersion: 1")
-            .Append(needsOutcomeReview || journey.ReplaySteps.Count == 0 ? "enabled: false\n" : string.Empty)
+            .Append(needsOutcomeReview || hasOmittedInput || hasUnresolvedNavigation || (!hasSelectedSections && journey.ReplaySteps.Count == 0) ? "enabled: false\n" : string.Empty)
             .Append("id: ").AppendLine(Quote(journey.SuggestedName))
             .Append("name: ").AppendLine(Quote(title.Trim()))
             .Append("appId: ").AppendLine(Quote(snapshot.AppId));
@@ -125,7 +139,10 @@ public static class WorkspaceTestExtractor
 
         // Parse with the same contract used by workspace test discovery.
         WorkspaceTestCatalog.Parse("ansight/tests", $"ansight/tests/{journey.SuggestedName}.yaml", source.ToString());
-        return new WorkspaceTestExtraction(journey.SuggestedName, source.ToString(), journey.ReplaySteps.Count, diagnostics);
+        return new WorkspaceTestExtraction(journey.SuggestedName, source.ToString(), journey.ReplaySteps.Count, diagnostics)
+        {
+            TestName = title.Trim()
+        };
     }
 
     private static string? FindNewFinalLabel(
@@ -142,9 +159,10 @@ public static class WorkspaceTestExtractor
         if (trees.Length < 2) return null;
         var finalTree = trees.LastOrDefault(tree => tree.CapturedAtUtc >= lastActionUtc.Value);
         if (finalTree is null) return null;
-        var initial = ReadLabels(trees[0].Payload).ToHashSet(StringComparer.Ordinal);
+        var beforeAction = trees.LastOrDefault(tree => tree.CapturedAtUtc <= lastActionUtc.Value) ?? trees[0];
+        var priorLabels = ReadLabels(beforeAction.Payload).ToHashSet(StringComparer.Ordinal);
         return ReadLabels(finalTree.Payload)
-            .Where(label => !initial.Contains(label))
+            .Where(label => !priorLabels.Contains(label))
             .OrderByDescending(static label => label.Length)
             .FirstOrDefault();
     }

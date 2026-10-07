@@ -53,6 +53,7 @@ public sealed class HostTimelineTaskExtractorTests
 
         Assert.Equal("The results screen shows the matching account", parsed.Validation.Assertions[0]);
         Assert.Equal("Inspect the final visual tree.", parsed.Validation.Prompt);
+        Assert.False(parsed.Enabled);
         Assert.DoesNotContain("private@example.test", result.Source, StringComparison.Ordinal);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("captured text was omitted", StringComparison.Ordinal));
     }
@@ -97,9 +98,104 @@ public sealed class HostTimelineTaskExtractorTests
         Assert.Contains("Verify the balance", parsed.Prompt, StringComparison.Ordinal);
         Assert.True(parsed.Prompt.IndexOf("Find the account", StringComparison.Ordinal) < parsed.Prompt.IndexOf("Verify the balance", StringComparison.Ordinal));
         Assert.DoesNotContain("Unrelated action", parsed.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("recorded sequence", parsed.Prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.True(parsed.Enabled);
         Assert.Throws<ArgumentException>(() => WorkspaceTestExtractor.Extract(
             snapshot, startedAt, startedAt.AddSeconds(10), "Review account",
             ["The balance is visible"], taskSectionIds: ["outside"]));
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_UsesAnnotatedIntentInsteadOfSwipeCoordinates()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(
+            startedAt,
+            [
+                CreateTouch("down", startedAt.AddSeconds(1), 0.8, 0.7),
+                CreateTouch("move", startedAt.AddSeconds(1.1), 0.7, 0.75),
+                CreateTouch("up", startedAt.AddSeconds(1.2), 0.6, 0.8)
+            ],
+            [],
+            [new SessionAnnotation
+            {
+                AnnotationId = "map",
+                StartUtc = startedAt.AddMilliseconds(500),
+                EndUtc = startedAt.AddSeconds(2),
+                Label = "Find Eagle Rock on the map and open its details"
+            }]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(3), "Open Eagle Rock",
+            ["Eagle Rock details are visible"], taskSectionIds: ["map"]);
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/open-eagle-rock.yaml", result.Source);
+
+        Assert.Contains("Find Eagle Rock on the map and open its details", parsed.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("ansight_swipe_ui", parsed.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("0.8", parsed.Prompt, StringComparison.Ordinal);
+        Assert.True(parsed.Enabled);
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_InfersNewFinalLabelFromTheLastAction()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var finalTree = CreateVisualTree(startedAt.AddSeconds(5), "copied-toast", "Copied to clipboard");
+        var finalRoot = finalTree.Payload!["root"]!.AsObject();
+        finalRoot["children"]!.AsArray().Add(new JsonObject
+        {
+            ["label"] = "Lengths range from ~6m to ~30m. Most climbs are between ~10m and ~15m."
+        });
+        var snapshot = CreateSnapshot(
+            startedAt,
+            [
+                CreateTouch("down", startedAt.AddSeconds(4), 0.5, 0.5),
+                CreateTouch("up", startedAt.AddSeconds(4.1), 0.5, 0.5)
+            ],
+            [
+                CreateVisualTree(startedAt.AddSeconds(1), "home", "Home"),
+                CreateVisualTree(startedAt.AddSeconds(3), "copy-button", "Lengths range from ~6m to ~30m. Most climbs are between ~10m and ~15m."),
+                finalTree
+            ]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(6), "Copy location");
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/copy-location.yaml", result.Source);
+
+        Assert.Contains("Copied to clipboard", parsed.Validation.Assertions[0], StringComparison.Ordinal);
+        Assert.DoesNotContain("Lengths range", parsed.Validation.Assertions[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WorkspaceTestRefiner_AcceptsShortIdentityAndRejectsRawReplay()
+    {
+        const string valid = """
+            schemaVersion: 1
+            id: "copy-location"
+            name: "Copy location"
+            appId: "com.example.app"
+            prompt: "Open the area and copy its location."
+            validation:
+              prompt: "Inspect the final UI."
+              assertions:
+                - "A copied confirmation is visible."
+            """;
+
+        var definition = WorkspaceTestRefiner.ValidateRefinedSource(valid, "com.example.app");
+        Assert.Equal("copy-location", definition.TestId);
+        Assert.Throws<InvalidDataException>(() => WorkspaceTestRefiner.ValidateRefinedSource(
+            valid.Replace("com.example.app", "com.other.app", StringComparison.Ordinal),
+            "com.example.app"));
+        Assert.Throws<InvalidDataException>(() => WorkspaceTestRefiner.ValidateRefinedSource(
+            valid.Replace("Open the area", "Call ansight_swipe_ui and open the area", StringComparison.Ordinal),
+            "com.example.app"));
+        Assert.Throws<InvalidDataException>(() => WorkspaceTestRefiner.ValidateRefinedSource(
+            valid.Replace("Copy location", "Recorded com.example.app workflow", StringComparison.Ordinal),
+            "com.example.app"));
+        Assert.Throws<InvalidDataException>(() => WorkspaceTestRefiner.ValidateRefinedSource(
+            valid.Replace("Open the area and copy its location.",
+                "In the com.example.app app, complete this journey using the visible UI. Open the area.", StringComparison.Ordinal),
+            "com.example.app"));
     }
 
     [Fact]

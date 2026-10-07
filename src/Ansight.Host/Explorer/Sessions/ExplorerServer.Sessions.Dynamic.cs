@@ -310,6 +310,20 @@ internal sealed partial class ExplorerServer
             return true;
         }
 
+        if (segments.Length == 6 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "analyses" && segments[5] == "delete")
+        {
+            var sessionId = Uri.UnescapeDataString(segments[2]);
+            if (!isExplorer && !string.Equals(sessionId, InitialSessionId, StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(response, OperationResult.Failure("Session not found."), HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            var result = runtime.SessionEditing.DeleteAnalysis(sessionId, Uri.UnescapeDataString(segments[4]));
+            await WriteJsonAsync(response, result, result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.BadRequest, false, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         if (segments.Length == 6 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "annotations" && segments[5] == "delete")
         {
             var result = runtime.SessionEditing.DeleteAnnotation(Uri.UnescapeDataString(segments[2]), Uri.UnescapeDataString(segments[4]));

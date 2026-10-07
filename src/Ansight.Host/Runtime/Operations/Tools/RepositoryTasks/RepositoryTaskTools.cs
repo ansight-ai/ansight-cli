@@ -76,7 +76,7 @@ internal abstract class RepositoryTaskTool : Operation
             return false;
         }
 
-        loadResult = repositoryTaskRouter.Load(app.CodebasePath, appId);
+        loadResult = repositoryTaskRouter.Load(RepositoryTaskWorkspaceScope.Resolve(appId, app.CodebasePath), appId);
         return true;
     }
 

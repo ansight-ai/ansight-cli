@@ -34,6 +34,18 @@ internal sealed partial class ExplorerServer
 
     private async Task<bool> TryHandleTaskExtractionDynamicPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken, string[] segments)
     {
+        if (isExplorer && segments.Length == 4 && segments[0] == "api" && segments[1] == "task-extractions" && segments[3] == "discard")
+        {
+            var extractionId = Uri.UnescapeDataString(segments[2]);
+            var discarded = taskExtractions.Discard(extractionId);
+            await WriteJsonAsync(response,
+                discarded ? OperationResult.Success("Task draft discarded.") : OperationResult.Failure($"Task extraction '{extractionId}' was not found."),
+                discarded ? HttpStatusCode.OK : HttpStatusCode.NotFound,
+                false,
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         if (isExplorer && segments.Length == 4 && segments[0] == "api" && segments[1] == "task-extractions" && segments[3] == "debug")
         {
             var extractionId = Uri.UnescapeDataString(segments[2]);

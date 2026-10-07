@@ -29,4 +29,8 @@ public sealed record WorkspaceTestRunRequest(
 
     [System.Text.Json.Serialization.JsonIgnore]
     internal WorkspaceTestRunStartParticipant? StartParticipant { get; init; }
+
+    internal string? DraftSource { get; init; }
+
+    internal string? DraftTaskRootPath { get; init; }
 }

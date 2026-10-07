@@ -49,6 +49,12 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
             .Select(static testId => testId.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray() ?? [];
+        if (!string.IsNullOrWhiteSpace(request.DraftSource))
+        {
+            var draft = Ansight.Host.Workspaces.Catalog.WorkspaceTestCatalog.Parse(
+                "ansight/tests", "ansight/tests/draft.yaml", request.DraftSource);
+            testIds = [draft.TestId];
+        }
         var kind = testIds.Length == 1 ? "single" : "batch";
         var execution = new ActiveTestExecution(
             Guid.CreateVersion7().ToString("N"),
@@ -151,6 +157,10 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                     0,
                     false));
         }
+        finally
+        {
+            DeleteDraftTaskRoot(request.DraftTaskRootPath);
+        }
     }
 
     private async Task RunBatchAsync(
@@ -236,8 +246,21 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
             EnableWorkspaceTools: request.EnableWorkspaceTools)
         {
             CaptureTrace = request.CaptureTrace,
-            Reasoning = AgentReasoningModes.Normalize(request.Reasoning)
+            Reasoning = AgentReasoningModes.Normalize(request.Reasoning),
+            DraftSource = request.DraftSource,
+            DraftTaskRootPath = request.DraftTaskRootPath
         };
+
+    private static void DeleteDraftTaskRoot(string? rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath)) return;
+        var fullPath = Path.GetFullPath(rootPath);
+        var parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+        if (!fullPath.StartsWith(parent + Path.DirectorySeparatorChar + "ansight-draft-test-", StringComparison.Ordinal)) return;
+        try { Directory.Delete(fullPath, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
 
     private static WorkspaceTestBatchRequest CreateBatchRequest(
         LocalWorkspaceTestExecutionRequest request,

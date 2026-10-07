@@ -19,4 +19,10 @@ public sealed record LocalWorkspaceTestExecutionRequest(
     Guid? TeamId = null)
 {
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? DraftSource { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string? DraftTaskRootPath { get; init; }
 }

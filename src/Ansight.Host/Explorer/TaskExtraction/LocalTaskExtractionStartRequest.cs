@@ -24,4 +24,5 @@ public sealed record LocalTaskExtractionStartRequest(
     bool ValidateSelectors = true)
 {
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
+    public string? ReplaceExtractionId { get; init; }
 }
