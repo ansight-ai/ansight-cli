@@ -21,4 +21,7 @@ public sealed record SessionExplorerSummary(
     int ScreenshotCount,
     int VisualTreeSnapshotCount,
     int ArtifactSnapshotCount,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags)
+{
+    public string CaptureSource { get; init; } = "sdk";
+}

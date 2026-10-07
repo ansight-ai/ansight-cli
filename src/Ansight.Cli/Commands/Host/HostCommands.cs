@@ -257,7 +257,7 @@ internal static class HostCommands
             if (notificationCoordinator is not null)
             {
                 await accessNotifications.UpdateAsync(lease.Decision, cancellationToken).ConfigureAwait(false);
-                await notificationCoordinator.NotifyHostStartedAsync(cancellationToken).ConfigureAwait(false);
+                await notificationCoordinator.NotifyHostStartedAsync(!noServe, cancellationToken).ConfigureAwait(false);
             }
 
             if (pairAppId is null)

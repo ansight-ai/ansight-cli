@@ -83,19 +83,38 @@ public sealed class NotificationCoordinator : IDisposable
         }
     }
 
-    public Task NotifyHostStartedAsync(CancellationToken cancellationToken = default)
+    public async Task NotifyHostStartedAsync(bool playerAvailable = true, CancellationToken cancellationToken = default)
     {
-        if (disposed)
+        if (disposed || !playerAvailable)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return PublishNotificationAsync(
-            new Notification(
-                HostStartedNotificationIdentifier,
-                "Ansight host started",
-                "The local host is ready for app connections."),
-            cancellationToken);
+        try
+        {
+            var gettingStarted = new Ansight.Host.Explorer.GettingStartedStore(hostRuntime.ApplicationPaths.ApplicationDataPath);
+            var state = gettingStarted.Read();
+            if (!state.NotificationSent && !state.Opened && !state.Skipped
+                && hostRuntime.Sessions.GetSummaries().Count == 0)
+            {
+                await notificationSink.ShowAsync(new Notification(
+                    "getting-started",
+                    "Welcome to Ansight",
+                    "Your local player is ready. Open it to connect your app and capture your first session."),
+                    cancellationToken).ConfigureAwait(false);
+                gettingStarted.Update(current => current with { NotificationSent = true });
+                return;
+            }
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A notification or its local receipt must not interrupt the host.
+        }
+
+        await PublishNotificationAsync(new Notification(
+            HostStartedNotificationIdentifier,
+            "Ansight host started",
+            "The local host is ready for app connections."), cancellationToken).ConfigureAwait(false);
     }
 
     internal void HandlePairingEvent(RuntimePairingEvent pairingEvent)

@@ -803,7 +803,7 @@ if [[ "${SKIP_SETUP}" -eq 0 && "${CREDENTIALS_READY}" -eq 1 ]]; then
       enable_linux_startup
     fi
   else
-    echo "Start the host when needed with: ansight host run"
+    echo "Start the host and open the local player when needed with: ansight host run --open"
   fi
 fi
 

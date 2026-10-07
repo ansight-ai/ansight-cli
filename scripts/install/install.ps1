@@ -559,7 +559,7 @@ try {
                 -AnsightWrapper $wrapperPath
         }
         else {
-            Write-Host 'Start the host when needed with: ansight host run'
+            Write-Host 'Start the host and open the local player when needed with: ansight host run --open'
         }
     }
 

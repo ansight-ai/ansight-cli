@@ -43,6 +43,8 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             return true;
         if (await TryHandleSessionsGetAsync(route, request, response, isHead, cancellationToken).ConfigureAwait(false))
             return true;
+        if (await TryHandleGettingStartedGetAsync(route, response, isHead, cancellationToken).ConfigureAwait(false))
+            return true;
         if (await TryHandleLocalGraphsGetAsync(route, request, response, isHead, cancellationToken).ConfigureAwait(false)) return true;
         if (await TryHandleCloudGetAsync(route, request, response, isHead, cancellationToken).ConfigureAwait(false))
             return true;
@@ -107,6 +109,8 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
     private async Task<bool> TryHandlePostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken)
     {
+        if (await TryHandleGettingStartedPostAsync(route, request, response, cancellationToken).ConfigureAwait(false))
+            return true;
         if (await TryHandleRunnerPostAsync(route, request, response, cancellationToken).ConfigureAwait(false))
             return true;
         if (await TryHandleSessionsPostAsync(route, request, response, cancellationToken).ConfigureAwait(false))

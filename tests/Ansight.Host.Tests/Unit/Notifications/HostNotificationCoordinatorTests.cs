@@ -29,7 +29,7 @@ public sealed class HostNotificationCoordinatorTests
     }
 
     [Fact]
-    public async Task HostStarted_NotifiesAfterDesktopIntegrationIsReady()
+    public async Task FirstHostStart_InvitesNewUserOnce()
     {
         using var environment = new TestSupport.TestEnvironment();
         using var runtime = environment.CreateRuntime();
@@ -40,12 +40,32 @@ public sealed class HostNotificationCoordinatorTests
         await coordinator.NotifyHostStartedAsync();
 
         var notification = Assert.Single(sink.Notifications);
-        Assert.Equal(NotificationCoordinator.HostStartedNotificationIdentifier, notification.Identifier);
-        Assert.Equal("Ansight host started", notification.Title);
-        Assert.Equal("The local host is ready for app connections.", notification.Body);
+        Assert.Equal("getting-started", notification.Identifier);
+        Assert.Equal("Welcome to Ansight", notification.Title);
+        Assert.Contains("local player is ready", notification.Body);
         Assert.Null(notification.SessionId);
         Assert.Null(notification.Schedule);
         Assert.Null(notification.Action);
+
+        await coordinator.NotifyHostStartedAsync();
+        Assert.Equal(NotificationCoordinator.HostStartedNotificationIdentifier, sink.Notifications[1].Identifier);
+    }
+
+    [Fact]
+    public async Task SkippedGettingStarted_DoesNotSendTheWelcomeAgain()
+    {
+        using var environment = new TestSupport.TestEnvironment();
+        using var runtime = environment.CreateRuntime();
+        var store = new Ansight.Host.Explorer.GettingStartedStore(environment.ApplicationPaths.ApplicationDataPath);
+        store.Update(state => state with { Opened = true, Skipped = true });
+        var sink = new RecordingNotificationSink();
+        using var coordinator = new NotificationCoordinator(runtime, sink);
+
+        await coordinator.InitializeAsync();
+        await coordinator.NotifyHostStartedAsync();
+
+        Assert.Equal(NotificationCoordinator.HostStartedNotificationIdentifier,
+            Assert.Single(sink.Notifications).Identifier);
     }
 
     [Fact]

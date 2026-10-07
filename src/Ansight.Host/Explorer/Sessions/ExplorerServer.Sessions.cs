@@ -341,7 +341,10 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                 : technologyEvidence.Contains("swift", StringComparison.OrdinalIgnoreCase) ? "swift"
                 : null;
 
-            return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice, runtimeDeviceIdentifier, runtimePlatform, technology, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags);
+            return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice, runtimeDeviceIdentifier, runtimePlatform, technology, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags)
+            {
+                CaptureSource = session.CaptureSource
+            };
         }).ToArray();
     }
 
