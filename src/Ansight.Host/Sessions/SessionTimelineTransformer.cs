@@ -170,6 +170,7 @@ internal static class SessionTimelineTransformer
         changed |= TrimTimestampedItems(session.Logs, log => log.TimestampUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering logs…", report);
         changed |= TrimTimestampedItems(session.Images, frame => frame.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering screenshots…", report);
         changed |= TrimTimestampedItems(session.Touches, touch => touch.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering touches…", report);
+        changed |= TrimNetworkRequests(session.NetworkRequests, rangeStartUtc, rangeEndUtc, mode, report);
         changed |= TrimTimestampedItems(session.VisualTreeSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering visual trees…", report);
         changed |= TrimTimestampedItems(session.ArtifactSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering artifacts…", report);
         changed |= TrimTimestampedItems(session.ApplicationEvents, appEvent => appEvent.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering application events…", report);
@@ -307,6 +308,7 @@ internal static class SessionTimelineTransformer
             },
             cutoffUtc,
             offset);
+        changed |= ShiftNetworkRequestsAfterCut(session.NetworkRequests, cutoffUtc, offset);
         changed |= ShiftTimestampedItemsAfterCut(
             session.VisualTreeSnapshots,
             snapshot => snapshot.CapturedAtUtc,
@@ -438,6 +440,31 @@ internal static class SessionTimelineTransformer
         return changed;
     }
 
+    private static bool ShiftNetworkRequestsAfterCut(
+        List<SessionNetworkRequest> requests,
+        DateTimeOffset cutoffUtc,
+        TimeSpan offset)
+    {
+        var changed = false;
+        for (var index = 0; index < requests.Count; index++)
+        {
+            var request = requests[index];
+            if (request.StartedAtUtc.ToUniversalTime() <= cutoffUtc)
+            {
+                continue;
+            }
+
+            requests[index] = CopyNetworkRequestWithTimeline(
+                request,
+                request.StartedAtUtc.ToUniversalTime() - offset,
+                request.CompletedAtUtc.ToUniversalTime() - offset,
+                request.DurationMilliseconds);
+            changed = true;
+        }
+
+        return changed;
+    }
+
     private static bool ShiftAnnotationsAfterCut(
         List<SessionAnnotation> annotations,
         DateTimeOffset cutoffUtc,
@@ -552,6 +579,79 @@ internal static class SessionTimelineTransformer
         report?.Invoke(new(message, beforeCount, beforeCount));
         return items.Count != beforeCount;
     }
+
+    private static bool TrimNetworkRequests(
+        List<SessionNetworkRequest> requests,
+        DateTimeOffset rangeStartUtc,
+        DateTimeOffset rangeEndUtc,
+        SessionTimelineTrimMode mode,
+        Action<SessionTimelineTrimProgress>? report)
+    {
+        const string message = "Filtering network requests…";
+        var beforeCount = requests.Count;
+        report?.Invoke(new(message, 0, beforeCount));
+        var changed = false;
+        for (var index = requests.Count - 1; index >= 0; index--)
+        {
+            var request = requests[index];
+            var startedAtUtc = request.StartedAtUtc.ToUniversalTime();
+            var completedAtUtc = request.CompletedAtUtc.ToUniversalTime();
+            var overlapsRange = startedAtUtc <= rangeEndUtc && completedAtUtc >= rangeStartUtc;
+            if (mode == SessionTimelineTrimMode.CutSelection ? overlapsRange : !overlapsRange)
+            {
+                requests.RemoveAt(index);
+                changed = true;
+                continue;
+            }
+
+            if (mode == SessionTimelineTrimMode.KeepSelectionOnly)
+            {
+                var clippedStartUtc = MaxTimestamp(startedAtUtc, rangeStartUtc);
+                var clippedEndUtc = MinTimestamp(completedAtUtc, rangeEndUtc);
+                if (clippedStartUtc != startedAtUtc || clippedEndUtc != completedAtUtc)
+                {
+                    requests[index] = CopyNetworkRequestWithTimeline(
+                        request,
+                        clippedStartUtc,
+                        clippedEndUtc,
+                        (clippedEndUtc - clippedStartUtc).TotalMilliseconds);
+                    changed = true;
+                }
+            }
+        }
+
+        report?.Invoke(new(message, beforeCount, beforeCount));
+        return changed;
+    }
+
+    private static SessionNetworkRequest CopyNetworkRequestWithTimeline(
+        SessionNetworkRequest request,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset completedAtUtc,
+        double durationMilliseconds)
+        => new()
+        {
+            Schema = request.Schema,
+            Id = request.Id,
+            Source = request.Source,
+            StartedAtUtc = startedAtUtc,
+            CompletedAtUtc = completedAtUtc,
+            DurationMilliseconds = durationMilliseconds,
+            Method = request.Method,
+            Url = request.Url,
+            RedactSensitiveData = request.RedactSensitiveData,
+            Protocol = request.Protocol,
+            RequestHeaders = request.RequestHeaders,
+            RequestBodySizeBytes = request.RequestBodySizeBytes,
+            RequestBody = request.RequestBody,
+            StatusCode = request.StatusCode,
+            ReasonPhrase = request.ReasonPhrase,
+            ResponseHeaders = request.ResponseHeaders,
+            ResponseBodySizeBytes = request.ResponseBodySizeBytes,
+            ResponseBody = request.ResponseBody,
+            ErrorType = request.ErrorType,
+            ErrorMessage = request.ErrorMessage
+        };
 
     private static bool TrimAnnotations(
         List<SessionAnnotation> annotations,
@@ -718,6 +818,14 @@ internal static class SessionTimelineTransformer
                      .Where(touchId => !string.IsNullOrWhiteSpace(touchId)))
         {
             session.SeenTouchIds.Add(touchId);
+        }
+
+        session.SeenNetworkRequestIds.Clear();
+        foreach (var requestId in session.NetworkRequests
+                     .Select(request => request.Id)
+                     .Where(requestId => !string.IsNullOrWhiteSpace(requestId)))
+        {
+            session.SeenNetworkRequestIds.Add(requestId);
         }
 
         var seenApplicationEventIds = session.GetSeenEventIds("application-events");

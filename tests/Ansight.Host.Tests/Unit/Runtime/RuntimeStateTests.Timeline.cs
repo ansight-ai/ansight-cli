@@ -194,6 +194,134 @@ public sealed partial class RuntimeStateTests
     }
 
     [Fact]
+    public void TrimSessionTimeline_KeepSelection_ClipsNetworkRequestsAndPersistsBounds()
+    {
+        using var environment = new TestSupport.TestEnvironment();
+        var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
+        var runtimeState = new RuntimeState(captureStore);
+        var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+        DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+        SessionNetworkRequest Request(string id, int startSeconds, int endSeconds)
+            => CreateNetworkRequest(id, At(startSeconds), At(endSeconds));
+
+        var imported = runtimeState.ImportSessionSnapshot(new AppSessionSnapshot
+        {
+            SessionId = "import-trim-network-keep",
+            AppId = "com.example.trim.network",
+            ClientName = "Imported Client",
+            RemoteAddress = "127.0.0.1",
+            CreatedUtc = startedAtUtc,
+            ConfigId = null,
+            Status = "WebSocket Closed",
+            LastUpdatedUtc = At(40),
+            IsHistorical = true,
+            NetworkRequests =
+            [
+                Request("before", 5, 6),
+                Request("crosses-start", 8, 12),
+                Request("inside", 14, 16),
+                Request("crosses-end", 18, 22),
+                Request("after", 25, 26)
+            ],
+            MetricChannels = [],
+            Metrics = []
+        }, new Dictionary<string, byte[]>());
+        Assert.True(imported.IsSuccess);
+        var sessionId = imported.ImportedSession!.SessionId;
+
+        var result = runtimeState.TrimSessionTimeline(sessionId, At(10), At(20), SessionTimelineTrimMode.KeepSelectionOnly);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var trimmed));
+        Assert.NotNull(trimmed);
+        Assert.Equal(At(10), trimmed!.CreatedUtc);
+        Assert.Equal(At(20), trimmed.LastUpdatedUtc);
+        Assert.Equal(["crosses-start", "inside", "crosses-end"], trimmed.NetworkRequests.Select(request => request.Id).ToArray());
+        Assert.Equal([At(10), At(14), At(18)], trimmed.NetworkRequests.Select(request => request.StartedAtUtc).ToArray());
+        Assert.Equal([At(12), At(16), At(20)], trimmed.NetworkRequests.Select(request => request.CompletedAtUtc).ToArray());
+        Assert.Equal([2000, 2000, 2000], trimmed.NetworkRequests.Select(request => request.DurationMilliseconds).ToArray());
+
+        Assert.True(captureStore.TryLoad(sessionId, out var persisted));
+        Assert.NotNull(persisted);
+        Assert.Equal(At(20), persisted!.LastUpdatedUtc);
+        Assert.Equal(["crosses-start", "inside", "crosses-end"], persisted.NetworkRequests.Select(request => request.Id).ToArray());
+        Assert.Equal(3, persisted.TotalNetworkRequestCount);
+
+        var reloadedRuntimeState = new RuntimeState(captureStore);
+        Assert.True(reloadedRuntimeState.TryGetSessionSnapshot(sessionId, out var reloaded));
+        Assert.Equal(At(20), reloaded!.LastUpdatedUtc);
+    }
+
+    [Fact]
+    public void TrimSessionTimeline_CutSelection_RemovesOverlappingNetworkRequestsAndShiftsLaterOnes()
+    {
+        using var environment = new TestSupport.TestEnvironment();
+        var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
+        var runtimeState = new RuntimeState(captureStore);
+        var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+        DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+        SessionNetworkRequest Request(string id, int startSeconds, int endSeconds)
+            => CreateNetworkRequest(id, At(startSeconds), At(endSeconds));
+
+        var imported = runtimeState.ImportSessionSnapshot(new AppSessionSnapshot
+        {
+            SessionId = "import-trim-network-cut",
+            AppId = "com.example.trim.network",
+            ClientName = "Imported Client",
+            RemoteAddress = "127.0.0.1",
+            CreatedUtc = startedAtUtc,
+            ConfigId = null,
+            Status = "WebSocket Closed",
+            LastUpdatedUtc = At(30),
+            IsHistorical = true,
+            NetworkRequests =
+            [
+                Request("before", 5, 6),
+                Request("crosses-start", 8, 12),
+                Request("inside", 14, 16),
+                Request("crosses-end", 18, 22),
+                Request("after", 25, 27)
+            ],
+            MetricChannels = [],
+            Metrics = []
+        }, new Dictionary<string, byte[]>());
+        Assert.True(imported.IsSuccess);
+        var sessionId = imported.ImportedSession!.SessionId;
+
+        var result = runtimeState.TrimSessionTimeline(sessionId, At(10), At(20), SessionTimelineTrimMode.CutSelection);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var trimmed));
+        Assert.NotNull(trimmed);
+        Assert.Equal(At(20), trimmed!.LastUpdatedUtc);
+        Assert.Equal(["before", "after"], trimmed.NetworkRequests.Select(request => request.Id).ToArray());
+        Assert.Equal([At(5), At(15)], trimmed.NetworkRequests.Select(request => request.StartedAtUtc).ToArray());
+        Assert.Equal([At(6), At(17)], trimmed.NetworkRequests.Select(request => request.CompletedAtUtc).ToArray());
+
+        Assert.True(captureStore.TryLoad(sessionId, out var persisted));
+        Assert.NotNull(persisted);
+        Assert.Equal(At(20), persisted!.LastUpdatedUtc);
+        Assert.Equal(["before", "after"], persisted.NetworkRequests.Select(request => request.Id).ToArray());
+        Assert.Equal(2, persisted.TotalNetworkRequestCount);
+    }
+
+    private static SessionNetworkRequest CreateNetworkRequest(
+        string id,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset completedAtUtc)
+        => new()
+        {
+            Id = id,
+            Source = "test",
+            StartedAtUtc = startedAtUtc,
+            CompletedAtUtc = completedAtUtc,
+            DurationMilliseconds = (completedAtUtc - startedAtUtc).TotalMilliseconds,
+            Method = "GET",
+            Url = "https://example.test/",
+            StatusCode = 200
+        };
+
+    [Fact]
     public void ExtractSessionTimelineRange_CreatesNewSessionAndKeepsSourceUnchanged()
     {
         using var environment = new TestSupport.TestEnvironment();
