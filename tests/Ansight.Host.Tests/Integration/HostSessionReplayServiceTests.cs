@@ -101,6 +101,22 @@ public sealed class HostSessionReplayServiceTests
         Assert.Equal(HttpStatusCode.OK, settingsResponse.StatusCode);
         var savedSettings = JsonNode.Parse(await settingsResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.Equal("Debug", savedSettings["settings"]?["logCaptureLevel"]?.GetValue<string>());
+        var storageSettingsUrl = new Uri(explorerUrl, "api/settings/session-storage");
+        var storageSettings = JsonNode.Parse(await client.GetStringAsync(storageSettingsUrl))!.AsObject();
+        Assert.False(storageSettings["sessionAutoCleanupEnabled"]?.GetValue<bool>());
+        using var storageSettingsResponse = await client.PostAsync(
+            storageSettingsUrl,
+            JsonContent.Create(new SessionStorageSettings(true, 30, 15, 2L * 1024 * 1024 * 1024)));
+        Assert.Equal(HttpStatusCode.OK, storageSettingsResponse.StatusCode);
+        var updatedStorageSettings = JsonNode.Parse(await client.GetStringAsync(storageSettingsUrl))!.AsObject();
+        Assert.True(updatedStorageSettings["sessionAutoCleanupEnabled"]?.GetValue<bool>());
+        Assert.Equal(30, updatedStorageSettings["sessionAutoCleanupRetentionDays"]?.GetValue<int>());
+        Assert.Equal(15, updatedStorageSettings["sessionAutoCompactionAgeDays"]?.GetValue<int>());
+        Assert.Equal(2L * 1024 * 1024 * 1024, updatedStorageSettings["sessionAutoCleanupMaximumCacheBytes"]?.GetValue<long>());
+        var unchangedCoreSettings = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/settings")))!.AsObject();
+        Assert.Equal("Debug", unchangedCoreSettings["logCaptureLevel"]?.GetValue<string>());
+        var cachePlan = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/session-cache")))!.AsObject();
+        Assert.Equal(2L * 1024 * 1024 * 1024, cachePlan["maximumCacheSizeBytes"]?.GetValue<long>());
         var storage = JsonNode.Parse(await client.GetStringAsync(
             new Uri(replayUrl, $"api/sessions/{Uri.EscapeDataString(imported.SessionId)}/storage")))!.AsObject();
         Assert.True(storage["totalSizeBytes"]!.GetValue<long>() > 0);

@@ -26,6 +26,9 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "api/settings" when isExplorer:
                 await WriteJsonAsync(response, CreateCoreSettings(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
+            case "api/settings/session-storage" when isExplorer:
+                await WriteJsonAsync(response, CreateSessionStorageSettings(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                return true;
         }
 
         return false;
@@ -42,6 +45,13 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     await WriteJsonAsync(response, result, result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict, false, cancellationToken).ConfigureAwait(false);
                     return true;
                 }
+            case "api/settings/session-storage" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<SessionStorageSettings>(request, cancellationToken).ConfigureAwait(false);
+                    UpdateSessionStorageSettings(body);
+                    await WriteJsonAsync(response, OperationResult.Success("Session storage settings saved."), HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
         }
 
         return false;
@@ -52,6 +62,25 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         var preferences = runtime.UserPreferences;
         var companion = runtime.ActiveCompanion?.GetAccessStatus() ?? new CompanionAccessStatus(CompanionAccessMode.Disabled, false, false, "Optional cloud extension is inactive.", 0);
         return new CoreSettings(TryNormalizeLogCaptureLevel(preferences.LogCaptureLevel) ?? "Information", preferences.CaptureNativeSessionLogs, preferences.CaptureHostOperationLogs, preferences.CaptureFullHostOperationTrafficToDisk, preferences.AdbPath, preferences.XcodePath, preferences.SessionAutoCleanupEnabled, preferences.SessionAutoCleanupRetentionDays, preferences.SessionAutoCompactionAgeDays, preferences.SessionAutoCleanupMaximumCacheBytes, preferences.MemorySpikeMinimumIncreasePercent, preferences.MemorySpikeMinimumIncreaseMegabytes, preferences.ExternalSimulatorMachineName, preferences.ExternalSimulatorTeamId, companion.Mode.ToString().ToLowerInvariant(), companion.IsEnabled, companion.IsAvailable, companion.Status, companion.ConnectionCount);
+    }
+
+    private SessionStorageSettings CreateSessionStorageSettings()
+    {
+        var preferences = runtime.UserPreferences;
+        return new SessionStorageSettings(preferences.SessionAutoCleanupEnabled, preferences.SessionAutoCleanupRetentionDays, preferences.SessionAutoCompactionAgeDays, preferences.SessionAutoCleanupMaximumCacheBytes);
+    }
+
+    private void UpdateSessionStorageSettings(SessionStorageSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        EnsureInRange(settings.SessionAutoCleanupRetentionDays, SessionCleanupPreferenceDefaults.MinimumRetentionDays, SessionCleanupPreferenceDefaults.MaximumRetentionDays, "Session retention days");
+        EnsureInRange(settings.SessionAutoCompactionAgeDays, SessionCleanupPreferenceDefaults.MinimumRetentionDays, SessionCleanupPreferenceDefaults.MaximumRetentionDays, "Session compaction age");
+        EnsureInRange(settings.SessionAutoCleanupMaximumCacheBytes, SessionCleanupPreferenceDefaults.MinimumMaximumCacheBytes, SessionCleanupPreferenceDefaults.MaximumMaximumCacheBytes, "Session cache limit");
+        var preferences = runtime.UserPreferences;
+        preferences.SessionAutoCleanupEnabled = settings.SessionAutoCleanupEnabled;
+        preferences.SessionAutoCleanupRetentionDays = settings.SessionAutoCleanupRetentionDays;
+        preferences.SessionAutoCompactionAgeDays = settings.SessionAutoCompactionAgeDays;
+        preferences.SessionAutoCleanupMaximumCacheBytes = settings.SessionAutoCleanupMaximumCacheBytes;
     }
 
     private async Task<CoreSettingsUpdateResult> UpdateCoreSettingsAsync(CoreSettingsUpdateRequest request, CancellationToken cancellationToken)
