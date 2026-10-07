@@ -46,6 +46,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     private readonly LocalWebAnalytics analytics;
     private readonly LocalTestExecutionCoordinator testExecutions;
     private readonly LocalTaskExtractionCoordinator taskExtractions;
+    private readonly WorkspaceTestDraftStore workspaceTestDrafts;
     internal readonly bool isExplorer;
     private readonly HttpListener listener;
     private readonly CancellationTokenSource shutdown;
@@ -68,6 +69,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         analytics = new LocalWebAnalytics(runtime.Analytics);
         testExecutions = new LocalTestExecutionCoordinator(runtime);
         taskExtractions = new LocalTaskExtractionCoordinator(runtime);
+        workspaceTestDrafts = new WorkspaceTestDraftStore(runtime.ApplicationPaths.ApplicationDataPath);
         this.isExplorer = isExplorer;
         ServerKey = serverKey;
         this.initialSessionId = initialSessionId;

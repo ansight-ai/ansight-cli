@@ -99,6 +99,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         bool CaptureTrace = true);
 
     private sealed record TaskDraftRestoreRequest(IReadOnlyList<LocalTaskExtractionSnapshot> Extractions);
+    private sealed record WorkspaceTestDraftDiscardRequest(string SessionId, string DraftId);
 
     private async Task<bool> TryHandleTaskExtractionGetAsync(string route, HttpListenerRequest request, HttpListenerResponse response, bool isHead, CancellationToken cancellationToken)
     {
@@ -107,6 +108,18 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "api/task-extractions" when isExplorer:
                 await WriteJsonAsync(response, taskExtractions.List(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
+            case "api/task-extractions/test-drafts" when isExplorer:
+                {
+                    var sessionId = request.QueryString["sessionId"];
+                    if (string.IsNullOrWhiteSpace(sessionId))
+                    {
+                        await WriteJsonAsync(response, OperationResult.Failure("Session ID is required."), HttpStatusCode.BadRequest, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+                    var drafts = await workspaceTestDrafts.ListAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response, drafts, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
             case "api/task-extractions/capabilities" when isExplorer:
                 await WriteJsonAsync(response, taskExtractions.GetCapabilities(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
@@ -144,6 +157,25 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     var body = await ReadJsonAsync<TaskDraftRestoreRequest>(request, cancellationToken).ConfigureAwait(false);
                     var restored = await taskExtractions.RestoreDraftsAsync(body.Extractions, cancellationToken).ConfigureAwait(false);
                     await WriteJsonAsync(response, restored, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/task-extractions/test-drafts/save" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<WorkspaceTestDraftSaveRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var snapshot = await runtime.Sessions.LoadSnapshotAsync(body.SessionId, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false)
+                        ?? throw new InvalidDataException($"Session '{body.SessionId}' was not found.");
+                    var draft = await workspaceTestDrafts.SaveAsync(snapshot.AppId, body, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response, draft, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/task-extractions/test-drafts/discard" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<WorkspaceTestDraftDiscardRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var discarded = await workspaceTestDrafts.DiscardAsync(body.SessionId, body.DraftId, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response,
+                        discarded ? OperationResult.Success("YAML test draft discarded.") : OperationResult.Failure("YAML test draft was not found."),
+                        discarded ? HttpStatusCode.OK : HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
                     return true;
                 }
             case "api/task-extractions/external-validate" when isExplorer:
