@@ -11,6 +11,7 @@ public static class WorkspaceTestCatalog
     private const int MaximumTestCount = 512;
     private const long MaximumTestFileBytes = 1_048_576;
     private const int MaximumRequiredSecretCount = 32;
+    private const int MaximumHintTaskCount = 5;
 
     public static WorkspaceTestCatalogResult Load(
         string workspacePath,
@@ -123,6 +124,7 @@ public static class WorkspaceTestCatalog
         var prompt = NormalizeRequiredString(root, "prompt");
         var validation = ReadValidation(root);
         var requiredSecrets = ReadRequiredSecrets(root);
+        var hintTasks = ReadHintTasks(root);
         var taskId = NormalizeOptionalString(root, "taskId");
         if (string.IsNullOrWhiteSpace(validation.Prompt) && validation.Assertions.Count == 0)
         {
@@ -140,8 +142,42 @@ public static class WorkspaceTestCatalog
             Path.GetFullPath(testPath))
         {
             Enabled = ReadEnabled(root),
-            TaskId = taskId
+            TaskId = taskId,
+            HintTasks = hintTasks
         };
+    }
+
+    private static IReadOnlyList<string> ReadHintTasks(JsonElement root)
+    {
+        if (!root.TryGetProperty("hintTasks", out var hintsElement))
+        {
+            return [];
+        }
+        if (hintsElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("hintTasks must be an array of repository task IDs.");
+        }
+
+        var taskIds = new List<string>();
+        foreach (var hintElement in hintsElement.EnumerateArray())
+        {
+            if (hintElement.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(hintElement.GetString()))
+            {
+                throw new InvalidDataException("hintTasks must contain only non-empty repository task IDs.");
+            }
+            var taskId = hintElement.GetString()!.Trim();
+            if (taskIds.Contains(taskId, StringComparer.Ordinal))
+            {
+                throw new InvalidDataException($"hintTasks contains duplicate task ID '{taskId}'.");
+            }
+            taskIds.Add(taskId);
+            if (taskIds.Count > MaximumHintTaskCount)
+            {
+                throw new InvalidDataException($"hintTasks can contain at most {MaximumHintTaskCount} task IDs.");
+            }
+        }
+        return taskIds;
     }
 
     private static bool ReadEnabled(JsonElement root)

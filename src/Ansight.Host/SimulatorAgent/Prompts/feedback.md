@@ -67,7 +67,7 @@ The bounded target-local tap was delivered. Do not repeat it. Wait once for the 
 <!-- /template -->
 
 <!-- template:task-failed -->
-The repository task did not complete successfully. Report that result honestly and do not manually replay the same cycle merely to hide the failure. Continue only if the task was explicitly partial and the remaining instruction is independently safe and unambiguous.
+The repository task did not complete successfully. If it stopped before changing the app because the starting page or tab was missing, establish that prerequisite and retry the same task once after the state changes. Otherwise report the failure honestly; do not manually replay a failed action or assertion to hide it. Trust any assertions the task already passed.
 <!-- /template -->
 
 <!-- template:task-shortcut-assessment -->

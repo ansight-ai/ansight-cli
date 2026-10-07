@@ -1272,7 +1272,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.DoesNotContain("redpoint", result.Audit.AgentPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CardSelectorView", result.Audit.AgentPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("map-dismiss-search-button", result.Audit.AgentPrompt, StringComparison.Ordinal);
-        Assert.Equal("ansight-simulator-agent-v35", result.Audit.PromptCacheKey);
+        Assert.Equal("ansight-simulator-agent-v36", result.Audit.PromptCacheKey);
         Assert.Equal(32_000, result.Audit.MaximumModelOutputTokens);
         Assert.All(client.MaximumOutputTokens, value => Assert.Equal(32_000, value));
         Assert.Equal(64, result.Audit.MaximumRoundTrips);

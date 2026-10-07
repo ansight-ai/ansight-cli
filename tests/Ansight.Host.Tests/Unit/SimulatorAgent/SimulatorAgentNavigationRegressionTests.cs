@@ -4,6 +4,118 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class SimulatorAgentServiceTests
 {
+    [Fact]
+    public async Task RunAsync_AllowsTemporaryStartingStateWithOtherLexicallyMatchingTasks()
+    {
+        const string focusTaskId = "focus-map-search-area";
+        const string detailsTaskId = "open-selected-map-area-details";
+        var client = new FakeOpenAiClient(
+        [
+            CreateFunctionTurn("declare", "ansight_declare_uncovered_step", new JsonObject
+            {
+                ["uncoveredStep"] = "Select the Map tab before searching for an area and opening Details.",
+                ["reason"] = "starting-state-not-satisfied",
+                ["relatedTaskId"] = focusTaskId,
+                ["evidence"] = "For you is selected; both tasks require the Map tab or a selected map card.",
+                ["consideredTaskIds"] = new JsonArray(focusTaskId, detailsTaskId)
+            }),
+            CreateFunctionTurn("select-map", "ansight_tap_ui", new JsonObject { ["automationId"] = "home-tab-explore" }),
+            CompleteNavigationTurn()
+        ]);
+        var gateway = new FakeToolGateway
+        {
+            RepositoryTaskShortcuts =
+            [
+                CreateRepositoryTaskShortcut("ansight_task_focus", focusTaskId, "Focus map search area"),
+                CreateRepositoryTaskShortcut("ansight_task_details", detailsTaskId, "Open selected map area details")
+            ]
+        };
+        gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Map tab selected."));
+        using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
+        service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
+        var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
+            ["Select Map, search for an area, and open Details."]));
+
+        Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare").IsError);
+        Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "select-map").IsError);
+        Assert.Equal("ansight_tap_ui", Assert.Single(gateway.Calls).ToolName);
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotForceWeatherTaskForLocationSearch()
+    {
+        const string weatherTaskId = "load-area-weather";
+        var weatherTask = CreateRepositoryTaskShortcut("ansight_task_weather", weatherTaskId,
+            "Load area weather") with
+        {
+            Description = "From the current area's open AreaPage, select About, scroll its details until the weather card is visible. Does not search for another area."
+        };
+        var client = new FakeOpenAiClient(
+        [
+            CreateFunctionTurn("declare", "ansight_declare_uncovered_step", new JsonObject
+            {
+                ["uncoveredStep"] = "Search Approach in the area details page and copy the Location card contents.",
+                ["reason"] = "no-matching-task",
+                ["relatedTaskId"] = null,
+                ["evidence"] = "Weather is unrelated to Location sharing and clipboard copying.",
+                ["consideredTaskIds"] = new JsonArray(weatherTaskId)
+            }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Approach" }),
+            CompleteNavigationTurn()
+        ]);
+        var gateway = new FakeToolGateway { RepositoryTaskShortcuts = [weatherTask] };
+        gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
+        using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
+        service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
+        var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
+            ["Search Approach and copy the Location card contents."]));
+
+        Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare").IsError);
+        var typed = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "type");
+        Assert.False(typed.IsError, typed.Message);
+        Assert.DoesNotContain(gateway.Calls, call => call.ToolName == "ansight_run_task");
+    }
+
+    [Fact]
+    public async Task RunAsync_TappingTextFieldDoesNotRequireAnotherTaskDeclaration()
+    {
+        const string taskId = "export-account-data";
+        var client = new FakeOpenAiClient(
+        [
+            CreateFunctionTurn("declare", "ansight_declare_uncovered_step", UnrelatedTaskDeclaration(taskId)),
+            CreateFunctionTurn("focus-search", "ansight_tap_ui", new JsonObject
+            {
+                ["text"] = "Search",
+                ["role"] = "textbox"
+            }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Kalymnos" }),
+            CompleteNavigationTurn()
+        ]);
+        var gateway = new FakeToolGateway
+        {
+            RepositoryTaskShortcuts = [CreateRepositoryTaskShortcut("ansight_task_export", taskId, "Export account data")]
+        };
+        gateway.Results.Enqueue(new ToolCallResult(false,
+            "{\"result\":{\"performed\":true,\"target\":{\"role\":\"textbox\"}}", "Search focused."));
+        gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
+        using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
+        service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
+        var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
+            ["Search for Kalymnos."]) { CaptureTrace = true });
+
+        var declared = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare");
+        Assert.Contains("\"manualUiAllowed\":true", declared.Result.Content, StringComparison.Ordinal);
+        var focused = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "focus-search");
+        Assert.False(focused.IsError);
+        Assert.Equal("{\"result\":{\"performed\":true,\"target\":{\"role\":\"textbox\"}}", focused.Result.Content);
+        var typed = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "type");
+        Assert.False(typed.IsError, typed.Message);
+        Assert.Equal(2, gateway.Calls.Count);
+    }
+
     [Theory]
     [InlineData("scope-mismatch")]
     [InlineData("missing-input")]

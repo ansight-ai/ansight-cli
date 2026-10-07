@@ -13,11 +13,18 @@ public sealed record WorkspaceTestDefinition(
 
     public string? TaskId { get; init; }
 
+    public IReadOnlyList<string> HintTasks { get; init; } = [];
+
     public string BuildRunnerPrompt(string? promptOverride = null)
     {
         var scenario = string.IsNullOrWhiteSpace(promptOverride)
             ? Prompt.Trim()
             : promptOverride.Trim();
+        if (HintTasks.Count > 0)
+        {
+            scenario += "\n\nSuggested repository tasks (hints only; use each only when available and its starting state and scope match): "
+                        + string.Join(", ", HintTasks.Select(static taskId => $"'{taskId}'")) + ".";
+        }
         if (!string.IsNullOrWhiteSpace(TaskId))
         {
             scenario = $"Run repository task '{TaskId}'.\n\n{scenario}";

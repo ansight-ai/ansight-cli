@@ -17,7 +17,10 @@ public sealed class WorkspaceTestServiceTests
                 "The receipt is visible.",
                 ["The order number is present."]),
             ["test-account"],
-            "/workspace/ansight/tests/checkout.json");
+            "/workspace/ansight/tests/checkout.json")
+        {
+            HintTasks = ["checkout.open-cart", "checkout.submit-order"]
+        };
 
         var prompt = test.BuildRunnerPrompt();
 
@@ -25,6 +28,8 @@ public sealed class WorkspaceTestServiceTests
         Assert.Contains("Validation:\nThe receipt is visible.", prompt, StringComparison.Ordinal);
         Assert.Contains("- The order number is present.", prompt, StringComparison.Ordinal);
         Assert.Contains("- test-account", prompt, StringComparison.Ordinal);
+        Assert.Contains("Suggested repository tasks", prompt, StringComparison.Ordinal);
+        Assert.Contains("'checkout.open-cart', 'checkout.submit-order'", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("$SCENARIO$", prompt, StringComparison.Ordinal);
     }
 

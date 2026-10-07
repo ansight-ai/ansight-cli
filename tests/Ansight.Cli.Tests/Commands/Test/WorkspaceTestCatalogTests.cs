@@ -22,6 +22,9 @@ public sealed class WorkspaceTestCatalogTests
                 Inspect the final screen.
               assertions:
                 - The home screen is visible.
+            hintTasks:
+              - onboarding.open-sign-in
+              - onboarding.submit-sign-in
             requiredSecrets:
               - TEST_PASSWORD
             """);
@@ -35,6 +38,8 @@ public sealed class WorkspaceTestCatalogTests
         Assert.Equal("Inspect the final screen.", test.Validation.Prompt);
         Assert.Equal(["The home screen is visible."], test.Validation.Assertions);
         Assert.Equal(["TEST_PASSWORD"], test.RequiredSecrets);
+        Assert.Equal(["onboarding.open-sign-in", "onboarding.submit-sign-in"], test.HintTasks);
+        Assert.Contains("Suggested repository tasks", test.BuildRunnerPrompt(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -54,6 +59,24 @@ public sealed class WorkspaceTestCatalogTests
 
         Assert.Single(result.Tests);
         Assert.Contains("Duplicate test ID 'smoke'", Assert.Single(result.Warnings), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("hintTasks: not-an-array", "hintTasks must be an array")]
+    [InlineData("hintTasks:\n  - ''", "hintTasks must contain only non-empty")]
+    [InlineData("hintTasks:\n  - map.search\n  - map.search", "duplicate task ID")]
+    public void LoadRejectsMalformedHintTasks(string hints, string expectedWarning)
+    {
+        using var workspace = TestDirectory.Create();
+        var testsDirectory = Path.Combine(workspace.Path, "ansight", "tests");
+        Directory.CreateDirectory(testsDirectory);
+        File.WriteAllText(Path.Combine(testsDirectory, "invalid.yaml"),
+            $"appId: com.example.app\nprompt: Open app\nvalidation: App is open\n{hints}\n");
+
+        var result = WorkspaceTestCatalog.Load(workspace.Path);
+
+        Assert.Empty(result.Tests);
+        Assert.Contains(expectedWarning, Assert.Single(result.Warnings), StringComparison.Ordinal);
     }
 
     [Fact]

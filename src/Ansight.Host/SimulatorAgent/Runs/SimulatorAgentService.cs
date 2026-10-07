@@ -36,7 +36,7 @@ public sealed class SimulatorAgentService : IDisposable
     private const int MaximumAuditOcrResultCharacters = 1_000_000;
     private const int MaximumAppGraphGuidanceCharacters = 16_000;
     private const int AuditSchemaVersion = 16;
-    private const string PromptCacheKey = "ansight-simulator-agent-v35";
+    private const string PromptCacheKey = "ansight-simulator-agent-v36";
     private static readonly HashSet<string> strongTaskMatchIgnoredWords = new(StringComparer.Ordinal)
     {
         "a", "an", "and", "for", "from", "in", "into", "it", "its", "no", "of", "on", "or",
@@ -2646,11 +2646,22 @@ public sealed class SimulatorAgentService : IDisposable
         {
             return false;
         }
+        if (call.Name == "ansight_tap_ui"
+            && string.Equals(ReadString(call.Arguments, "role"), "textbox", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
 
         try
         {
             var output = JsonNode.Parse(result.Output);
             var content = output?["result"] ?? output;
+            if (call.Name == "ansight_tap_ui"
+                && string.Equals(content?["target"]?["role"]?.GetValue<string>(),
+                    "textbox", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
             return content?["performed"]?.GetValue<bool>() != false;
         }
         catch (JsonException)
@@ -2847,7 +2858,11 @@ public sealed class SimulatorAgentService : IDisposable
                              || !string.Equals(taskId, relatedTaskId, StringComparison.Ordinal))
             .ToArray();
         var excludesRelatedTask = reason is "scope-mismatch" or "missing-input";
-        if (unaccountedStrongMatches.Length > 0 && !excludesRelatedTask)
+        // A temporary prerequisite does not exclude any shortcut. Let the agent establish
+        // the starting state, then reassess all unused tasks after the navigation.
+        if (unaccountedStrongMatches.Length > 0
+            && !excludesRelatedTask
+            && reason != "starting-state-not-satisfied")
         {
             return CreateAgentGuardResult(
                 "taskReassessmentDeclaration",
@@ -2857,7 +2872,8 @@ public sealed class SimulatorAgentService : IDisposable
                 + "Use task-failed or partial-task-residual only for a related task whose recorded outcome supports that reason.");
         }
 
-        var manualUiAllowed = unaccountedStrongMatches.Length == 0;
+        var manualUiAllowed = unaccountedStrongMatches.Length == 0
+                              || reason == "starting-state-not-satisfied";
         var message = manualUiAllowed
             ? $"Manual UI is allowed for the declared uncovered step '{uncoveredStep}' ({reason}). "
               + "Reassess remaining tasks after a navigation transition, not after text entry or a rejected action with performed=false. "
@@ -2907,8 +2923,19 @@ public sealed class SimulatorAgentService : IDisposable
             string.Join(' ', inputPropertyNames)));
         var matchedTermCount = queryTerms.Count(queryTerm => taskTerms.Any(
             taskTerm => AreStrongTaskTermsEquivalent(queryTerm, taskTerm)));
+        // Descriptions can mention an action only to rule it out (for example,
+        // "does not search"). Require the task's identity to match as well.
+        var idTerms = TokenizeTaskMatchText(task.TaskId);
+        var titleTerms = TokenizeTaskMatchText(task.Title);
+        var identityCoverage = new[] { idTerms, titleTerms }
+            .Where(terms => terms.Count > 0)
+            .Select(terms => (double)terms.Count(identityTerm => queryTerms.Any(
+                queryTerm => AreStrongTaskTermsEquivalent(queryTerm, identityTerm))) / terms.Count)
+            .DefaultIfEmpty(0)
+            .Max();
         return matchedTermCount >= 3
-               && (double)matchedTermCount / queryTerms.Count >= 0.4;
+               && (double)matchedTermCount / queryTerms.Count >= 0.4
+               && identityCoverage >= 0.6;
     }
 
     private static IReadOnlyList<string> TokenizeTaskMatchText(string value)

@@ -17,6 +17,9 @@ schemaVersion: 1
 id: onboarding.smoke
 name: Onboarding smoke test
 appId: com.example.app
+hintTasks:
+  - onboarding.open-sign-in
+  - onboarding.submit-sign-in
 prompt: |-
   Launch the app and complete onboarding as a new user.
 validation:
@@ -29,6 +32,9 @@ requiredSecrets:
 ```
 
 `requiredSecrets` contains aliases only; values are resolved at run time.
+`hintTasks` is optional. It names up to five repository task IDs to preload and
+suggest to the agent. A hint is used only when its starting state and scope fit;
+the task's own assertions provide evidence for steps it verifies.
 New tests use `.yaml`; existing `.json` tests remain valid.
 
 ```sh

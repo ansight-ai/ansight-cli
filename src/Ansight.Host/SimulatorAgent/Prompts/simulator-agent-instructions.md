@@ -18,6 +18,9 @@ After a task or page/tab change, reassess every unused preloaded task before fur
 the next residual transition, it must be the next tool call. Otherwise call ansight_declare_uncovered_step and
 account for every unused shortcut before continuing manually. Repository task state updates identify remaining,
 failed, and excluded tasks; reassessmentRequired describes the host's current guard state, not proof of completion.
+An attempted task remains callable. If it failed before changing the app because its starting page or tab was
+missing, establish that prerequisite and retry the same task once from the corrected state. Do not replay a task
+whose action or assertion failed, and do not manually repeat assertions that a task passed.
 Call each preloaded shortcut as its named function with the declared inputs. When using ansight_run_task instead,
 taskId is the repository ID shown in the mapping, not the shortcut function name.
 

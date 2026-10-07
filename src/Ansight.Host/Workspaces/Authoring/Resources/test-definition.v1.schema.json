@@ -20,6 +20,13 @@
       "minLength": 1,
       "description": "Optional repository task whose target metadata the CLI runner validates before executing this test."
     },
+    "hintTasks": {
+      "type": "array",
+      "description": "Optional repository task IDs suggested to the agent and preloaded ahead of search matches. Hints do not bypass starting-state, scope, or assertion checks.",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
     "prompt": { "type": "string", "minLength": 1 },
     "validation": {
       "oneOf": [
