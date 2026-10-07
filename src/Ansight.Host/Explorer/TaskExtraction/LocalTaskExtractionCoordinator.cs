@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -19,6 +20,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private const int MaximumDraftRevisionAttempts = 3;
     private const int MaximumProgressEntries = 100;
     private const int MaximumSourceCharacters = 500_000;
+    private const int MaximumTraceContextCharacters = 1_000_000;
+    private const int MaximumTracePayloadCharacters = 120_000;
     private const int MaximumOcrEvidenceFrames = 12;
     private const string InspectSelectionToolName = "inspect_selected_period";
     private const string InspectTaskSeedToolName = "inspect_task_seed";
@@ -1021,10 +1024,19 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             extraction.Report("agent.turn", $"Extraction agent pass {turn:N0}.");
             var passStartedAtUtc = DateTimeOffset.UtcNow;
             var passStopwatch = Stopwatch.StartNew();
+            var instructions = BuildAgentInstructions();
+            var context = CreateTracePayload(new JsonObject
+            {
+                ["instructions"] = instructions,
+                ["input"] = history.DeepClone(),
+                ["incrementalInput"] = pendingInput.DeepClone(),
+                ["startNewConversation"] = requiresFullReplay,
+                ["tools"] = tools.DeepClone()
+            }.ToJsonString(), MaximumTraceContextCharacters);
             var request = new OpenAiRequest(
                 apiKey,
                 extraction.Model,
-                BuildAgentInstructions(),
+                instructions,
                 history,
                 tools,
                 extraction.ReasoningEffort,
@@ -1035,9 +1047,27 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 IncrementalInput = pendingInput,
                 StartNewConversation = requiresFullReplay
             };
-            var response = webSocketSession is null
-                ? await httpClient.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false)
-                : await webSocketSession.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+            OpenAiTurn response;
+            try
+            {
+                response = webSocketSession is null
+                    ? await httpClient.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false)
+                    : await webSocketSession.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                passStopwatch.Stop();
+                extraction.RecordTracePass(new LocalTaskExtractionModelPassTrace(
+                    turn, null, extraction.Model, null, passStartedAtUtc, DateTimeOffset.UtcNow,
+                    passStopwatch.ElapsedMilliseconds, SimulatorAgentTokenUsage.Empty, [])
+                {
+                    Reasoning = extraction.Reasoning,
+                    Context = context,
+                    Succeeded = false,
+                    ErrorMessage = exception.Message
+                });
+                throw;
+            }
             passStopwatch.Stop();
             var passCompletedAtUtc = DateTimeOffset.UtcNow;
             addUsage(response.Tokens);
@@ -1052,7 +1082,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 response.Tokens,
                 response.FunctionCalls.Select(static call => call.Name).ToArray())
             {
-                Reasoning = extraction.Reasoning
+                Reasoning = extraction.Reasoning,
+                Context = context,
+                AssistantOutput = CreateTracePayload(response.AssistantText, MaximumTracePayloadCharacters)
             });
             if (!string.IsNullOrWhiteSpace(response.ResponseId))
             {
@@ -1073,6 +1105,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
             foreach (var call in response.FunctionCalls)
             {
+                var toolStartedAtUtc = DateTimeOffset.UtcNow;
+                var toolStopwatch = Stopwatch.StartNew();
                 if (string.Equals(call.Name, SubmitDraftToolName, StringComparison.Ordinal))
                 {
                     try
@@ -1081,12 +1115,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                         var draftResult = MaterializeAndValidateDraft(extraction, submission);
                         if (draftResult.IsValid)
                         {
+                            RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                                JsonSerializer.Serialize(new { isSuccess = true, draftResult.Draft.SuggestedName, draftResult.Draft.TaskId, draftResult.Message }), false);
                             return draftResult;
                         }
 
                         lastRejectedDraft = draftResult;
                         if (draftResult.IsInfrastructureFailure)
                         {
+                            RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                                JsonSerializer.Serialize(new { isSuccess = false, draftResult.Message, draftResult.Draft.ValidationWarnings }), true);
                             extraction.Report(
                                 "validation.unavailable",
                                 draftResult.Message);
@@ -1103,6 +1141,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             var stalledMessage =
                                 $"The extraction agent could not produce a valid module after {draftRevisionAttempts:N0} submissions. {firstDiagnostic}";
                             extraction.Report("agent.stalled", stalledMessage);
+                            RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                                JsonSerializer.Serialize(new { isSuccess = false, message = stalledMessage, draftResult.Draft.ValidationWarnings }), true);
                             return DraftMaterializationResult.Invalid(draftResult.Draft, stalledMessage);
                         }
 
@@ -1119,6 +1159,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             }).ToJsonString());
                         history.Add(rejectedOutput);
                         pendingInput.Add(rejectedOutput.DeepClone());
+                        RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                            rejectedOutput.ToJsonString(), true);
                     }
                     catch (Exception exception) when (exception is InvalidDataException or JsonException)
                     {
@@ -1132,35 +1174,47 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             }).ToJsonString());
                         history.Add(rejectedOutput);
                         pendingInput.Add(rejectedOutput.DeepClone());
+                        RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                            rejectedOutput.ToJsonString(), true);
+                    }
+                    catch (Exception exception)
+                    {
+                        RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                            JsonSerializer.Serialize(new { isSuccess = false, message = exception.Message }), true);
+                        throw;
                     }
 
                     continue;
                 }
 
-                var toolOutput = call.Name switch
+                JsonObject toolOutput;
+                try
                 {
-                    InspectSelectionToolName => BuildSelectionEvidence(snapshot, extraction, seed),
-                    InspectTaskSeedToolName => BuildTaskSeedEvidence(seed),
-                    InspectVisualTreesToolName => BuildVisualTreeEvidence(
-                        snapshot,
-                        extraction,
-                        call.Arguments),
-                    InspectScreenshotOcrToolName => BuildScreenshotOcrEvidence(
-                        snapshot,
-                        extraction,
-                        call.Arguments),
-                    InspectTaskSupportModulesToolName => BuildTaskSupportModuleEvidence(
-                        extraction,
-                        call.Arguments),
-                    _ => new JsonObject
+                    toolOutput = call.Name switch
                     {
-                        ["isSuccess"] = false,
-                        ["message"] = $"Unknown extraction tool '{call.Name}'."
-                    }
-                };
+                        InspectSelectionToolName => BuildSelectionEvidence(snapshot, extraction, seed),
+                        InspectTaskSeedToolName => BuildTaskSeedEvidence(seed),
+                        InspectVisualTreesToolName => BuildVisualTreeEvidence(snapshot, extraction, call.Arguments),
+                        InspectScreenshotOcrToolName => BuildScreenshotOcrEvidence(snapshot, extraction, call.Arguments),
+                        InspectTaskSupportModulesToolName => BuildTaskSupportModuleEvidence(extraction, call.Arguments),
+                        _ => new JsonObject
+                        {
+                            ["isSuccess"] = false,
+                            ["message"] = $"Unknown extraction tool '{call.Name}'."
+                        }
+                    };
+                }
+                catch (Exception exception)
+                {
+                    RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                        JsonSerializer.Serialize(new { isSuccess = false, message = exception.Message }), true);
+                    throw;
+                }
                 var functionOutput = CreateFunctionOutput(call.CallId, toolOutput.ToJsonString());
                 history.Add(functionOutput);
                 pendingInput.Add(functionOutput.DeepClone());
+                RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                    toolOutput.ToJsonString(), toolOutput["isSuccess"]?.ToJsonString() == "false");
             }
 
             if (response.FunctionCalls.Count == 0)
@@ -2640,6 +2694,39 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
     }
 
+    private static SimulatorAgentAuditPayload CreateTracePayload(string? content, int maximumCharacters)
+    {
+        var value = content ?? string.Empty;
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+        return new SimulatorAgentAuditPayload(
+            value.Length <= maximumCharacters ? value : value[..maximumCharacters],
+            value.Length,
+            value.Length > maximumCharacters,
+            hash);
+    }
+
+    private static void RecordTraceToolCall(
+        ActiveTaskExtraction extraction,
+        int passSequence,
+        OpenAiFunctionCall call,
+        DateTimeOffset startedAtUtc,
+        Stopwatch stopwatch,
+        string result,
+        bool isError)
+    {
+        stopwatch.Stop();
+        extraction.RecordTraceToolCall(new LocalTaskExtractionToolCallTrace(
+            0,
+            passSequence,
+            call.CallId,
+            call.Name,
+            startedAtUtc,
+            stopwatch.ElapsedMilliseconds,
+            CreateTracePayload(call.Arguments.ToJsonString(), MaximumTracePayloadCharacters),
+            CreateTracePayload(result, MaximumTracePayloadCharacters),
+            isError));
+    }
+
     private sealed record AgentDraftSubmission(string SuggestedName, string Summary, string Source);
 
     private readonly record struct TaskSourceToken(string Text, bool IsIdentifier);
@@ -2678,6 +2765,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         private SimulatorAgentTokenUsage traceTokens = SimulatorAgentTokenUsage.Empty;
         private SimulatorAgentRunCost? traceCost;
         private readonly List<LocalTaskExtractionModelPassTrace> traceModelPasses = [];
+        private readonly List<LocalTaskExtractionToolCallTrace> traceToolCalls = [];
 
         public ActiveTaskExtraction(
             string extractionId,
@@ -2780,6 +2868,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 traceTokens = SimulatorAgentTokenUsage.Empty;
                 traceCost = null;
                 traceModelPasses.Clear();
+                traceToolCalls.Clear();
                 Touch();
             }
         }
@@ -2796,6 +2885,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
                 traceTokens = traceTokens.Add(pass.Tokens);
                 traceModelPasses.Add(pass);
+                Touch();
+            }
+        }
+
+        public void RecordTraceToolCall(LocalTaskExtractionToolCallTrace call)
+        {
+            lock (gate)
+            {
+                traceToolCalls.Add(call with { Sequence = traceToolCalls.Count + 1 });
                 Touch();
             }
         }
@@ -2857,9 +2955,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 traceTokens = snapshot.Trace?.Tokens ?? SimulatorAgentTokenUsage.Empty;
                 traceCost = snapshot.Trace?.CalculatedCost;
                 traceModelPasses.Clear();
+                traceToolCalls.Clear();
                 if (snapshot.Trace is not null)
                 {
                     traceModelPasses.AddRange(snapshot.Trace.ModelPasses);
+                    traceToolCalls.AddRange(snapshot.Trace.ToolCalls);
                 }
             }
         }
@@ -3128,7 +3228,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             traceRunId,
                             traceTokens,
                             traceCost,
-                            traceModelPasses.ToArray()))
+                            traceModelPasses.ToArray())
+                        {
+                            ToolCalls = traceToolCalls.ToArray()
+                        })
                 {
                     Reasoning = Reasoning,
                     ReasoningEffort = ReasoningEffort,

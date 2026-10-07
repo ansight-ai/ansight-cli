@@ -18,4 +18,18 @@ public sealed record LocalTaskExtractionTrace(
     Guid? RunId,
     SimulatorAgentTokenUsage Tokens,
     SimulatorAgentRunCost? CalculatedCost,
-    IReadOnlyList<LocalTaskExtractionModelPassTrace> ModelPasses);
+    IReadOnlyList<LocalTaskExtractionModelPassTrace> ModelPasses)
+{
+    public IReadOnlyList<LocalTaskExtractionToolCallTrace> ToolCalls { get; init; } = [];
+}
+
+public sealed record LocalTaskExtractionToolCallTrace(
+    int Sequence,
+    int PassSequence,
+    string CallId,
+    string ToolName,
+    DateTimeOffset StartedAtUtc,
+    long DurationMilliseconds,
+    SimulatorAgentAuditPayload Arguments,
+    SimulatorAgentAuditPayload Result,
+    bool IsError);

@@ -26,4 +26,12 @@ public sealed record LocalTaskExtractionModelPassTrace(
     IReadOnlyList<string> FunctionCalls)
 {
     public string? Reasoning { get; init; }
+
+    public SimulatorAgentAuditPayload? Context { get; init; }
+
+    public SimulatorAgentAuditPayload? AssistantOutput { get; init; }
+
+    public bool Succeeded { get; init; } = true;
+
+    public string? ErrorMessage { get; init; }
 }
