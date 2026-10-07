@@ -70,7 +70,9 @@ internal static class CliCommandAccessPolicy
                 or "session" or "sessions" or "attachment" or "attachments"
                 or "analysis" or "analyses" or "build" or "workspace"
             || command is "session" or "sessions" && action is "share" or "share-batch"
-                or "summary" or "summarize" or "summarise" or "url" or "share-url" or "replay-url"
+                or "summary" or "summarize" or "summarise"
+                or "summary-local" or "summarize-local" or "summarise-local"
+                or "url" or "share-url" or "replay-url"
             || command is "app-graph" or "app-graphs" && (action == "sync"
                 || arguments.GetOption("graph-store")?.Trim().ToLowerInvariant() is "hosted" or "server" or "cloud")
             || command == "app" && action == "execute"

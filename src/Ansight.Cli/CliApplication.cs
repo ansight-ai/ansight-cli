@@ -497,7 +497,7 @@ public static class CliApplication
              session annotation|analysis|screenshot|artifact
              session cache status|plan|prune|compact
                                               Manage retention and recorded-session cache size
-             session serve|share|summary|url  Play, share, or summarize replay evidence
+             session serve|share|summary|summary-local|url  Play, share, or summarize replay evidence
              session import|export|sanitize   Move portable or sanitized session ZIP files
 
            Workspace:

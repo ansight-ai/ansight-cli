@@ -302,6 +302,7 @@ internal sealed class CliAnalytics
 
         return command == "session"
                && ResolveAction(arguments) is "share" or "share-batch" or "summary" or "summarize" or "summarise"
+                   or "summary-local" or "summarize-local" or "summarise-local"
                    or "url" or "share-url" or "replay-url"
             ? "cloud"
             : "local";
@@ -442,6 +443,7 @@ internal sealed class CliAnalytics
         "dismiss", "is-open", "open", "openai", "overview", "pair", "plan", "prune", "push-file", "refresh", "register", "remove", "run",
         "run-all", "sanitize", "screenshot", "serve", "share", "share-batch", "share-url", "replay-url",
         "show", "shutdown", "start", "startup", "summary", "summarize", "summarise",
+        "summary-local", "summarize-local", "summarise-local",
         "status", "stop", "terminate", "threads", "tools", "touches", "trees", "url", "validate"
     };
 }

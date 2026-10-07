@@ -112,7 +112,10 @@ internal static class SessionCommands
             "serve" => await ServeAsync(runtime, arguments, output, cancellationToken),
             "share" => await ShareAsync(runtime, arguments, output, cancellationToken),
             "share-batch" => await ShareBatchAsync(runtime, arguments, output, cancellationToken),
-            "summary" or "summarize" or "summarise" => await SummaryAsync(
+            "summary" or "summarize" or "summarise" => arguments.HasFlag("local")
+                ? await SessionDirectCommands.SummaryLocalAsync(runtime, arguments, output, cancellationToken)
+                : await SummaryAsync(runtime, arguments, output, cancellationToken),
+            "summary-local" or "summarize-local" or "summarise-local" => await SessionDirectCommands.SummaryLocalAsync(
                 runtime,
                 arguments,
                 output,
@@ -126,7 +129,7 @@ internal static class SessionCommands
             "sanitize" or "sanitise" => await SanitizeAsync(runtime, arguments, output, cancellationToken),
             "import" => await ImportAsync(runtime, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown session action '{action}'. Expected list, show, logs, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, url, export, sanitize, or import.")
+                $"Unknown session action '{action}'. Expected list, show, logs, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
         };
     }
 
@@ -1441,6 +1444,8 @@ internal static Task<int> SummaryAsync(
              ansight session share <session-id> [options]
              ansight session share-batch <session-id> <session-id>... [--team-id <uuid>] [--sanitize]
              ansight session summary <session-id> [analysis options]
+             ansight session summary <session-id> --local [--team-id <uuid>] [--reasoning <mode>]
+             ansight session summary-local <session-id> [--team-id <uuid>] [--reasoning <mode>]
              ansight session url <session-id> [options]
              ansight session export <session-id> <output.zip> [--exclude-native-logs] [--sanitize]
              ansight session sanitize <session-id> <output.zip> [--sanitizer <module.ts>]
@@ -1459,6 +1464,12 @@ internal static Task<int> SummaryAsync(
              artifacts     Return app-requested artifact snapshots
              annotations   Return user and agent annotations
              analyses      Return persisted session analyses
+
+           Summary commands:
+             summary       Start Cloud AI extraction for an existing team share
+             summary --local | summary-local
+                           Summarize local capture evidence with the brokered agent model;
+                           save the result locally without sharing the capture
 
            Session list filters:
              --app-id <id>                  Exact application ID
@@ -1543,6 +1554,7 @@ internal static Task<int> SummaryAsync(
              share         Export and upload a team, authenticated, or public cloud replay
              share-batch   Upload 2-32 team sessions and send one email listing successful uploads
              summary       Start a portal-compatible AI summary for an existing cloud share
+             summary-local Summarize local evidence through the brokered model and save locally
              url           Resolve the newest existing cloud replay URL
              export        Write a portable ZIP archive
              sanitize      Write a PII-sanitized portable ZIP without modifying the local capture
@@ -1562,10 +1574,13 @@ internal static Task<int> SummaryAsync(
              --include-archived                  Allow archived shares when resolving a URL
 
            AI summary options:
-             --team-id <uuid>                    Restrict cloud-share resolution to one organisation
-             --mode <fast|thorough>               Override the thorough summary default
-             --provider <openai|anthropic|gemini>
-             --model <id>                        Override the provider's default model
+             --local                             Use brokered AI on local evidence and save locally
+             --team-id <uuid>                    Select an organisation for the cloud or brokered run
+             --reasoning <fast|balanced|deep>     Select brokered local summary reasoning; default: fast
+             --mode <fast|thorough>               Cloud AI extraction depth
+             --provider <openai|anthropic|gemini> Cloud AI provider
+             --model <id>                        Cloud provider override or diagnostic local model override;
+                                                 local override cannot be combined with --reasoning
              --source-part <part>                Repeat to override metadata, logs, and screenshot sources
              --slice-start-ms <value>             Inclusive extraction start offset
              --slice-end-ms <value>               Inclusive extraction end offset

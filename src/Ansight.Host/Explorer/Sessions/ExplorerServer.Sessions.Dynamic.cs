@@ -13,6 +13,7 @@ using Ansight.Host.Trends;
 using Ansight.Host.Runtime.BinaryTransfers;
 using Ansight.Host.Runtime.Operations;
 using Ansight.Host.Runtime.Operations.Tools.UiAutomation;
+using Ansight.Host.Runtime.Tasks;
 using Ansight.Infrastructure.Preferences;
 
 namespace Ansight.Host.Explorer;
@@ -139,6 +140,45 @@ internal sealed partial class ExplorerServer
 
     private async Task<bool> TryHandleSessionsDynamicPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken, string[] segments)
     {
+        if (segments is ["api", "sessions", _, "local-summary"])
+        {
+            var sessionId = Uri.UnescapeDataString(segments[2]);
+            if (!isExplorer && !string.Equals(sessionId, InitialSessionId, StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(response, new { isSuccess = false, message = "Session not found." }, HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            var body = await ReadJsonAsync<JsonObject>(request, cancellationToken).ConfigureAwait(false);
+            var teamIdText = ReadOptionalString(body, "teamId");
+            if (teamIdText is not null && (!Guid.TryParse(teamIdText, out var parsedTeamId) || parsedTeamId == Guid.Empty))
+            {
+                await WriteJsonAsync(response, new { isSuccess = false, message = "Choose a valid organisation ID." }, HttpStatusCode.BadRequest, false, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            var snapshot = await LoadReplaySnapshotAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            if (snapshot is null)
+            {
+                await WriteJsonAsync(response, new { isSuccess = false, message = "Session not found." }, HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            try
+            {
+                var teamId = teamIdText is null ? (Guid?)null : Guid.Parse(teamIdText);
+                var analysis = await LocalSessionSummaryRunner.RunAsync(runtime, snapshot, teamId, cancellationToken).ConfigureAwait(false);
+                runtime.SessionEditing.AddAnalysis(sessionId, analysis);
+                await WriteJsonAsync(response, new { isSuccess = true, message = "Local session summary saved.", analysisId = analysis.AnalysisId }, HttpStatusCode.Created, false, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or HttpRequestException or IOException or JsonException)
+            {
+                await WriteJsonAsync(response, new { isSuccess = false, message = exception.Message }, HttpStatusCode.Conflict, false, cancellationToken).ConfigureAwait(false);
+            }
+
+            return true;
+        }
+
         if (segments.Length >= 4 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "cloud-analysis")
             return await TryHandleCloudAnalysisPostAsync(route, request, response, cancellationToken, segments).ConfigureAwait(false);
 

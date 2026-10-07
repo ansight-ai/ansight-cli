@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Ansight.Host;
+using Ansight.Host.Runtime.Tasks;
 
 namespace Ansight.Cli.Commands.Session;
 
@@ -98,6 +99,62 @@ internal static class SessionDirectCommands
                 result),
             () => result.Message);
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
+    }
+
+    public static async Task<int> SummaryLocalAsync(
+        RuntimeCoordinator runtime,
+        CliArguments arguments,
+        CliOutput output,
+        CancellationToken cancellationToken)
+    {
+        arguments.EnsurePositionalCount(3, "ansight session summary <session-id> --local [--team-id <uuid>]");
+        var cloudOnlyOption = new[] { "mode", "provider", "source-part", "slice-start-ms", "slice-end-ms", "instructions" }
+            .FirstOrDefault(arguments.HasFlag);
+        if (cloudOnlyOption is not null)
+        {
+            throw new CliUsageException($"--{cloudOnlyOption} is for Cloud AI extraction and cannot be used with --local.");
+        }
+
+        var reasoning = ReasoningOptions.Resolve(arguments);
+        var modelOverride = ReasoningOptions.ResolveModelOverride(arguments);
+
+        var sessionId = arguments.RequirePositional(2, "session identifier");
+        var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
+            .ConfigureAwait(false);
+        if (snapshot is null)
+        {
+            return WriteSessionNotFound(sessionId, output);
+        }
+
+        Guid? teamId = null;
+        if (arguments.GetOption("team-id") is { } teamIdText)
+        {
+            if (!Guid.TryParse(teamIdText, out var parsedTeamId) || parsedTeamId == Guid.Empty)
+            {
+                throw new CliUsageException("--team-id must be a non-empty UUID.");
+            }
+
+            teamId = parsedTeamId;
+        }
+
+        var analysis = await LocalSessionSummaryRunner.RunAsync(
+                runtime,
+                snapshot,
+                teamId,
+                cancellationToken,
+                reasoning,
+                modelOverride)
+            .ConfigureAwait(false);
+        runtime.SessionEditing.AddAnalysis(snapshot.SessionId, analysis);
+        output.Write(
+            new SessionLocalSummaryOutput(
+                "ansight.session-local-summary/v1",
+                snapshot.SessionId,
+                analysis.AnalysisId,
+                analysis.AgentId,
+                analysis.FinalResponse ?? string.Empty),
+            () => analysis.FinalResponse ?? "Local session summary saved.");
+        return CliExitCodes.Success;
     }
 
     public static async Task<int> AnnotationAsync(
@@ -384,3 +441,10 @@ internal sealed record SessionNormalizationOutput(
     string SchemaVersion,
     string SessionId,
     SessionNormalizationResult Result);
+
+internal sealed record SessionLocalSummaryOutput(
+    string Schema,
+    string SessionId,
+    string AnalysisId,
+    string AgentId,
+    string Summary);

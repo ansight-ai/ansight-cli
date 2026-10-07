@@ -41,6 +41,7 @@ public sealed class LocalAccessBoundaryTests
     [InlineData("session", "summary")]
     [InlineData("session", "summarize")]
     [InlineData("session", "summarise")]
+    [InlineData("session", "summary-local")]
     [InlineData("session", "url")]
     [InlineData("session", "share-url")]
     [InlineData("session", "replay-url")]
