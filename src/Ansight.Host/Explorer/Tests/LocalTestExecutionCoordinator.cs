@@ -133,7 +133,16 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                     result.IsSuccess ? 1 : 0,
                     result.IsSuccess ? 0 : 1,
                     0,
-                    false));
+                    false)
+                {
+                    TraceRunId = result.AgentResult?.Audit.TraceEnabled == true
+                        && result.AgentResult.AuditFilePath is not null
+                            ? result.AgentResult.Audit.RunId : null,
+                    TraceError = request.CaptureTrace
+                        ? result.AgentResult?.AuditPersistenceError
+                          ?? (result.AgentResult is null ? "The run stopped before the agent trace began." : null)
+                        : null
+                });
         }
         catch (OperationCanceledException) when (execution.Cancellation.IsCancellationRequested)
         {

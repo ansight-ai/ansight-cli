@@ -154,7 +154,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                 || handle.Task is null
                 || handle.Task.IsCompleted)
             {
-                if (IsPhysicalDeviceSession(normalizedSessionId))
+                if (CanUseAppManagedCapture(normalizedSessionId))
                 {
                     log.Info($"app_managed_screenshot_test_profile_started sessionId={normalizedSessionId}");
                     return AppManagedTestRunScope.Instance;
@@ -172,12 +172,15 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         return new TestRunScope(this, normalizedSessionId);
     }
 
-    private bool IsPhysicalDeviceSession(string sessionId)
+    private bool CanUseAppManagedCapture(string sessionId)
     {
         return runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
-               && snapshot?.DeviceProfile?.Device is { } device
-               && device.IsVirtual != true
-               && device.IsEmulator != true;
+               && snapshot is { IsHistorical: false }
+               && (snapshot.CaptureSource == WorkspaceExecutionModes.Sdk
+                   && (snapshot.DeviceProfile is not null || !string.IsNullOrWhiteSpace(snapshot.DeviceProfileJson))
+                   || snapshot.DeviceProfile?.Device is { } device
+                   && device.IsVirtual != true
+                   && device.IsEmulator != true);
     }
 
     public void SetInterval(string sessionId, int intervalMilliseconds)

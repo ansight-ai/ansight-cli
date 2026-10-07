@@ -9,4 +9,8 @@ public sealed record LocalTestExecutionResult(
     int PassedCount,
     int FailedCount,
     int SkippedCount,
-    bool WasCancelled);
+    bool WasCancelled)
+{
+    public string? TraceRunId { get; init; }
+    public string? TraceError { get; init; }
+}

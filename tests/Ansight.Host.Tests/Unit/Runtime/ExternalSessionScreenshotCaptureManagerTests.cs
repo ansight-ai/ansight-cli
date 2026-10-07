@@ -1,11 +1,27 @@
 using Ansight.Host.Tests.TestSupport;
 using Ansight.Infrastructure.Preferences;
 using SkiaSharp;
+using System.Net;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed class ExternalSessionScreenshotCaptureManagerTests
 {
+    [Fact]
+    public void SdkSimulatorWithoutHostCaptureUsesAppManagedScreenshotScope()
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var manager = new ExternalSessionScreenshotCaptureManager(state, new UserPreferences(
+            new FilePreferencesStore(Path.Combine(environment.RootPath, "preferences.json"))));
+        var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
+        state.SetSessionDeviceProfile(sessionId, null,
+            """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS","isVirtual":true}}""");
+
+        using var scope = manager.BeginTestRun(sessionId);
+        Assert.NotNull(scope);
+    }
+
     [Fact]
     public async Task BackgroundObservationRecordsMarkerAndPausesWithoutFailingBeforeWatchPoll()
     {

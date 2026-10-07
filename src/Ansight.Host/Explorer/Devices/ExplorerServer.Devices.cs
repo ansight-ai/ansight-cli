@@ -26,6 +26,43 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "api/devices":
                 await WriteJsonAsync(response, await runtime.Devices.ListAsync(cancellationToken).ConfigureAwait(false), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
+            case "api/devices/installed" when isExplorer:
+                {
+                    var appId = request.QueryString["appId"]?.Trim();
+                    if (string.IsNullOrWhiteSpace(appId))
+                        throw new InvalidDataException("An app ID is required to find installed devices.");
+                    var inventory = await runtime.Devices.ListAsync(cancellationToken).ConfigureAwait(false);
+                    var installed = new ConcurrentBag<string>();
+                    var unknown = new ConcurrentBag<string>();
+                    using var concurrency = new SemaphoreSlim(6);
+                    await Task.WhenAll(inventory.Devices.Where(static device => device.IsAvailable).Select(async device =>
+                    {
+                        var key = $"{device.Platform}:{device.Identifier}";
+                        await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        try
+                        {
+                            var applications = await runtime.Devices.ListApplicationsAsync(
+                                device.Platform, device.Identifier, cancellationToken).ConfigureAwait(false);
+                            if (applications.Any(application => string.Equals(application.Identifier, appId, StringComparison.OrdinalIgnoreCase)))
+                                installed.Add(key);
+                        }
+                        catch (Exception exception) when (exception is not OperationCanceledException)
+                        {
+                            unknown.Add(key);
+                        }
+                        finally
+                        {
+                            concurrency.Release();
+                        }
+                    })).ConfigureAwait(false);
+                    await WriteJsonAsync(response, new
+                    {
+                        appId,
+                        installedDeviceKeys = installed.Order(StringComparer.Ordinal).ToArray(),
+                        unknownDeviceKeys = unknown.Order(StringComparer.Ordinal).ToArray()
+                    }, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
             case "api/location/playback":
                 await WriteJsonAsync(response, runtime.DeviceLocationPlayback.GetSnapshot(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
