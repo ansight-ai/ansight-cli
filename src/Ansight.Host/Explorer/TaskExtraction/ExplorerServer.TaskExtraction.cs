@@ -15,6 +15,7 @@ using Ansight.Host.Runtime.Operations;
 using Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 using Ansight.Infrastructure.Preferences;
 using Ansight.Host.Runtime.Tasks;
+using Ansight.Host.Workspaces.Catalog;
 
 namespace Ansight.Host.Explorer;
 
@@ -58,6 +59,25 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         string Title,
         string Source,
         bool Force = false);
+
+    private sealed record WorkspaceTestPreviewRequest(
+        string SessionId,
+        DateTimeOffset StartUtc,
+        DateTimeOffset EndUtc,
+        string Title,
+        IReadOnlyList<string>? Assertions,
+        string? ValidationPrompt,
+        IReadOnlyList<string>? TaskSectionIds);
+
+    private sealed record WorkspaceTestSaveRequest(
+        string SessionId,
+        DateTimeOffset StartUtc,
+        DateTimeOffset EndUtc,
+        string Title,
+        string Source,
+        bool Force = false);
+
+    private sealed record WorkspaceTestValidateRequest(string SessionId, string Source);
 
     private async Task<bool> TryHandleTaskExtractionGetAsync(string route, HttpListenerRequest request, HttpListenerResponse response, bool isHead, CancellationToken cancellationToken)
     {
@@ -118,6 +138,63 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     var body = await ReadJsonAsync<AppiumPreviewRequest>(request, cancellationToken).ConfigureAwait(false);
                     var extraction = await BuildAppiumPreviewAsync(body, cancellationToken).ConfigureAwait(false);
                     await WriteJsonAsync(response, extraction, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/task-extractions/test-preview" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<WorkspaceTestPreviewRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var extraction = await BuildWorkspaceTestPreviewAsync(body, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response, extraction, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/task-extractions/test-validate" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<WorkspaceTestValidateRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var snapshot = await runtime.Sessions.LoadSnapshotAsync(body.SessionId, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false)
+                        ?? throw new InvalidDataException($"Session '{body.SessionId}' was not found.");
+                    ValidateWorkspaceTestSource(body.Source, snapshot.AppId);
+                    await WriteJsonAsync(response, new ExternalDraftResult("passed", "Ansight workspace test YAML is valid.", ""), HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+            case "api/task-extractions/test-save" when isExplorer:
+                {
+                    var body = await ReadJsonAsync<WorkspaceTestSaveRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var extraction = await BuildWorkspaceTestPreviewAsync(
+                        new WorkspaceTestPreviewRequest(body.SessionId, body.StartUtc, body.EndUtc, body.Title, null, null, null),
+                        cancellationToken).ConfigureAwait(false);
+                    var snapshot = await runtime.Sessions.LoadSnapshotAsync(body.SessionId, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false)
+                        ?? throw new InvalidDataException($"Session '{body.SessionId}' was not found.");
+                    ValidateWorkspaceTestSource(body.Source, snapshot.AppId);
+                    var workspacePath = runtime.Apps.Get(snapshot.AppId)?.CodebasePath;
+                    if (string.IsNullOrWhiteSpace(workspacePath))
+                    {
+                        throw new InvalidDataException($"App '{snapshot.AppId}' must be linked to a workspace before saving an Ansight test.");
+                    }
+
+                    var directoryPath = Path.Combine(workspacePath, "ansight", "tests");
+                    Directory.CreateDirectory(directoryPath);
+                    var destinationPath = Path.Combine(directoryPath, extraction.SuggestedName + ".yaml");
+                    if (File.Exists(destinationPath) && !body.Force)
+                    {
+                        throw new InvalidDataException($"Ansight test already exists at '{destinationPath}'. Choose another title or explicitly replace it.");
+                    }
+
+                    var temporaryPath = destinationPath + ".tmp-" + Guid.NewGuid().ToString("N");
+                    try
+                    {
+                        await File.WriteAllTextAsync(temporaryPath, body.Source, new UTF8Encoding(false), cancellationToken)
+                            .ConfigureAwait(false);
+                        File.Move(temporaryPath, destinationPath, overwrite: body.Force);
+                    }
+                    finally
+                    {
+                        if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+                    }
+
+                    await WriteJsonAsync(response, new MaestroSavedFlow(destinationPath), HttpStatusCode.OK, false, cancellationToken)
+                        .ConfigureAwait(false);
                     return true;
                 }
             case "api/task-extractions/appium-save" when isExplorer:
@@ -269,5 +346,37 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             .ConfigureAwait(false)
             ?? throw new InvalidDataException($"Session '{request.SessionId}' was not found.");
         return AppiumScriptExtractor.Extract(snapshot, request.StartUtc, request.EndUtc, request.Title);
+    }
+
+    private async Task<WorkspaceTestExtraction> BuildWorkspaceTestPreviewAsync(
+        WorkspaceTestPreviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
+        if (request.EndUtc <= request.StartUtc)
+        {
+            throw new InvalidDataException("Select a timeline period with a positive duration.");
+        }
+
+        var snapshot = await runtime.Sessions.LoadSnapshotAsync(request.SessionId, cancellationToken: cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new InvalidDataException($"Session '{request.SessionId}' was not found.");
+        return WorkspaceTestExtractor.Extract(
+            snapshot, request.StartUtc, request.EndUtc, request.Title, request.Assertions, request.ValidationPrompt, request.TaskSectionIds);
+    }
+
+    private static void ValidateWorkspaceTestSource(string source, string appId)
+    {
+        if (string.IsNullOrWhiteSpace(source) || source.Length > 256_000)
+        {
+            throw new InvalidDataException("Ansight test source must contain 1 to 256,000 characters.");
+        }
+
+        var definition = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/draft.yaml", source);
+        if (!string.Equals(definition.AppId, appId, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"The test appId must match the source session app '{appId}'.");
+        }
     }
 }

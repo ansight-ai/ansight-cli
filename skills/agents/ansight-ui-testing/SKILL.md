@@ -83,6 +83,23 @@ ansight test list <repository-root> --json
 ansight test validate <repository-root> --json
 ```
 
+To extract a workspace YAML test from an existing replay interval, use the
+session player's **Extract test or task → Ansight test** option or the CLI:
+
+```sh
+ansight task extract <session-id> --start <seconds-or-timestamp> --end <seconds-or-timestamp> \
+  --format test --workspace <repository-root> --title <title> \
+  --assertion "<observable final state>" --json
+```
+
+The extractor writes `ansight/tests/<suggested-name>.yaml` with a recorded
+journey prompt and validation assertions. Repeat `--assertion` for multiple
+outcomes and use `--validation` for custom validation instructions. Without an
+explicit assertion, it suggests one from a newly visible final UI label when
+available; otherwise the generated test is disabled until its generic outcome
+is replaced. Review the starting state and any omitted input values, then run
+`ansight test validate` before relying on the test.
+
 Run only when requested. Add `--trace` when the result needs the full model context, tool payloads, and exportable execution graph rather than lightweight audit metadata:
 
 ```sh

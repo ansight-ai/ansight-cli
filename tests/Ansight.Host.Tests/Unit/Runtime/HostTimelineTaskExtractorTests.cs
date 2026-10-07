@@ -1,10 +1,107 @@
 using System.Text.Json.Nodes;
+using Ansight.Host.Models.Session;
 using Ansight.Host.Runtime.Tasks;
+using Ansight.Host.Workspaces.Catalog;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed class HostTimelineTaskExtractorTests
 {
+    [Fact]
+    public void WorkspaceTestExport_ProducesRunnableSchemaWithRecordedJourneyAndNewFinalLabel()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(
+            startedAt,
+            [
+                CreateTouch("down", startedAt.AddSeconds(1), 0.5, 0.5),
+                CreateTouch("up", startedAt.AddSeconds(1.1), 0.5, 0.5)
+            ],
+            [
+                CreateVisualTree(startedAt.AddSeconds(1), "continue-button", "Continue"),
+                CreateVisualTree(startedAt.AddSeconds(2), "confirmation-title", "Order complete")
+            ]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(3), "Complete checkout");
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/complete-checkout.yaml", result.Source);
+
+        Assert.Equal("complete-checkout", parsed.TestId);
+        Assert.Equal(snapshot.AppId, parsed.AppId);
+        Assert.Contains("1. ", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Contains("Order complete", parsed.Validation.Assertions[0], StringComparison.Ordinal);
+        Assert.Equal(1, result.GeneratedActionCount);
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_UsesExplicitOutcomeAndOmitsCapturedInputValue()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(
+            startedAt,
+            [],
+            [
+                CreateInputVisualTree(startedAt.AddSeconds(1), "tree-1", string.Empty),
+                CreateInputVisualTree(startedAt.AddSeconds(2), "tree-2", "private@example.test")
+            ]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(3), "Search accounts",
+            ["The results screen shows the matching account"],
+            "Inspect the final visual tree.");
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/search-accounts.yaml", result.Source);
+
+        Assert.Equal("The results screen shows the matching account", parsed.Validation.Assertions[0]);
+        Assert.Equal("Inspect the final visual tree.", parsed.Validation.Prompt);
+        Assert.DoesNotContain("private@example.test", result.Source, StringComparison.Ordinal);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("captured text was omitted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_DisablesDraftWhenNoObservableOutcomeIsAvailable()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(
+            startedAt,
+            [
+                CreateTouch("down", startedAt.AddSeconds(1), 0.5, 0.5),
+                CreateTouch("up", startedAt.AddSeconds(1.1), 0.5, 0.5)
+            ],
+            [CreateVisualTree(startedAt.AddSeconds(1), "continue-button", "Continue")]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(2), "Continue checkout");
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/continue-checkout.yaml", result.Source);
+
+        Assert.False(parsed.Enabled);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("Replace the generic outcome assertion", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_UsesOnlySelectedAnnotatedTaskRanges()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(startedAt, [], [],
+        [
+            new SessionAnnotation { AnnotationId = "search", StartUtc = startedAt.AddSeconds(1), EndUtc = startedAt.AddSeconds(3), Label = "Find the account", Notes = "Use the customer name" },
+            new SessionAnnotation { AnnotationId = "verify", StartUtc = startedAt.AddSeconds(4), EndUtc = startedAt.AddSeconds(6), Label = "Verify the balance" },
+            new SessionAnnotation { AnnotationId = "outside", StartUtc = startedAt.AddSeconds(11), EndUtc = startedAt.AddSeconds(12), Label = "Unrelated action" }
+        ]);
+
+        var result = WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(10), "Review account",
+            ["The balance is visible"], taskSectionIds: ["verify", "search"]);
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/review-account.yaml", result.Source);
+
+        Assert.Contains("Find the account — Use the customer name", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Contains("Verify the balance", parsed.Prompt, StringComparison.Ordinal);
+        Assert.True(parsed.Prompt.IndexOf("Find the account", StringComparison.Ordinal) < parsed.Prompt.IndexOf("Verify the balance", StringComparison.Ordinal));
+        Assert.DoesNotContain("Unrelated action", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Throws<ArgumentException>(() => WorkspaceTestExtractor.Extract(
+            snapshot, startedAt, startedAt.AddSeconds(10), "Review account",
+            ["The balance is visible"], taskSectionIds: ["outside"]));
+    }
+
     [Fact]
     public void AppiumExport_GeneratesRunnableDraftWithRecordedIdAndCoordinateFallback()
     {
@@ -640,7 +737,8 @@ public sealed class HostTimelineTaskExtractorTests
     private static AppSessionSnapshot CreateSnapshot(
         DateTimeOffset startedAt,
         IReadOnlyList<SessionTouchInputRecord> touches,
-        IReadOnlyList<SessionVisualTreeSnapshot> visualTrees)
+        IReadOnlyList<SessionVisualTreeSnapshot> visualTrees,
+        IReadOnlyList<SessionAnnotation>? annotations = null)
     {
         return new AppSessionSnapshot
         {
@@ -655,6 +753,7 @@ public sealed class HostTimelineTaskExtractorTests
             IsHistorical = true,
             Touches = touches,
             VisualTreeSnapshots = visualTrees,
+            Annotations = annotations ?? [],
             MetricChannels = [],
             Metrics = []
         };

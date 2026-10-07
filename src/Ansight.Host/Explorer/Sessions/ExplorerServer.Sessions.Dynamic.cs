@@ -84,6 +84,20 @@ internal sealed partial class ExplorerServer
             return true;
         }
 
+        if (segments.Length == 4 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "annotations")
+        {
+            var sessionId = Uri.UnescapeDataString(segments[2]);
+            if (!isExplorer && !string.Equals(sessionId, InitialSessionId, StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(response, new { message = "Session not found." }, HttpStatusCode.NotFound, isHead, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await WriteJsonAsync(response, snapshot?.Annotations ?? [], snapshot is null ? HttpStatusCode.NotFound : HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         if (segments.Length == 3 && segments[0] == "api" && segments[1] == "sessions")
         {
             await WriteSessionAsync(response, Uri.UnescapeDataString(segments[2]), isHead, cancellationToken).ConfigureAwait(false);

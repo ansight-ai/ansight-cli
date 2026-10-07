@@ -102,7 +102,7 @@ internal static class TaskCommands
     {
         arguments.EnsurePositionalCount(
             3,
-            "ansight task extract <session-id> --start <timestamp|offset> --end <timestamp|offset> [--format ansight|maestro|appium] [--workspace <path>] [--title <title>]");
+            "ansight task extract <session-id> --start <timestamp|offset> --end <timestamp|offset> [--format ansight|test|maestro|appium] [--workspace <path>] [--title <title>]");
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
@@ -118,9 +118,13 @@ internal static class TaskCommands
                     ?? snapshot.Name
                     ?? $"Recorded {snapshot.AppId} workflow";
         var format = arguments.GetOption("format")?.Trim().ToLowerInvariant() ?? "ansight";
-        if (format is not ("ansight" or "maestro" or "appium"))
+        if (format is not ("ansight" or "test" or "maestro" or "appium"))
         {
-            throw new CliUsageException("--format must be 'ansight', 'maestro', or 'appium'.");
+            throw new CliUsageException("--format must be 'ansight', 'test', 'maestro', or 'appium'.");
+        }
+        if (format != "test" && (arguments.GetOptions("assertion").Count > 0 || arguments.GetOption("validation") is not null))
+        {
+            throw new CliUsageException("--assertion and --validation require --format test.");
         }
 
         var extraction = format == "ansight"
@@ -132,6 +136,11 @@ internal static class TaskCommands
         var appium = format == "appium"
             ? AppiumScriptExtractor.Extract(snapshot, startUtc, endUtc, title)
             : null;
+        var test = format == "test"
+            ? WorkspaceTestExtractor.Extract(
+                snapshot, startUtc, endUtc, title,
+                arguments.GetOptions("assertion"), arguments.GetOption("validation"))
+            : null;
         var workspacePath = Path.GetFullPath(
             arguments.GetOption("workspace")
             ?? arguments.GetOption("repository")
@@ -142,6 +151,7 @@ internal static class TaskCommands
             {
                 "maestro" => Path.Combine(workspacePath, ".maestro", $"{maestro!.SuggestedName}.yaml"),
                 "appium" => Path.Combine(workspacePath, "appium", $"{appium!.SuggestedName}.test.mjs"),
+                "test" => Path.Combine(workspacePath, "ansight", "tests", $"{test!.SuggestedName}.yaml"),
                 _ => Path.Combine(workspacePath, "ansight", "tasks", $"{extraction!.SuggestedName}.ts")
             }));
 
@@ -181,7 +191,7 @@ internal static class TaskCommands
         {
             await File.WriteAllTextAsync(
                     temporaryPath,
-                    maestro?.Source ?? appium?.Source ?? extraction!.Source,
+                    maestro?.Source ?? appium?.Source ?? test?.Source ?? extraction!.Source,
                     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -231,6 +241,25 @@ internal static class TaskCommands
                           : Environment.NewLine + string.Join(
                               Environment.NewLine,
                               appium.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+            return CliExitCodes.Success;
+        }
+
+        if (test is not null)
+        {
+            output.Write(
+                new WorkspaceTestExtractionOutput(
+                    "ansight.workspace-test-extraction/v1",
+                    snapshot.SessionId,
+                    startUtc,
+                    endUtc,
+                    outputPath,
+                    test),
+                () => $"Generated {test.GeneratedActionCount:N0} recorded step(s).{Environment.NewLine}Test: {outputPath}"
+                      + (test.Diagnostics.Count == 0
+                          ? string.Empty
+                          : Environment.NewLine + string.Join(
+                              Environment.NewLine,
+                              test.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
             return CliExitCodes.Success;
         }
 
@@ -323,11 +352,13 @@ internal static class TaskCommands
              --end <value>           ISO-8601 timestamp or seconds after session start
              --workspace <path>      Workspace root; defaults to the current directory
              --title <title>         Task title; defaults to the session or app name
-             --format <format>       ansight (default), maestro, or appium
+             --format <format>       ansight (default), test, maestro, or appium
+             --assertion <text>      Final-state assertion for --format test; repeatable
+             --validation <text>     Final-state validation instructions for --format test
              --ai                    Refine a Maestro draft with the configured OpenAI model
              --reasoning <mode>      fast, balanced, or deep for --ai
              --model <model>         Optional model override for --ai
-             --output <path>         Explicit TypeScript, Maestro YAML, or Appium JS destination
+             --output <path>         Explicit output file destination
              --force                 Replace an existing extraction file
 
            Use only one of --device-id or --session-id. Task execution requires a
@@ -366,3 +397,11 @@ internal sealed record AppiumScriptExtractionOutput(
     DateTimeOffset EndUtc,
     string FilePath,
     AppiumScriptExtraction Extraction);
+
+internal sealed record WorkspaceTestExtractionOutput(
+    string Schema,
+    string SessionId,
+    DateTimeOffset StartUtc,
+    DateTimeOffset EndUtc,
+    string FilePath,
+    WorkspaceTestExtraction Extraction);
