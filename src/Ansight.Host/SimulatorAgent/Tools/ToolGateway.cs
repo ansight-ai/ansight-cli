@@ -242,7 +242,8 @@ internal sealed class ToolGateway : IToolGateway
         string sessionId,
         string instruction,
         CancellationToken cancellationToken,
-        Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null)
+        Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null,
+        IReadOnlyList<string>? preferredTaskIds = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(instruction);
@@ -339,8 +340,51 @@ internal sealed class ToolGateway : IToolGateway
             }
         }
 
+        // Draft test runs explicitly chose these tasks. Search by exact ID and preload
+        // them even when a short task covers too little of the whole journey to pass
+        // the normal relevance thresholds.
+        var preferredTasks = new List<RepositoryTaskShortcut>();
+        foreach (var taskId in (preferredTaskIds ?? [])
+                     .Where(static id => !string.IsNullOrWhiteSpace(id))
+                     .Distinct(StringComparer.Ordinal)
+                     .Take(MaximumPreloadedRepositoryTasks))
+        {
+            if (candidatesByTaskId.TryGetValue(taskId, out var candidate))
+            {
+                preferredTasks.Add(candidate);
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await operations.CallToolAsync(
+                    "ansight_list_tasks",
+                    new JsonObject
+                    {
+                        ["sessionId"] = sessionId.Trim(),
+                        ["query"] = taskId,
+                        ["maxResults"] = RepositoryTaskProtocol.MaximumDiscoveryResults
+                    },
+                    RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false))
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var exactTask = result.IsError ? null : ReadRepositoryTaskShortcuts(result)
+                .FirstOrDefault(task => string.Equals(task.TaskId, taskId, StringComparison.Ordinal));
+            if (exactTask is not null) preferredTasks.Add(exactTask);
+            trace?.Invoke(new SimulatorAgentRepositoryTaskDiscoveryTrace("preferred", taskId, [])
+            {
+                SelectedTaskIds = exactTask is null ? [] : [taskId],
+                Message = exactTask is null
+                    ? "The selected draft task was not found in this run's task catalog."
+                    : "The selected draft task was preloaded by exact ID."
+            });
+        }
+
         var selectedTasks = new List<RepositoryTaskShortcut>();
         var selectedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var task in preferredTasks)
+        {
+            if (selectedTaskIds.Add(task.TaskId)) selectedTasks.Add(task);
+        }
         foreach (var taskId in focusedLeaders)
         {
             if (selectedTaskIds.Add(taskId)
@@ -770,10 +814,11 @@ internal sealed class ToolGateway : IToolGateway
         }
         if (string.Equals(toolName, "ansight_list_app_tools", StringComparison.Ordinal)
             && ReadString(arguments, "query") is null
-            && ReadString(arguments, "feature") is null)
+            && ReadString(arguments, "feature") is null
+            && ReadString(arguments, "toolId") is null)
         {
             return ErrorResult(
-                "Provide a focused query or feature when discovering app tools; broad catalog dumps are not available to the simulator agent.");
+                "Provide a focused query, feature, or exact toolId when discovering app tools; broad catalog dumps are not available to the simulator agent.");
         }
         if (string.Equals(toolName, "ansight_list_tasks", StringComparison.Ordinal)
             && ReadString(arguments, "query") is null
@@ -1590,7 +1635,7 @@ internal sealed class ToolGateway : IToolGateway
             "ansight_pinch_ui" => "Pinch: scale <1 zooms out; >1 zooms in. Returns before/after semantic evidence.",
             "ansight_back_ui" => "Navigate back once and return before/after semantic evidence.",
             "ansight_run_ui_sequence" => "Run 1–32 known recorded gestures when intermediate inspection is unnecessary. Returns endpoint evidence and per-step outcomes.",
-            "ansight_list_app_tools" => "Search executable app tools by focused query/feature. Read policy by default; write only for requested actions. Critical tools excluded. Follow prerequisiteToolIds.",
+            "ansight_list_app_tools" => "Search executable app tools by focused query, feature, or exact toolId. Read policy by default; write only for requested actions. Critical tools excluded. Follow prerequisiteToolIds.",
             "ansight_take_screenshot" => "Save a screenshot artifact. Returns metadata, not pixels; cannot locate targets or resolve semantic gaps.",
             "ansight_call_app_tool" => "Call an exact discovered read/write app tool. Follow prerequisiteToolIds; critical tools are rejected.",
             "ansight_list_tasks" => "Search additional repository tasks with a focused behavioral query/feature when preloaded tasks leave a gap.",
@@ -1801,6 +1846,7 @@ internal sealed class ToolGateway : IToolGateway
             sessionId.Trim(),
             ReadString(arguments, "query")?.ToLowerInvariant(),
             ReadString(arguments, "feature")?.ToLowerInvariant(),
+            ReadString(arguments, "toolId")?.ToLowerInvariant(),
             string.Equals(ReadString(arguments, "policy"), "write", StringComparison.OrdinalIgnoreCase)
                 ? "write"
                 : "read");

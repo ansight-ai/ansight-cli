@@ -321,7 +321,8 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                         {
                             Reasoning = body.Reasoning,
                             DraftSource = body.Source,
-                            DraftTaskRootPath = taskRoot
+                            DraftTaskRootPath = taskRoot,
+                            PreferredTaskIds = drafts.Select(draft => draft.Draft!.TaskId).ToArray()
                         };
                         execution = testExecutions.Start(run);
                     }

@@ -257,7 +257,8 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
             CaptureTrace = request.CaptureTrace,
             Reasoning = AgentReasoningModes.Normalize(request.Reasoning),
             DraftSource = request.DraftSource,
-            DraftTaskRootPath = request.DraftTaskRootPath
+            DraftTaskRootPath = request.DraftTaskRootPath,
+            PreferredTaskIds = request.PreferredTaskIds
         };
 
     private static void DeleteDraftTaskRoot(string? rootPath)

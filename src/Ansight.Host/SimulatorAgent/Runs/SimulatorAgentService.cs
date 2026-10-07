@@ -487,7 +487,8 @@ public sealed class SimulatorAgentService : IDisposable
                                         TaskDiscovery = instructionTrace
                                     });
                                 }
-                                : null)
+                                : null,
+                            request.PreferredTaskIds)
                         .ConfigureAwait(false)
                     : [];
                 RecordSetupStep($"Discover repository tasks (instruction {instructionIndex + 1})");

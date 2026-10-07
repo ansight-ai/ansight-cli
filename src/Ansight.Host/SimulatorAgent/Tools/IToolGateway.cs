@@ -30,7 +30,8 @@ internal interface IToolGateway
         string sessionId,
         string instruction,
         CancellationToken cancellationToken,
-        Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null);
+        Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null,
+        IReadOnlyList<string>? preferredTaskIds = null);
 
     OpenAiFunctionCall NormalizeFunctionCall(
         OpenAiFunctionCall call);

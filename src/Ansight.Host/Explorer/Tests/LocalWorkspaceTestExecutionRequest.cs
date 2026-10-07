@@ -25,4 +25,7 @@ public sealed record LocalWorkspaceTestExecutionRequest(
 
     [System.Text.Json.Serialization.JsonIgnore]
     internal string? DraftTaskRootPath { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal IReadOnlyList<string> PreferredTaskIds { get; init; } = [];
 }

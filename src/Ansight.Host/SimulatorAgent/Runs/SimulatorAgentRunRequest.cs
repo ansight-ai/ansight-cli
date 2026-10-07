@@ -46,6 +46,8 @@ public sealed record SimulatorAgentRunRequest(
 
     public string? WorkspaceTestName { get; init; }
 
+    internal IReadOnlyList<string> PreferredTaskIds { get; init; } = [];
+
     public string? BatchRunId { get; init; }
 
     public IReadOnlyList<SimulatorAgentAppGraphPlan> AppGraphPlans { get; init; } = [];

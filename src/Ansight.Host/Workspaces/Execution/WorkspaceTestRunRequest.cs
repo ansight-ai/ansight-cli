@@ -33,4 +33,6 @@ public sealed record WorkspaceTestRunRequest(
     internal string? DraftSource { get; init; }
 
     internal string? DraftTaskRootPath { get; init; }
+
+    internal IReadOnlyList<string> PreferredTaskIds { get; init; } = [];
 }

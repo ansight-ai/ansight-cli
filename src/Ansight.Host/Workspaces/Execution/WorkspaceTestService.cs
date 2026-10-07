@@ -547,6 +547,7 @@ public sealed partial class WorkspaceTestService
                     WorkspacePath = catalog.WorkspacePath,
                     WorkspaceTestId = test.TestId,
                     WorkspaceTestName = test.Name,
+                    PreferredTaskIds = request.PreferredTaskIds,
                     BatchRunId = request.BatchRunId,
                     OperationContext = request.OperationContext,
                     CaptureTrace = request.CaptureTrace,

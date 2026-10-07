@@ -3252,7 +3252,8 @@ public sealed partial class SimulatorAgentServiceTests
             string sessionId,
             string instruction,
             CancellationToken cancellationToken,
-            Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null)
+            Action<SimulatorAgentRepositoryTaskDiscoveryTrace>? trace = null,
+            IReadOnlyList<string>? preferredTaskIds = null)
         {
             foreach (var item in RepositoryTaskDiscoveryTraces)
             {

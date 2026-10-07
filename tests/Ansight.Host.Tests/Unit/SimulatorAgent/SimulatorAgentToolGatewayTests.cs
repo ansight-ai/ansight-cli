@@ -130,6 +130,41 @@ public sealed partial class SimulatorAgentToolGatewayTests
     }
 
     [Fact]
+    public async Task RepositoryTaskShortcuts_PreloadExplicitDraftTaskBelowWholeJourneyThreshold()
+    {
+        var dispatcher = new RecordingOperationDispatcher();
+        dispatcher.ResponseFactory = (_, _) => RequestResult.ToolResult(new JsonObject
+        {
+            ["tasks"] = new JsonArray(new JsonObject
+            {
+                ["taskId"] = "copy-location-details",
+                ["title"] = "Copy location details",
+                ["description"] = "Copy the selected location to the clipboard.",
+                ["feature"] = "location-sharing",
+                ["inputSchema"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject()
+                },
+                ["match"] = new JsonObject { ["score"] = 50.8, ["coverage"] = 0.583 }
+            })
+        }, isError: false);
+        var traces = new List<SimulatorAgentRepositoryTaskDiscoveryTrace>();
+
+        var shortcuts = await new ToolGateway(dispatcher).GetRepositoryTaskShortcutsAsync(
+            "selected-session",
+            "Search for Eagle Rock, open its details, share, then copy the GPS location.",
+            CancellationToken.None,
+            traces.Add,
+            ["copy-location-details"]);
+
+        Assert.Equal("copy-location-details", Assert.Single(shortcuts).TaskId);
+        Assert.Contains(traces, item => item.Stage == "preferred"
+            && item.SelectedTaskIds.Contains("copy-location-details"));
+        Assert.Contains(dispatcher.Calls, call => call.Arguments?["query"]?.GetValue<string>() == "copy-location-details");
+    }
+
+    [Fact]
     public void RequestContext_RecognizesDirectAndRepositoryTaskTestCalls()
     {
         var correlationId = RunRequestContext.CreateCorrelationId();
@@ -1405,6 +1440,31 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.Equal(2, dispatcher.Calls.Count);
         Assert.Equal("read", dispatcher.Calls[0].Arguments?["policy"]?.GetValue<string>());
         Assert.Equal("write", dispatcher.Calls[1].Arguments?["policy"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AppToolBridge_AllowsExactToolIdDiscoveryAndCachesEachIdSeparately()
+    {
+        var dispatcher = new RecordingOperationDispatcher();
+        var gateway = new ToolGateway(dispatcher);
+        gateway.BeginRun("selected-session", SecretAccess.Empty);
+
+        await gateway.ExecuteAsync(
+            "ansight_list_app_tools",
+            new JsonObject { ["toolId"] = "clipboard.get_text" },
+            "selected-session",
+            "correlation-first",
+            CancellationToken.None);
+        await gateway.ExecuteAsync(
+            "ansight_list_app_tools",
+            new JsonObject { ["toolId"] = "clipboard.has_text" },
+            "selected-session",
+            "correlation-second",
+            CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Calls.Count);
+        Assert.Equal("clipboard.get_text", dispatcher.Calls[0].Arguments?["toolId"]?.GetValue<string>());
+        Assert.Equal("clipboard.has_text", dispatcher.Calls[1].Arguments?["toolId"]?.GetValue<string>());
     }
 
     [Fact]
