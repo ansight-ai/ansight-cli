@@ -1554,7 +1554,7 @@ internal static Task<int> SummaryAsync(
              share         Export and upload a team, authenticated, or public cloud replay
              share-batch   Upload 2-32 team sessions and send one email listing successful uploads
              summary       Start a portal-compatible AI summary for an existing cloud share
-             summary-local Summarize local evidence through the brokered model and save locally
+             summary-local Summarize local session evidence and save the result locally
              url           Resolve the newest existing cloud replay URL
              export        Write a portable ZIP archive
              sanitize      Write a PII-sanitized portable ZIP without modifying the local capture
@@ -1574,9 +1574,9 @@ internal static Task<int> SummaryAsync(
              --include-archived                  Allow archived shares when resolving a URL
 
            AI summary options:
-             --local                             Use brokered AI on local evidence and save locally
-             --team-id <uuid>                    Select an organisation for the cloud or brokered run
-             --reasoning <fast|balanced|deep>     Select brokered local summary reasoning; default: fast
+             --local                             Analyze local evidence and save the summary locally
+             --team-id <uuid>                    Select an organisation for the summary run
+             --reasoning <fast|balanced|deep>     Select local summary reasoning; default: fast
              --mode <fast|thorough>               Cloud AI extraction depth
              --provider <openai|anthropic|gemini> Cloud AI provider
              --model <id>                        Cloud provider override or diagnostic local model override;

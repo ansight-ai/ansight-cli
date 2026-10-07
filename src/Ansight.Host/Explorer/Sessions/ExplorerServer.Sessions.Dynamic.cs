@@ -164,6 +164,12 @@ internal sealed partial class ExplorerServer
                 return true;
             }
 
+            if (request.AcceptTypes?.Any(type => string.Equals(type.Trim(), "application/x-ndjson", StringComparison.OrdinalIgnoreCase)) == true)
+            {
+                await StreamLocalSummaryAsync(response, sessionId, snapshot, teamIdText is null ? null : Guid.Parse(teamIdText), cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
             try
             {
                 var teamId = teamIdText is null ? (Guid?)null : Guid.Parse(teamIdText);
