@@ -174,7 +174,7 @@ internal sealed class CliLocalHostServer : IAsyncDisposable
             if (request.ContentType is not null) message.Content.Headers.TryAddWithoutValidation("Content-Type", request.ContentType);
             if (request.ContentLength64 >= 0) message.Content.Headers.ContentLength = request.ContentLength64;
         }
-        foreach (var header in new[] { "Range", "If-None-Match", "If-Modified-Since" })
+        foreach (var header in new[] { "Accept", "Range", "If-None-Match", "If-Modified-Since" })
             if (request.Headers[header] is { } value) message.Headers.TryAddWithoutValidation(header, value);
         using var result = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, lifetime.Token).ConfigureAwait(false);
         response.StatusCode = (int)result.StatusCode;

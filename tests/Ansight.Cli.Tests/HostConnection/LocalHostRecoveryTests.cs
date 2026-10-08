@@ -7,6 +7,49 @@ namespace Ansight.Cli.Tests.HostConnection;
 
 public sealed class LocalHostRecoveryTests
 {
+    [Theory(Timeout = 15000)]
+    [InlineData("application/x-ndjson")]
+    [InlineData("text/event-stream")]
+    public async Task AuthorizedGatewayPreservesStreamNegotiationAndForwardsProgressBeforeCompletion(string mediaType)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var upstream = new HttpListener();
+        var upstreamUrl = new Uri($"http://127.0.0.1:{port}/source/");
+        upstream.Prefixes.Add(upstreamUrl.AbsoluteUri);
+        upstream.Start();
+        await using var lease = await CliAccessLease.CreateAsync(TestAccessAuthorizer.Allow, CancellationToken.None);
+        var access = new CliLocalHostAccess();
+        access.Allow(upstreamUrl, lease);
+        await using var server = new CliLocalHostServer(0, "/player/", access, (_, _) => Task.CompletedTask, CancellationToken.None);
+        using var client = new HttpClient { BaseAddress = server.Url };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/sessions/example/annotation-summary")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Accept.ParseAdd(mediaType);
+        var requestTask = client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        var context = await upstream.GetContextAsync().WaitAsync(timeout.Token);
+        Assert.Equal(mediaType, context.Request.Headers["Accept"]);
+        context.Response.ContentType = mediaType;
+        context.Response.SendChunked = true;
+        await context.Response.OutputStream.WriteAsync(Encoding.UTF8.GetBytes("progress\n"), timeout.Token);
+        await context.Response.OutputStream.FlushAsync(timeout.Token);
+
+        using var response = await requestTask.WaitAsync(timeout.Token);
+        Assert.Equal(mediaType, response.Content.Headers.ContentType?.MediaType);
+        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(timeout.Token));
+        Assert.Equal("progress", await reader.ReadLineAsync(timeout.Token));
+        // The upstream response remains open until the client has received progress.
+        await context.Response.OutputStream.WriteAsync(Encoding.UTF8.GetBytes("complete\n"), timeout.Token);
+        context.Response.Close();
+        Assert.Equal("complete", await reader.ReadLineAsync(timeout.Token));
+        Assert.Null(await reader.ReadLineAsync(timeout.Token));
+    }
+
     [Fact]
     public async Task AuthorizedGatewayStreamsBinaryUploadsAndPreservesTheResponse()
     {
