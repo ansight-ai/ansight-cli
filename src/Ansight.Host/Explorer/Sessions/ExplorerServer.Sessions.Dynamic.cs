@@ -140,6 +140,12 @@ internal sealed partial class ExplorerServer
 
     private async Task<bool> TryHandleSessionsDynamicPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken, string[] segments)
     {
+        if (segments is ["api", "sessions", _, "annotation-summary"])
+        {
+            await WriteAnnotationSummaryAsync(request, response, Uri.UnescapeDataString(segments[2]), cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         if (segments is ["api", "sessions", _, "local-summary"])
         {
             var sessionId = Uri.UnescapeDataString(segments[2]);
@@ -157,16 +163,16 @@ internal sealed partial class ExplorerServer
                 return true;
             }
 
+            if (AcceptsSummaryStream(request))
+            {
+                await StreamLocalSummaryAsync(response, sessionId, teamIdText is null ? null : Guid.Parse(teamIdText), cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
             var snapshot = await LoadReplaySnapshotAsync(sessionId, cancellationToken).ConfigureAwait(false);
             if (snapshot is null)
             {
                 await WriteJsonAsync(response, new { isSuccess = false, message = "Session not found." }, HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
-                return true;
-            }
-
-            if (request.AcceptTypes?.Any(type => string.Equals(type.Trim(), "application/x-ndjson", StringComparison.OrdinalIgnoreCase)) == true)
-            {
-                await StreamLocalSummaryAsync(response, sessionId, snapshot, teamIdText is null ? null : Guid.Parse(teamIdText), cancellationToken).ConfigureAwait(false);
                 return true;
             }
 

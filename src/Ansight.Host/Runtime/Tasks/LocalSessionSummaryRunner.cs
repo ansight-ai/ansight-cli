@@ -13,7 +13,7 @@ using SkiaSharp;
 
 namespace Ansight.Host.Runtime.Tasks;
 
-internal static class LocalSessionSummaryRunner
+internal static partial class LocalSessionSummaryRunner
 {
     private const int MaximumEvidenceCharacters = 32_000;
     private const int MaximumScreenshotWidth = 1024;
@@ -74,9 +74,10 @@ internal static class LocalSessionSummaryRunner
         CancellationToken cancellationToken,
         string reasoningMode = AgentReasoningModes.Fast,
         string? modelOverride = null,
-        Action<string>? reportProgress = null)
+        Action<SessionSummaryProgress>? reportProgress = null,
+        bool isSection = false)
     {
-        reportProgress?.Invoke("Preparing analysis…");
+        reportProgress?.Invoke(new("preparing", "Preparing the model and checking AI access…"));
         var gateway = runtime.WorkspaceTests.RunGateway
             ?? throw new InvalidOperationException("Session analysis is unavailable on this host.");
         var reasoning = AgentReasoningModes.Normalize(reasoningMode);
@@ -89,7 +90,7 @@ internal static class LocalSessionSummaryRunner
                 teamId,
                 runtime.Apps.Get(snapshot.AppId)?.CodebasePath ?? AppContext.BaseDirectory,
                 $"session-summary-{Guid.NewGuid():N}",
-                "Local session summary",
+                isSection ? "Session section annotation" : "Local session summary",
                 snapshot.AppId,
                 requestedModel,
                 ValidationAssertionCount: 0,
@@ -113,29 +114,31 @@ internal static class LocalSessionSummaryRunner
         {
             var transport = preparation.ModelTransport
                 ?? throw new InvalidOperationException("Session analysis could not start.");
+            reportProgress?.Invoke(new("preparing", "Connecting to the AI provider…"));
             var accessKey = await transport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
             if (string.IsNullOrWhiteSpace(accessKey))
             {
                 throw new InvalidOperationException("Session analysis could not be authorized.");
             }
 
-            reportProgress?.Invoke("Collecting session evidence…");
-            var evidence = BuildEvidence(snapshot) + BuildScreenshotText(runtime, snapshot);
+            reportProgress?.Invoke(new("evidence", $"Collecting {snapshot.Images.Count} screenshots, {snapshot.Touches.Count} touches and {snapshot.Logs.Count} logs…"));
+            var evidence = BuildEvidence(snapshot) + BuildScreenshotText(runtime, snapshot, reportProgress);
             var content = new JsonArray(new JsonObject
             {
                 ["type"] = "input_text",
                 ["text"] = evidence
             });
-            reportProgress?.Invoke("Preparing screenshots…");
-            var screenshotCount = AppendScreenshotImages(runtime, snapshot, content);
+            reportProgress?.Invoke(new("screenshots", "Preparing screenshots for analysis…"));
+            var screenshotCount = AppendScreenshotImages(runtime, snapshot, content, reportProgress);
             var input = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
-            reportProgress?.Invoke(screenshotCount > 0 ? "Analyzing session and screenshots…" : "Analyzing session…");
+            var scope = isSection ? "section" : "session";
+            reportProgress?.Invoke(new("analysis", screenshotCount > 0 ? $"Analysing {scope} with {screenshotCount} screenshots…" : $"Analysing {scope} evidence…"));
             using var client = new OpenAiResponsesClient();
             turn = await client.CreateResponseAsync(
                 new OpenAiRequest(
                     accessKey,
                     configuration.Model,
-                    summaryInstructions,
+                    isSection ? sectionInstructions : summaryInstructions,
                     input,
                     new JsonArray(),
                     configuration.ReasoningEffort,
@@ -145,7 +148,7 @@ internal static class LocalSessionSummaryRunner
                     Transport = transport
                 },
                 cancellationToken).ConfigureAwait(false);
-            reportProgress?.Invoke("Formatting summary…");
+            reportProgress?.Invoke(new("formatting", isSection ? "Writing the annotation…" : "Formatting the summary…"));
             var summary = FormatSummary(turn.AssistantText);
             if (summary.Length == 0)
             {
@@ -161,7 +164,7 @@ internal static class LocalSessionSummaryRunner
                 StartedUtc = startedUtc,
                 CompletedUtc = DateTimeOffset.UtcNow,
                 Success = true,
-                StatusMessage = "Generated from local session evidence.",
+                StatusMessage = isSection ? "Generated from selected section evidence." : "Generated from local session evidence.",
                 FinalResponse = summary
             };
         }
@@ -229,17 +232,18 @@ internal static class LocalSessionSummaryRunner
         return description + "\n\n" + string.Join("\n", steps.Select((step, index) => $"{index + 1}. {step}"));
     }
 
-    private static int AppendScreenshotImages(RuntimeCoordinator runtime, AppSessionSnapshot snapshot, JsonArray content)
+    private static int AppendScreenshotImages(RuntimeCoordinator runtime, AppSessionSnapshot snapshot, JsonArray content, Action<SessionSummaryProgress>? reportProgress)
     {
         var frames = snapshot.Images.OrderBy(frame => frame.CapturedAtUtc).ToArray();
         if (frames.Length == 0) return 0;
         var count = 0;
         var indexes = Enumerable.Range(0, Math.Min(frames.Length, ScreenshotSampleCount))
             .Select(index => (int)Math.Round(index * (frames.Length - 1) / (double)Math.Max(1, Math.Min(frames.Length, ScreenshotSampleCount) - 1)))
-            .Distinct();
-        foreach (var index in indexes)
+            .Distinct().ToArray();
+        for (var sampleIndex = 0; sampleIndex < indexes.Length; sampleIndex++)
         {
-            var frame = frames[index];
+            reportProgress?.Invoke(new("screenshots", $"Preparing screenshot {sampleIndex + 1} of {indexes.Length}…", sampleIndex, indexes.Length));
+            var frame = frames[indexes[sampleIndex]];
             var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, snapshot, frame);
             if (!File.Exists(path)) continue;
             try
@@ -386,16 +390,18 @@ internal static class LocalSessionSummaryRunner
         return url.Split('?', '#')[0];
     }
 
-    private static string BuildScreenshotText(RuntimeCoordinator runtime, AppSessionSnapshot snapshot)
+    private static string BuildScreenshotText(RuntimeCoordinator runtime, AppSessionSnapshot snapshot, Action<SessionSummaryProgress>? reportProgress)
     {
         if (snapshot.Images.Count == 0) return string.Empty;
         var frames = snapshot.Images.OrderBy(frame => frame.CapturedAtUtc).ToArray();
         var selected = new[] { frames[0], frames[frames.Length / 2], frames[^1] }
-            .DistinctBy(frame => frame.FrameId);
+            .DistinctBy(frame => frame.FrameId).ToArray();
         var scanner = new TesseractSessionScreenshotOcrScanner();
         var text = new StringBuilder("\nScreenshot OCR (only frames listed below were scanned):\n");
-        foreach (var frame in selected)
+        for (var index = 0; index < selected.Length; index++)
         {
+            reportProgress?.Invoke(new("evidence", $"Reading screenshot text {index + 1} of {selected.Length}…", index, selected.Length));
+            var frame = selected[index];
             var filePath = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, snapshot, frame);
             if (!File.Exists(filePath)) continue;
             try
