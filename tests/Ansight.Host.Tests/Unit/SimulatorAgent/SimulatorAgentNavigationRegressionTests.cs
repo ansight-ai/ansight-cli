@@ -4,6 +4,48 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class SimulatorAgentServiceTests
 {
+    [Theory]
+    [InlineData("In the for you list, find and select the \"Eagle Rock\" search result. Then, validate that the area detail page has opened.")]
+    [InlineData("Open ‘Eagle Rock’ from the matching search results and verify the detail page.")]
+    [InlineData("Choose the matching area, Eagle Rock, then verify its detail page.")]
+    public async Task RunAsync_SearchFeedbackPreservesExplicitResultSelectionAndRemainingJourney(string selection)
+    {
+        var client = new FakeOpenAiClient(
+        [
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject
+            {
+                ["automationId"] = "for-you-global-search", ["value"] = "Eagle rock"
+            }),
+            CreateFunctionTurn("find", "ansight_find_ui", new JsonObject
+            {
+                ["text"] = "Eagle Rock", ["role"] = "text", ["visible"] = true
+            }),
+            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject { ["automationId"] = "eagle-rock-result" }),
+            CompleteNavigationTurn()
+        ]);
+        var gateway = new FakeToolGateway();
+        gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
+        gateway.Results.Enqueue(new ToolCallResult(false,
+            "{\"result\":{\"totalMatches\":2,\"matches\":[{\"text\":\"Eagle Rock\"},{\"text\":\"Eagle Rock\"}]}}", "Results found."));
+        gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Opened."));
+        using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
+        service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
+        var instruction = "Test scenario:\nFocus the global search field on the For you tab.\n\n"
+            + "Enter \"Eagle rock\" in the global search field and wait for the \"Eagle ROck\" search result to display.\n\n"
+            + selection + "\n\nEnter \"Approach\" in the area's search field. Copy the location and verify the clipboard matches its GPS coordinates.";
+        var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123", [instruction]));
+
+        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        Assert.Equal(3, gateway.Calls.Count);
+        var postFindInput = client.Inputs[2].ToJsonString();
+        Assert.Contains("Use the complete current instruction", postFindInput);
+        Assert.Contains("continue the remaining journey", postFindInput);
+        Assert.DoesNotContain("The instruction does not ask to act", postFindInput);
+        Assert.DoesNotContain("do not follow its tapHint", postFindInput);
+        Assert.DoesNotContain("Complete after any remaining search-only verification", postFindInput);
+    }
+
     [Fact]
     public async Task RunAsync_AllowsTemporaryStartingStateWithOtherLexicallyMatchingTasks()
     {
@@ -232,7 +274,10 @@ public sealed partial class SimulatorAgentServiceTests
     [InlineData("textbox", false, true)]
     [InlineData("textbox", true, false)]
     [InlineData("text", false, false)]
-    public async Task RunAsync_SearchWaitCannotVerifyOnlyTheInputEcho(string role, bool explicitInputSelector, bool rejected)
+    [InlineData("textbox", false, true, "Search for Kalymnos and verify its search result is visible.")]
+    [InlineData("textbox", false, true, "Search for Kalymnos and select the \"Kalymnos\" search result.")]
+    public async Task RunAsync_SearchWaitCannotVerifyOnlyTheInputEcho(string role, bool explicitInputSelector, bool rejected,
+        string instruction = "Search for Kalymnos, open a result, then return.")
     {
         var waitArguments = new JsonObject { ["text"] = "Kalymnos", ["condition"] = "visible" };
         if (explicitInputSelector)
@@ -260,7 +305,7 @@ public sealed partial class SimulatorAgentServiceTests
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
-            ["Search for Kalymnos, open a result, then return."]) { CaptureTrace = true });
+            [instruction]) { CaptureTrace = true });
 
         var wait = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "wait");
         Assert.Equal(rejected, wait.IsError);

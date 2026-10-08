@@ -47,7 +47,7 @@ The requested scroll gesture was delivered without an unexpected navigation post
 <!-- /template -->
 
 <!-- template:search-result-verified -->
-The focused query verified the matching search result. The instruction does not ask to act on that result, so do not follow its tapHint. Complete after any remaining search-only verification.
+The focused query returned matching text. Use the complete current instruction to determine the next step. If it asks to select or open the matching search result, establish the intended result outside the search input, use its observed actionable selector or tapHint, and continue the remaining journey. When multiple results match, compare nearbyText with the requested criteria, then copy the chosen result's complete tapHint, including its host-resolved index and targetFingerprint. If any matching result is permitted, choose the first qualifying visible result and verify the destination. If the target remains ambiguous or tapHint is missing, inspect surrounding result content or the screenshot to identify the intended target; do not guess a list index. A truncated tree from another source cannot disprove these matches. Stay on the requested workflow; a task for a different tab is not a substitute. If it asks only to search or verify results, finish those checks without adding a selection. This observation does not change the requested scope or complete later steps.
 <!-- /template -->
 
 <!-- template:stagnation-warning -->
@@ -67,7 +67,15 @@ The bounded target-local tap was delivered. Do not repeat it. Wait once for the 
 <!-- /template -->
 
 <!-- template:task-failed -->
-The repository task did not complete successfully. If it stopped before changing the app because the starting page or tab was missing, establish that prerequisite and retry the same task once after the state changes. Otherwise report the failure honestly; do not manually replay a failed action or assertion to hide it. Trust any assertions the task already passed.
+The repository task did not complete successfully. If it stopped before changing the app because the starting page or tab was missing, reassess whether that task belongs to the requested workflow. For a task from a different tab or path, declare scope-mismatch and continue the user's requested path; do not change tabs just to make the task usable. For a task within scope, establish the prerequisite and retry the same task once after the state changes. An inapplicable task's unmet starting state does not prove the requested UI journey failed. Preserve the failed attempt in the report. Otherwise report the failure honestly; do not manually replay a failed action or assertion to hide it. Trust any assertions the task already passed.
+<!-- /template -->
+
+<!-- template:task-passed -->
+The repository task passed. Its passed assertions are completed checks. Combine them with earlier action-result observations and the requested journey before choosing another tool. If every requested action and check is covered, call complete_instruction now, even if repository task state lists unused shortcuts or reassessmentRequired=true. Continue only for a specific requested action or check that remains unproven at the required point in the journey, or a final-state requirement that later actions could have invalidated. Do not add an unrequested toast check, repeat a proven page-title or clipboard check, or issue a separate UI assertion merely to restate existing evidence. A passed task does not cover requirements outside its assertions and the other evidence already collected.
+<!-- /template -->
+
+<!-- template:truncated-ui-observation -->
+This UI observation is truncated: omitted controls and results are unknown, not absent. Do not use this partial tree to negate positive matches or native input values already observed without an intervening UI change. If the requested target remains unresolved, inspect a focused subtree or query, or use ansight_scan_screen when available to distinguish the visible results and their surrounding context. Avoid repeating a full-tree capture that hits the same limit. Continue through an evidence-backed target and verify the requested outcome; fail only for a specific unmet check or an unresolved targeting gap after the available focused recovery.
 <!-- /template -->
 
 <!-- template:task-shortcut-assessment -->

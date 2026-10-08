@@ -11,7 +11,7 @@ internal sealed class AgentToolCatalog
     private static readonly Dictionary<string, string[]> bundleToolNames = new(StringComparer.Ordinal)
     {
         ["manual-ui"] = ["ansight_find_ui", "ansight_wait_for_ui", "ansight_assert_ui", "ansight_tap_ui",
-            "ansight_type_text", "ansight_type_secret", "ansight_scroll_ui", "ansight_back_ui"],
+            "ansight_type_text", "ansight_type_secret", "ansight_scroll_ui", "ansight_back_ui", AgentUiBatch.ToolName],
         ["gestures"] = ["ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],
         ["evidence"] = ["ansight_take_screenshot", "ansight_get_live_navigation_structure"],
@@ -124,7 +124,7 @@ internal sealed class AgentToolCatalog
         => new()
         {
             ["type"] = "function", ["name"] = LoadToolName,
-            ["description"] = "Load capabilities when current tools are insufficient. manual-ui: find, wait, assert, tap, type, scroll, back; gestures: swipe, pinch, batches; app-tools: domain tool discovery/calls; evidence: screenshots/navigation; lifecycle: app/device lifecycle; tasks: task details. Loading performs no app action.",
+            ["description"] = "Load capabilities when current tools are insufficient. manual-ui: find, wait, assert, tap, type, scroll, back, ordered tool batches; gestures: swipe, pinch, recorded gestures; app-tools: domain tool discovery/calls; evidence: screenshots/navigation; lifecycle: app/device lifecycle; tasks: task details. Loading performs no app action.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
             {

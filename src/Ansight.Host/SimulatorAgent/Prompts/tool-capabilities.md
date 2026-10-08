@@ -12,6 +12,17 @@ or missing-input only for the exact task's extra operation or missing property. 
 after the covered portion passed, and task-failed for an attempted failure. Reassess after page/tab changes,
 including Back; same-page text entry, scrolling, and performed=false do not invalidate a declaration.
 
+For a short sequence whose next actions are already known, prefer ansight_run_ui_batch to separate model passes.
+It executes 2–8 find/tap/type/wait/assert calls in order, through the normal guards, and records each result.
+Each step has toolName and arguments using that tool's schema. After find, a tap or type step may set
+usePreviousTarget=true and omit all selector/coordinate fields; the host copies the one exact returned target.
+A missing, truncated, or duplicate find result stops the batch for your decision; it never chooses a duplicate.
+For example: find the search field, type with usePreviousTarget=true and value="Eagle Rock", then wait for the
+known loading indicator to disappear. Inspect the results before planning which one to open. When the exact field
+is already observed, start with type directly; type focuses the field, so a separate tap is unnecessary.
+Do not batch unknown targets, guessed future selectors, tasks, tool loading, completion, or actions whose scope
+depends on an earlier result. Stop on errors; never replay a successful prefix just because a later step failed.
+
 ansight_type_text replaces content by default; clear with value="" and replaceExisting=true. Never restart to
 clear a field or search for the app's own name. Use ansight_type_secret only with a declared host-managed alias
 and exact target; never reveal a secret or pass it through ansight_type_text. After search/filter input, wait for

@@ -52,6 +52,27 @@ The descriptor must remain a JSON-compatible object literal because Ansight
 reads it without executing the module. A normal return with no named `expect`
 assertion is **inconclusive**, not passed.
 
+## Tell the test runner what completed
+
+Use named assertions with messages that explain the verified outcome. The runtime
+reports `Passed` when the task finishes with passing assertions; a returned
+`success: true` flag does not replace them. Return a short `summary` and any useful
+measured values so the agent can understand the completed scope:
+
+```ts
+expect(result.passed, {
+  id: "signed-in-home-visible",
+  message: "The signed-in home screen is visible."
+}).toBe(true);
+return { summary: "Opened and verified the signed-in home screen." };
+```
+
+The return value reaches the agent as `result.output`. `summary` is a recommended
+convention, not a special command. The runner combines this output and the named
+assertions with earlier observations, then completes the test when all requested
+steps and checks are covered. Describe only what this script actually did and
+verified; a reusable task should not tell the agent to ignore remaining test steps.
+
 `platforms`, `deviceKinds`, and `frameworks` are optional task metadata, not
 task inputs. A workspace test can reference this task with `taskId`; its CLI
 runner validates the selected target and connected framework before execution.

@@ -1249,7 +1249,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains("Already launched, connected, and foreground.", client.Inputs[0].ToJsonString());
         Assert.Contains("Example App (com.example.app)", client.Inputs[0].ToJsonString());
         Assert.Equal(30, result.Audit.Tokens.TotalTokens);
-        Assert.Equal(16, result.Audit.SchemaVersion);
+        Assert.Equal(17, result.Audit.SchemaVersion);
         Assert.True(result.Audit.TraceEnabled);
         Assert.Equal(20, result.Audit.Tokens.InputTokens);
         Assert.Equal(10, result.Audit.Tokens.OutputTokens);
@@ -1272,7 +1272,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.DoesNotContain("redpoint", result.Audit.AgentPrompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CardSelectorView", result.Audit.AgentPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("map-dismiss-search-button", result.Audit.AgentPrompt, StringComparison.Ordinal);
-        Assert.Equal("ansight-simulator-agent-v36", result.Audit.PromptCacheKey);
+        Assert.Equal("ansight-simulator-agent-v42", result.Audit.PromptCacheKey);
         Assert.Equal(32_000, result.Audit.MaximumModelOutputTokens);
         Assert.All(client.MaximumOutputTokens, value => Assert.Equal(32_000, value));
         Assert.Equal(64, result.Audit.MaximumRoundTrips);
@@ -2700,8 +2700,9 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Contains("Select a result only when", client.Inputs[1].ToJsonString());
         var postFindInput = client.Inputs[2].ToJsonString();
-        Assert.Contains("verified the matching search result", postFindInput);
-        Assert.Contains("do not follow its tapHint", postFindInput);
+        Assert.Contains("Use the complete current instruction", postFindInput);
+        Assert.Contains("If it asks only to search or verify results", postFindInput);
+        Assert.Contains("without adding a selection", postFindInput);
         Assert.DoesNotContain("call ansight_tap_ui now", postFindInput);
         Assert.Equal(2, gateway.Calls.Count);
     }

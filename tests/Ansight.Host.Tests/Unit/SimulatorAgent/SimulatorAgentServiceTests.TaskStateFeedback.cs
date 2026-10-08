@@ -4,6 +4,72 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class SimulatorAgentServiceTests
 {
+    [Theory]
+    [InlineData("ansight_task_copy")]
+    [InlineData("ansight_run_task")]
+    public async Task RunAsync_PassedTaskCanCompleteOnNextPassWithPriorEvidenceAndUnusedShortcuts(string toolName)
+    {
+        var gateway = new FakeToolGateway
+        {
+            RepositoryTaskShortcuts =
+            [
+                CreateRepositoryTaskShortcut("ansight_task_copy", "copy-gps-location", "Copy GPS location"),
+                CreateRepositoryTaskShortcut("ansight_task_weather", "load-weather", "Load weather")
+            ],
+            InitialObservation = new ToolCallResult(false,
+                """{"result":{"capability":"ui.observe","root":{"text":"Eagle Rock","type":"AreaPage","visible":true}}}""",
+                "Eagle Rock detail page is visible."),
+            Result = new ToolCallResult(false,
+                """{"status":"Passed","assertions":[{"assertionId":"clipboard-matches-displayed-gps","passed":true}]}""",
+                "Task passed its clipboard assertion.")
+        };
+        AddToolLoadingDefinitions(gateway);
+        var arguments = toolName == "ansight_run_task"
+            ? new JsonObject { ["taskId"] = "copy-gps-location", ["input"] = new JsonObject() }
+            : new JsonObject();
+        var session = new FakeOpenAiSession([
+            CreateFunctionTurn("copy", toolName, arguments),
+            CompleteWebSocketTurn()
+        ]);
+        using var service = CreateToolLoadingService(session, gateway);
+
+        var result = await service.RunAsync(ToolLoadingRequest(
+            "Verify the Eagle Rock detail page is open, then copy its GPS location and check the clipboard matches."));
+
+        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        Assert.Equal(2, session.Requests.Count);
+        Assert.Equal("ansight_run_task", Assert.Single(gateway.Calls).ToolName);
+        var afterTask = session.Requests[1].IncrementalInput!;
+        AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(afterTask)), ["load-weather"], [], [], true);
+        var feedback = afterTask.ToJsonString();
+        Assert.Contains("The repository task passed.", feedback, StringComparison.Ordinal);
+        Assert.Contains("call complete_instruction now", feedback, StringComparison.Ordinal);
+        Assert.Contains("specific requested action or check that remains unproven", feedback, StringComparison.Ordinal);
+        Assert.True(feedback.IndexOf("The repository task passed.", StringComparison.Ordinal)
+                    > feedback.IndexOf("Repository task state:", StringComparison.Ordinal));
+        Assert.Contains("Eagle Rock", session.Requests[1].Input.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunAsync_OrdinaryToolSuccessDoesNotReceivePassedTaskGuidance()
+    {
+        var gateway = new FakeToolGateway
+        {
+            Result = new ToolCallResult(false, "{\"matches\":[]}", "No matches.")
+        };
+        AddToolLoadingDefinitions(gateway);
+        var session = new FakeOpenAiSession([
+            CreateFunctionTurn("observe", "ansight_get_live_visual_tree", new JsonObject()),
+            CompleteWebSocketTurn()
+        ]);
+        using var service = CreateToolLoadingService(session, gateway);
+
+        await service.RunAsync(ToolLoadingRequest("Inspect the current screen."));
+
+        Assert.DoesNotContain("The repository task passed.",
+            session.Requests[1].IncrementalInput!.ToJsonString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task RunAsync_EmitsTaskStateOnlyWhenSuccessChangesRemainingTasks()
     {
@@ -70,12 +136,15 @@ public sealed partial class SimulatorAgentServiceTests
         var afterFailure = session.Requests[1].IncrementalInput!;
         AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(afterFailure)), [], ["open-account"], [], true);
         Assert.Contains("The repository task did not complete successfully.", afterFailure.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("The repository task passed.", afterFailure.ToJsonString(), StringComparison.Ordinal);
         var failureOutput = Assert.Single(afterFailure.OfType<JsonObject>(), item =>
             item["type"]?.GetValue<string>() == "function_call_output" && item["call_id"]?.GetValue<string>() == "failed");
         Assert.Contains("Account visibility assertion failed.", failureOutput["output"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.True(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "failed").IsError);
         AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(session.Requests[2].IncrementalInput!)), [], [], [], false);
         Assert.DoesNotContain("The repository task did not complete successfully.",
+            session.Requests[2].IncrementalInput!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains("The repository task passed.",
             session.Requests[2].IncrementalInput!.ToJsonString(), StringComparison.Ordinal);
     }
 

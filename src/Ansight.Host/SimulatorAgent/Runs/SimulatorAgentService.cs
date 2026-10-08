@@ -35,8 +35,8 @@ public sealed class SimulatorAgentService : IDisposable
     private const int MaximumAuditModelContextCharacters = 1_000_000;
     private const int MaximumAuditOcrResultCharacters = 1_000_000;
     private const int MaximumAppGraphGuidanceCharacters = 16_000;
-    private const int AuditSchemaVersion = 16;
-    private const string PromptCacheKey = "ansight-simulator-agent-v36";
+    private const int AuditSchemaVersion = 17;
+    private const string PromptCacheKey = "ansight-simulator-agent-v42";
     private static readonly HashSet<string> strongTaskMatchIgnoredWords = new(StringComparer.Ordinal)
     {
         "a", "an", "and", "for", "from", "in", "into", "it", "its", "no", "of", "on", "or",
@@ -509,6 +509,7 @@ public sealed class SimulatorAgentService : IDisposable
                     tools.Add(BuildDeclareUncoveredStepToolDefinition(repositoryTasks));
                 }
                 tools.Add(BuildCompleteInstructionToolDefinition());
+                if (AgentUiBatch.BuildDefinition(tools) is { } batchDefinition) tools.Add(batchDefinition);
                 var toolCatalog = useDeferredToolLoading ? new AgentToolCatalog(tools) : null;
                 if (toolCatalog is not null)
                 {
@@ -611,6 +612,11 @@ public sealed class SimulatorAgentService : IDisposable
                 {
                     conversation.AddGuidance(navigationGuidance.TakeNewGuidance(
                         initialObservation.ModelOutput ?? initialObservation.Output));
+                    if (!initialObservation.IsError
+                        && IsTruncatedUiObservation(initialObservation.ModelOutput ?? initialObservation.Output))
+                    {
+                        conversation.AddUserInput(ReadFeedbackPrompt("truncated-ui-observation"));
+                    }
                 }
                 var history = conversation.History;
                 var instructionCompleted = false;
@@ -861,7 +867,27 @@ public sealed class SimulatorAgentService : IDisposable
                         continue;
                     }
 
-                    foreach (var receivedCall in response.FunctionCalls)
+                    var batchTools = isCompletionGracePass ? completionOnlyTools
+                        : toolCatalog is null ? tools
+                        : new JsonArray(toolCatalog.FullTools.OfType<JsonObject>()
+                            .Where(tool => !toolCatalog.IsDeferred(tool["name"]!.GetValue<string>()))
+                            .Select(tool => tool.DeepClone()).ToArray());
+                    var plannedCalls = new AgentUiBatch(response.FunctionCalls, batchTools,
+                        (callId, output) => conversation.AddFunctionOutput(callId, output),
+                        completed =>
+                        {
+                            toolCallAudits.Add(new SimulatorAgentToolCallAudit(
+                                toolCallAudits.Count + 1, instructionIndex + 1, turn,
+                                completed.Call.CallId, AgentUiBatch.ToolName, false, null,
+                                completed.StartedUtc, completed.DurationMilliseconds,
+                                CreateAuditPayload(SanitizeToolArguments(completed.Call).ToJsonString(), MaximumAuditArgumentCharacters, request.CaptureTrace),
+                                CreateAuditPayload(completed.Result.Output, MaximumAuditResultCharacters, request.CaptureTrace),
+                                completed.Result.IsError, completed.Result.Message));
+                            ReportProgress(new SimulatorAgentProgress(SimulatorAgentProgressStage.ToolCompleted,
+                                completed.Result.Message, instructionIndex + 1, instructions.Count, turn, AgentUiBatch.ToolName));
+                            conversation.AddUserInput("The ordered batch has finished. Use its recorded results to decide the next action; do not repeat completed steps. A stopped batch leaves later steps unexecuted.");
+                        });
+                    foreach (var receivedCall in plannedCalls.ReadCalls())
                     {
                         var call = toolGateway.NormalizeFunctionCall(receivedCall);
                         cancellationToken.ThrowIfCancellationRequested();
@@ -1094,7 +1120,11 @@ public sealed class SimulatorAgentService : IDisposable
                             var eligibleRepositoryTasks = repositoryTasks
                                 .Where(task => !excludedRepositoryTaskIds.Contains(task.TaskId))
                                 .ToArray();
-                            if (toolCatalog is not null && call.Name == AgentToolCatalog.LoadToolName)
+                            if (plannedCalls.ValidationError is { } batchError)
+                            {
+                                toolResult = CreateAgentGuardResult("batchGuard", batchError);
+                            }
+                            else if (toolCatalog is not null && call.Name == AgentToolCatalog.LoadToolName)
                             {
                                 loadedTools = toolCatalog.Load(call.Arguments);
                                 toolResult = loadedTools.Result;
@@ -1228,7 +1258,7 @@ public sealed class SimulatorAgentService : IDisposable
                                     correlationId,
                                     cancellationToken,
                                     request.OperationContext);
-                                toolResult = RejectSearchInputEcho(call, toolResult, lastTypedText, instruction);
+                                toolResult = RejectSearchInputEcho(call, toolResult, lastTypedText);
                                 if (!toolResult.IsError
                                     && !sessionCapabilities.IsDeviceOnly
                                     && string.Equals(call.Name, "ansight_launch_app", StringComparison.Ordinal)
@@ -1286,7 +1316,12 @@ public sealed class SimulatorAgentService : IDisposable
                                     MaximumAuditResultCharacters,
                                     request.CaptureTrace),
                                 true,
-                                exception.Message));
+                                exception.Message)
+                            {
+                                BatchCallId = plannedCalls.BatchCallId,
+                                BatchStepIndex = plannedCalls.StepIndex,
+                                BatchStepCount = plannedCalls.StepCount
+                            });
                             ReportProgress(new SimulatorAgentProgress(
                                 SimulatorAgentProgressStage.ToolCompleted,
                                 $"{call.Name} threw after {toolStopwatch.ElapsedMilliseconds:N0} ms: {exception.Message}",
@@ -1325,11 +1360,14 @@ public sealed class SimulatorAgentService : IDisposable
                             OcrEvidence = CreateOcrTraceEvidence(
                                 toolResult.TraceEvidence,
                                 request.CaptureTrace),
+                            BatchCallId = plannedCalls.BatchCallId,
+                            BatchStepIndex = plannedCalls.StepIndex,
+                            BatchStepCount = plannedCalls.StepCount,
                             AccessibilityEvidence = CreateAccessibilityTraceEvidence(
                                 toolResult.AccessibilityEvidence,
                                 request.CaptureTrace)
                         });
-                        conversation.AddFunctionOutput(call.CallId, toolResult.ModelOutput ?? toolResult.Output);
+                        plannedCalls.RecordResult(call, toolResult);
                         if (loadedTools is { AdditionalTools.Count: > 0 })
                         {
                             conversation.AddToolCapabilities(loadedTools.AdditionalTools, loadedTools.Guidance);
@@ -1435,6 +1473,15 @@ public sealed class SimulatorAgentService : IDisposable
                             lastRepositoryTaskState = repositoryTaskState;
                         }
 
+                        if (toolWasDispatched && !toolResult.IsError
+                            && appGraphExplorationName is null
+                            && string.Equals(call.Name, "ansight_run_task", StringComparison.Ordinal))
+                        {
+                            // A remaining shortcut is not a remaining requirement. Put the completion
+                            // guidance after task state so that reassessment does not invite extra work.
+                            conversation.AddUserInput(ReadFeedbackPrompt("task-passed"));
+                        }
+
                         if (!toolResult.IsError
                             && string.Equals(call.Name, "ansight_call_app_tool", StringComparison.Ordinal))
                         {
@@ -1489,12 +1536,21 @@ public sealed class SimulatorAgentService : IDisposable
                             && !string.IsNullOrWhiteSpace(typedText))
                         {
                             lastTypedText = typedText;
-                            conversation.AddUserInput(ReadFeedbackPrompt("text-entry-delivered"));
+                            if (plannedCalls.BatchCallId is null)
+                                conversation.AddUserInput(ReadFeedbackPrompt("text-entry-delivered"));
+                        }
+
+                        if (!toolResult.IsError
+                            && string.Equals(call.Name, "ansight_get_live_visual_tree", StringComparison.Ordinal)
+                            && IsTruncatedUiObservation(toolResult.ModelOutput ?? toolResult.Output))
+                        {
+                            conversation.AddUserInput(ReadFeedbackPrompt("truncated-ui-observation"));
                         }
 
                         if (!toolResult.IsError
                             && string.Equals(call.Name, "ansight_find_ui", StringComparison.Ordinal)
-                            && ContainsActionDirective(instruction))
+                            && ContainsActionDirective(instruction)
+                            && plannedCalls.BatchCallId is null)
                         {
                             if (IsTypedSearchResultQuery(call.Arguments, lastTypedText)
                                 && HasZeroUiMatches(toolResult.Output))
@@ -1503,8 +1559,7 @@ public sealed class SimulatorAgentService : IDisposable
                                     "query-not-represented"));
                             }
                             else if (IsTypedSearchResultQuery(call.Arguments, lastTypedText)
-                                     && HasUiMatches(toolResult.Output)
-                                     && !InstructionRequestsActingOnTypedResult(instruction, lastTypedText))
+                                     && HasUiMatches(toolResult.Output))
                             {
                                 conversation.AddUserInput(ReadFeedbackPrompt(
                                     "search-result-verified"));
@@ -1576,7 +1631,9 @@ public sealed class SimulatorAgentService : IDisposable
                         }
                         ReportProgress(new SimulatorAgentProgress(
                             SimulatorAgentProgressStage.ToolCompleted,
-                            toolResult.IsError
+                            call.Name == DeclareUncoveredStepToolName
+                                ? $"Decision: {toolResult.Message}"
+                                : toolResult.IsError
                                 ? $"{call.Name} failed after {toolStopwatch.ElapsedMilliseconds:N0} ms: {toolResult.Message}"
                                 : $"{call.Name} completed in {toolStopwatch.ElapsedMilliseconds:N0} ms: {toolResult.Message}",
                             instructionIndex + 1,
@@ -2446,6 +2503,22 @@ public sealed class SimulatorAgentService : IDisposable
         }
     }
 
+    private static bool IsTruncatedUiObservation(string output)
+    {
+        try
+        {
+            return JsonNode.Parse(output)?["result"] is JsonObject result
+                   && ReadString(result, "capability") == "ui.observe"
+                   && result["truncated"] is JsonValue truncated
+                   && truncated.TryGetValue<bool>(out var value)
+                   && value;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static bool HasZeroUiMatches(string output)
     {
         try
@@ -2487,31 +2560,6 @@ public sealed class SimulatorAgentService : IDisposable
            && arguments["text"] is JsonValue textValue
            && textValue.TryGetValue<string>(out var queriedText)
            && string.Equals(queriedText, lastTypedText, StringComparison.OrdinalIgnoreCase);
-
-    private static bool InstructionRequestsActingOnTypedResult(string instruction, string? typedText)
-    {
-        if (string.IsNullOrWhiteSpace(typedText))
-        {
-            return false;
-        }
-
-        var normalizedInstruction = instruction.ToLowerInvariant();
-        var normalizedTarget = typedText.Trim().ToLowerInvariant();
-        var directTargets = new[]
-        {
-            $"select {normalizedTarget}",
-            $"choose {normalizedTarget}",
-            $"open {normalizedTarget}",
-            $"tap {normalizedTarget}",
-            $"press {normalizedTarget}"
-        };
-        return directTargets.Any(normalizedInstruction.Contains)
-               || normalizedInstruction.Contains("select the result", StringComparison.Ordinal)
-               || normalizedInstruction.Contains("choose the result", StringComparison.Ordinal)
-               || normalizedInstruction.Contains("open the result", StringComparison.Ordinal)
-               || normalizedInstruction.Contains("open a result", StringComparison.Ordinal)
-               || normalizedInstruction.Contains("tap the result", StringComparison.Ordinal);
-    }
 
     private static bool ContainsActionDirective(string instruction)
     {
@@ -2574,6 +2622,10 @@ public sealed class SimulatorAgentService : IDisposable
     private static string BuildToolCallMessage(OpenAiFunctionCall call)
     {
         var safeArguments = SanitizeToolArguments(call);
+        if (call.Name == DeclareUncoveredStepToolName)
+        {
+            return $"Choosing how to continue: {ReadString(safeArguments, "uncoveredStep") ?? "checking saved tasks for the next step."}";
+        }
         var argumentText = safeArguments.ToJsonString();
         if (argumentText.Length > 320)
         {
@@ -2678,12 +2730,10 @@ public sealed class SimulatorAgentService : IDisposable
     private static ToolCallResult RejectSearchInputEcho(
         OpenAiFunctionCall call,
         ToolCallResult result,
-        string? lastTypedText,
-        string instruction)
+        string? lastTypedText)
     {
         if (result.IsError || call.Name != "ansight_wait_for_ui"
             || !IsTypedSearchResultQuery(call.Arguments, lastTypedText)
-            || !InstructionRequestsActingOnTypedResult(instruction, lastTypedText)
             || ReadString(call.Arguments, "condition") is "hidden" or "stable"
             || new[] { "nodeId", "automationId", "role", "type", "ancestorAutomationId", "action" }
                 .Any(key => ReadString(call.Arguments, key) is not null))
@@ -2881,6 +2931,21 @@ public sealed class SimulatorAgentService : IDisposable
               + "A scope-mismatch or missing-input exclusion lasts for this instruction; omit that task from later declarations."
             : $"Excluded task '{relatedTaskId}' for this instruction ({reason}). "
               + $"Before manual UI, run or assess the remaining matching tasks: {string.Join(", ", unaccountedStrongMatches)}.";
+        var relatedTaskTitle = repositoryTasks.FirstOrDefault(task => task.TaskId == relatedTaskId)?.Title;
+        var taskLabel = relatedTaskId is null ? "The saved task" : $"“{relatedTaskTitle ?? relatedTaskId}”";
+        var explanation = reason switch
+        {
+            "no-matching-task" => "No saved task covers this step.",
+            "starting-state-not-satisfied" => $"{taskLabel} needs its starting screen or app state set up first.",
+            "scope-mismatch" => $"{taskLabel} includes work outside this test.",
+            "missing-input" => $"{taskLabel} needs information that is not available.",
+            "partial-task-residual" => $"{taskLabel} passed. This step still needs to be completed.",
+            "task-failed" => $"{taskLabel} failed. The agent has proposed a next step.",
+            _ => "The agent has checked the available saved tasks."
+        };
+        var displayMessage = manualUiAllowed
+            ? $"{explanation} Next, the agent will use the app controls: {uncoveredStep}"
+            : $"{explanation} Other saved tasks still need to be checked before using the app controls.";
         return new ToolCallResult(
             false,
             new JsonObject
@@ -2891,6 +2956,7 @@ public sealed class SimulatorAgentService : IDisposable
                 ["uncoveredStep"] = uncoveredStep,
                 ["reason"] = reason,
                 ["relatedTaskId"] = relatedTaskId,
+                ["relatedTaskTitle"] = relatedTaskTitle,
                 ["evidence"] = evidence,
                 ["consideredTaskIds"] = new JsonArray(
                     suppliedTaskIds
@@ -2899,7 +2965,7 @@ public sealed class SimulatorAgentService : IDisposable
                         .ToArray()),
                 ["message"] = message
             }.ToJsonString(),
-            message);
+            displayMessage);
     }
 
     private static bool IsStrongRepositoryTaskMatch(
@@ -3135,6 +3201,12 @@ public sealed class SimulatorAgentService : IDisposable
     private static JsonObject SanitizeToolArguments(OpenAiFunctionCall call)
     {
         var safeArguments = call.Arguments.DeepClone().AsObject();
+        if (call.Name == AgentUiBatch.ToolName && safeArguments["steps"] is JsonArray steps)
+        {
+            foreach (var step in steps.OfType<JsonObject>())
+                if (ReadString(step, "toolName") is { } name && step["arguments"] is JsonObject arguments)
+                    step["arguments"] = SanitizeToolArguments(new OpenAiFunctionCall(call.CallId, name, arguments));
+        }
         if (string.Equals(call.Name, "ansight_type_text", StringComparison.Ordinal)
             && safeArguments["value"] is JsonValue value
             && value.TryGetValue<string>(out var text))
@@ -3537,7 +3609,7 @@ public sealed class SimulatorAgentService : IDisposable
             var isError = parsedOutput?["isError"] is JsonValue errorValue
                           && errorValue.TryGetValue<bool>(out var parsedError)
                           && parsedError;
-            item["output"] = new JsonObject
+            var compacted = new JsonObject
             {
                 ["isError"] = isError,
                 ["superseded"] = true,
@@ -3545,7 +3617,12 @@ public sealed class SimulatorAgentService : IDisposable
                 ["originalCharacterCount"] = output.Length,
                 ["sha256"] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(output)))
                     .ToLowerInvariant()
-            }.ToJsonString();
+            };
+            if (parsedOutput is not null && ToolEvidenceSummary.Create(parsedOutput) is { } evidence)
+            {
+                compacted["historicalEvidence"] = evidence;
+            }
+            item["output"] = compacted.ToJsonString();
             rewritten = true;
         }
 

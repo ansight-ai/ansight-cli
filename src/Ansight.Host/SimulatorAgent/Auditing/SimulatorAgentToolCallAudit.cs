@@ -17,6 +17,12 @@ public sealed record SimulatorAgentToolCallAudit(
     bool IsError,
     string Message)
 {
+    public string? BatchCallId { get; init; }
+
+    public int? BatchStepIndex { get; init; }
+
+    public int? BatchStepCount { get; init; }
+
     public IReadOnlyList<RepositoryTaskToolCall>? TaskCalls { get; init; }
 
     public IReadOnlyList<RepositoryTaskAssertion>? TaskAssertions { get; init; }
