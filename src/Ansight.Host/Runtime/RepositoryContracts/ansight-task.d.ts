@@ -247,6 +247,10 @@ export interface UiNode {
   viewportRelation?: "inside" | "partial" | "above" | "below" | "left" | "right" | "outside" | "unknown";
   /** Whether the node is effectively visible and intersects the captured viewport. */
   onScreen?: boolean;
+  /** Host-resolved tap arguments for this exact observed match. Copy the complete selector unchanged. */
+  tapHint?: { tool: "ansight_tap_ui"; selector: UiTapArguments } | null;
+  /** Nearby visible labels for distinguishing duplicate matches; proximity does not establish ancestry. */
+  nearbyText?: Array<Pick<UiNode, "text" | "role" | "type" | "bounds">>;
   /** Screen-space bounds when the source exposes layout information. */
   bounds?: UiBounds | null;
   /** Depth below the visual-tree root. */
@@ -443,6 +447,8 @@ export interface UiActionResult extends SessionResultIdentity {
 
 /** Arguments accepted by the UI tap operation. */
 export interface UiTapArguments extends UiSelector {
+  /** Opaque freshness value from a discovered tapHint; copy unchanged and rediscover if rejected. */
+  targetFingerprint?: string;
   /** Optional recorded viewport-normalized horizontal coordinate from 0 through 1. */
   normalizedX?: number;
   /** Optional recorded viewport-normalized vertical coordinate from 0 through 1. */
@@ -461,6 +467,8 @@ export interface UiTapArguments extends UiSelector {
 
 /** Arguments accepted by the UI type text operation. */
 export interface UiTypeTextArguments extends UiSelector {
+  /** Opaque freshness value from a discovered tapHint; copy unchanged and rediscover if rejected. */
+  targetFingerprint?: string;
   /** Text to enter into the selected UI node. */
   value: string;
   /** Whether existing text should be cleared before typing. */

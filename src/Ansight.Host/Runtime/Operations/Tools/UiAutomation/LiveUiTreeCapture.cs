@@ -4,7 +4,7 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
-internal sealed class LiveUiTreeCapture
+internal sealed partial class LiveUiTreeCapture
 {
     public const string DeviceAccessibilityToolId = "device.accessibility";
 
@@ -287,7 +287,9 @@ internal sealed class LiveUiTreeCapture
         }
         if (deviceResult.IsSuccess && HasModalDominance(deviceResult))
         {
-            return deviceResult;
+            return await CaptureModalTargetAsync(
+                deviceResult, session, appToolBridge, operationName, correlationId, selector!,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var fallbackResult = preferredFallbackToolId is null ? null

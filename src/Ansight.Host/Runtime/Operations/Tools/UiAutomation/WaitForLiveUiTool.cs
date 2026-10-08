@@ -333,7 +333,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             ["matchCount"] = reportedMatches.Count,
             ["stableSamples"] = stableSamples,
             ["treeHash"] = finalHash,
-            ["message"] = latestError ?? $"Timed out waiting for UI condition '{condition}'."
+            ["message"] = selector.DescribeFailure(latestError ?? $"Timed out waiting for UI condition '{condition}'.")
         };
         if (latestCapture is not null)
         {

@@ -145,7 +145,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 Name,
                 correlationId,
                 selector,
-                ToolExecutionCancellation.Current);
+                ToolExecutionCancellation.Current,
+                allowCached: arguments?["targetFingerprint"] is null);
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -211,7 +212,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 viewport);
             if (matches.Count == 0)
             {
-                var canUseOcr = selector.CanUseOcr
+                var canUseOcr = arguments?["targetFingerprint"] is null && selector.CanUseOcr
                                 && RunRequestContext.AllowsScreenshotOcr(correlationId);
                 if (actionKind == LiveUiActionKind.Tap && canUseOcr)
                 {
@@ -237,15 +238,15 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                     }
                     else if (ocrResult.Matches.Count > 1 && !selector.IndexSpecified)
                     {
-                        return BuildOcrToolError(
+                        return BuildSelectorError(
                             $"Screenshot OCR found {ocrResult.Matches.Count} visible text matches. Use ansight_find_ui to disambiguate the exact current target before tapping.",
-                            ocrTraceEvidence);
+                            selector, ocrTraceEvidence);
                     }
                     else if (selector.IndexSpecified && selector.Index >= ocrResult.Matches.Count)
                     {
-                        return BuildOcrToolError(
+                        return BuildSelectorError(
                             $"Screenshot OCR found {ocrResult.Matches.Count} visible text match(es), but index {selector.Index} was requested.",
-                            ocrTraceEvidence);
+                            selector, ocrTraceEvidence);
                     }
                 }
 
@@ -255,27 +256,27 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         selector.WithoutVisibility(),
                         capture.TypeRegistry).Count > 0)
                 {
-                    return BuildOcrToolError(
+                    return BuildSelectorError(
                         "A live UI node matched the stable selector fields, but it is effectively hidden. One of its MAUI ancestors may no longer be visible.",
-                        ocrTraceEvidence);
+                        selector, ocrTraceEvidence);
                 }
 
                 if (ocrNormalizedPoint is null)
                 {
-                    return BuildOcrToolError(
+                    return BuildSelectorError(
                         canUseOcr
                             ? "No semantic node or unique current screenshot-text match satisfied the supplied selector."
                             : "No live UI node matched the supplied selector.",
-                        ocrTraceEvidence);
+                        selector, ocrTraceEvidence);
                 }
             }
 
             if (matches.Count > 0 && selector.Index >= matches.Count)
             {
-                return BuildOcrToolError(
+                return BuildSelectorError(
                     $"The selector matched {matches.Count} node(s), but index {selector.Index} was requested. "
                     + "Indexes apply after all selector filters. Reuse the exact tapHint from a fresh find result.",
-                    ocrTraceEvidence);
+                    selector, ocrTraceEvidence);
             }
 
             if (matches.Count > 0)
@@ -284,7 +285,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 if (!LiveUiNodeQuery.IsEffectivelyVisible(target)
                     || !LiveUiNodeQuery.IsEffectivelyEnabled(target))
                 {
-                    return ToolError("The selected UI node is not visible and enabled.");
+                    return BuildSelectorError("The selected UI node is not visible and enabled.", selector, ocrTraceEvidence);
                 }
                 if (actionKind == LiveUiActionKind.KeyboardOpen
                     && !string.Equals(
@@ -295,9 +296,22 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         .Any(action => string.Equals(action, "focus", StringComparison.OrdinalIgnoreCase)
                                        || string.Equals(action, "typeText", StringComparison.OrdinalIgnoreCase)))
                 {
-                    return ToolError(
-                        "The selected UI node is not reported as a text input that can receive focus.");
+                    return BuildSelectorError(
+                        "The selected UI node is not reported as a text input that can receive focus.", selector, ocrTraceEvidence);
                 }
+            }
+        }
+
+        if (arguments?["targetFingerprint"] is { } fingerprintValue)
+        {
+            if (fingerprintValue is not JsonValue fingerprintScalar
+                || !fingerprintScalar.TryGetValue<string>(out var fingerprint)
+                || target is null
+                || !string.Equals(fingerprint, LiveUiTapTarget.Fingerprint(capture.Root, target, viewport), StringComparison.Ordinal))
+            {
+                return BuildSelectorError(
+                    "The discovered target or its nearby content changed. No input was delivered. "
+                    + "Run ansight_find_ui again and use the selected result's complete fresh tapHint.", selector, ocrTraceEvidence);
             }
         }
 
@@ -779,14 +793,16 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             isError: !inputResult.IsSuccess || postconditionError is not null);
     }
 
-    private static RequestResult BuildOcrToolError(
+    internal static RequestResult BuildSelectorError(
         string message,
+        LiveUiSelector selector,
         JsonObject? ocrTraceEvidence)
     {
         return RequestResult.ToolResult(
             new JsonObject
             {
-                ["message"] = message,
+                ["message"] = selector.DescribeFailure(message),
+                ["selector"] = selector.ToJson(),
                 ["performed"] = false,
                 [LiveUiOcrTraceEvidence.PayloadPropertyName] = ocrTraceEvidence?.DeepClone()
             },
@@ -821,6 +837,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 nullable: true);
         }
 
+        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.TypeText)
+        {
+            properties["targetFingerprint"] = ToolSchema.String(
+                "Copy this opaque freshness value from tapHint.selector when supplied. The host rechecks the target and nearby text before acting; rediscover if it changed.",
+                nullable: true);
+        }
         if (actionKind == LiveUiActionKind.Tap)
         {
             properties["normalizedX"] = ToolSchema.Number(

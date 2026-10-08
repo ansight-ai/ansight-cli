@@ -67,6 +67,15 @@ public sealed partial class AppInteractionBackendTests
             Assert.Equal(1, driver.Taps);
             Assert.Equal(0, bridge.Captures);
             Assert.Equal(0, bridge.CatalogQueries);
+            var missing = await dispatcher.CallToolAsync("ansight_tap_ui", new JsonObject
+            {
+                ["sessionId"] = id, ["automationId"] = "missing-button", ["visible"] = true
+            });
+            Assert.True(missing.Payload?["isError"]?.GetValue<bool>());
+            var failure = missing.Payload?["structuredContent"];
+            Assert.Equal("missing-button", failure?["selector"]?["automationId"]?.GetValue<string>());
+            Assert.Contains("missing-button", failure?["message"]?.GetValue<string>());
+            Assert.Equal(1, driver.Taps);
             var context = dispatcher.CreateAppInteractionContext(id);
             var observation = await context.ExecuteAsync(new("static-screen", "snapshot"));
             Assert.True(observation.Succeeded);

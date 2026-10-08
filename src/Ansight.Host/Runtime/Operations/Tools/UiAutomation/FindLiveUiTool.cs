@@ -132,7 +132,11 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 var result = ToResultJson(match, viewport, evidenceSource, selector);
                 result["tapHint"] = selectedCapture is null
                     ? null
-                    : BuildTapHint(selectedCapture.Root, match, viewport, selector);
+                    : BuildTapHint(selectedCapture.Root, match, viewport, selector, selectedCapture.Payload);
+                if (semanticSelection.StrictMatches.Count > 1 && selectedCapture is not null)
+                {
+                    result["nearbyText"] = LiveUiTapTarget.NearbyText(selectedCapture.Root, match, viewport);
+                }
                 return result;
             })
             .ToArray();
@@ -270,7 +274,8 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         JsonObject root,
         LiveUiNodeMatch match,
         LiveUiBounds? viewport,
-        LiveUiSelector originalSelector)
+        LiveUiSelector originalSelector,
+        JsonObject? payload = null)
     {
         var bounds = LiveUiNodeQuery.ReadBounds(match.Node);
         if (bounds is null || bounds.Width <= 0 || bounds.Height <= 0
@@ -281,37 +286,68 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             return null;
         }
 
-        var selector = new JsonObject { ["exact"] = true, ["visible"] = true, ["enabled"] = true };
+        var candidates = new List<JsonObject>();
         if (LiveUiNodeQuery.ReadAutomationId(match.Node) is { Length: > 0 } automationId)
         {
-            selector["automationId"] = automationId;
+            candidates.Add(new JsonObject { ["automationId"] = automationId });
         }
-        else if (LiveUiNodeQuery.ReadString(match.Node, "id") is { Length: > 0 } nodeId)
+        if (LiveUiNodeQuery.ReadString(match.Node, "id") is { Length: > 0 } nodeId)
         {
-            selector["nodeId"] = nodeId;
+            candidates.Add(new JsonObject { ["nodeId"] = nodeId });
         }
-        else if (LiveUiNodeQuery.ReadText(match.Node) is { Length: > 0 } text)
+        if (LiveUiNodeQuery.ReadText(match.Node) is { Length: > 0 } text)
         {
-            selector["text"] = text;
-            selector["role"] = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry);
-            selector["type"] = match.TypeRegistry.Resolve(match.Node);
-        }
-        else
-        {
-            return null;
+            candidates.Add(new JsonObject
+            {
+                ["text"] = text,
+                ["role"] = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry),
+                ["type"] = match.TypeRegistry.Resolve(match.Node)
+            });
         }
 
-        if (originalSelector.AncestorAutomationId is not null)
+        JsonObject? indexedSelector = null;
+        foreach (var selector in candidates)
         {
-            selector["ancestorAutomationId"] = originalSelector.AncestorAutomationId;
+            selector["exact"] = true;
+            selector["visible"] = true;
+            selector["enabled"] = true;
+            if (originalSelector.AncestorAutomationId is not null)
+            {
+                selector["ancestorAutomationId"] = originalSelector.AncestorAutomationId;
+            }
+
+            // Recompute the index after narrowing filters, using the same ordering as tap.
+            // Prefer a unique identity even when a more stable ID happens to be repeated.
+            var resolved = LiveUiNodeQuery.OrderMatchesForSelection(
+                LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(selector), match.TypeRegistry),
+                payload ?? root, viewport);
+            var index = resolved.ToList().FindIndex(candidate => ReferenceEquals(candidate.Node, match.Node));
+            if (index < 0) continue;
+            if (resolved.Count == 1) return TapHint(selector);
+
+            // Coincident labels may describe the same rendered element. Do not turn those
+            // into separate positional choices without evidence of distinct visible targets.
+            if (resolved.Where((_, otherIndex) => otherIndex != index).Any(other =>
+                    LiveUiNodeQuery.ReadBounds(other.Node) is { } otherBounds
+                    && LiveUiBounds.Intersection(bounds, otherBounds) is not null)) continue;
+
+            selector["index"] = index;
+            selector["targetFingerprint"] = LiveUiTapTarget.Fingerprint(root, match, viewport!);
+            indexedSelector = selector;
         }
 
-        // Validate against the full action tree. A broad-query index cannot be carried into
-        // narrowed filters, and duplicate rows must not receive an invented positional target.
-        var resolved = LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(selector), match.TypeRegistry);
-        return resolved.Count == 1 && ReferenceEquals(resolved[0].Node, match.Node)
-            ? new JsonObject { ["tool"] = "ansight_tap_ui", ["selector"] = selector }
-            : null;
+        return indexedSelector is null ? null : TapHint(indexedSelector);
+
+        JsonObject TapHint(JsonObject selector)
+        {
+            if (ResolveViewportRelation(bounds, viewport) == "partial"
+                && LiveUiBounds.Intersection(bounds, viewport!) is { } visibleBounds)
+            {
+                selector["screenX"] = visibleBounds.CenterX;
+                selector["screenY"] = visibleBounds.CenterY;
+            }
+            return new JsonObject { ["tool"] = "ansight_tap_ui", ["selector"] = selector };
+        }
     }
 
     private static SemanticSelection OrderSelection(

@@ -74,6 +74,11 @@ internal static class UiNodeProjection
 
         // A null hint is an authoritative refusal. A missing hint does not establish uniqueness.
         if (source.TryGetPropertyValue("tapHint", out var hint)) result["tapHint"] = hint?.DeepClone();
+        if (source["nearbyText"] is JsonArray nearbyText)
+        {
+            result["nearbyText"] = new JsonArray(nearbyText.OfType<JsonObject>().Take(6)
+                .Select(label => (JsonNode)FromResult(label, options, includeAncestors: false)).ToArray());
+        }
         if (includeAncestors && source["ancestorPath"] is JsonArray ancestors)
         {
             SetAncestors(result, ancestors.OfType<JsonObject>(), null, options);

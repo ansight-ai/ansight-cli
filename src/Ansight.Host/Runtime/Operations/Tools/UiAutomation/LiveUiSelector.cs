@@ -145,6 +145,19 @@ internal sealed class LiveUiSelector
         };
     }
 
+    public string DescribeFailure(string message)
+    {
+        if (!HasCriteria) return message;
+        var fields = ToJson();
+        foreach (var field in fields.Where(static field => field.Value is null).Select(static field => field.Key).ToArray())
+        {
+            fields.Remove(field);
+        }
+        fields.Remove("indexSpecified");
+        if (!IndexSpecified) fields.Remove("index");
+        return $"{message} Selector: {fields.ToJsonString()}.";
+    }
+
     public LiveUiSelector WithoutVisibility()
     {
         return new LiveUiSelector

@@ -1550,6 +1550,7 @@ internal sealed class ToolGateway : IToolGateway
             "exact" => "Exact string matching; default true.",
             "caseSensitive" => "Case-sensitive matching; default false.",
             "index" => "Zero-based match index after selector filters; default 0.",
+            "targetFingerprint" => "Copy unchanged from the selected tapHint; a changed target requires fresh discovery.",
             "orientation" when toolName == "ansight_scroll_ui" => "Content to reveal: down/S reveals below, up/N reveals above (opposite finger travel). Compass directions/paths accepted; default up.",
             "orientation" when toolName == "ansight_swipe_ui" => "Finger travel: up/N, down/S, E, W, diagonals or paths such as S to N. Default up.",
             "length" when toolName is "ansight_swipe_ui" or "ansight_scroll_ui" => "Viewport fraction 0.05–0.9; default 0.4.",

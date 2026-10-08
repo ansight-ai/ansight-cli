@@ -123,6 +123,8 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
                 ["capability"] = "ui.assert",
                 ["actionId"] = actionId,
                 ["passed"] = passed,
+                ["message"] = passed ? "UI assertion passed." : selector.DescribeFailure(
+                    $"UI assertion failed: {string.Join(" ", failures.Select(failure => failure?.ToString()))}"),
                 ["sessionId"] = capture.Session.SessionId,
                 ["appId"] = capture.Session.AppId,
                 ["visualTreeToolId"] = capture.ToolId,
