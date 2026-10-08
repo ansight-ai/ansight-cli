@@ -4,7 +4,7 @@
   "title": "Ansight workspace test",
   "type": "object",
   "additionalProperties": false,
-  "required": ["appId", "prompt", "validation"],
+  "required": ["appId", "prompt"],
   "properties": {
     "schemaVersion": {
       "const": 1,
@@ -45,10 +45,10 @@
     "prompt": {
       "type": "string",
       "minLength": 1,
-      "description": "Scenario and actions the agent should perform in the app during this test."
+      "description": "Actions and observable checks for the agent, in order. Supports @task/ID for exact workspace tasks and @selector/ID for exact automation IDs; percent-encode special characters in IDs."
     },
     "validation": {
-      "description": "How to check the final app state. Use a validation prompt string, or an object with a prompt, assertions, or both.",
+      "description": "Optional additional checks. Checks can also be written directly in prompt. Use a validation string, or an object with a prompt, assertions, or both.",
       "oneOf": [
         { "type": "string", "minLength": 1 },
         {

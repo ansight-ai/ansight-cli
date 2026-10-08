@@ -34,6 +34,23 @@ public sealed class WorkspaceTestServiceTests
     }
 
     [Fact]
+    public async Task RunAsync_RejectsUnknownInlineTaskBeforeLaunchingTheApplication()
+    {
+        using var environment = new TestEnvironment();
+        using var runtime = environment.CreateRuntime();
+        var workspacePath = CreateWorkspace(environment.RootPath);
+        File.WriteAllText(Path.Combine(workspacePath, "ansight", "tests", "example.json"),
+            """{"appId":"com.example.target","prompt":"Run @task/missing."}""");
+        var launcher = new FakeTargetLauncher(new WorkspaceTestTarget(
+            DevicePlatforms.Android, "android-1", "Pixel", "com.example.target", false, false, true));
+        var service = new WorkspaceTestService(runtime, runtime.SimulatorAgent, launcher);
+        var result = await service.RunAsync(new WorkspaceTestRunRequest(workspacePath, "example"), null, CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Unknown or disabled prompt task reference(s): @task/missing", result.Message);
+        Assert.Equal(0, launcher.LaunchCallCount);
+    }
+
+    [Fact]
     public void CatalogReportsExpandedInstructionsOverTheRunnerLimit()
     {
         var rootPath = Path.Combine(Path.GetTempPath(), $"ansight-workspace-{Guid.NewGuid():N}");
@@ -137,6 +154,39 @@ public sealed class WorkspaceTestServiceTests
         Assert.False(result.IsSuccess);
         Assert.Contains("disabled", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, targetLauncher.LaunchCallCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_AllowsADisabledDraftWithoutEnablingTheSavedTest()
+    {
+        using var environment = new TestEnvironment();
+        using var runtime = environment.CreateRuntime();
+        var workspacePath = CreateWorkspace(environment.RootPath);
+        var testPath = Path.Combine(workspacePath, "ansight", "tests", "example.json");
+        const string source = """
+                              {"enabled":false,"appId":"com.example.target","prompt":"Open the app and verify the home screen."}
+                              """;
+        File.WriteAllText(testPath, source);
+        var target = new WorkspaceTestTarget(
+            DevicePlatforms.Android, "android-1", "Pixel", "com.example.target", false, false, true);
+        var launcher = new FakeTargetLauncher(target);
+        var service = new WorkspaceTestService(runtime, runtime.SimulatorAgent, launcher);
+
+        var result = await service.RunAsync(new WorkspaceTestRunRequest(
+            workspacePath, "example", SessionWaitTimeout: TimeSpan.Zero,
+            Target: new WorkspaceTestTargetRequest(DeviceIdentifier: target.DeviceIdentifier),
+            EnableWorkspaceTools: false)
+        {
+            DraftSource = source
+        }, null, CancellationToken.None);
+
+        // Reaching the session wait proves a disabled draft gets past the run gate.
+        Assert.Equal(1, launcher.LaunchCallCount);
+        Assert.Contains("Timed out", result.Message, StringComparison.Ordinal);
+        Assert.Equal(1, launcher.StopCallCount);
+        Assert.False(result.Test!.Enabled);
+        Assert.Equal(source, File.ReadAllText(testPath));
+        Assert.False(WorkspaceTestCatalog.Load(workspacePath).Tests.Single().Enabled);
     }
 
     [Fact]

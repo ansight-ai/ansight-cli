@@ -15,6 +15,13 @@ public sealed record WorkspaceTestDefinition(
 
     public IReadOnlyList<string> HintTasks { get; init; } = [];
 
+    public IReadOnlyList<string> GetReferencedTaskIds()
+        => WorkspacePromptReferences.Read(string.Join("\n", new[] { Prompt, Validation.Prompt }.Concat(Validation.Assertions)))
+            .Where(reference => reference.Kind == "task")
+            .Select(reference => reference.Id)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
     public string BuildRunnerPrompt(string? promptOverride = null)
     {
         var scenario = string.IsNullOrWhiteSpace(promptOverride)
@@ -53,7 +60,7 @@ public sealed record WorkspaceTestDefinition(
                 {
                     ["SECRETS"] = BuildBulletList(RequiredSecrets)
                 });
-        return EmbeddedTextResource.RenderSection(
+        return WorkspacePromptReferences.Expand(EmbeddedTextResource.RenderSection(
             "Workspaces/Catalog/Prompts/workspace-test-prompts.md",
             "runner",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -62,7 +69,7 @@ public sealed record WorkspaceTestDefinition(
                 ["VALIDATION_SECTION"] = validationSection,
                 ["ASSERTIONS_SECTION"] = assertionsSection,
                 ["SECRETS_SECTION"] = secretsSection
-            }).TrimEnd();
+            }).TrimEnd());
     }
 
     private static string BuildSection(

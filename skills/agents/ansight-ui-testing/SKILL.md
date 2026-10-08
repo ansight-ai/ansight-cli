@@ -74,7 +74,7 @@ Derive stable IDs from paths by removing the extension and replacing directory s
 
 ## Tests: Agentic Journeys
 
-Read the current [Workspace Tests](https://www.ansight.ai/docs/workspace/tests) contract before authoring. Keep actions and journey context in `prompt`; keep observable success criteria in `validation`. Require the exact `appId`. Put only secret aliases in `requiredSecrets`, never secret values. Trends evaluation is session-driven and independent of workspace test outcomes.
+Read the current [Workspace Tests](https://www.ansight.ai/docs/workspace/tests) contract before authoring. Put actions and observable checks together in `prompt`, checking transient state at the relevant point in the journey. `validation` is optional; retain it when a separate checklist is useful. Use `@task/ID` for an exact workspace task and `@selector/ID` for an exact observed automation ID; percent-encode special characters in IDs. The YAML editor completes both references from workspace tasks and recorded automation IDs. Unknown or disabled task references fail before execution; an unrecorded selector needs evidence review. Require the exact `appId`. Put only secret aliases in `requiredSecrets`, never secret values. Trends evaluation is session-driven and independent of workspace test outcomes.
 
 List and validate before execution:
 
@@ -401,7 +401,7 @@ Inspect event labels or native log messages in captured evidence before defining
 
 A session can contain several completed instances of the same operation. Choose `firstCompleted`, `lastCompleted`, `exactlyOne`, or `all` deliberately for the intended analysis. When paired start and end events carry the same non-empty `details`, Ansight keeps that value as a group so repeated operations such as loading “Secret Garden” and “Seaside” form separate metric and regression series. Set `maximumDurationMs` high enough for a realistic slow run but low enough to prevent an unrelated later end event from closing an abandoned start.
 
-A Trends definition selects telemetry inside each chosen span, calculates deterministic `metrics`, and applies each metric's `budget`. Keep behavioral assertions in test validation and numeric trend rules in Trends definitions.
+A Trends definition selects telemetry inside each chosen span, calculates deterministic `metrics`, and applies each metric's `budget`. Keep behavioral assertions in the test prompt or optional validation block and numeric trend rules in Trends definitions.
 
 An optional `regression` belongs on the metric it monitors. Use [Trends](https://www.ansight.ai/docs/workspace/trends) for reference, regression, confirmation, and comparable-series rules. Inspect stored results with:
 

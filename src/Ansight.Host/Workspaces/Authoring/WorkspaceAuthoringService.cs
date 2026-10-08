@@ -316,9 +316,10 @@ public sealed class WorkspaceAuthoringService
         source.AppendLine($"id: {JsonSerializer.Serialize(testId)}");
         source.AppendLine($"name: {JsonSerializer.Serialize(NormalizeOptional(request.Name) ?? Humanize(testId))}");
         source.AppendLine($"appId: {JsonSerializer.Serialize(appId)}");
-        AppendYamlBlock(source, "prompt", NormalizeOptional(request.Prompt) ?? "Run the scenario using Ansight tools.");
-        source.AppendLine("validation:");
-        AppendYamlBlock(source, "  prompt", NormalizeOptional(request.ValidationPrompt) ?? "Validate the final app state.");
+        AppendYamlBlock(source, "prompt", NormalizeOptional(request.Prompt) ?? "Describe the actions and the observable outcomes to verify using Ansight tools.");
+        var validationPrompt = NormalizeOptional(request.ValidationPrompt);
+        if (validationPrompt is not null || assertions.Count > 0) source.AppendLine("validation:");
+        if (validationPrompt is not null) AppendYamlBlock(source, "  prompt", validationPrompt);
         if (assertions.Count > 0)
         {
             source.AppendLine("  assertions:");

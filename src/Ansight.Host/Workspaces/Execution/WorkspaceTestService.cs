@@ -251,7 +251,9 @@ public sealed partial class WorkspaceTestService
                 BuildMissingTestMessage(catalog, request.TestId));
         }
 
-        if (!test.Enabled)
+        // Explicit draft runs are how an author verifies a test before enabling it
+        // in the workspace. Keep the parsed definition and saved source unchanged.
+        if (draftTest is null && !test.Enabled)
         {
             return WorkspaceTestRunResult.Failure(
                 $"Workspace test '{test.TestId}' is disabled.",
@@ -273,6 +275,20 @@ public sealed partial class WorkspaceTestService
                     workspaceConnection.Message,
                     test);
             }
+        }
+
+        var referencedTaskIds = test.GetReferencedTaskIds();
+        if (referencedTaskIds.Count > 0)
+        {
+            if (!request.EnableWorkspaceTools)
+                return WorkspaceTestRunResult.Failure("Prompt task references require workspace tools to be enabled.", test);
+            var referencedTasks = runtime.InspectRepositoryTasks(test.AppId,
+                RepositoryTaskWorkspaceScope.Resolve(test.AppId, catalog.WorkspacePath));
+            var unavailable = referencedTaskIds.Where(id => !referencedTasks.Tasks.Any(task =>
+                task.Enabled && string.Equals(task.TaskId, id, StringComparison.Ordinal))).ToArray();
+            if (unavailable.Length > 0)
+                return WorkspaceTestRunResult.Failure(
+                    $"Unknown or disabled prompt task reference(s): {string.Join(", ", unavailable.Select(id => "@task/" + id))}.", test);
         }
 
         RepositoryTask? declaredTask = null;
@@ -547,7 +563,7 @@ public sealed partial class WorkspaceTestService
                     WorkspacePath = catalog.WorkspacePath,
                     WorkspaceTestId = test.TestId,
                     WorkspaceTestName = test.Name,
-                    PreferredTaskIds = request.PreferredTaskIds.Concat(test.HintTasks)
+                    PreferredTaskIds = referencedTaskIds.Concat(request.PreferredTaskIds).Concat(test.HintTasks)
                         .Distinct(StringComparer.Ordinal).ToArray(),
                     BatchRunId = request.BatchRunId,
                     OperationContext = request.OperationContext,

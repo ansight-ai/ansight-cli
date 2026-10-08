@@ -1,8 +1,9 @@
 # Tests
 
 A test describes a user journey and its observable finish line. Ansight gives
-the instructions to an agent, the agent operates the app, and a separate
-validation step decides whether the expected state was reached.
+the instructions to an agent, which operates the app and verifies each requested
+check using evidence. Put actions and checks together in the prompt; a separate
+validation block is optional.
 
 Read the full [Ansight workspace tests guide](https://www.ansight.ai/docs/workspace/tests).
 
@@ -22,11 +23,7 @@ hintTasks:
   - onboarding.submit-sign-in
 prompt: |-
   Launch the app and complete onboarding as a new user.
-validation:
-  prompt: |-
-    Inspect the final app state.
-  assertions:
-    - The signed-in home screen is visible
+  Verify that the signed-in home screen is visible.
 requiredSecrets:
   - TEST_USER_PASSWORD
 ```
@@ -35,7 +32,10 @@ requiredSecrets:
 `hintTasks` is optional. It names up to five repository task IDs to preload and
 suggest to the agent. A hint is used only when its starting state and scope fit;
 the task's own assertions provide evidence for steps it verifies.
-New tests use `.yaml`; existing `.json` tests remain valid.
+Use `@task/ID` for an exact workspace task or `@selector/ID` for an exact
+automation ID inside the prompt. The YAML editor completes tasks and recorded
+selectors and shows their details on hover. Percent-encode special characters
+in IDs. New tests use `.yaml`; existing `.json` tests remain valid.
 
 ```sh
 ansight test validate .

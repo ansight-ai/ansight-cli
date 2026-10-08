@@ -126,7 +126,9 @@ public static class WorkspaceTestCatalog
         var requiredSecrets = ReadRequiredSecrets(root);
         var hintTasks = ReadHintTasks(root);
         var taskId = NormalizeOptionalString(root, "taskId");
-        if (string.IsNullOrWhiteSpace(validation.Prompt) && validation.Assertions.Count == 0)
+        WorkspacePromptReferences.Read(string.Join("\n", new[] { prompt, validation.Prompt }.Concat(validation.Assertions)));
+        if (root.TryGetProperty("validation", out _)
+            && string.IsNullOrWhiteSpace(validation.Prompt) && validation.Assertions.Count == 0)
         {
             throw new InvalidDataException(
                 "validation must contain a prompt or at least one assertion.");
@@ -256,7 +258,7 @@ public static class WorkspaceTestCatalog
     {
         if (!root.TryGetProperty("validation", out var validationElement))
         {
-            throw new InvalidDataException("validation is required.");
+            return new WorkspaceTestValidation(string.Empty, []);
         }
 
         if (validationElement.ValueKind == JsonValueKind.String)

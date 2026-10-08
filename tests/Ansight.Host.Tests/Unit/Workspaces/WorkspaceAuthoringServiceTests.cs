@@ -182,6 +182,18 @@ public sealed class WorkspaceAuthoringServiceTests
     }
 
     [Fact]
+    public void AddTest_DefaultsToPromptOnlyWithoutFillerValidation()
+    {
+        using var directory = new TemporaryDirectory();
+        var result = new WorkspaceAuthoringService().AddTest(new WorkspaceTestCreateRequest(
+            directory.RootPath, "copy", "com.example.app",
+            Prompt: "Tap Copy and verify the confirmation appears."));
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.DoesNotContain("validation:", File.ReadAllText(result.DefinitionPath!));
+        Assert.Empty(Assert.Single(WorkspaceTestCatalog.Load(directory.RootPath).Tests).Validation.Assertions);
+    }
+
+    [Fact]
     public void AddDefinitions_CreatesFilesAcceptedByExistingCatalogs()
     {
         using var directory = new TemporaryDirectory();
