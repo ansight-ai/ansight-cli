@@ -14,7 +14,8 @@ public sealed class WorkspacePromptReferenceTests
         Assert.Empty(test.Validation.Prompt);
         var runner = test.BuildRunnerPrompt();
         Assert.Contains("Tap Copy and verify the confirmation appears.", runner);
-        Assert.Contains("transient confirmations before continuing", runner);
+        Assert.Contains("Capture a requested transient check when it occurs.", runner);
+        Assert.Contains("These runner instructions add no new product requirements.", runner);
         Assert.DoesNotContain("Validation:", runner);
     }
 
