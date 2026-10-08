@@ -51,6 +51,9 @@ public sealed class AutomationEvidenceTaskTests
         Assert.Equal("task:evidence", createPayload["annotation"]!["source"]!.GetValue<string>());
         Assert.True(fixture.Store.TryLoad("foreign", out var foreign));
         Assert.Empty(foreign!.Annotations);
+        await TestWait.UntilAsync(() => fixture.Store.TryLoad("current", out var persisted)
+            && persisted!.Annotations.Count == 0,
+            because: "The annotation deletion should reach the capture store before checking persisted evidence.");
         Assert.True(fixture.Store.TryLoad("current", out var current));
         Assert.Empty(current!.Annotations);
     }
