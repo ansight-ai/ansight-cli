@@ -96,7 +96,9 @@ internal static class RepositoryTaskProtocol
             ["durationMilliseconds"] = result.DurationMilliseconds,
             ["message"] = result.Message,
             ["output"] = result.Output?.DeepClone(),
-            ["assertions"] = new JsonArray(result.Assertions.Select(assertion => (JsonNode?)new JsonObject
+            ["assertions"] = includeCallTrace
+                ? JsonSerializer.SerializeToNode(result.Assertions.Select(RepositoryTaskCallTrace.CaptureAssertion), JsonUtil.Compact)
+                : new JsonArray(result.Assertions.Select(assertion => (JsonNode?)new JsonObject
             {
                 ["assertionId"] = assertion.AssertionId,
                 ["passed"] = assertion.Passed,
@@ -110,6 +112,7 @@ internal static class RepositoryTaskProtocol
                         Arguments = null,
                         Result = null,
                         ChildCalls = null,
+                        Assertions = null,
                         SourceTrace = null
                     }).ToArray(),
                 JsonUtil.Compact)

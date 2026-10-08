@@ -19,6 +19,8 @@ public sealed record SimulatorAgentToolCallAudit(
 {
     public IReadOnlyList<RepositoryTaskToolCall>? TaskCalls { get; init; }
 
+    public IReadOnlyList<RepositoryTaskAssertion>? TaskAssertions { get; init; }
+
     public RepositoryTaskSourceTrace? TaskSource { get; init; }
 
     public SimulatorAgentOcrTraceEvidence? OcrEvidence { get; init; }

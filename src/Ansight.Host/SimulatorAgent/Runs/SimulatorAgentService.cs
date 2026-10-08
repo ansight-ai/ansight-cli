@@ -1320,6 +1320,7 @@ public sealed class SimulatorAgentService : IDisposable
                             toolResult.Message)
                         {
                             TaskCalls = request.CaptureTrace ? toolResult.TaskCalls : null,
+                            TaskAssertions = request.CaptureTrace ? toolResult.TaskAssertions : null,
                             TaskSource = request.CaptureTrace ? toolResult.TaskSource : null,
                             OcrEvidence = CreateOcrTraceEvidence(
                                 toolResult.TraceEvidence,

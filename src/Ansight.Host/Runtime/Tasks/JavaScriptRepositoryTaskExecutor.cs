@@ -69,6 +69,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         var startedAtUtc = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         var toolCalls = new List<RepositoryTaskToolCall>();
+        var recordedAssertions = new List<RepositoryTaskAssertion>();
         if (unavailableMessage is not null)
         {
             return Finish(
@@ -78,7 +79,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 stopwatch,
                 unavailableMessage,
                 null,
-                [],
+                recordedAssertions,
                 toolCalls,
                 string.Empty);
         }
@@ -112,7 +113,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     stopwatch,
                     "The repository task Node.js runtime did not start.",
                     null,
-                    [],
+                    recordedAssertions,
                     toolCalls,
                     string.Empty);
             }
@@ -153,7 +154,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             ? "Repository task execution was cancelled while loading its module."
                             : $"Task module loading exceeded the host's {moduleLoadTimeout.TotalSeconds:0}-second limit.",
                         null,
-                        [],
+                        recordedAssertions,
                         toolCalls,
                         standardError);
                 }
@@ -172,7 +173,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     stopwatch,
                     "The task module did not complete the Ansight startup handshake.",
                     null,
-                    [],
+                    recordedAssertions,
                     toolCalls,
                     standardError);
             }
@@ -200,7 +201,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             stopwatch,
                             "The task process exited without returning a result.",
                             null,
-                            [],
+                            recordedAssertions,
                             toolCalls,
                             standardError);
                     }
@@ -216,13 +217,19 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             stopwatch,
                             "The task process returned malformed protocol JSON.",
                             null,
-                            [],
+                            recordedAssertions,
                             toolCalls,
                             await standardErrorTask.ConfigureAwait(false));
                     }
 
                     if (request.SourceCapture?.TryRead(message) == true) continue;
                     var messageType = message["type"]?.GetValue<string>();
+                    if (string.Equals(messageType, "assertion", StringComparison.Ordinal)
+                        && message["assertion"] is JsonObject assertion)
+                    {
+                        recordedAssertions.AddRange(ParseAssertions(new JsonArray(assertion.DeepClone())));
+                        continue;
+                    }
                     if (string.Equals(messageType, "call", StringComparison.Ordinal))
                     {
                         var callFailure = await HandleToolCallAsync(
@@ -242,7 +249,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                                 stopwatch,
                                 callFailure.Value.Message,
                                 null,
-                                [],
+                                recordedAssertions,
                                 toolCalls,
                                 await standardErrorTask.ConfigureAwait(false));
                         }
@@ -261,14 +268,17 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             stopwatch,
                             $"The task process returned unsupported message type '{messageType ?? "(missing)"}'.",
                             null,
-                            [],
+                            recordedAssertions,
                             toolCalls,
                             await standardErrorTask.ConfigureAwait(false));
                     }
 
                     process.StandardInput.Close();
                     await process.WaitForExitAsync(taskCts.Token).ConfigureAwait(false);
-                    var assertions = ParseAssertions(message["assertions"] as JsonArray);
+                    // The streamed values capture what was compared at the time of the check,
+                    // even if a task later mutates an object used by an expectation.
+                    IReadOnlyList<RepositoryTaskAssertion> assertions = recordedAssertions.Count > 0
+                        ? recordedAssertions : ParseAssertions(message["assertions"] as JsonArray);
                     var status = ParseStatus(message["status"]?.GetValue<string>());
                     var resultMessage = message["message"]?.GetValue<string>()
                                         ?? "Repository task completed.";
@@ -322,7 +332,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                         ? "Repository task execution was cancelled."
                         : $"Repository task exceeded its {request.Task.Timeout.TotalSeconds:0}-second timeout.",
                     null,
-                    [],
+                    recordedAssertions,
                     toolCalls,
                     await standardErrorTask.ConfigureAwait(false));
             }
@@ -348,7 +358,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 stopwatch,
                 exception.Message,
                 null,
-                [],
+                recordedAssertions,
                 toolCalls,
                 standardError);
         }
@@ -478,6 +488,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             ? RepositoryTaskCallTrace.CaptureArguments(toolName, message["arguments"], traceAppToolId)
             : null;
         IReadOnlyList<RepositoryTaskToolCall>? childCalls = null;
+        IReadOnlyList<RepositoryTaskAssertion>? childAssertions = null;
         RepositoryTaskSourceTrace? sourceTrace = null;
         RequestResult result;
         using var cancellationScope = ToolExecutionCancellation.Push(cancellationToken);
@@ -500,6 +511,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     .ConfigureAwait(false);
                 result = taskApiResult.Result;
                 childCalls = request.CaptureTrace ? taskApiResult.ChildCalls : null;
+                childAssertions = request.CaptureTrace ? taskApiResult.Assertions : null;
                 sourceTrace = request.CaptureTrace ? taskApiResult.SourceTrace : null;
             }
             else
@@ -604,6 +616,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 Arguments = capturedArguments,
                 Result = request.CaptureTrace ? RepositoryTaskCallTrace.CaptureResult(callResult, traceAppToolId) : null,
                 ChildCalls = childCalls,
+                Assertions = childAssertions,
                 SourceTrace = sourceTrace
             });
         }
@@ -770,7 +783,12 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 item["passed"]?.GetValue<bool>() ?? false,
                 item["message"]?.GetValue<string>() ?? "Assertion completed.",
                 item["expected"]?.DeepClone(),
-                item["actual"]?.DeepClone()));
+                item["actual"]?.DeepClone())
+            {
+                Matcher = item["matcher"]?.GetValue<string>(),
+                CompletedAtUtc = DateTimeOffset.TryParse(item["completedAtUtc"]?.GetValue<string>(), out var completed)
+                    ? completed : null
+            });
         }
 
         return assertions;

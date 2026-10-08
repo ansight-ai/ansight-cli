@@ -10,6 +10,25 @@ internal static class RepositoryTaskCallTrace
     internal const int MaximumArgumentCharacters = 32_768;
     internal const int MaximumResultCharacters = 262_144;
 
+    public static RepositoryTaskAssertion CaptureAssertion(RepositoryTaskAssertion assertion)
+        => assertion with
+        {
+            Expected = CaptureAssertionValue(assertion.Expected),
+            Actual = CaptureAssertionValue(assertion.Actual)
+        };
+
+    private static JsonNode? CaptureAssertionValue(JsonNode? value)
+    {
+        var payload = Capture(value, MaximumArgumentCharacters);
+        return payload.WasTruncated ? new JsonObject
+        {
+            ["traceValueTruncated"] = true,
+            ["preview"] = payload.Content,
+            ["originalCharacterCount"] = payload.OriginalCharacterCount,
+            ["sha256"] = payload.Sha256
+        } : value?.DeepClone();
+    }
+
     public static RepositoryTaskCallPayload CaptureArguments(string toolName, JsonNode? arguments, string? appToolId = null)
     {
         var capturedArguments = arguments?.DeepClone() ?? new JsonObject();

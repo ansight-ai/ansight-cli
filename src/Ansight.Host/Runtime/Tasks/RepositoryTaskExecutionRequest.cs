@@ -30,7 +30,8 @@ internal delegate Task<global::Ansight.Host.Runtime.Operations.RequestResult> Re
 internal sealed record RepositoryTaskApiResult(
     global::Ansight.Host.Runtime.Operations.RequestResult Result,
     IReadOnlyList<RepositoryTaskToolCall>? ChildCalls = null,
-    RepositoryTaskSourceTrace? SourceTrace = null);
+    RepositoryTaskSourceTrace? SourceTrace = null,
+    IReadOnlyList<RepositoryTaskAssertion>? Assertions = null);
 
 internal delegate Task<RepositoryTaskApiResult> RepositoryTaskApiExecutor(
     RepositoryTaskExecutionRequest parentRequest,

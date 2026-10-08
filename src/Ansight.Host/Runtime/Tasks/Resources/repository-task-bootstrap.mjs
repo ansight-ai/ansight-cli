@@ -91,31 +91,50 @@ const requireMetadata = metadata => {
   };
 };
 
-const record = (metadata, passed, defaultMessage, expected, actual, soft) => {
+const snapshotAssertionValue = value => {
+  try {
+    const serialized = JSON.stringify(value, (_key, item) => {
+      if (item === undefined) return { valueType: "undefined" };
+      if (typeof item === "bigint") return { valueType: "bigint", value: String(item) };
+      if (typeof item === "number" && !Number.isFinite(item)) return { valueType: "number", value: String(item) };
+      return item;
+    });
+    return serialized === undefined ? { valueType: typeof value } : JSON.parse(serialized);
+  } catch {
+    return { captureError: "The assertion value could not be serialized." };
+  }
+};
+
+const record = (metadata, passed, defaultMessage, expected, actual, soft, matcher) => {
   const normalized = requireMetadata(metadata);
   const assertion = {
     assertionId: normalized.id,
     passed,
     message: normalized.message ?? defaultMessage,
-    expected: expected ?? null,
-    actual: actual ?? null
+    expected: snapshotAssertionValue(expected),
+    actual: snapshotAssertionValue(actual),
+    matcher,
+    completedAtUtc: new Date().toISOString()
   };
   assertions.push(assertion);
+  process.stdout.write(`${JSON.stringify({ type: "assertion", assertion })}\n`);
   if (!passed && !soft) throw new TaskAssertionError(assertion.message);
   return actual;
 };
 
 const createMatchers = (actual, metadata, soft, negated = false) => {
-  const finish = (matched, positiveMessage, negativeMessage, expected) => record(
+  const finish = (matcher, matched, positiveMessage, negativeMessage, expected) => record(
     metadata,
     negated ? !matched : matched,
     negated ? negativeMessage : positiveMessage,
     negated ? { not: expected } : expected,
     actual,
-    soft);
+    soft,
+    `expect${soft ? ".soft" : ""}${negated ? ".not" : ""}.${matcher}`);
   const matchers = {
     toBe(expected) {
       return finish(
+        "toBe",
         Object.is(actual, expected),
         "Expected values to be identical.",
         "Expected values not to be identical.",
@@ -123,6 +142,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
     },
     toEqual(expected) {
       return finish(
+        "toEqual",
         isDeepStrictEqual(actual, expected),
         "Expected values to be deeply equal.",
         "Expected values not to be deeply equal.",
@@ -130,6 +150,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
     },
     toBeTruthy() {
       return finish(
+        "toBeTruthy",
         Boolean(actual),
         "Expected a truthy value.",
         "Expected a falsy value.",
@@ -137,6 +158,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
     },
     toBeFalsy() {
       return finish(
+        "toBeFalsy",
         !actual,
         "Expected a falsy value.",
         "Expected a truthy value.",
@@ -144,6 +166,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
     },
     toBeDefined() {
       return finish(
+        "toBeDefined",
         actual !== undefined,
         "Expected a defined value.",
         "Expected an undefined value.",
@@ -151,13 +174,15 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
     },
     toBeUndefined() {
       return finish(
+        "toBeUndefined",
         actual === undefined,
         "Expected an undefined value.",
         "Expected a defined value.",
-        null);
+        undefined);
     },
     toBeNull() {
       return finish(
+        "toBeNull",
         actual === null,
         "Expected null.",
         "Expected a non-null value.",
@@ -168,6 +193,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
         ? actual.includes(expected)
         : Array.isArray(actual) && actual.some(value => Object.is(value, expected));
       return finish(
+        "toContain",
         matched,
         "Expected the value to contain the item.",
         "Expected the value not to contain the item.",
@@ -177,6 +203,7 @@ const createMatchers = (actual, metadata, soft, negated = false) => {
       const matched = Array.isArray(actual)
         && actual.some(value => isDeepStrictEqual(value, expected));
       return finish(
+        "toContainEqual",
         matched,
         "Expected the collection to contain a deeply equal item.",
         "Expected the collection not to contain a deeply equal item.",

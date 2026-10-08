@@ -972,6 +972,10 @@ internal sealed class ToolGateway : IToolGateway
             {
                 ModelOutput = modelOutput,
                 TaskSource = taskSource,
+                TaskAssertions = string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal)
+                                 && structuredContent["assertions"] is JsonArray taskAssertions
+                    ? taskAssertions.Deserialize<RepositoryTaskAssertion[]>(JsonUtil.Compact)
+                    : null,
                 TaskCalls = string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal)
                             && structuredContent["toolCalls"] is JsonArray taskCalls
                     ? taskCalls.Deserialize<RepositoryTaskToolCall[]>(JsonUtil.Compact)
@@ -1013,12 +1017,22 @@ internal sealed class ToolGateway : IToolGateway
     private static string BuildRepositoryTaskModelOutput(JsonObject content, bool isError)
     {
         var result = new JsonObject();
-        foreach (var propertyName in new[] { "taskId", "status", "message", "output", "assertions" })
+        foreach (var propertyName in new[] { "taskId", "status", "message", "output" })
         {
             if (content[propertyName] is { } value)
             {
                 result[propertyName] = value.DeepClone();
             }
+        }
+
+        if (content["assertions"] is JsonArray assertions)
+        {
+            result["assertions"] = new JsonArray(assertions.OfType<JsonObject>().Select(assertion => (JsonNode?)new JsonObject
+            {
+                ["assertionId"] = assertion["assertionId"]?.DeepClone(),
+                ["passed"] = assertion["passed"]?.DeepClone(),
+                ["message"] = assertion["message"]?.DeepClone()
+            }).ToArray());
         }
 
         if (isError)

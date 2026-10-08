@@ -49,7 +49,12 @@ public sealed record RepositoryTaskAssertion(
     bool Passed,
     string Message,
     JsonNode? Expected,
-    JsonNode? Actual);
+    JsonNode? Actual)
+{
+    public string? Matcher { get; init; }
+
+    public DateTimeOffset? CompletedAtUtc { get; init; }
+}
 
 public sealed record RepositoryTaskToolCall(
     int Sequence,
@@ -73,6 +78,9 @@ public sealed record RepositoryTaskToolCall(
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<RepositoryTaskToolCall>? ChildCalls { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RepositoryTaskAssertion>? Assertions { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RepositoryTaskSourceTrace? SourceTrace { get; init; }

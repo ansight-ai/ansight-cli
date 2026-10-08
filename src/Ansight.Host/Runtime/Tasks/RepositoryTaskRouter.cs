@@ -357,7 +357,8 @@ internal sealed class RepositoryTaskRouter
                 RepositoryTaskProtocol.BuildRunResult(result, includeCallTrace: false),
                 isError: result.Status != RepositoryTaskRunStatus.Passed),
             parentRequest.CaptureTrace ? result.ToolCalls : null,
-            parentRequest.CaptureTrace ? result.SourceTrace : null);
+            parentRequest.CaptureTrace ? result.SourceTrace : null,
+            parentRequest.CaptureTrace ? result.Assertions.Select(RepositoryTaskCallTrace.CaptureAssertion).ToArray() : null);
     }
 
     private static string? NormalizeOptionalString(JsonNode? value)

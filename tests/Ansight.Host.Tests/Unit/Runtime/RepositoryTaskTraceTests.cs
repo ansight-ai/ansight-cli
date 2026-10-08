@@ -261,6 +261,10 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal("nested-value", ReadCallPayload(composition.Result)["output"]?["value"]?.GetValue<string>());
         Assert.False(composition.Result!.WasTruncated);
         Assert.Equal(3, composition.ChildCalls?.Count);
+        var nestedAssertion = Assert.Single(composition.Assertions!);
+        Assert.True(nestedAssertion.Passed);
+        Assert.Equal("expect.toBe", nestedAssertion.Matcher);
+        Assert.Equal("nested-value", nestedAssertion.Actual!.GetValue<string>());
         Assert.Equal(childSource, Assert.Single(composition.SourceTrace!.Modules).Content);
         Assert.Equal("map.child", composition.SourceTrace.TaskId);
         Assert.DoesNotContain("sourceTrace", composition.Result.Content);
@@ -278,6 +282,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal(composition.Arguments, protocolCalls[1].Arguments);
         Assert.Equal(composition.Result, protocolCalls[1].Result);
         Assert.Equal(composition.ChildCalls![2], protocolCalls[1].ChildCalls![2]);
+        Assert.Equal("nested-value", Assert.Single(protocolCalls[1].Assertions!).Actual!.GetValue<string>());
         var persisted = File.ReadLines(Path.Combine(repository.RootPath, "automation", "task-runs.jsonl"))
             .Select(line => JsonSerializer.Deserialize<RepositoryTaskRunResult>(line, JsonUtil.Compact)!)
             .Single(run => run.RunId == result.RunId);
