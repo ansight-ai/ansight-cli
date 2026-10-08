@@ -65,6 +65,8 @@ public sealed class LocalTaskExtractionCoordinatorTests
 
         Assert.NotNull(request);
         Assert.True(request.ValidateSelectors);
+        Assert.True(request.TrimToTechnology);
+        Assert.False(request.IncludeOnlyNecessaryFeatures);
         Assert.Equal("fast", request.Reasoning);
         Assert.Equal(string.Empty, request.Model);
     }
@@ -233,6 +235,272 @@ public sealed class LocalTaskExtractionCoordinatorTests
 
         Assert.Contains("map.query_state", handoff, StringComparison.Ordinal);
         Assert.DoesNotContain("\"id\":\"map.query\"", handoff, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompactTypeDefinitions_PreservesDeclarationsAndLiteralCommentMarkers()
+    {
+        const string source = """
+                              /** Documentation is not needed by the extraction agent. */
+                              export type Route = `${string}.${string}`;
+                              export type Url = "https://example.com/a/*/b";
+                              // Another comment.
+                              export interface TaskDefinition { title: string; }
+                              """;
+
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(source);
+
+        Assert.Contains("export type Route = `${string}.${string}`;", compact, StringComparison.Ordinal);
+        Assert.Contains("https://example.com/a/*/b", compact, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskDefinition { title: string; }", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("Documentation is not needed", compact, StringComparison.Ordinal);
+        Assert.DoesNotContain("Another comment", compact, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompactTypeDefinitions_SubstantiallyReducesBundledContract()
+    {
+        var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(full);
+
+        Assert.True(compact.Length < full.Length / 3);
+        Assert.Contains("export interface TaskDefinition", compact, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskInvocation", compact, StringComparison.Ordinal);
+        Assert.Contains("export type AndroidPermission", compact, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("react-native", "TaskReactContext", "readonly react: TaskReactContext;")]
+    [InlineData("flutter", "TaskFlutterContext", "readonly flutter: TaskFlutterContext;")]
+    [InlineData("dotnet-maui", "TaskMauiContext", "readonly maui: TaskMauiContext;")]
+    public void TrimTypeDefinitionsForFramework_RetainsOnlySupportedFrameworkSuite(
+        string framework,
+        string selectedInterface,
+        string selectedProperty)
+    {
+        var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
+        var selected = LocalTaskExtractionCoordinator.TrimTypeDefinitionsForFramework(full, framework);
+
+        Assert.Contains($"export interface {selectedInterface}", selected, StringComparison.Ordinal);
+        Assert.Contains(selectedProperty, selected, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskAppContext", selected, StringComparison.Ordinal);
+        Assert.Contains("export interface UiSelector", selected, StringComparison.Ordinal);
+        foreach (var other in new[] { "TaskMauiContext", "TaskReactContext", "TaskFlutterContext", "TaskCapacitorContext" }
+                     .Where(name => name != selectedInterface))
+        {
+            Assert.DoesNotContain(other, selected, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void SelectTypeDefinitionsForEvidence_FallsBackToFullContractForMixedOrUnknownFrameworks()
+    {
+        var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
+        var expected = LocalTaskExtractionCoordinator.CompactTypeDefinitions(full);
+        SessionVisualTreeSnapshot Tree(string kind, string platform = "ios") => new()
+        {
+            SnapshotId = $"{kind}-{platform}",
+            CapturedAtUtc = DateTimeOffset.UtcNow,
+            Source = "test",
+            VisualTreeKind = kind,
+            RuntimePlatform = platform,
+            NodeCount = 0,
+            Payload = new JsonObject()
+        };
+
+        Assert.Equal(expected, LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
+            full, [Tree("native", "unknown")], null));
+        Assert.Equal(expected, LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
+            full, [Tree("flutter", "ios"), Tree("react-component", "android")], null));
+        Assert.DoesNotContain("TaskFlutterContext", LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
+            full, [Tree("react-component")], null), StringComparison.Ordinal);
+        var iosNative = LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
+            full, [Tree("native")], null);
+        Assert.DoesNotContain("AndroidPermissionNames", iosNative, StringComparison.Ordinal);
+        Assert.Contains("IosPermissionNames", iosNative, StringComparison.Ordinal);
+
+        var reactCatalog = new JsonObject
+        {
+            ["tools"] = new JsonArray(new JsonObject
+            {
+                ["id"] = "react.get_component_tree",
+                ["executable"] = true
+            })
+        };
+        Assert.DoesNotContain("TaskFlutterContext", LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
+            full, [Tree("native")], reactCatalog), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TrimTypeDefinitionsForPlatform_RemovesOnlyOtherPlatformsPermissionSurface()
+    {
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(
+            RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
+        var android = LocalTaskExtractionCoordinator.TrimTypeDefinitionsForPlatform(compact, "android");
+        var ios = LocalTaskExtractionCoordinator.TrimTypeDefinitionsForPlatform(compact, "ios");
+
+        Assert.DoesNotContain("IosPermissionNames", android, StringComparison.Ordinal);
+        Assert.Contains("AndroidPermissionNames", android, StringComparison.Ordinal);
+        Assert.DoesNotContain("AndroidPermissionNames", ios, StringComparison.Ordinal);
+        Assert.Contains("IosPermissionNames", ios, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskHostUiContext", android, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskHostUiContext", ios, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskTypeDefinitionSlicer_KeepsCoreAndRequestedClipboardWithoutUnrelatedFeatures()
+    {
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(
+            RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
+        var selected = TaskTypeDefinitionSlicer.Slice(
+            compact,
+            "Tap Share and copy the area location to the clipboard.",
+            "await ansight.ui.tap({ automationId: 'ShareButton' });");
+
+        Assert.Contains("export interface TaskDefinition", selected, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskHostUiContext", selected, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskClipboardContext", selected, StringComparison.Ordinal);
+        Assert.Contains("readonly clipboard: TaskClipboardContext;", selected, StringComparison.Ordinal);
+        Assert.DoesNotContain("export interface TaskHostTelemetryContext", selected, StringComparison.Ordinal);
+        Assert.DoesNotContain("export interface AndroidPermissionNames", selected, StringComparison.Ordinal);
+        Assert.True(selected.Length < compact.Length / 2);
+    }
+
+    [Fact]
+    public void TaskTypeDefinitionSlicer_PreservesExplicitlyUsedHostFeature()
+    {
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(
+            RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
+        var selected = TaskTypeDefinitionSlicer.Slice(
+            compact, "Verify a network request.", "await ansight.network.getRequests({});");
+
+        Assert.Contains("readonly network: TaskHostNetworkContext;", selected, StringComparison.Ordinal);
+        Assert.Contains("export interface TaskHostNetworkContext", selected, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TaskTypeDefinitionSlicer_IncludesPermissionConstantsWhenRequested()
+    {
+        var compact = LocalTaskExtractionCoordinator.CompactTypeDefinitions(
+            RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
+        var selected = TaskTypeDefinitionSlicer.Slice(compact, "Grant camera permission.", string.Empty);
+
+        Assert.Contains("readonly permissions: TaskHostPermissionsContext;", selected, StringComparison.Ordinal);
+        Assert.Contains("export const IosPermission", selected, StringComparison.Ordinal);
+        Assert.Contains("export const AndroidPermission", selected, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildTaskContractEvidence_RecoversOriginalDocumentedDeclaration()
+    {
+        var result = LocalTaskExtractionCoordinator.BuildTaskContractEvidence(new JsonObject
+        {
+            ["symbol"] = "TaskFlutterContext",
+            ["characterOffset"] = 0
+        });
+
+        Assert.Contains("@supportedFrameworks flutter", result["sourceChunk"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("getWidgetTree", result["sourceChunk"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Null(result["nextCharacterOffset"]);
+    }
+
+    [Fact]
+    public void BuildVisibleTreeEvidence_ReturnsGroundedVisibleNodesWithoutRawPayload()
+    {
+        var tree = new SessionVisualTreeSnapshot
+        {
+            SnapshotId = "tree-1",
+            CapturedAtUtc = DateTimeOffset.UtcNow,
+            Source = "test",
+            VisualTreeKind = "native",
+            RuntimePlatform = "ios",
+            NodeCount = 2,
+            Payload = new JsonObject
+            {
+                ["root"] = new JsonObject
+                {
+                    ["id"] = "root",
+                    ["type"] = "UIWindow",
+                    ["visible"] = true,
+                    ["children"] = new JsonArray(new JsonObject
+                    {
+                        ["id"] = "button-1",
+                        ["automationId"] = "ShareButton",
+                        ["text"] = "Share",
+                        ["type"] = "UIButton",
+                        ["visible"] = true,
+                        ["children"] = new JsonArray()
+                    })
+                }
+            }
+        };
+
+        var result = LocalTaskExtractionCoordinator.BuildVisibleTreeEvidence(
+            [tree],
+            LocalTaskSelectorEvidence.Create([tree]),
+            new JsonObject { ["snapshotIds"] = new JsonArray("tree-1"), ["nodeOffset"] = 0 });
+        var serialized = result.ToJsonString();
+
+        Assert.Contains("ShareButton", serialized, StringComparison.Ordinal);
+        Assert.Contains("Share", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"payload\"", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"children\"", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildRawVisualTreeEvidence_PreservesHiddenNodesAndAllPayloadChunks()
+    {
+        var tree = new SessionVisualTreeSnapshot
+        {
+            SnapshotId = "tree-raw",
+            CapturedAtUtc = DateTimeOffset.UtcNow,
+            Source = "test",
+            VisualTreeKind = "native",
+            RuntimePlatform = "ios",
+            NodeCount = 2,
+            Payload = new JsonObject
+            {
+                ["root"] = new JsonObject
+                {
+                    ["id"] = "root",
+                    ["children"] = new JsonArray(new JsonObject
+                    {
+                        ["id"] = "hidden-detail",
+                        ["visible"] = false,
+                        ["state"] = "requires-expanded-parent"
+                    })
+                },
+                ["additionalCaptureData"] = new string('x', 33_000)
+            }
+        };
+
+        var first = LocalTaskExtractionCoordinator.BuildRawVisualTreeEvidence(
+            [tree], new JsonObject { ["snapshotId"] = "tree-raw", ["characterOffset"] = 0 });
+        var nextOffset = first["nextCharacterOffset"]!.GetValue<int>();
+        var second = LocalTaskExtractionCoordinator.BuildRawVisualTreeEvidence(
+            [tree], new JsonObject { ["snapshotId"] = "tree-raw", ["characterOffset"] = nextOffset });
+        var recoveredPayload = first["payloadChunk"]!.GetValue<string>()
+                               + second["payloadChunk"]!.GetValue<string>();
+
+        Assert.Equal(tree.Payload.ToJsonString(), recoveredPayload);
+        Assert.Contains("hidden-detail", recoveredPayload, StringComparison.Ordinal);
+        Assert.Null(second["nextCharacterOffset"]);
+    }
+
+    [Fact]
+    public void TrimToLatestCompaction_KeepsCheckpointAndFollowingFunctionCall()
+    {
+        var history = new JsonArray(
+            new JsonObject { ["type"] = "message", ["id"] = "initial" },
+            new JsonObject { ["type"] = "function_call_output", ["id"] = "old-tool" },
+            new JsonObject { ["type"] = "compaction", ["id"] = "checkpoint" },
+            new JsonObject { ["type"] = "function_call", ["id"] = "next-tool" });
+
+        LocalTaskExtractionCoordinator.TrimToLatestCompaction(history, 2);
+
+        Assert.Equal(2, history.Count);
+        Assert.Equal("checkpoint", history[0]?["id"]?.GetValue<string>());
+        Assert.Equal("next-tool", history[1]?["id"]?.GetValue<string>());
     }
 
     [Theory]

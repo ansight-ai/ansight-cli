@@ -116,6 +116,17 @@ public sealed class OpenAiResponsesClientTests
     }
 
     [Fact]
+    public void BuildPayload_EnablesCompactionForHttpWhenRequested()
+    {
+        var request = CreateRequest() with { CompactThresholdTokens = 160_000 };
+
+        var payload = OpenAiResponsesClient.BuildPayload(request, request.Input);
+
+        Assert.Equal("compaction", payload["context_management"]?[0]?["type"]?.GetValue<string>());
+        Assert.Equal(160_000, payload["context_management"]?[0]?["compact_threshold"]?.GetValue<int>());
+    }
+
+    [Fact]
     public void BuildWebSocketPayload_ContinuationSendsOnlyNewInputAndPreservesToolSchemas()
     {
         var request = CreateRequest() with

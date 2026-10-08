@@ -15,11 +15,11 @@ public sealed record AgentReasoningConfiguration(
             ? modelOverride.Trim()
             : mode switch
             {
-                AgentReasoningModes.Fast => "gpt-5.6-luna",
-                AgentReasoningModes.Balanced => "gpt-5.6-terra",
-                _ => "gpt-5.6-sol"
+                AgentReasoningModes.Fast => "gpt-6-luna",
+                _ => "gpt-6.1-sol"
             };
-        return new(mode, model, "medium", "defaults-v1");
+        var effort = mode == AgentReasoningModes.Deep ? "high" : "medium";
+        return new(mode, model, effort, "defaults-v2");
     }
 
     public static string NormalizeReasoningEffort(string effort) => effort?.Trim().ToLowerInvariant() switch

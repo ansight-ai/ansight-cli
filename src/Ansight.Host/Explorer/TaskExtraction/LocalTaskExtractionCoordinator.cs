@@ -3,11 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Ansight.Host.Runtime.RepositoryContracts;
 using Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 using Ansight.Host.Runtime.Sanitization;
 using Ansight.Host.Runtime.Tasks;
 using Ansight.Host.SimulatorAgent;
+using Ansight.Host.SimulatorAgent.Observations;
+using Ansight.Host.UiAutomation;
 using Ansight.Host.Workspaces.Execution;
 using Ansight.Tools;
 
@@ -26,8 +29,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private const string InspectSelectionToolName = "inspect_selected_period";
     private const string InspectTaskSeedToolName = "inspect_task_seed";
     private const string InspectVisualTreesToolName = "inspect_visual_trees";
+    private const string InspectRawVisualTreeToolName = "inspect_raw_visual_tree";
     private const string InspectScreenshotOcrToolName = "inspect_screenshot_ocr";
     private const string InspectTaskSupportModulesToolName = "inspect_task_support_modules";
+    private const string InspectTaskContractToolName = "inspect_task_contract";
     private const string SubmitDraftToolName = "submit_task_draft";
     private static readonly IReadOnlySet<string> expectStaticMethods = new HashSet<string>(
         ["soft"],
@@ -394,6 +399,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             request.TeamId,
             !string.IsNullOrWhiteSpace(request.TaskName),
             request.ValidateSelectors,
+            request.TrimToTechnology,
+            request.IncludeOnlyNecessaryFeatures,
             runtime.FeatureLifetime);
         lock (gate)
         {
@@ -465,7 +472,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     item.StartUtc, item.EndUtc, item.TaskName, item.Description,
                     NormalizeMode(item.Mode), item.Model, item.Reasoning, null,
                     item.TaskNameIsAuthoritative,
-                    item.ValidateSelectors, runtime.FeatureLifetime);
+                    item.ValidateSelectors, item.TrimToTechnology,
+                    item.IncludeOnlyNecessaryFeatures, runtime.FeatureLifetime);
                 var selectedTrees = session.VisualTreeSnapshots
                     .Where(tree => tree.CapturedAtUtc >= item.StartUtc && tree.CapturedAtUtc <= item.EndUtc)
                     .ToArray();
@@ -1002,17 +1010,26 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             ?? throw new InvalidOperationException("Task extraction requires a brokered model transport.");
         var apiKey = await transport.ResolveAccessKeyAsync(extraction.Cancellation.Token).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("The brokered model transport returned no access token.");
-        if (extraction.Mode == LocalTaskExtractionModes.DirectWebSocket && preparation.ModelTransport?.SupportsWebSockets == false)
+        if (extraction.Mode == LocalTaskExtractionModes.DirectWebSocket && !transport.SupportsWebSockets)
             throw new InvalidOperationException("The selected transport does not support WebSockets.");
 
         using var httpClient = new OpenAiResponsesClient();
-        await using var webSocketSession = extraction.Mode == LocalTaskExtractionModes.DirectWebSocket
+        var useWebSocket = transport.SupportsWebSockets;
+        await using var webSocketSession = useWebSocket
             ? new OpenAiResponsesWebSocketSession()
             : null;
+        var compactDefinitions = extraction.TrimToTechnology
+            ? SelectTypeDefinitionsForSession(RepositoryModuleContractArtifacts.GetTaskTypeDefinitions(), snapshot, extraction)
+            : CompactTypeDefinitions(RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
+        var promptDefinitions = extraction.IncludeOnlyNecessaryFeatures
+            ? TaskTypeDefinitionSlicer.Slice(compactDefinitions, extraction.Description, seed.Source)
+            : compactDefinitions;
         var history = new JsonArray(CreateUserInput(BuildAgentHandoff(
             extraction,
-            RepositoryModuleContractArtifacts.GetTaskTypeDefinitions(),
-            snapshot.AppToolCatalog)));
+            promptDefinitions,
+            snapshot.AppToolCatalog,
+            snapshot,
+            seed)));
         var pendingInput = history.DeepClone().AsArray();
         var tools = BuildAgentTools();
         var requiresFullReplay = true;
@@ -1045,14 +1062,28 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 Transport = preparation.ModelTransport,
                 IncrementalInput = pendingInput,
-                StartNewConversation = requiresFullReplay
+                StartNewConversation = requiresFullReplay,
+                CompactThresholdTokens = 160_000
             };
             OpenAiTurn response;
             try
             {
-                response = webSocketSession is null
-                    ? await httpClient.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false)
-                    : await webSocketSession.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+                if (useWebSocket && webSocketSession is not null)
+                {
+                    try
+                    {
+                        response = await webSocketSession.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+                    }
+                    catch (OpenAiWebSocketTransportException) when (extraction.Mode != LocalTaskExtractionModes.DirectWebSocket)
+                    {
+                        useWebSocket = false;
+                        response = await httpClient.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    response = await httpClient.CreateResponseAsync(request, extraction.Cancellation.Token).ConfigureAwait(false);
+                }
             }
             catch (Exception exception)
             {
@@ -1097,10 +1128,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             pendingInput.Clear();
+            var responseStartIndex = history.Count;
             foreach (var output in response.Output)
             {
                 history.Add(output?.DeepClone());
             }
+            TrimToLatestCompaction(history, responseStartIndex);
             requiresFullReplay = false;
 
             foreach (var call in response.FunctionCalls)
@@ -1195,8 +1228,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                         InspectSelectionToolName => BuildSelectionEvidence(snapshot, extraction, seed),
                         InspectTaskSeedToolName => BuildTaskSeedEvidence(seed),
                         InspectVisualTreesToolName => BuildVisualTreeEvidence(snapshot, extraction, call.Arguments),
+                        InspectRawVisualTreeToolName => BuildRawVisualTreeEvidence(snapshot, extraction, call.Arguments),
                         InspectScreenshotOcrToolName => BuildScreenshotOcrEvidence(snapshot, extraction, call.Arguments),
                         InspectTaskSupportModulesToolName => BuildTaskSupportModuleEvidence(extraction, call.Arguments),
+                        InspectTaskContractToolName => BuildTaskContractEvidence(call.Arguments),
                         _ => new JsonObject
                         {
                             ["isSuccess"] = false,
@@ -1687,7 +1722,23 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         AppSessionSnapshot snapshot,
         ActiveTaskExtraction extraction,
         JsonObject arguments)
+        => BuildVisibleTreeEvidence(
+            snapshot.VisualTreeSnapshots
+                .Where(tree => IsWithin(tree.CapturedAtUtc, extraction))
+                .OrderBy(tree => tree.CapturedAtUtc)
+                .ToArray(),
+            extraction.RequireSelectorEvidenceContext().Evidence,
+            arguments);
+
+    internal static JsonObject BuildVisibleTreeEvidence(
+        IReadOnlyList<SessionVisualTreeSnapshot> selectedTrees,
+        LocalTaskSelectorEvidenceIndex evidence,
+        JsonObject arguments)
     {
+        var nodeOffset = arguments["nodeOffset"] is JsonValue offsetValue
+                         && offsetValue.TryGetValue<int>(out var requestedOffset)
+            ? Math.Clamp(requestedOffset, 0, 10_000)
+            : 0;
         var requestedIds = arguments["snapshotIds"] is JsonArray values
             ? values.OfType<JsonValue>()
                 .Select(value => value.TryGetValue<string>(out var id) ? id : null)
@@ -1696,28 +1747,156 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 .Take(3)
                 .ToHashSet(StringComparer.Ordinal)
             : [];
-        var candidates = snapshot.VisualTreeSnapshots
-            .Where(tree => IsWithin(tree.CapturedAtUtc, extraction)
-                           && (requestedIds.Count == 0 || requestedIds.Contains(tree.SnapshotId)))
+        var candidates = selectedTrees
+            .Where(tree => requestedIds.Count == 0 || requestedIds.Contains(tree.SnapshotId))
             .OrderBy(tree => tree.CapturedAtUtc)
             .ToArray();
         var trees = (requestedIds.Count == 0
                 ? SelectRepresentativeTrees(candidates, 3)
                 : candidates.Take(3))
-            .Select(tree => new
+            .Select(tree =>
             {
-                tree.SnapshotId,
-                tree.CapturedAtUtc,
-                tree.VisualTreeKind,
-                tree.RuntimePlatform,
-                tree.NodeCount,
-                tree.Truncated,
-                payload = ParseTruncatedJson(tree.Payload, 80_000)
+                var visibleNodes = evidence.Nodes
+                    .Where(node => string.Equals(node.SnapshotId, tree.SnapshotId, StringComparison.Ordinal)
+                                   && !string.Equals(node.Source, "ocr", StringComparison.Ordinal))
+                    .OrderByDescending(node => !string.IsNullOrWhiteSpace(node.AutomationId)
+                                               || node.TextValues.Count > 0)
+                    .ToArray();
+                return new
+                {
+                    tree.SnapshotId,
+                    tree.CapturedAtUtc,
+                    tree.VisualTreeKind,
+                    tree.RuntimePlatform,
+                    tree.NodeCount,
+                    tree.Truncated,
+                    visibleNodeCount = visibleNodes.Length,
+                    nodeOffset,
+                    nextNodeOffset = nodeOffset + 150 < visibleNodes.Length ? nodeOffset + 150 : (int?)null,
+                    nodes = visibleNodes.Skip(nodeOffset).Take(150).Select(node => new
+                    {
+                        node.NodeId,
+                        node.AutomationId,
+                        node.Role,
+                        node.Type,
+                        text = node.TextValues.OrderBy(value => value, StringComparer.Ordinal).Take(8),
+                        actions = node.Actions.OrderBy(value => value, StringComparer.Ordinal).Take(8),
+                        ancestorAutomationIds = node.AncestorAutomationIds.OrderBy(value => value, StringComparer.Ordinal).Take(8)
+                    })
+                };
             });
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-visual-trees/v1",
             visualTrees = trees
+        });
+    }
+
+    private static JsonObject BuildRawVisualTreeEvidence(
+        AppSessionSnapshot snapshot,
+        ActiveTaskExtraction extraction,
+        JsonObject arguments)
+        => BuildRawVisualTreeEvidence(
+            snapshot.VisualTreeSnapshots
+                .Where(tree => IsWithin(tree.CapturedAtUtc, extraction))
+                .ToArray(),
+            arguments);
+
+    internal static JsonObject BuildRawVisualTreeEvidence(
+        IReadOnlyList<SessionVisualTreeSnapshot> selectedTrees,
+        JsonObject arguments)
+    {
+        var snapshotId = ReadOptionalString(arguments, "snapshotId");
+        var tree = selectedTrees.FirstOrDefault(candidate => string.Equals(
+            candidate.SnapshotId, snapshotId, StringComparison.Ordinal));
+        if (tree is null)
+        {
+            return new JsonObject
+            {
+                ["isSuccess"] = false,
+                ["message"] = "The requested visual-tree snapshot is not in the selected period."
+            };
+        }
+
+        var requestedOffset = arguments["characterOffset"] is JsonValue offsetValue
+                              && offsetValue.TryGetValue<int>(out var value)
+            ? Math.Max(value, 0)
+            : 0;
+        var serialized = tree.Payload.ToJsonString();
+        var offset = Math.Min(requestedOffset, serialized.Length);
+        const int maximumChunkCharacters = 32_000;
+        var length = Math.Min(maximumChunkCharacters, serialized.Length - offset);
+        return SerializeObject(new
+        {
+            schema = "ansight.task-extraction-raw-visual-tree/v1",
+            tree.SnapshotId,
+            tree.CapturedAtUtc,
+            tree.VisualTreeKind,
+            tree.RuntimePlatform,
+            tree.NodeCount,
+            tree.Truncated,
+            originalCharacters = serialized.Length,
+            characterOffset = offset,
+            nextCharacterOffset = offset + length < serialized.Length ? offset + length : (int?)null,
+            payloadChunk = serialized.Substring(offset, length)
+        });
+    }
+
+    internal static JsonObject BuildTaskContractEvidence(JsonObject arguments)
+    {
+        var symbol = ReadOptionalString(arguments, "symbol") ?? string.Empty;
+        var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
+        string source;
+        if (symbol.Length == 0)
+        {
+            source = CompactTypeDefinitions(full);
+        }
+        else
+        {
+            if (symbol.Length > 120 || !Regex.IsMatch(symbol, @"^[A-Za-z][A-Za-z0-9_]*$"))
+                return new JsonObject { ["isSuccess"] = false, ["message"] = "Use an exact exported TypeScript symbol name." };
+            var declarations = Regex.Matches(full,
+                    @"(?m)^export (?:interface|type|const) (?<name>[A-Za-z][A-Za-z0-9_]*)")
+                .Cast<Match>()
+                .ToArray();
+            var selected = declarations
+                .Select((declaration, index) => new { declaration, index })
+                .Where(item => string.Equals(item.declaration.Groups["name"].Value, symbol, StringComparison.Ordinal))
+                .ToArray();
+            if (selected.Length == 0)
+                return new JsonObject { ["isSuccess"] = false, ["message"] = $"Exported symbol '{symbol}' was not found." };
+            var declarationsWithDocs = new StringBuilder();
+            foreach (var item in selected)
+            {
+                var start = item.declaration.Index;
+                var end = item.index + 1 < declarations.Length
+                    ? declarations[item.index + 1].Index
+                    : full.Length;
+                var commentStart = full.LastIndexOf("/**", start, StringComparison.Ordinal);
+                var commentEnd = full.LastIndexOf("*/", start, StringComparison.Ordinal);
+                if (commentStart >= 0 && commentEnd > commentStart
+                    && string.IsNullOrWhiteSpace(full[(commentEnd + 2)..start]))
+                    start = commentStart;
+                declarationsWithDocs.Append(full.AsSpan(start, end - start));
+            }
+            source = declarationsWithDocs.ToString();
+        }
+
+        var requestedOffset = arguments["characterOffset"] is JsonValue offsetValue
+                              && offsetValue.TryGetValue<int>(out var value)
+            ? Math.Max(value, 0)
+            : 0;
+        var offset = Math.Min(requestedOffset, source.Length);
+        const int maximumChunkCharacters = 32_000;
+        var length = Math.Min(maximumChunkCharacters, source.Length - offset);
+        return SerializeObject(new
+        {
+            schema = "ansight.task-extraction-contract-evidence/v1",
+            symbol,
+            originalCharacters = source.Length,
+            characterOffset = offset,
+            nextCharacterOffset = offset + length < source.Length ? offset + length : (int?)null,
+            sourceChunk = source.Substring(offset, length)
         });
     }
 
@@ -1874,7 +2053,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 ["type"] = "function",
                 ["name"] = InspectVisualTreesToolName,
-                ["description"] = "Inspect up to three visual-tree payloads from the selected period by snapshot ID. Pass an empty array to inspect representative beginning, middle, and ending trees.",
+                ["description"] = "Inspect a compact inventory of grounded visible UI nodes from up to three selected visual trees. Pass empty snapshotIds for representative trees; use nodeOffset to page through additional nodes. For hierarchy, hidden nodes, or omitted attributes, call inspect_raw_visual_tree.",
                 ["strict"] = true,
                 ["parameters"] = new JsonObject
                 {
@@ -1886,9 +2065,36 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             ["type"] = "array",
                             ["items"] = new JsonObject { ["type"] = "string" },
                             ["maxItems"] = 3
+                        },
+                        ["nodeOffset"] = new JsonObject
+                        {
+                            ["type"] = "integer",
+                            ["minimum"] = 0
                         }
                     },
-                    ["required"] = new JsonArray("snapshotIds"),
+                    ["required"] = new JsonArray("snapshotIds", "nodeOffset"),
+                    ["additionalProperties"] = false
+                }
+            },
+            new JsonObject
+            {
+                ["type"] = "function",
+                ["name"] = InspectRawVisualTreeToolName,
+                ["description"] = "Read the original, unfiltered visual-tree JSON for one snapshot in 32,000-character chunks. Use when hierarchy, hidden state, node order, or attributes omitted from the compact inventory affect the task. Request the next characterOffset until nextCharacterOffset is null.",
+                ["strict"] = true,
+                ["parameters"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["snapshotId"] = StringSchema("Exact visual-tree snapshot ID from the selected period."),
+                        ["characterOffset"] = new JsonObject
+                        {
+                            ["type"] = "integer",
+                            ["minimum"] = 0
+                        }
+                    },
+                    ["required"] = new JsonArray("snapshotId", "characterOffset"),
                     ["additionalProperties"] = false
                 }
             },
@@ -1939,6 +2145,24 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             new JsonObject
             {
                 ["type"] = "function",
+                ["name"] = InspectTaskContractToolName,
+                ["description"] = "Inspect an omitted or unclear declaration from the full bundled TypeScript contract, with documentation. Pass its exact exported symbol name, or an empty symbol for the complete compact contract; page using characterOffset.",
+                ["strict"] = true,
+                ["parameters"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["symbol"] = StringSchema("Exact exported symbol, or empty for the complete compact contract."),
+                        ["characterOffset"] = new JsonObject { ["type"] = "integer", ["minimum"] = 0 }
+                    },
+                    ["required"] = new JsonArray("symbol", "characterOffset"),
+                    ["additionalProperties"] = false
+                }
+            },
+            new JsonObject
+            {
+                ["type"] = "function",
                 ["name"] = SubmitDraftToolName,
                 ["description"] = "Submit the complete validated repository task draft. This ends extraction.",
                 ["strict"] = true,
@@ -1983,9 +2207,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         => """
            You are Ansight's local repository-task extraction agent. Convert only the user-selected capture period into one deterministic, source-controlled TypeScript task.
 
-           Inspect the selected period, deterministic seed, and the relevant visual trees before submitting. Inspect retained screenshot OCR when visual trees do not expose the visible text needed for a semantic assertion. Every literal UI selector value in ansight.ui or ansight.keyboard calls must be directly present in the selected session's UI evidence: a visible visual-tree node, or recorded screenshot OCR for a text selector. Logs, telemetry, framework navigation names, source-code class names, the handoff, and inferred component names do not prove that a selector exists. Never turn those strings into `type`, `automationId`, `text`, `role`, `nodeId`, `ancestorAutomationId`, or `action` selectors unless the same value appears on a captured UI node or in OCR. Prefer a captured automation ID; otherwise use captured visible text with its captured role. Avoid coordinate taps. Omit unsupported or ambiguous steps rather than fabricating them.
+           The handoff includes a compact selected-period inventory and deterministic seed. Inspect their full versions when the summary is insufficient, and inspect the relevant visual trees before submitting. The compact tree inventory is only a selector index: it does not preserve all node relationships, hidden state, node order, or attributes. For any step or assertion whose meaning depends on those details, call `inspect_raw_visual_tree` for the relevant snapshot and continue through its chunks as needed before deciding what the task should do. Inspect retained screenshot OCR when visual trees do not expose the visible text needed for a semantic assertion. Every literal UI selector value in ansight.ui or ansight.keyboard calls must be directly present in the selected session's UI evidence: a visible visual-tree node, or recorded screenshot OCR for a text selector. Logs, telemetry, framework navigation names, source-code class names, the handoff, and inferred component names do not prove that a selector exists. Never turn those strings into `type`, `automationId`, `text`, `role`, `nodeId`, `ancestorAutomationId`, or `action` selectors unless the same value appears on a captured UI node or in OCR. Prefer a captured automation ID; otherwise use captured visible text with its captured role. Avoid coordinate taps. Omit unsupported or ambiguous steps rather than fabricating them.
 
-           The handoff contains Ansight's complete bundled `ansight-task.d.ts`. It is the sole authoritative execution contract. Every member used in the submitted module must be declared by that contract; never infer a convenience method from a raw tool name or from ordinary browser APIs. Host operations are feature-sliced: use `ansight.ui.tap`, `ansight.ui.waitFor`, and `ansight.ui.find`, never `ansight.tap`, `ansight.waitFor`, `ansight.find_ui`, or `ansight.getCurrentPage`. Framework inspection, when actually necessary, is feature-sliced under `app` (for example `app.maui.getCurrentPage`) and returns the `AppToolCallResult` envelope declared by the contract. Prefer `ansight.ui.find` and `ansight.ui.waitFor` for visible product outcomes.
+           The handoff contains a selected view of Ansight's bundled `ansight-task.d.ts` declarations with documentation comments removed. Technology and optional feature filters may omit APIs from this initial view. If a needed API is absent or its behavior is unclear, call `inspect_task_contract` to read its full declaration and documentation before using it. The submitted task is compiled against the original full declaration file. Every member used in the submitted module must be declared in the handoff or verified through `inspect_task_contract`; never infer a convenience method from a raw tool name or from ordinary browser APIs. Host operations are feature-sliced: use `ansight.ui.tap`, `ansight.ui.waitFor`, and `ansight.ui.find`, never `ansight.tap`, `ansight.waitFor`, `ansight.find_ui`, or `ansight.getCurrentPage`. Framework inspection, when actually necessary, is feature-sliced under `app` and returns the `AppToolCallResult` envelope declared by the contract. Prefer `ansight.ui.find` and `ansight.ui.waitFor` for visible product outcomes.
 
            The handoff may also contain exact app-tool or artifact definitions selected by the user with `@tool:`, `@artifact-provider:`, or `@artifact:` references. These definitions describe device capabilities, but do not add typed convenience members to the TypeScript contract. Invoke a selected custom tool through the contract's generic `app.callTool` API, or use a declared standardized `app` suite method when one maps to the exact selected tool. Use artifact provider and artifact identifiers exactly as recorded.
 
@@ -2004,10 +2228,219 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
            Use tools to inspect evidence. Finish only by calling submit_task_draft.
            """;
 
+    internal static string CompactTypeDefinitions(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var compact = new StringBuilder(source.Length);
+        char quote = '\0';
+        for (var index = 0; index < source.Length; index++)
+        {
+            var current = source[index];
+            var next = index + 1 < source.Length ? source[index + 1] : '\0';
+            if (quote != '\0')
+            {
+                compact.Append(current);
+                if (current == '\\' && index + 1 < source.Length)
+                {
+                    compact.Append(source[++index]);
+                }
+                else if (current == quote)
+                {
+                    quote = '\0';
+                }
+                continue;
+            }
+            if (current is '\'' or '"' or '`')
+            {
+                quote = current;
+                compact.Append(current);
+                continue;
+            }
+            if (current == '/' && next == '/')
+            {
+                index += 2;
+                while (index < source.Length && source[index] != '\n') index++;
+                if (index < source.Length) compact.Append('\n');
+                continue;
+            }
+            if (current == '/' && next == '*')
+            {
+                index += 2;
+                while (index + 1 < source.Length && !(source[index] == '*' && source[index + 1] == '/')) index++;
+                index = Math.Min(index + 1, source.Length - 1);
+                compact.Append(' ');
+                continue;
+            }
+            compact.Append(current);
+        }
+
+        return string.Join('\n', compact.ToString().Split('\n')
+            .Where(static line => !string.IsNullOrWhiteSpace(line))) + '\n';
+    }
+
+    private static string SelectTypeDefinitionsForSession(
+        string source,
+        AppSessionSnapshot snapshot,
+        ActiveTaskExtraction extraction)
+        => SelectTypeDefinitionsForEvidence(
+            source,
+            snapshot.VisualTreeSnapshots.Where(tree => IsWithin(tree.CapturedAtUtc, extraction)).ToArray(),
+            snapshot.AppToolCatalog?.ToolCatalog);
+
+    internal static string SelectTypeDefinitionsForEvidence(
+        string source,
+        IReadOnlyList<SessionVisualTreeSnapshot> selectedTrees,
+        JsonObject? appToolCatalog)
+    {
+        var platforms = selectedTrees
+            .Select(tree => tree.RuntimePlatform)
+            .Where(platform => platform is VisualTreeContract.IosRuntimePlatform or VisualTreeContract.AndroidRuntimePlatform)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var frameworks = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var tree in selectedTrees)
+        {
+            switch (tree.VisualTreeKind)
+            {
+                case VisualTreeContract.MauiKind:
+                    frameworks.Add(RepositoryTaskTargets.DotNetMaui);
+                    break;
+                case VisualTreeContract.ReactComponentKind or VisualTreeContract.ReactShadowKind:
+                    frameworks.Add(RepositoryTaskTargets.ReactNative);
+                    break;
+                case VisualTreeContract.FlutterKind:
+                    frameworks.Add(RepositoryTaskTargets.Flutter);
+                    break;
+            }
+        }
+
+        var capabilities = SessionCapabilities.FromPublishedTools(null, appToolCatalog);
+        foreach (var toolId in capabilities.VisualTreeToolIds)
+        {
+            switch (toolId)
+            {
+                case VisualTreeContract.MauiToolId:
+                    frameworks.Add(RepositoryTaskTargets.DotNetMaui);
+                    break;
+                case VisualTreeContract.ReactComponentToolId or VisualTreeContract.ReactShadowToolId:
+                    frameworks.Add(RepositoryTaskTargets.ReactNative);
+                    break;
+                case VisualTreeContract.FlutterToolId:
+                    frameworks.Add(RepositoryTaskTargets.Flutter);
+                    break;
+            }
+        }
+        foreach (var framework in capabilities.NavigationFrameworks)
+        {
+            switch (framework)
+            {
+                case "maui":
+                    frameworks.Add(RepositoryTaskTargets.DotNetMaui);
+                    break;
+                case "react-native":
+                    frameworks.Add(RepositoryTaskTargets.ReactNative);
+                    break;
+                case "flutter":
+                    frameworks.Add(RepositoryTaskTargets.Flutter);
+                    break;
+            }
+        }
+
+        var frameworkSelected = frameworks.Count == 1
+            ? TrimTypeDefinitionsForFramework(source, frameworks.Single())
+            : CompactTypeDefinitions(source);
+        return platforms.Length == 1
+            ? TrimTypeDefinitionsForPlatform(frameworkSelected, platforms[0])
+            : frameworkSelected;
+    }
+
+    internal static string TrimTypeDefinitionsForPlatform(string compactDeclarations, string platform)
+    {
+        var excludedProperty = platform switch
+        {
+            VisualTreeContract.IosRuntimePlatform => "android",
+            VisualTreeContract.AndroidRuntimePlatform => "ios",
+            _ => null
+        };
+        if (excludedProperty is null) return compactDeclarations;
+        var selected = Regex.Replace(compactDeclarations,
+            $@"(?ms)^  readonly {excludedProperty}: NativePermissionsContext<.*?^  \}};\n?",
+            string.Empty);
+        var excludedSymbols = excludedProperty == "android"
+            ? new[] { "AndroidPermissionNames", "AndroidPermission", "CommonAndroidPermission" }
+            : ["IosPermissionNames", "IosPermission"];
+        foreach (var symbol in excludedSymbols)
+        {
+            selected = Regex.Replace(selected,
+                $@"(?ms)^export (?:interface|type|const) {Regex.Escape(symbol)}(?=\W).*?(?=^export (?:interface|type|const) |\z)",
+                string.Empty);
+        }
+        return selected;
+    }
+
+    internal static string TrimTypeDefinitionsForFramework(string source, string framework)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(framework);
+        var compact = CompactTypeDefinitions(source);
+        foreach (Match declaration in Regex.Matches(source, @"export interface (Task[A-Za-z]+Context)\s*\{"))
+        {
+            var commentStart = source.LastIndexOf("/**", declaration.Index, StringComparison.Ordinal);
+            var commentEnd = source.LastIndexOf("*/", declaration.Index, StringComparison.Ordinal);
+            if (commentStart < 0 || commentEnd < commentStart
+                || !string.IsNullOrWhiteSpace(source[(commentEnd + 2)..declaration.Index]))
+            {
+                continue;
+            }
+
+            var annotation = Regex.Match(source[commentStart..commentEnd], @"@supportedFrameworks\s+([^\r\n*]+)");
+            if (!annotation.Success)
+            {
+                continue;
+            }
+            var supportedFrameworks = annotation.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (supportedFrameworks.Contains(framework, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var name = declaration.Groups[1].Value;
+            var property = char.ToLowerInvariant(name[4]) + name[5..^7];
+            var declarationPattern = $@"(?ms)^export interface {Regex.Escape(name)}\s*\{{.*?^\}}\n?";
+            var propertyPattern = $@"(?m)^[ \t]*readonly {Regex.Escape(property)}: {Regex.Escape(name)};\n?";
+            if (Regex.Matches(compact, $@"\b{Regex.Escape(name)}\b").Count != 2
+                || !Regex.IsMatch(compact, declarationPattern)
+                || !Regex.IsMatch(compact, propertyPattern))
+            {
+                continue;
+            }
+
+            compact = Regex.Replace(compact, declarationPattern, string.Empty);
+            compact = Regex.Replace(compact, propertyPattern, string.Empty);
+        }
+
+        return compact;
+    }
+
+    internal static void TrimToLatestCompaction(JsonArray history, int responseStartIndex)
+    {
+        for (var index = history.Count - 1; index >= responseStartIndex; index--)
+        {
+            if (history[index] is JsonObject item
+                && string.Equals(ReadOptionalString(item, "type"), "compaction", StringComparison.Ordinal))
+            {
+                for (var removed = 0; removed < index; removed++) history.RemoveAt(0);
+                return;
+            }
+        }
+    }
+
     private static string BuildAgentHandoff(
         ActiveTaskExtraction extraction,
         string taskTypeDefinitions,
-        SessionAppToolCatalogSnapshot? appToolCatalog)
+        SessionAppToolCatalogSnapshot? appToolCatalog,
+        AppSessionSnapshot snapshot,
+        TimelineTaskExtraction seed)
         => $"""
            Extract a reusable Ansight repository task from the selected timeline period.
 
@@ -2022,14 +2455,68 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
            Agent handoff from the user:
            {extraction.Description}
 
-           BEGIN AUTHORITATIVE BUNDLED ANSIGHT TYPESCRIPT CONTRACT
+           BEGIN SELECTED PERIOD AND DETERMINISTIC SEED SUMMARY
+           {BuildInitialEvidence(snapshot, extraction, seed).ToJsonString(jsonOptions)}
+           END SELECTED PERIOD AND DETERMINISTIC SEED SUMMARY
+
+           Contract options: trimToTechnology={extraction.TrimToTechnology}; includeOnlyNecessaryFeatures={extraction.IncludeOnlyNecessaryFeatures}.
+           BEGIN SELECTED BUNDLED ANSIGHT TYPESCRIPT CONTRACT
            {taskTypeDefinitions}
-           END AUTHORITATIVE BUNDLED ANSIGHT TYPESCRIPT CONTRACT
+           END SELECTED BUNDLED ANSIGHT TYPESCRIPT CONTRACT
 
            {BuildTaskSupportModuleHandoff(extraction.WorkspacePath)}
 
            {BuildReferencedAppCapabilityHandoff(extraction.Description, appToolCatalog)}
            """;
+
+    private static JsonObject BuildInitialEvidence(
+        AppSessionSnapshot snapshot,
+        ActiveTaskExtraction extraction,
+        TimelineTaskExtraction seed)
+    {
+        var trees = snapshot.VisualTreeSnapshots
+            .Where(tree => IsWithin(tree.CapturedAtUtc, extraction))
+            .OrderBy(tree => tree.CapturedAtUtc)
+            .Take(30)
+            .Select(tree => new
+            {
+                tree.SnapshotId,
+                tree.CapturedAtUtc,
+                tree.VisualTreeKind,
+                tree.RuntimePlatform,
+                tree.NodeCount,
+                tree.Truncated
+            });
+        var annotations = snapshot.Annotations
+            .Where(item => item.EndUtc.GetValueOrDefault(item.StartUtc) >= extraction.StartUtc
+                           && item.StartUtc <= extraction.EndUtc)
+            .OrderBy(item => item.StartUtc)
+            .Take(20)
+            .Select(item => new { item.StartUtc, item.EndUtc, item.Label, notes = item.Notes is null ? null : Truncate(item.Notes, 300) });
+        return SerializeObject(new
+        {
+            schema = "ansight.task-extraction-initial-evidence/v1",
+            counts = new
+            {
+                touches = snapshot.Touches.Count(touch => IsWithin(touch.CapturedAtUtc, extraction)),
+                visualTrees = snapshot.VisualTreeSnapshots.Count(tree => IsWithin(tree.CapturedAtUtc, extraction)),
+                screenshots = snapshot.Images.Count(frame => IsWithin(frame.CapturedAtUtc, extraction)),
+                generatedReplaySteps = seed.ReplaySteps.Count
+            },
+            visualTrees = trees,
+            annotations,
+            seed = new
+            {
+                seed.SuggestedName,
+                source = Truncate(seed.Source, 12_000),
+                sourceTruncated = seed.Source.Length > 12_000,
+                seed.GestureCount,
+                seed.GeneratedActionCount,
+                diagnostics = seed.Diagnostics.Take(20),
+                replayInstructions = seed.ReplayInstructions.Take(30)
+            }
+        });
+    }
 
     private static string BuildTaskSupportModuleHandoff(string workspacePath)
     {
@@ -2165,22 +2652,6 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
     private static JsonObject SerializeObject<T>(T value)
         => JsonSerializer.SerializeToNode(value, jsonOptions) as JsonObject ?? new JsonObject();
-
-    private static JsonNode ParseTruncatedJson(JsonObject value, int maximumCharacters)
-    {
-        var serialized = value.ToJsonString();
-        if (serialized.Length <= maximumCharacters)
-        {
-            return value.DeepClone();
-        }
-
-        return new JsonObject
-        {
-            ["truncated"] = true,
-            ["originalCharacters"] = serialized.Length,
-            ["prefix"] = serialized[..maximumCharacters]
-        };
-    }
 
     private static bool IsWithin(DateTimeOffset timestamp, ActiveTaskExtraction extraction)
         => IsWithin(timestamp, extraction.StartUtc, extraction.EndUtc);
@@ -2782,6 +3253,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             Guid? teamId,
             bool taskNameIsAuthoritative,
             bool validateSelectors,
+            bool trimToTechnology,
+            bool includeOnlyNecessaryFeatures,
             CancellationToken featureLifetime)
         {
             ExtractionId = extractionId;
@@ -2799,6 +3272,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             TeamId = teamId;
             TaskNameIsAuthoritative = taskNameIsAuthoritative;
             ValidateSelectors = validateSelectors;
+            TrimToTechnology = trimToTechnology;
+            IncludeOnlyNecessaryFeatures = includeOnlyNecessaryFeatures;
             CreatedAtUtc = DateTimeOffset.UtcNow;
             UpdatedAtUtc = CreatedAtUtc;
             Cancellation = CancellationTokenSource.CreateLinkedTokenSource(featureLifetime);
@@ -2822,6 +3297,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         public string? ReasoningConfigurationRevision { get; private set; }
         public Guid? TeamId { get; }
         public bool ValidateSelectors { get; }
+        public bool TrimToTechnology { get; }
+        public bool IncludeOnlyNecessaryFeatures { get; }
         public DateTimeOffset CreatedAtUtc { get; private set; }
         public DateTimeOffset UpdatedAtUtc { get; private set; }
         public CancellationTokenSource Cancellation { get; }
@@ -3236,7 +3713,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     Reasoning = Reasoning,
                     ReasoningEffort = ReasoningEffort,
                     ReasoningConfigurationRevision = ReasoningConfigurationRevision,
-                    TaskNameIsAuthoritative = TaskNameIsAuthoritative
+                    TaskNameIsAuthoritative = TaskNameIsAuthoritative,
+                    TrimToTechnology = TrimToTechnology,
+                    IncludeOnlyNecessaryFeatures = IncludeOnlyNecessaryFeatures
                 };
             }
         }

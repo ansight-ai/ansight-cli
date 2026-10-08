@@ -25,4 +25,6 @@ public sealed record LocalTaskExtractionStartRequest(
 {
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
     public string? ReplaceExtractionId { get; init; }
+    public bool TrimToTechnology { get; init; } = true;
+    public bool IncludeOnlyNecessaryFeatures { get; init; }
 }

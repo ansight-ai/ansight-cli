@@ -3,7 +3,7 @@ namespace Ansight.Host.SimulatorAgent;
 public sealed record SimulatorAgentRunRequest(
     string SessionId,
     IReadOnlyList<string> Instructions,
-    string Model = "gpt-5.6-luna",
+    string Model = "gpt-6-luna",
     int MaximumTurnsPerInstruction = 64,
     int MaximumToolCalls = 512,
     string? AppId = null,

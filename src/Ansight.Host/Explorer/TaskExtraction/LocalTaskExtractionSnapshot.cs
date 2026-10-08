@@ -44,4 +44,6 @@ public sealed record LocalTaskExtractionSnapshot(
     public string? ReasoningConfigurationRevision { get; init; }
 
     public bool TaskNameIsAuthoritative { get; init; } = true;
+    public bool TrimToTechnology { get; init; } = true;
+    public bool IncludeOnlyNecessaryFeatures { get; init; }
 }

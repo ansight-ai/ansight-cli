@@ -106,7 +106,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         JsonArray input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        return new JsonObject
+        var payload = new JsonObject
         {
             ["model"] = request.Model.Trim(),
             ["instructions"] = request.Instructions,
@@ -122,6 +122,15 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
             ["prompt_cache_key"] = request.PromptCacheKey.Trim(),
             ["max_output_tokens"] = request.MaximumOutputTokens
         };
+        if (request.CompactThresholdTokens is { } compactThresholdTokens)
+        {
+            payload["context_management"] = new JsonArray(new JsonObject
+            {
+                ["type"] = "compaction",
+                ["compact_threshold"] = compactThresholdTokens
+            });
+        }
+        return payload;
     }
 
     internal static JsonObject BuildWebSocketPayload(
@@ -157,15 +166,6 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
                     });
                 }
             }
-        }
-
-        if (request.CompactThresholdTokens is { } compactThresholdTokens)
-        {
-            payload["context_management"] = new JsonArray(new JsonObject
-            {
-                ["type"] = "compaction",
-                ["compact_threshold"] = compactThresholdTokens
-            });
         }
 
         if (request.CompletionOnly)
