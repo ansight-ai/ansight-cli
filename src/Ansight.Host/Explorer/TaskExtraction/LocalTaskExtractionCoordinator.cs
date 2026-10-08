@@ -22,6 +22,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private const int MaximumAgentTurns = 12;
     private const int MaximumDraftRevisionAttempts = 3;
     private const int MaximumProgressEntries = 100;
+    private const int MaximumTaskNameCharacters = 200;
+    private const int MaximumGeneratedTaskNameCharacters = 60;
     private const int MaximumSourceCharacters = 500_000;
     private const int MaximumTraceContextCharacters = 1_000_000;
     private const int MaximumTracePayloadCharacters = 120_000;
@@ -378,7 +380,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 || previous.StartUtc != request.StartUtc.ToUniversalTime()
                 || previous.EndUtc != request.EndUtc.ToUniversalTime()
                 || previous.Status is "queued" or "running"
-                || previous.TestStatus == "running"
+                || previous.TestStatus is "running" or "cancelling"
                 || previous.CommittedPath is not null)
             {
                 throw new InvalidDataException("Only an uncommitted draft from this selected period can be regenerated.");
@@ -522,8 +524,26 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             return null;
         }
 
-        extraction.BeginTest(request.SessionId);
-        extraction.TestTask = RunTestAsync(extraction, request);
+        var testCancellation = extraction.BeginTest(request.SessionId);
+        extraction.TestTask = RunTestAsync(extraction, request, testCancellation);
+        return extraction.Snapshot();
+    }
+
+    public async Task<LocalTaskExtractionSnapshot?> CancelTestAsync(string extractionId)
+    {
+        ActiveTaskExtraction? extraction;
+        lock (gate) extraction = extractions.GetValueOrDefault(extractionId.Trim());
+        if (extraction is null) return null;
+        await extraction.CancelTestAsync().ConfigureAwait(false);
+        return extraction.Snapshot();
+    }
+
+    public LocalTaskExtractionSnapshot? ClearTestResult(string extractionId)
+    {
+        ActiveTaskExtraction? extraction;
+        lock (gate) extraction = extractions.GetValueOrDefault(extractionId.Trim());
+        if (extraction is null) return null;
+        extraction.ClearTestResult();
         return extraction.Snapshot();
     }
 
@@ -749,13 +769,48 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var temporaryPath = destinationPath + ".tmp-" + extraction.ExtractionId;
         File.WriteAllText(temporaryPath, draft.Source, new UTF8Encoding(false));
-        var taskRuntimePath = Path.Combine(taskDirectory, "ansight-task.js");
-        if (!File.Exists(taskRuntimePath))
-            File.WriteAllText(taskRuntimePath, RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), new UTF8Encoding(false));
+        EnsureRequiredTaskRuntime(taskDirectory, draft.Source);
         File.Move(temporaryPath, destinationPath);
         extraction.MarkCommitted(destinationPath);
         runtime.Analytics.RecordUsage("task_saved", outcome: "succeeded");
         return extraction.Snapshot();
+    }
+
+    internal static void EnsureRequiredTaskRuntime(string taskDirectory, string source)
+    {
+        var runtimePath = Path.Combine(taskDirectory, "ansight-task.js");
+        if (File.Exists(runtimePath)) return;
+        var needsRuntime = ReferencesTaskRuntime(source)
+            || Directory.EnumerateFiles(taskDirectory, "*.ts", SearchOption.AllDirectories)
+                .Where(path => !path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase))
+                .Any(path => ReferencesTaskRuntime(File.ReadAllText(path)));
+        if (needsRuntime)
+            File.WriteAllText(runtimePath, RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), new UTF8Encoding(false));
+    }
+
+    private static bool ReferencesTaskRuntime(string source)
+    {
+        var tokens = TokenizeTaskSource(source, includeStrings: true);
+        for (var index = 0; index + 1 < tokens.Count; index++)
+        {
+            if (tokens[index].Text is not ("import" or "export")) continue;
+            var next = index + 1;
+            if (tokens[next].Text == "type") continue;
+            if (tokens[next].Text == "(") next++;
+            else if (tokens[next].Text is "{" or "*" || tokens[next].IsIdentifier)
+            {
+                // Only import declarations and re-exports have a module specifier after `from`.
+                if (tokens[index].Text == "export" && tokens[next].Text is not ("{" or "*")) continue;
+                while (next < tokens.Count && tokens[next].Text is not ("from" or ";" or "import" or "export")) next++;
+                if (next == tokens.Count || tokens[next].Text != "from") continue;
+                next++;
+            }
+            if (next >= tokens.Count) continue;
+            var value = tokens[next].Text;
+            if (value.Length > 2 && value[0] is '\'' or '"' or '`'
+                && value[1..^1].EndsWith("/ansight-task.js", StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 
     public LocalTaskExtractionSnapshot? Cancel(string extractionId)
@@ -782,7 +837,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             var snapshot = extraction.Snapshot();
-            if (snapshot.Status is "queued" or "running" || snapshot.TestStatus == "running")
+            if (snapshot.Status is "queued" or "running" || snapshot.TestStatus is "running" or "cancelling")
             {
                 throw new InvalidDataException("Wait for the extraction or test run to finish before discarding its draft.");
             }
@@ -828,17 +883,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         extraction.Begin("Loading the selected capture period.");
         var stopwatch = Stopwatch.StartNew();
         WorkspaceTestRunPreparation? preparation = null;
+        TimelineTaskExtraction? seed = null;
+        LocalTaskExtractionDraft? latestDraft = null;
         var tokens = SimulatorAgentTokenUsage.Empty;
         var modelPasses = new List<SimulatorAgentModelPassUsage>();
         try
         {
-            var validationEnvironmentError = LocalTypeScriptTaskCompiler.GetEnvironmentError(
-                runtime.JavaScriptExecutablePath);
-            if (validationEnvironmentError is not null)
-            {
-                throw new InvalidOperationException(validationEnvironmentError);
-            }
-
             var snapshot = await runtime.Sessions.LoadSnapshotAsync(
                     extraction.SessionId,
                     cancellationToken: extraction.Cancellation.Token)
@@ -850,7 +900,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             extraction.Report("evidence.loaded", "Building deterministic evidence from the selected period.");
-            var seed = TimelineTaskExtractor.Extract(
+            seed = TimelineTaskExtractor.Extract(
                 snapshot,
                 extraction.StartUtc,
                 extraction.EndUtc,
@@ -864,6 +914,13 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             extraction.ConfigureSelectorEvidence(
                 snapshot,
                 LocalTaskSelectorEvidence.Create(selectedTrees, selectedImages.Length));
+
+            var validationEnvironmentError = LocalTypeScriptTaskCompiler.GetEnvironmentError(
+                runtime.JavaScriptExecutablePath);
+            if (validationEnvironmentError is not null)
+            {
+                throw new InvalidOperationException(validationEnvironmentError);
+            }
 
             preparation = await PrepareAgentAsync(extraction).ConfigureAwait(false);
             if (!preparation.IsSuccess)
@@ -886,7 +943,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     seed,
                     preparation,
                     modelPasses,
-                    usage => tokens = tokens.Add(usage))
+                    usage => tokens = tokens.Add(usage),
+                    draft => latestDraft = draft)
                 .ConfigureAwait(false);
             if (draftResult.IsValid)
             {
@@ -907,6 +965,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             else
             {
                 extraction.NeedsReview(draftResult.Draft, draftResult.Message);
+                usageOutcome = "needsReview";
             }
         }
         catch (OperationCanceledException) when (extraction.Cancellation.IsCancellationRequested)
@@ -915,11 +974,33 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
         catch (Exception exception)
         {
-            extraction.Fail(
-                "failed",
-                SanitizeUserFacingMessage(
-                    exception.GetBaseException().Message,
-                    "Task extraction failed. Please try again."));
+            var reason = SanitizeUserFacingMessage(
+                exception.GetBaseException().Message,
+                "The extraction agent could not finish the task.");
+            if (seed is null)
+            {
+                extraction.Fail("failed", reason);
+            }
+            else
+            {
+                var draft = BuildRecoveryDraft(runtime.BaseFolderPath, extraction.ExtractionId, seed, latestDraft, reason);
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(draft.SourcePath)!);
+                    File.WriteAllText(draft.SourcePath, draft.Source + Environment.NewLine, new UTF8Encoding(false));
+                }
+                catch (Exception saveException) when (saveException is IOException or UnauthorizedAccessException)
+                {
+                    draft = draft with
+                    {
+                        ValidationWarnings = [.. draft.ValidationWarnings,
+                            $"The draft is available in the editor but could not be saved to disk: {saveException.Message}"]
+                    };
+                }
+                extraction.NeedsReview(draft,
+                    "An incomplete draft is available for review. " + string.Join(" ", draft.ValidationWarnings));
+                usageOutcome = "needsReview";
+            }
         }
         finally
         {
@@ -1004,7 +1085,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         TimelineTaskExtraction seed,
         WorkspaceTestRunPreparation preparation,
         ICollection<SimulatorAgentModelPassUsage> modelPasses,
-        Action<SimulatorAgentTokenUsage> addUsage)
+        Action<SimulatorAgentTokenUsage> addUsage,
+        Action<LocalTaskExtractionDraft> preserveDraft)
     {
         var transport = preparation.ModelTransport
             ?? throw new InvalidOperationException("Task extraction requires a brokered model transport.");
@@ -1031,14 +1113,20 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             snapshot,
             seed)));
         var pendingInput = history.DeepClone().AsArray();
-        var tools = BuildAgentTools();
         var requiresFullReplay = true;
         DraftMaterializationResult? lastRejectedDraft = null;
         var draftRevisionAttempts = 0;
         for (var turn = 1; turn <= MaximumAgentTurns; turn++)
         {
             extraction.Cancellation.Token.ThrowIfCancellationRequested();
-            extraction.Report("agent.turn", $"Extraction agent pass {turn:N0}.");
+            var submissionOnly = IsDraftSubmissionTurn(turn);
+            extraction.Report("agent.turn", submissionOnly
+                ? $"Extraction agent pass {turn:N0}/{MaximumAgentTurns:N0}: writing or repairing the draft."
+                : $"Extraction agent pass {turn:N0}/{MaximumAgentTurns:N0}.");
+            var guidance = CreateUserInput(BuildAgentTurnGuidance(turn));
+            history.Add(guidance);
+            pendingInput.Add(guidance.DeepClone());
+            var tools = BuildAgentToolsForTurn(turn);
             var passStartedAtUtc = DateTimeOffset.UtcNow;
             var passStopwatch = Stopwatch.StartNew();
             var instructions = BuildAgentInstructions();
@@ -1145,7 +1233,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     try
                     {
                         var submission = ParseDraftSubmission(call.Arguments);
-                        var draftResult = MaterializeAndValidateDraft(extraction, submission);
+                        var draftResult = MaterializeAndValidateDraft(extraction, submission, preserveDraft);
+                        preserveDraft(draftResult.Draft);
                         if (draftResult.IsValid)
                         {
                             RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
@@ -1220,6 +1309,20 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     continue;
                 }
 
+                if (submissionOnly)
+                {
+                    var rejectedOutput = CreateFunctionOutput(call.CallId, new JsonObject
+                    {
+                        ["isSuccess"] = false,
+                        ["message"] = "Evidence inspection has ended. Call submit_task_draft with the best source supported by the evidence already collected; mark unfinished work with REVIEW: comments."
+                    }.ToJsonString());
+                    history.Add(rejectedOutput);
+                    pendingInput.Add(rejectedOutput.DeepClone());
+                    RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
+                        rejectedOutput.ToJsonString(), true);
+                    continue;
+                }
+
                 JsonObject toolOutput;
                 try
                 {
@@ -1255,7 +1358,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             if (response.FunctionCalls.Count == 0)
             {
                 var reminder = CreateUserInput(
-                    "Continue the extraction with the provided tools. Submit a validated TypeScript draft with submit_task_draft; do not answer in prose.");
+                    "Call submit_task_draft with the available TypeScript source. Mark unfinished work with REVIEW: comments if necessary; do not answer only in prose.");
                 history.Add(reminder);
                 pendingInput.Add(reminder.DeepClone());
             }
@@ -1263,12 +1366,59 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         return lastRejectedDraft
                ?? throw new InvalidOperationException(
-                   $"The extraction agent did not submit a task draft within {MaximumAgentTurns:N0} passes.");
+                   $"The extraction agent reached its {MaximumAgentTurns:N0}-pass limit without completing a draft.");
+    }
+
+    internal static LocalTaskExtractionDraft BuildRecoveryDraft(
+        string baseFolderPath,
+        string extractionId,
+        TimelineTaskExtraction seed,
+        LocalTaskExtractionDraft? latestDraft,
+        string reason)
+    {
+        if (latestDraft is not null)
+        {
+            return latestDraft with
+            {
+                ValidationWarnings = [.. latestDraft.ValidationWarnings, reason]
+            };
+        }
+
+        var draftRoot = Path.Combine(baseFolderPath, "task-extraction-drafts", extractionId);
+        var suggestedName = Slugify(seed.SuggestedName);
+        if (string.IsNullOrWhiteSpace(suggestedName)) suggestedName = "extracted-task";
+        return new LocalTaskExtractionDraft(
+            suggestedName,
+            seed.Summary,
+            seed.Source,
+            suggestedName,
+            draftRoot,
+            Path.Combine(draftRoot, RepositoryTaskLoader.TaskDirectoryRelativePath, suggestedName + ".ts"),
+            [.. seed.Diagnostics, reason,
+                "This draft uses the recorded steps. Review the selectors and add the requested product-outcome assertions before testing."]);
+    }
+
+    internal static bool IsDraftSubmissionTurn(int turn)
+        => turn > MaximumAgentTurns - MaximumDraftRevisionAttempts;
+
+    internal static string BuildAgentTurnGuidance(int turn)
+        => IsDraftSubmissionTurn(turn)
+            ? $"Pass {turn} of {MaximumAgentTurns}. Evidence inspection has ended; {MaximumAgentTurns - turn + 1} submission pass(es) remain. Call submit_task_draft now with your best complete TypeScript module. Repair any validation diagnostics from prior submissions. If a requested step or assertion is still unsupported, leave a REVIEW: comment explaining it rather than inventing a selector or API. Always submit the available work, even if it needs review; do not answer only in prose."
+            : $"Pass {turn} of {MaximumAgentTurns}. You have {MaximumAgentTurns - MaximumDraftRevisionAttempts - turn + 1} evidence-inspection pass(es) left, including this one. The final {MaximumDraftRevisionAttempts} passes are reserved for submitting and repairing the draft. Inspect only evidence needed for this task; do not exhaustively page through every visual tree. You may call submit_task_draft as soon as you have enough evidence.";
+
+    internal static JsonArray BuildAgentToolsForTurn(int turn)
+    {
+        var tools = BuildAgentTools();
+        return IsDraftSubmissionTurn(turn)
+            ? new JsonArray(tools.OfType<JsonObject>()
+                .Single(tool => tool["name"]?.GetValue<string>() == SubmitDraftToolName).DeepClone())
+            : tools;
     }
 
     private DraftMaterializationResult MaterializeAndValidateDraft(
         ActiveTaskExtraction extraction,
-        AgentDraftSubmission submission)
+        AgentDraftSubmission submission,
+        Action<LocalTaskExtractionDraft>? preserveDraft = null)
     {
         var suggestedName = Slugify(extraction.TaskNameIsAuthoritative
             ? extraction.TaskName
@@ -1284,6 +1434,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             throw new InvalidDataException(
                 $"The generated task exceeds the {MaximumSourceCharacters:N0}-character limit.");
         }
+        var draftRoot = Path.Combine(runtime.BaseFolderPath, "task-extraction-drafts", extraction.ExtractionId);
+        var taskDirectory = Path.Combine(draftRoot, RepositoryTaskLoader.TaskDirectoryRelativePath);
+        var sourcePath = Path.Combine(taskDirectory, suggestedName + ".ts");
+        preserveDraft?.Invoke(new LocalTaskExtractionDraft(
+            suggestedName, submission.Summary.Trim(), source, suggestedName, draftRoot, sourcePath,
+            ["Validation did not finish for this submitted draft."]));
         var validationWarnings = new List<string>();
         if (!source.Contains("expect(", StringComparison.Ordinal)
             && !source.Contains("expect.soft(", StringComparison.Ordinal))
@@ -1301,14 +1457,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             validationWarnings.AddRange(ValidateSelectorGrounding(extraction, source));
         }
 
-        var draftRoot = Path.Combine(
-            runtime.BaseFolderPath,
-            "task-extraction-drafts",
-            extraction.ExtractionId);
-        var taskDirectory = Path.Combine(draftRoot, RepositoryTaskLoader.TaskDirectoryRelativePath);
         Directory.CreateDirectory(taskDirectory);
         CopyTaskSupportModules(extraction.WorkspacePath, taskDirectory);
-        var sourcePath = Path.Combine(taskDirectory, suggestedName + ".ts");
         var previousSourcePath = extraction.ReplaceGeneratedSourcePath(sourcePath);
         if (previousSourcePath is not null
             && !string.Equals(previousSourcePath, sourcePath, StringComparison.Ordinal))
@@ -1337,7 +1487,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         if (catalog.Tasks.Count == 1 && !extraction.TaskNameIsAuthoritative)
         {
             var generatedTitle = catalog.Tasks[0].Title.Trim();
-            if (generatedTitle.Length > 60 || generatedTitle.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 7)
+            if (generatedTitle.Length > MaximumGeneratedTaskNameCharacters || generatedTitle.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 7)
             {
                 validationWarnings.Add("Use a concise task title of at most seven words and 60 characters.");
             }
@@ -1524,7 +1674,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
     private async Task RunTestAsync(
         ActiveTaskExtraction extraction,
-        LocalTaskExtractionTestRequest request)
+        LocalTaskExtractionTestRequest request,
+        CancellationToken testCancellation)
     {
         try
         {
@@ -1551,13 +1702,13 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     sessionId,
                     draft.TaskId,
                     request.Input,
-                    extraction.Cancellation.Token)
+                    testCancellation)
                 .ConfigureAwait(false);
             extraction.CompleteTest(CreateTestResult(result));
         }
-        catch (OperationCanceledException) when (extraction.Cancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (testCancellation.IsCancellationRequested)
         {
-            extraction.FailTest("Task test run cancelled.");
+            extraction.FailTest("Task test run cancelled.", cancelled: true);
         }
         catch (Exception exception)
         {
@@ -2209,13 +2360,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
            The handoff includes a compact selected-period inventory and deterministic seed. Inspect their full versions when the summary is insufficient, and inspect the relevant visual trees before submitting. The compact tree inventory is only a selector index: it does not preserve all node relationships, hidden state, node order, or attributes. For any step or assertion whose meaning depends on those details, call `inspect_raw_visual_tree` for the relevant snapshot and continue through its chunks as needed before deciding what the task should do. Inspect retained screenshot OCR when visual trees do not expose the visible text needed for a semantic assertion. Every literal UI selector value in ansight.ui or ansight.keyboard calls must be directly present in the selected session's UI evidence: a visible visual-tree node, or recorded screenshot OCR for a text selector. Logs, telemetry, framework navigation names, source-code class names, the handoff, and inferred component names do not prove that a selector exists. Never turn those strings into `type`, `automationId`, `text`, `role`, `nodeId`, `ancestorAutomationId`, or `action` selectors unless the same value appears on a captured UI node or in OCR. Prefer a captured automation ID; otherwise use captured visible text with its captured role. Avoid coordinate taps. Omit unsupported or ambiguous steps rather than fabricating them.
 
+           For editable controls, prefer their captured automation ID for both the readiness wait and text entry. Do not add placeholder text, current input value, or a source-specific role when the ID already identifies the control. If the editable descendant lacks an ID, use an observed textbox role scoped to a captured ancestor ID without tying identity to its mutable text. All constraints must resolve on the same node in one tree source. The selector inventory's textValues contain the text accepted by the live selector matcher; secondary raw labels, values, and placeholders are not interchangeable text aliases. An automation ID on the target itself is not its ancestor.
+
            The handoff contains a selected view of Ansight's bundled `ansight-task.d.ts` declarations with documentation comments removed. Technology and optional feature filters may omit APIs from this initial view. If a needed API is absent or its behavior is unclear, call `inspect_task_contract` to read its full declaration and documentation before using it. The submitted task is compiled against the original full declaration file. Every member used in the submitted module must be declared in the handoff or verified through `inspect_task_contract`; never infer a convenience method from a raw tool name or from ordinary browser APIs. Host operations are feature-sliced: use `ansight.ui.tap`, `ansight.ui.waitFor`, and `ansight.ui.find`, never `ansight.tap`, `ansight.waitFor`, `ansight.find_ui`, or `ansight.getCurrentPage`. Framework inspection, when actually necessary, is feature-sliced under `app` and returns the `AppToolCallResult` envelope declared by the contract. Prefer `ansight.ui.find` and `ansight.ui.waitFor` for visible product outcomes.
 
            The handoff may also contain exact app-tool or artifact definitions selected by the user with `@tool:`, `@artifact-provider:`, or `@artifact:` references. These definitions describe device capabilities, but do not add typed convenience members to the TypeScript contract. Invoke a selected custom tool through the contract's generic `app.callTool` API, or use a declared standardized `app` suite method when one maps to the exact selected tool. Use artifact provider and artifact identifiers exactly as recorded.
 
            Workspace-authored `.ts` and `.d.ts` files without an exported `task` descriptor are support modules, not tasks. Use `inspect_task_support_modules` to discover them and inspect relevant sources. Prefer importing their existing types and helper functions over reproducing them in the generated task. The extraction compiler includes those support modules at their workspace-relative paths.
 
-           The submitted source must statically export `task` and a default async run function, use only members declared in the bundled contract, declare an object input schema, await calls serially, stay within 100 actions, and contain at least one meaningful stable named `expect` assertion for the requested product outcome. A generic stability-only assertion is insufficient. Remove every REVIEW marker. Do not include markdown fences or prose in `source`.
+           The submitted source must statically export `task` and a default async run function, use only members declared in the bundled contract, declare an object input schema, await calls serially, stay within 100 actions, and contain at least one meaningful stable named `expect` assertion for the requested product outcome. A generic stability-only assertion is insufficient. Resolve REVIEW markers whenever evidence permits; if the pass budget ends first, submit the available source with REVIEW: comments explaining unfinished work. Such a draft will remain marked as needing review. Do not include markdown fences or prose in `source`.
 
            Do not copy the deterministic seed's `maximumActions` value after adding or changing calls. Omit `maximumActions` from extracted task descriptors unless the user explicitly requested a custom action budget; omission uses the host's safe 64-action default. If a custom value is required, it must cover every possible runtime `ansight` and `app` call, including calls made by branches, loops, retries, and imported helpers, and it cannot exceed 100.
 
@@ -2225,7 +2378,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
            Every submission is compiled with strict TypeScript against that exact bundled declaration file, statically loaded as a repository task, and may be checked against the selected session's visual-tree and OCR evidence. If submit_task_draft returns diagnostics, repair all of them and resubmit the complete module; do not defend or work around an undeclared API or unobserved selector.
 
-           Use tools to inspect evidence. Finish only by calling submit_task_draft.
+           Use tools to inspect evidence within the pass budget supplied each turn. Finish by calling submit_task_draft, even if some work must remain for review. Returning an incomplete draft is better than returning no draft.
            """;
 
     internal static string CompactTypeDefinitions(string source)
@@ -2716,16 +2869,40 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             throw new InvalidDataException("The extraction handoff must be 8,000 characters or fewer.");
         }
-        if (request.TaskName?.Trim().Length > 200)
+        if (request.TaskName?.Trim().Length > MaximumTaskNameCharacters)
         {
-            throw new InvalidDataException("The task name must be 200 characters or fewer.");
+            throw new InvalidDataException($"The task name must be {MaximumTaskNameCharacters} characters or fewer.");
         }
     }
 
     internal static string ResolveTaskName(LocalTaskExtractionStartRequest request)
-        => string.IsNullOrWhiteSpace(request.TaskName)
-            ? request.Description.Trim()
-            : request.TaskName.Trim();
+    {
+        if (!string.IsNullOrWhiteSpace(request.TaskName))
+        {
+            return request.TaskName.Trim();
+        }
+
+        // Metering needs a short provisional title before the agent can name the task.
+        // Keep the complete description in the handoff, not in the title.
+        var title = Regex.Replace(request.Description.Trim(), @"\s+", " ");
+        if (title.Length <= MaximumGeneratedTaskNameCharacters)
+        {
+            return title;
+        }
+
+        var length = MaximumGeneratedTaskNameCharacters - 1;
+        var wordBoundary = title.LastIndexOf(' ', length);
+        if (wordBoundary > 0)
+        {
+            length = wordBoundary;
+        }
+        else if (char.IsHighSurrogate(title[length - 1]))
+        {
+            length--;
+        }
+
+        return title[..length].TrimEnd() + "…";
+    }
 
     private static string ReadRequiredString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
@@ -3054,7 +3231,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             $"'{callPath}' is not declared by the bundled task contract. {root} calls must use '{root}.<suite>.<method>(...)' (available suites: {availableSuites}) or the declared '{root}.callTool(...)' escape hatch.");
     }
 
-    private static IReadOnlyList<TaskSourceToken> TokenizeTaskSource(string source)
+    private static IReadOnlyList<TaskSourceToken> TokenizeTaskSource(string source, bool includeStrings = false)
     {
         var tokens = new List<TaskSourceToken>();
         for (var index = 0; index < source.Length;)
@@ -3087,7 +3264,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
             if (character is '\'' or '"' or '`')
             {
-                index = SkipQuotedSource(source, index, character);
+                var end = SkipQuotedSource(source, index, character);
+                if (includeStrings) tokens.Add(new TaskSourceToken(source[index..end], IsIdentifier: false));
+                index = end;
                 continue;
             }
             if (IsIdentifierStart(character))
@@ -3228,6 +3407,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         private string testStatus = "idle";
         private string? testMessage;
         private LocalTaskExtractionTestResult? testResult;
+        private CancellationTokenSource? testCancellation;
         private string? committedPath;
         private SelectorEvidenceContext? selectorEvidenceContext;
         private Guid? traceRunId;
@@ -3423,9 +3603,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 ReasoningConfigurationRevision = snapshot.ReasoningConfigurationRevision;
                 progress.Clear();
                 progress.AddRange(snapshot.Progress.TakeLast(MaximumProgressEntries));
-                testStatus = snapshot.TestStatus == "running" ? "idle" : snapshot.TestStatus;
-                testMessage = snapshot.TestStatus == "running" ? null : snapshot.TestMessage;
-                testResult = snapshot.TestStatus == "running" ? null : snapshot.TestResult;
+                var wasRunning = snapshot.TestStatus is "running" or "cancelling";
+                testStatus = wasRunning ? "idle" : snapshot.TestStatus;
+                testMessage = wasRunning ? null : snapshot.TestMessage;
+                testResult = wasRunning ? null : snapshot.TestResult;
                 traceStatus = snapshot.Trace?.Status ?? "idle";
                 traceMessage = snapshot.Trace?.Message;
                 traceRunId = snapshot.Trace?.RunId;
@@ -3457,7 +3638,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 lock (gate)
                 {
-                    return status is "ready" or "needsReview" or "failed" or "cancelled" or "committed";
+                    return testStatus is not ("running" or "cancelling")
+                           && status is "ready" or "needsReview" or "failed" or "cancelled" or "committed";
                 }
             }
         }
@@ -3511,7 +3693,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             lock (gate)
             {
-                if (testStatus == "running")
+                if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("Wait for the task test run to finish before editing the draft.");
                 }
@@ -3540,7 +3722,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
         }
 
-        public void BeginTest(string? sessionId)
+        public CancellationToken BeginTest(string? sessionId)
         {
             lock (gate)
             {
@@ -3548,16 +3730,47 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for a ready task draft before testing it.");
                 }
-                if (testStatus == "running")
+                if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("This task draft already has a test run in progress.");
                 }
 
+                testCancellation?.Dispose();
+                testCancellation = CancellationTokenSource.CreateLinkedTokenSource(Cancellation.Token);
                 testStatus = "running";
                 testMessage = $"Starting test run on '{sessionId?.Trim()}'.";
                 testResult = null;
                 Touch();
                 AddProgress("test.started", testMessage);
+                return testCancellation.Token;
+            }
+        }
+
+        public Task CancelTestAsync()
+        {
+            lock (gate)
+            {
+                if (testStatus is not "running" || testCancellation is null) return Task.CompletedTask;
+                testStatus = "cancelling";
+                testMessage = "Cancelling test run…";
+                Touch();
+                AddProgress("test.cancelling", testMessage);
+                // CancelAsync marks the token now but runs callbacks outside this lock.
+                return testCancellation.CancelAsync();
+            }
+        }
+
+        public void ClearTestResult()
+        {
+            lock (gate)
+            {
+                if (testStatus is "running" or "cancelling")
+                    throw new InvalidDataException("Cancel the test run and wait for it to stop before clearing its result.");
+                testStatus = "idle";
+                testMessage = null;
+                testResult = null;
+                Touch();
+                AddProgress("test.cleared", "Test result cleared.");
             }
         }
 
@@ -3565,6 +3778,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             lock (gate)
             {
+                if (testCancellation?.IsCancellationRequested == true)
+                    result = result with { Status = "cancelled", Message = "Task test run cancelled." };
                 testResult = result;
                 testStatus = result.Status;
                 testMessage = result.Message;
@@ -3573,14 +3788,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
         }
 
-        public void FailTest(string nextMessage)
+        public void FailTest(string nextMessage, bool cancelled = false)
         {
             lock (gate)
             {
-                testStatus = "failed";
-                testMessage = nextMessage;
+                var wasCancelled = cancelled || testCancellation?.IsCancellationRequested == true;
+                testStatus = wasCancelled ? "cancelled" : "failed";
+                testMessage = wasCancelled ? "Task test run cancelled." : nextMessage;
                 Touch();
-                AddProgress("test.failed", nextMessage);
+                AddProgress(wasCancelled ? "test.cancelled" : "test.failed", testMessage);
             }
         }
 
@@ -3609,7 +3825,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for the agent to produce a task draft.");
                 }
-                if (testStatus == "running")
+                if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("Wait for the task test run to finish before editing the draft.");
                 }
@@ -3626,7 +3842,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             lock (gate)
             {
-                if (testStatus == "running")
+                if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("Wait for the task test run to finish before debugging it.");
                 }
@@ -3715,13 +3931,17 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     ReasoningConfigurationRevision = ReasoningConfigurationRevision,
                     TaskNameIsAuthoritative = TaskNameIsAuthoritative,
                     TrimToTechnology = TrimToTechnology,
-                    IncludeOnlyNecessaryFeatures = IncludeOnlyNecessaryFeatures
+                    IncludeOnlyNecessaryFeatures = IncludeOnlyNecessaryFeatures,
+                    AutomationIds = selectorEvidenceContext?.Evidence.AutomationIds
                 };
             }
         }
 
         public void Dispose()
-            => Cancellation.Dispose();
+        {
+            testCancellation?.Dispose();
+            Cancellation.Dispose();
+        }
 
         private void Touch()
             => UpdatedAtUtc = DateTimeOffset.UtcNow;

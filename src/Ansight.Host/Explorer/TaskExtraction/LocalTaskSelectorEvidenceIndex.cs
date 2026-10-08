@@ -24,6 +24,7 @@ internal sealed class LocalTaskSelectorEvidenceIndex
     public int ScreenshotFrameCount { get; }
     public int OcrFrameCount { get; }
     public IReadOnlyList<LocalTaskSelectorEvidenceNode> Nodes { get; }
+    public IReadOnlyList<string> AutomationIds { get; init; } = [];
 
     public LocalTaskSelectorEvidenceIndex WithOcrBlocks(
         SessionImageFrame frame,
@@ -49,7 +50,10 @@ internal sealed class LocalTaskSelectorEvidenceIndex
             TreeCount,
             ScreenshotFrameCount,
             OcrFrameCount + 1,
-            [.. Nodes, .. ocrNodes]);
+            [.. Nodes, .. ocrNodes])
+        {
+            AutomationIds = AutomationIds
+        };
     }
 
     public bool ContainsIdentity(LocalTaskSelectorEvidenceNode candidate)

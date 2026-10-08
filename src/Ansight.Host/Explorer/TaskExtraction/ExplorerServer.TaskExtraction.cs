@@ -123,6 +123,28 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "api/task-extractions/capabilities" when isExplorer:
                 await WriteJsonAsync(response, taskExtractions.GetCapabilities(), HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
                 return true;
+            case "api/task-extractions/test-selectors" when isExplorer:
+                {
+                    var sessionId = request.QueryString["sessionId"]?.Trim();
+                    if (string.IsNullOrWhiteSpace(sessionId)
+                        || !DateTimeOffset.TryParse(request.QueryString["startUtc"], out var startUtc)
+                        || !DateTimeOffset.TryParse(request.QueryString["endUtc"], out var endUtc)
+                        || endUtc < startUtc)
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, "A session and valid startUtc/endUtc range are required."), HttpStatusCode.BadRequest, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+                    var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    if (snapshot is null)
+                    {
+                        await WriteJsonAsync(response, new OperationResult(false, "The source session was not found."), HttpStatusCode.NotFound, isHead, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    }
+                    var ids = LocalTaskSelectorEvidence.Create(snapshot.VisualTreeSnapshots
+                        .Where(tree => tree.CapturedAtUtc >= startUtc && tree.CapturedAtUtc <= endUtc)).AutomationIds;
+                    await WriteJsonAsync(response, ids, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
             case "api/task-extractions/references" when isExplorer:
                 {
                     var sessionId = request.QueryString["sessionId"];
@@ -284,10 +306,6 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                         .ConfigureAwait(false)
                         ?? throw new InvalidDataException($"Session '{body.SessionId}' was not found.");
                     var definition = ValidateWorkspaceTestSource(body.Source, snapshot.AppId);
-                    if (!definition.Enabled)
-                    {
-                        throw new InvalidDataException("This test is disabled. Resolve its REVIEW items before running it.");
-                    }
                     var workspacePath = runtime.Apps.Get(snapshot.AppId)?.CodebasePath;
                     if (string.IsNullOrWhiteSpace(workspacePath))
                     {
@@ -580,7 +598,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         }
     }
 
-    private static WorkspaceTestDefinition ValidateWorkspaceTestSource(string source, string appId)
+    private WorkspaceTestDefinition ValidateWorkspaceTestSource(string source, string appId)
     {
         if (string.IsNullOrWhiteSpace(source) || source.Length > 256_000)
         {
@@ -591,6 +609,15 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         if (!string.Equals(definition.AppId, appId, StringComparison.Ordinal))
         {
             throw new InvalidDataException($"The test appId must match the source session app '{appId}'.");
+        }
+        var references = definition.GetReferencedTaskIds();
+        if (references.Count > 0)
+        {
+            var workspacePath = runtime.Apps.Get(appId)?.CodebasePath;
+            var tasks = string.IsNullOrWhiteSpace(workspacePath) ? [] : runtime.InspectRepositoryTasks(appId, workspacePath).Tasks;
+            var unavailable = references.Where(id => !tasks.Any(task => task.Enabled && task.TaskId == id)).ToArray();
+            if (unavailable.Length > 0)
+                throw new InvalidDataException($"Unknown or disabled prompt task reference(s): {string.Join(", ", unavailable.Select(id => "@task/" + id))}.");
         }
         return definition;
     }

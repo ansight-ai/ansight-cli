@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host.Models.Session;
 using Ansight.Host.Workspaces.Catalog;
+using Ansight.Host.Explorer.TaskExtraction;
 
 namespace Ansight.Host.Runtime.Tasks;
 
@@ -14,6 +15,7 @@ public sealed record WorkspaceTestExtraction(
     IReadOnlyList<string> Diagnostics)
 {
     public string? TestName { get; init; }
+    public IReadOnlyList<string> AutomationIds { get; init; } = [];
 }
 
 public static class WorkspaceTestExtractor
@@ -56,10 +58,11 @@ public static class WorkspaceTestExtractor
 
         var prompt = new StringBuilder();
         var hasSelectedSections = taskSectionIds is { Count: > 0 };
+        SessionAnnotation[] sections = [];
         if (hasSelectedSections)
         {
             var selectedIds = taskSectionIds!.ToHashSet(StringComparer.Ordinal);
-            var sections = snapshot.Annotations
+            sections = snapshot.Annotations
                 .Where(annotation => selectedIds.Contains(annotation.AnnotationId)
                     && annotation.EndUtc > annotation.StartUtc
                     && annotation.StartUtc >= startUtc
@@ -71,24 +74,15 @@ public static class WorkspaceTestExtractor
             {
                 throw new ArgumentException("Every selected task section must be a labelled range annotation inside the test period.");
             }
-
-            prompt.AppendLine("Complete these steps in order:");
-            for (var index = 0; index < sections.Length; index++)
-            {
-                var section = sections[index];
-                prompt.Append(index + 1).Append(". ").Append(section.Label.Trim());
-                if (!string.IsNullOrWhiteSpace(section.Notes)) prompt.Append(" — ").Append(section.Notes.Trim());
-                prompt.AppendLine();
-            }
         }
-        else if (journey.ReplaySteps.Count == 0)
+        if (journey.ReplaySteps.Count == 0 && !hasSelectedSections)
         {
             prompt.AppendLine("Review the selected replay and add the missing journey steps before running this test.");
             diagnostics.Add("No replayable interactions were found; complete the journey prompt before running this test.");
         }
-        else
+        else if (journey.ReplaySteps.Count > 0)
         {
-            prompt.AppendLine("Use the recorded controls as a guide to complete the journey:");
+            prompt.AppendLine("Use the recorded controls as a guide to complete the entire selected journey:");
             for (var index = 0; index < journey.ReplaySteps.Count; index++)
             {
                 var step = journey.ReplaySteps[index];
@@ -101,16 +95,30 @@ public static class WorkspaceTestExtractor
                     _ => step.Instruction
                 };
                 prompt.Append(index + 1).Append(". ").AppendLine(instruction);
-                if (step.Kind == "input")
+                if (step.Kind == "input" && !IsAnnotated(step.CapturedAtUtc))
                 {
                     diagnostics.Add($"Input at {step.CapturedAtUtc:O} needs a test value; captured text was omitted from the YAML test.");
                 }
             }
         }
 
-        var hasOmittedInput = !hasSelectedSections && journey.ReplaySteps.Any(static step => step.Kind == "input");
-        var hasUnresolvedNavigation = !hasSelectedSections && journey.ReplaySteps.Any(static step =>
-            step.Kind == "swipe" || step.Instruction.StartsWith("Replay the recorded tap", StringComparison.Ordinal));
+        if (hasSelectedSections)
+        {
+            if (prompt.Length > 0) prompt.AppendLine();
+            prompt.AppendLine("Use these selected annotations to clarify the corresponding parts of the journey; retain the recorded steps before, between, and after them:");
+            foreach (var section in sections)
+            {
+                prompt.Append("- ").Append(section.Label.Trim());
+                if (!string.IsNullOrWhiteSpace(section.Notes)) prompt.Append(" — ").Append(section.Notes.Trim());
+                prompt.Append(" (Recorded range: ").Append(section.StartUtc.ToString("O"))
+                    .Append(" to ").Append(section.EndUtc!.Value.ToString("O")).AppendLine(")");
+            }
+        }
+
+        bool IsAnnotated(DateTimeOffset? time) => time.HasValue && sections.Any(section => time >= section.StartUtc && time <= section.EndUtc);
+        var hasOmittedInput = journey.ReplaySteps.Any(step => step.Kind == "input" && !IsAnnotated(step.CapturedAtUtc));
+        var hasUnresolvedNavigation = journey.ReplaySteps.Any(step => !IsAnnotated(step.CapturedAtUtc)
+            && (step.Kind == "swipe" || step.Instruction.StartsWith("Replay the recorded tap", StringComparison.Ordinal)));
         if (hasUnresolvedNavigation)
         {
             diagnostics.Add("Some recorded gestures lack a semantic target; describe their purpose before running this test.");
@@ -126,22 +134,27 @@ public static class WorkspaceTestExtractor
             .Append("id: ").AppendLine(Quote(journey.SuggestedName))
             .Append("name: ").AppendLine(Quote(title.Trim()))
             .Append("appId: ").AppendLine(Quote(snapshot.AppId));
-        AppendBlock(source, "prompt", prompt.ToString().TrimEnd());
-        source.AppendLine("validation:");
-        AppendBlock(source, "  prompt", string.IsNullOrWhiteSpace(validationPrompt)
-            ? "Inspect the final app state through Ansight UI evidence and verify every assertion below."
-            : validationPrompt.Trim());
-        source.AppendLine("  assertions:");
-        foreach (var outcome in outcomes)
+        if (string.IsNullOrWhiteSpace(validationPrompt) && assertions is not { Count: > 0 })
         {
-            source.Append("    - ").AppendLine(Quote(outcome));
+            prompt.AppendLine().AppendLine("Verify through Ansight evidence:");
+            foreach (var outcome in outcomes) prompt.Append("- ").AppendLine(outcome);
+        }
+        AppendBlock(source, "prompt", prompt.ToString().TrimEnd());
+        if (!string.IsNullOrWhiteSpace(validationPrompt) || assertions is { Count: > 0 })
+        {
+            source.AppendLine("validation:");
+            if (!string.IsNullOrWhiteSpace(validationPrompt)) AppendBlock(source, "  prompt", validationPrompt.Trim());
+            source.AppendLine("  assertions:");
+            foreach (var outcome in outcomes) source.Append("    - ").AppendLine(Quote(outcome));
         }
 
         // Parse with the same contract used by workspace test discovery.
         WorkspaceTestCatalog.Parse("ansight/tests", $"ansight/tests/{journey.SuggestedName}.yaml", source.ToString());
         return new WorkspaceTestExtraction(journey.SuggestedName, source.ToString(), journey.ReplaySteps.Count, diagnostics)
         {
-            TestName = title.Trim()
+            TestName = title.Trim(),
+            AutomationIds = LocalTaskSelectorEvidence.Create(snapshot.VisualTreeSnapshots
+                .Where(tree => tree.CapturedAtUtc >= startUtc && tree.CapturedAtUtc <= endUtc)).AutomationIds
         };
     }
 

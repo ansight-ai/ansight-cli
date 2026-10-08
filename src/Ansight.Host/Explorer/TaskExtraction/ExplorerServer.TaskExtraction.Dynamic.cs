@@ -54,7 +54,7 @@ internal sealed partial class ExplorerServer
             return true;
         }
 
-        if (isExplorer && segments.Length == 4 && segments[0] == "api" && segments[1] == "task-extractions" && segments[3] is "draft" or "test" or "commit" or "cancel")
+        if (isExplorer && segments.Length == 4 && segments[0] == "api" && segments[1] == "task-extractions" && segments[3] is "draft" or "test" or "commit" or "cancel" or "cancel-test" or "clear-test")
         {
             var extractionId = Uri.UnescapeDataString(segments[2]);
             LocalTaskExtractionSnapshot? extraction;
@@ -72,12 +72,20 @@ internal sealed partial class ExplorerServer
             {
                 extraction = taskExtractions.Commit(extractionId);
             }
+            else if (segments[3] == "cancel-test")
+            {
+                extraction = await taskExtractions.CancelTestAsync(extractionId).ConfigureAwait(false);
+            }
+            else if (segments[3] == "clear-test")
+            {
+                extraction = taskExtractions.ClearTestResult(extractionId);
+            }
             else
             {
                 extraction = taskExtractions.Cancel(extractionId);
             }
 
-            await WriteJsonAsync(response, (object?)extraction ?? OperationResult.Failure($"Task extraction '{extractionId}' was not found."), extraction is null ? HttpStatusCode.NotFound : segments[3] is "test" or "cancel" ? HttpStatusCode.Accepted : HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+            await WriteJsonAsync(response, (object?)extraction ?? OperationResult.Failure($"Task extraction '{extractionId}' was not found."), extraction is null ? HttpStatusCode.NotFound : segments[3] is "test" or "cancel" or "cancel-test" ? HttpStatusCode.Accepted : HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
             return true;
         }
 

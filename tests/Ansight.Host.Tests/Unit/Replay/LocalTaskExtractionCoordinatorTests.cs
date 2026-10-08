@@ -3,11 +3,76 @@ using System.Text.Json.Nodes;
 using Ansight.Host.Replay;
 using Ansight.Host.Runtime.Automation;
 using Ansight.Host.Runtime.RepositoryContracts;
+using Ansight.Host.Runtime.Tasks;
 
 namespace Ansight.Host.Tests.Unit.Replay;
 
 public sealed class LocalTaskExtractionCoordinatorTests
 {
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(9, false)]
+    [InlineData(10, true)]
+    [InlineData(11, true)]
+    [InlineData(12, true)]
+    public void BuildAgentToolsForTurn_ReservesFinalPassesForDraftSubmission(int turn, bool submissionOnly)
+    {
+        var tools = LocalTaskExtractionCoordinator.BuildAgentToolsForTurn(turn)
+            .OfType<JsonObject>()
+            .Select(tool => tool["name"]!.GetValue<string>())
+            .ToArray();
+
+        Assert.Contains("submit_task_draft", tools);
+        if (submissionOnly)
+        {
+            Assert.Single(tools);
+        }
+        else
+        {
+            Assert.Contains("inspect_raw_visual_tree", tools);
+            Assert.Contains("inspect_task_contract", tools);
+        }
+    }
+
+    [Fact]
+    public void BuildRecoveryDraft_ReturnsRecordedSourceWhenAgentNeverSubmits()
+    {
+        const string reason = "The extraction agent reached its 12-pass limit without completing a draft.";
+        var seed = new TimelineTaskExtraction(
+            "copy-location", "// Recorded location-sharing steps", 3, 2, ["Copy target needs review."]);
+        var baseFolder = Path.GetTempPath();
+
+        var draft = LocalTaskExtractionCoordinator.BuildRecoveryDraft(baseFolder, "extraction-1", seed, null, reason);
+
+        Assert.Equal(seed.Source, draft.Source);
+        Assert.Equal(seed.Summary, draft.Summary);
+        Assert.Equal("copy-location", draft.SuggestedName);
+        Assert.Equal(Path.Combine(baseFolder, "task-extraction-drafts", "extraction-1"), draft.DraftRootPath);
+        Assert.Equal(Path.Combine(draft.DraftRootPath, RepositoryTaskLoader.TaskDirectoryRelativePath, "copy-location.ts"), draft.SourcePath);
+        Assert.Contains("Copy target needs review.", draft.ValidationWarnings);
+        Assert.Contains(reason, draft.ValidationWarnings);
+        Assert.Contains(draft.ValidationWarnings, warning => warning.Contains("product-outcome assertions", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BuildRecoveryDraft_PreservesSubmittedSourceAndDiagnosticsAfterLaterFailure()
+    {
+        var seed = new TimelineTaskExtraction("recorded-seed", "// Original seed", 1, 1, []);
+        var submitted = new LocalTaskExtractionDraft(
+            "copy-location", "Copy and verify GPS", "// Agent-authored clipboard assertion", "copy-location",
+            Path.GetTempPath(), Path.Combine(Path.GetTempPath(), "copy-location.ts"), ["Selector requires review."]);
+        const string reason = "The model connection ended during a revision.";
+
+        var draft = LocalTaskExtractionCoordinator.BuildRecoveryDraft(Path.GetTempPath(), "extraction-1", seed, submitted, reason);
+
+        Assert.Equal(submitted.Source, draft.Source);
+        Assert.Equal(submitted.SourcePath, draft.SourcePath);
+        Assert.Equal(submitted.TaskId, draft.TaskId);
+        Assert.Equal(submitted.Summary, draft.Summary);
+        Assert.Equal(new[] { "Selector requires review.", reason }, draft.ValidationWarnings);
+        Assert.Single(submitted.ValidationWarnings);
+    }
+
     [Fact]
     public void ValidateStartRequest_RequiresPositiveSelectedPeriod()
     {
@@ -66,7 +131,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
         Assert.NotNull(request);
         Assert.True(request.ValidateSelectors);
         Assert.True(request.TrimToTechnology);
-        Assert.False(request.IncludeOnlyNecessaryFeatures);
+        Assert.True(request.IncludeOnlyNecessaryFeatures);
         Assert.Equal("fast", request.Reasoning);
         Assert.Equal(string.Empty, request.Model);
     }
@@ -127,6 +192,71 @@ public sealed class LocalTaskExtractionCoordinatorTests
         Assert.Equal(
             "Extract the recorded UI flow.",
             LocalTaskExtractionCoordinator.ResolveTaskName(request));
+    }
+
+    [Fact]
+    public void ResolveTaskName_BoundsLongAnnotationWithoutChangingHandoff()
+    {
+        const string description = """
+            In this section, the tester searched Eagle Rock for "Approach", opened location sharing, and copied its GPS location to the clipboard while the approach map remained visible.
+            1. Completed the search text "Approach"; About showed one match with the Location map and elevation profile.
+            2. Tapped Share beside Location, opening options for Location (GPS) and Location (Google Maps).
+            3. Tapped the copy control for Location (GPS); the Share sheet closed.
+            4. Saw "Copied the location for 'Eagle Rock' to your clipboard." while the Location map remained open.
+            To validate, use the clipboard tool to check the contents against the displayed GPS location.
+            """;
+        var request = new LocalTaskExtractionStartRequest(
+            "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5), description);
+
+        LocalTaskExtractionCoordinator.ValidateStartRequest(request);
+        var title = LocalTaskExtractionCoordinator.ResolveTaskName(request);
+
+        Assert.True(description.Length > 500);
+        Assert.InRange(title.Length, 1, 60);
+        Assert.Equal("In this section, the tester searched Eagle Rock for…", title);
+        Assert.Equal(description, request.Description);
+        LocalTaskExtractionCoordinator.ValidateStartRequest(request with { TaskName = title });
+    }
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(61)]
+    [InlineData(500)]
+    [InlineData(501)]
+    [InlineData(8_000)]
+    public void ResolveTaskName_BoundsDescriptionsWithoutWordBreaks(int length)
+    {
+        var request = new LocalTaskExtractionStartRequest(
+            "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5), new string('a', length));
+
+        LocalTaskExtractionCoordinator.ValidateStartRequest(request);
+        var title = LocalTaskExtractionCoordinator.ResolveTaskName(request);
+
+        Assert.Equal(length <= 60 ? request.Description : new string('a', 59) + "…", title);
+    }
+
+    [Theory]
+    [InlineData("  Copy\r\nEagle Rock\t GPS  ", "Copy Eagle Rock GPS")]
+    [InlineData("📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍", "📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍📍…")]
+    public void ResolveTaskName_NormalizesWhitespaceAndPreservesUnicode(string description, string expected)
+    {
+        var request = new LocalTaskExtractionStartRequest(
+            "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5), description);
+
+        Assert.Equal(expected, LocalTaskExtractionCoordinator.ResolveTaskName(request));
+    }
+
+    [Fact]
+    public void ResolveTaskName_PreservesExplicitNameAtMaximumLength()
+    {
+        var name = new string('a', 200);
+        var request = new LocalTaskExtractionStartRequest(
+            "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5),
+            "Extract the recorded UI flow.", TaskName: $"  {name}  ");
+
+        LocalTaskExtractionCoordinator.ValidateStartRequest(request);
+
+        Assert.Equal(name, LocalTaskExtractionCoordinator.ResolveTaskName(request));
     }
 
     [Fact]

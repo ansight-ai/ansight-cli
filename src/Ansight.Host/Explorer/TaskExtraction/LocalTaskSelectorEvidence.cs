@@ -41,15 +41,26 @@ internal static class LocalTaskSelectorEvidence
         ArgumentNullException.ThrowIfNull(visualTrees);
         var trees = visualTrees.OrderBy(static tree => tree.CapturedAtUtc).ToArray();
         var nodes = new List<LocalTaskSelectorEvidenceNode>();
+        var automationIds = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var tree in trees)
         {
             if (tree.Payload["root"] is JsonObject root)
             {
                 var typeRegistry = VisualTreeTypeRegistry.FromPayload(tree.Payload);
-                foreach (var match in LiveUiNodeQuery.Enumerate(root, typeRegistry)
-                             .Where(LiveUiNodeQuery.IsEffectivelyVisible))
+                foreach (var match in LiveUiNodeQuery.Enumerate(root, typeRegistry))
                 {
-                    var textValues = new HashSet<string>(ReadTextValues(match.Node), StringComparer.OrdinalIgnoreCase);
+                    if (LiveUiNodeQuery.ReadAutomationId(match.Node) is { } automationId)
+                    {
+                        automationIds.Add(automationId);
+                    }
+                    if (!LiveUiNodeQuery.IsEffectivelyVisible(match))
+                    {
+                        continue;
+                    }
+                    // Ground `text` against exactly what live selectors read. A secondary
+                    // placeholder/value in the raw node is evidence, but is not another
+                    // matchable text alias when a label or primary text takes precedence.
+                    var textValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     if (LiveUiNodeQuery.ReadText(match.Node) is { } primaryText)
                     {
                         textValues.Add(primaryText);
@@ -76,7 +87,10 @@ internal static class LocalTaskSelectorEvidence
             }
         }
 
-        return new LocalTaskSelectorEvidenceIndex(trees.Length, screenshotFrameCount, 0, nodes);
+        return new LocalTaskSelectorEvidenceIndex(trees.Length, screenshotFrameCount, 0, nodes)
+        {
+            AutomationIds = automationIds.ToArray()
+        };
     }
 
     public static IReadOnlyList<LocalTaskSelectorCall> ExtractSelectorCalls(string source)
@@ -364,47 +378,6 @@ internal static class LocalTaskSelectorEvidence
             ", ",
             fields.OrderBy(static field => field.Key, StringComparer.Ordinal)
                 .Select(static field => $"{field.Key}={JsonValue.Create(field.Value)!.ToJsonString()}"));
-
-    private static IReadOnlySet<string> ReadTextValues(JsonObject node)
-    {
-        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddString(values, node, "text");
-        AddString(values, node, "label");
-        AddString(values, node, "title");
-        AddString(values, node, "value");
-        if (node["visual"] is JsonObject visual)
-        {
-            AddString(values, visual, "text");
-            AddString(values, visual, "value");
-        }
-        if (node["properties"] is JsonObject properties)
-        {
-            AddString(values, properties, "text");
-            AddString(values, properties, "value");
-            AddString(values, properties, "placeholder");
-        }
-
-        return values;
-    }
-
-    private static string? ReadString(JsonObject value, string propertyName)
-        => ReadStringValue(value[propertyName]);
-
-    private static string? ReadStringValue(JsonNode? value)
-        => value is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
-            ? text.Trim()
-            : null;
-
-    private static void AddString(ISet<string> values, JsonObject source, string propertyName)
-    {
-        var value = ReadString(source, propertyName);
-        if (value is not null)
-        {
-            values.Add(value);
-        }
-    }
 
     private static bool TryReadPropertyName(LocalTaskSourceToken token, out string propertyName)
     {

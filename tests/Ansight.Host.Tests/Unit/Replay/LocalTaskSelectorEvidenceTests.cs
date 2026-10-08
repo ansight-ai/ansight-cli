@@ -9,6 +9,81 @@ namespace Ansight.Host.Tests.Unit.Replay;
 public sealed class LocalTaskSelectorEvidenceTests
 {
     [Fact]
+    public void Validate_UsesTheSameTextAsLiveSelectorMatchingInsteadOfSecondaryPlaceholderOrValue()
+    {
+        var evidence = LocalTaskSelectorEvidence.Create(
+        [
+            CreateTree("search-entered", new JsonObject
+            {
+                ["automationId"] = "area-search-text", ["visible"] = true,
+                ["children"] = new JsonArray(new JsonObject
+                {
+                    ["id"] = "search-input", ["label"] = "Appr", ["role"] = "textbox", ["visible"] = true,
+                    ["visual"] = new JsonObject { ["text"] = "Search areas, routes and about", ["value"] = "Approach" },
+                    ["properties"] = new JsonObject { ["placeholder"] = "Search areas, routes and about" }
+                })
+            })
+        ]);
+        const string source = """
+            await ansight.ui.waitFor({ text: "Search areas, routes and about", role: "textbox", ancestorAutomationId: "area-search-text" });
+            await ansight.ui.typeText({ text: "Approach", role: "textbox", ancestorAutomationId: "area-search-text", value: "Approach" });
+            await ansight.ui.find({ text: "Appr", role: "textbox", ancestorAutomationId: "area-search-text" });
+            await ansight.ui.typeText({ automationId: "area-search-text", value: "Approach" });
+            """;
+
+        var issues = LocalTaskSelectorEvidence.Validate(source, evidence);
+
+        Assert.Equal([1, 2], issues.Select(issue => issue.Call.Sequence));
+        Assert.Equal(["Appr"], Assert.Single(evidence.Nodes, node => node.NodeId == "search-input").TextValues);
+    }
+
+    [Fact]
+    public void Validate_AcceptsVisualTextWhenItIsTheRuntimeTextButNotUnmatchedProperties()
+    {
+        var evidence = LocalTaskSelectorEvidence.Create(
+        [
+            CreateTree("search-empty", new JsonObject
+            {
+                ["id"] = "search-input", ["role"] = "textbox", ["visible"] = true,
+                ["visual"] = new JsonObject { ["text"] = "Search areas" },
+                ["properties"] = new JsonObject { ["placeholder"] = "Other placeholder" }
+            })
+        ]);
+
+        Assert.Empty(LocalTaskSelectorEvidence.Validate(
+            "await ansight.ui.find({ text: \"Search areas\", role: \"textbox\" });", evidence));
+        Assert.Single(LocalTaskSelectorEvidence.Validate(
+            "await ansight.ui.find({ text: \"Other placeholder\", role: \"textbox\" });", evidence));
+    }
+
+    [Fact]
+    public void Create_CollectsAllDistinctIdsAcrossTreesIncludingHiddenNodesAndAncestors()
+    {
+        var evidence = LocalTaskSelectorEvidence.Create(
+        [
+            CreateTree("framework", new JsonObject
+            {
+                ["automationId"] = "page",
+                ["visible"] = true,
+                ["children"] = new JsonArray(new JsonObject { ["automationId"] = "hidden", ["visible"] = false })
+            }),
+            CreateTree("native",
+                new JsonObject { ["accessibilityIdentifier"] = "save", ["visible"] = true },
+                new JsonObject { ["automationId"] = "page", ["visible"] = true },
+                new JsonObject { ["props"] = new JsonObject { ["testID"] = "react-button" }, ["visible"] = true })
+        ]);
+
+        Assert.Equal(["hidden", "page", "react-button", "save"], evidence.AutomationIds);
+        Assert.DoesNotContain(evidence.Nodes, node => node.AutomationId == "hidden");
+        var augmented = evidence.WithOcrBlocks(new SessionImageFrame
+        {
+            FrameId = "ocr", CapturedAtUtc = DateTimeOffset.UtcNow,
+            Format = "png", Width = 10, Height = 10, Quality = 100, ByteCount = 100
+        }, []);
+        Assert.Equal(evidence.AutomationIds, augmented.AutomationIds);
+    }
+
+    [Fact]
     public void Validate_AcceptsSelectorsObservedInVisibleVisualTreeNodes()
     {
         var evidence = LocalTaskSelectorEvidence.Create(

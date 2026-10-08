@@ -19,7 +19,8 @@ public sealed class HostTimelineTaskExtractorTests
             ],
             [
                 CreateVisualTree(startedAt.AddSeconds(1), "continue-button", "Continue"),
-                CreateVisualTree(startedAt.AddSeconds(2), "confirmation-title", "Order complete")
+                CreateVisualTree(startedAt.AddSeconds(2), "confirmation-title", "Order complete"),
+                CreateVisualTree(startedAt.AddSeconds(4), "outside-period", "Outside the extraction")
             ]);
 
         var result = WorkspaceTestExtractor.Extract(
@@ -29,7 +30,12 @@ public sealed class HostTimelineTaskExtractorTests
         Assert.Equal("complete-checkout", parsed.TestId);
         Assert.Equal(snapshot.AppId, parsed.AppId);
         Assert.Contains("1. ", parsed.Prompt, StringComparison.Ordinal);
-        Assert.Contains("Order complete", parsed.Validation.Assertions[0], StringComparison.Ordinal);
+        Assert.Contains("Order complete", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Empty(parsed.Validation.Assertions);
+        Assert.DoesNotContain("validation:", result.Source, StringComparison.Ordinal);
+        Assert.Contains("continue-button", result.AutomationIds);
+        Assert.Contains("confirmation-title", result.AutomationIds);
+        Assert.DoesNotContain("outside-period", result.AutomationIds);
         Assert.Equal(1, result.GeneratedActionCount);
     }
 
@@ -79,7 +85,7 @@ public sealed class HostTimelineTaskExtractorTests
     }
 
     [Fact]
-    public void WorkspaceTestExport_UsesOnlySelectedAnnotatedTaskRanges()
+    public void WorkspaceTestExport_UsesSelectedAnnotationsAsJourneyGuidance()
     {
         var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
         var snapshot = CreateSnapshot(startedAt, [], [],
@@ -103,6 +109,58 @@ public sealed class HostTimelineTaskExtractorTests
         Assert.Throws<ArgumentException>(() => WorkspaceTestExtractor.Extract(
             snapshot, startedAt, startedAt.AddSeconds(10), "Review account",
             ["The balance is visible"], taskSectionIds: ["outside"]));
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_PreservesActionsBeforeBetweenAndAfterSelectedAnnotations()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var actionTimes = new[] { 1, 4, 7, 10, 13 };
+        var snapshot = CreateSnapshot(startedAt,
+            actionTimes.SelectMany(second => new[]
+            {
+                CreateTouch("down", startedAt.AddSeconds(second), 0.5, 0.5),
+                CreateTouch("up", startedAt.AddSeconds(second + 0.1), 0.5, 0.5)
+            }).ToArray(),
+            actionTimes.Select(second => CreateVisualTree(startedAt.AddSeconds(second), $"control-{second}", $"Action {second}")).ToArray(),
+            [
+                new SessionAnnotation { AnnotationId = "first", StartUtc = startedAt.AddSeconds(3), EndUtc = startedAt.AddSeconds(5), Label = "First marked action" },
+                new SessionAnnotation { AnnotationId = "second", StartUtc = startedAt.AddSeconds(9), EndUtc = startedAt.AddSeconds(11), Label = "Second marked action" }
+            ]);
+
+        var result = WorkspaceTestExtractor.Extract(snapshot, startedAt, startedAt.AddSeconds(14),
+            "Complete journey", ["The final action is complete"], taskSectionIds: ["first", "second"]);
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/journey.yaml", result.Source);
+
+        var lastIndex = -1;
+        foreach (var second in actionTimes)
+        {
+            var index = parsed.Prompt.IndexOf($"control-{second}", StringComparison.Ordinal);
+            Assert.True(index > lastIndex, $"Recorded action {second} must be retained in order.");
+            lastIndex = index;
+        }
+        Assert.Contains("First marked action", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Contains("Second marked action", parsed.Prompt, StringComparison.Ordinal);
+        Assert.Equal(5, result.GeneratedActionCount);
+    }
+
+    [Fact]
+    public void WorkspaceTestExport_AnnotationDoesNotHideUnresolvedInputElsewhereInSelection()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var snapshot = CreateSnapshot(startedAt, [],
+            [CreateInputVisualTree(startedAt.AddSeconds(1), "input-before", ""),
+             CreateInputVisualTree(startedAt.AddSeconds(2), "input-after", "private@example.test")],
+            [new SessionAnnotation { AnnotationId = "later", StartUtc = startedAt.AddSeconds(3), EndUtc = startedAt.AddSeconds(5), Label = "Verify account" }]);
+
+        var result = WorkspaceTestExtractor.Extract(snapshot, startedAt, startedAt.AddSeconds(6),
+            "Review account", ["The account is visible"], taskSectionIds: ["later"]);
+        var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/review-account.yaml", result.Source);
+
+        Assert.False(parsed.Enabled);
+        Assert.Contains("Enter an appropriate test value", parsed.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("private@example.test", result.Source, StringComparison.Ordinal);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Contains("captured text was omitted", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -162,8 +220,32 @@ public sealed class HostTimelineTaskExtractorTests
             snapshot, startedAt, startedAt.AddSeconds(6), "Copy location");
         var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/copy-location.yaml", result.Source);
 
-        Assert.Contains("Copied to clipboard", parsed.Validation.Assertions[0], StringComparison.Ordinal);
-        Assert.DoesNotContain("Lengths range", parsed.Validation.Assertions[0], StringComparison.Ordinal);
+        Assert.Contains("The final screen visibly shows \"Copied to clipboard\".", parsed.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("The final screen visibly shows \"Lengths range", parsed.Prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WorkspaceTestRefiner_SamplesUiEvidenceAcrossTheEntirePeriod()
+    {
+        var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
+        var trees = Enumerable.Range(0, 30).Select(second =>
+        {
+            var tree = CreateVisualTree(startedAt.AddSeconds(second), $"screen-{second}", $"Screen {second}");
+            var children = tree.Payload!["root"]!["children"]!.AsArray();
+            for (var node = 0; node < 150; node++)
+                children.Add(new JsonObject { ["automationId"] = $"screen-{second}-control-{node}", ["label"] = $"Control {node}" });
+            return tree;
+        }).ToArray();
+
+        var selected = WorkspaceTestRefiner.SelectUiEvidence(trees);
+
+        Assert.InRange(selected.Count, 1, 120);
+        Assert.Equal(startedAt, selected.First().CapturedAtUtc);
+        Assert.Equal(startedAt.AddSeconds(29), selected.Last().CapturedAtUtc);
+        Assert.Contains(selected, node => node.CapturedAtUtc >= startedAt.AddSeconds(12) && node.CapturedAtUtc <= startedAt.AddSeconds(17));
+        Assert.Contains(selected, node => node.AutomationId == "screen-0-control-149");
+        Assert.Contains(selected, node => node.AutomationId == "screen-29-control-149");
+        Assert.Empty(WorkspaceTestRefiner.SelectUiEvidence([]));
     }
 
     [Fact]

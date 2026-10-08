@@ -45,5 +45,6 @@ public sealed record LocalTaskExtractionSnapshot(
 
     public bool TaskNameIsAuthoritative { get; init; } = true;
     public bool TrimToTechnology { get; init; } = true;
-    public bool IncludeOnlyNecessaryFeatures { get; init; }
+    public bool IncludeOnlyNecessaryFeatures { get; init; } = true;
+    public IReadOnlyList<string>? AutomationIds { get; init; }
 }
