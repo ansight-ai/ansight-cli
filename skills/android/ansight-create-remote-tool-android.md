@@ -119,7 +119,7 @@ Registered tools stay hidden and unusable until the active guard allows their `T
 When the app uses:
 
 ```kotlin
-debugImplementation("ai.ansight:ansight-android:1.4.0-preview.1")
+debugImplementation("ai.ansight:ansight-android:latest.release")
 ```
 
 put custom tool code under the debug source set:

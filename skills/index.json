@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "scope": "current-published-skill-files",
-  "generated": "2026-09-28T06:37:10.483Z",
+  "generated": "2026-10-09T02:16:47.665Z",
   "count": 27,
   "skills": [
     {
@@ -236,8 +236,8 @@
     },
     {
       "path": "agents/ansight-ui-testing/SKILL.md",
-      "bytes": 30203,
-      "sha256": "0295939f464eb3d0d351017d12deace64fe4ed4d735b0bedf090e87b9406fb72",
+      "bytes": 31642,
+      "sha256": "9730565d2b313923ad058cbd92f070134a5e284ca3f35b52a3ada99434368ad9",
       "url": "https://www.ansight.ai/skills/agents/ansight-ui-testing/SKILL.md"
     },
     {
@@ -266,26 +266,26 @@
     },
     {
       "path": "android/ansight-create-remote-tool-android.md",
-      "bytes": 8853,
-      "sha256": "8798b99b36342f3bb9210a2863608aef4759970feee1035ccacc72aaf45b20f1",
+      "bytes": 8852,
+      "sha256": "40ae68bab919358f64b47864edd54992827eaadc62bdc241c47ee8427bf41909",
       "url": "https://www.ansight.ai/skills/android/ansight-create-remote-tool-android.md"
     },
     {
       "path": "android/ansight-install-android.md",
-      "bytes": 4244,
-      "sha256": "58106ce5736868a7b99399dd409c36c199c25dc160ac10d57a531a9a1a784bc7",
+      "bytes": 4255,
+      "sha256": "b63effc542d30d3b4feb750a5374db82e8dd3983854b08097d00bf6d1056e6b1",
       "url": "https://www.ansight.ai/skills/android/ansight-install-android.md"
     },
     {
       "path": "ansight-cli-setup.md",
-      "bytes": 8542,
-      "sha256": "7246b7f32fd1cb57849afc575ee56d6b5d59677b6708c6d1c2b1a45c92e8b7be",
+      "bytes": 8773,
+      "sha256": "0152129813fdc7dab7872231bbe4aa99068b3ff45fbb2d6796223776d81033aa",
       "url": "https://www.ansight.ai/skills/ansight-cli-setup.md"
     },
     {
       "path": "ansight-install.md",
-      "bytes": 8775,
-      "sha256": "31983f1949d232389117ab32d7fe0f08891ab4bc5595675ee7dad6eceb67df51",
+      "bytes": 8979,
+      "sha256": "470d63d44ebf7e4a9abf6f152d7bf9b605cdfb9b07bac2c61e1610831774ccb2",
       "url": "https://www.ansight.ai/skills/ansight-install.md"
     },
     {
@@ -302,8 +302,8 @@
     },
     {
       "path": "cordova/ansight-install-cordova.md",
-      "bytes": 3763,
-      "sha256": "d7766317deb25cd43c5e6566de66ff8eb685a96cde38cdb7d2308df0717df685",
+      "bytes": 3789,
+      "sha256": "b8033b17d198ea702053026880d9864fb241e87afa3ad28d0e574714b370ccdc",
       "url": "https://www.ansight.ai/skills/cordova/ansight-install-cordova.md"
     },
     {
@@ -320,8 +320,8 @@
     },
     {
       "path": "dotnet/ansight-install-dotnet.md",
-      "bytes": 3733,
-      "sha256": "f3a1eb452df119c1409a1e80cd5fb04f5e8f8d6fcaa765d9f2601fbcd3516e25",
+      "bytes": 3742,
+      "sha256": "b88b95c410f7382790213bec9337c98d1f48626859641af7d28c71ae44368bb3",
       "url": "https://www.ansight.ai/skills/dotnet/ansight-install-dotnet.md"
     },
     {
@@ -338,8 +338,8 @@
     },
     {
       "path": "flutter/ansight-install-flutter.md",
-      "bytes": 3486,
-      "sha256": "347f30e53f6583bbd7f2c91daa517cf526778158f8b488de2b46b2f8934fe533",
+      "bytes": 3502,
+      "sha256": "94798ceb33627553443f437d987416e0506da001c66887ba5b8a66ea403b348e",
       "url": "https://www.ansight.ai/skills/flutter/ansight-install-flutter.md"
     },
     {
@@ -356,8 +356,8 @@
     },
     {
       "path": "ios/ansight-install-ios.md",
-      "bytes": 4265,
-      "sha256": "a3609732e486e76898cf3abd282e4621840dddfc828fea2909eae1dce4dd7fd0",
+      "bytes": 4597,
+      "sha256": "7ba385494d3ab7f03fba06acc0cbd8d36645d3f0352ccfc1ed53d0eecf973978",
       "url": "https://www.ansight.ai/skills/ios/ansight-install-ios.md"
     },
     {
@@ -374,8 +374,8 @@
     },
     {
       "path": "react-native/ansight-install-react-native.md",
-      "bytes": 3651,
-      "sha256": "23e6a2b9addca88a36661ffa46a066364c947f7e7c02fef8c8a4f050d77516b1",
+      "bytes": 3677,
+      "sha256": "57c2b5adad2cc75e592b290ecc8078635b6f3b7a3c2de6bd1d4a63cc8a10271e",
       "url": "https://www.ansight.ai/skills/react-native/ansight-install-react-native.md"
     }
   ],

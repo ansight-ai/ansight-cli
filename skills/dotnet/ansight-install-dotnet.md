@@ -16,10 +16,10 @@ This skill implements an explicitly selected SDK integration. If the user only w
 
 1. Identify the app project, target frameworks, startup path, debug guard, and
    existing developer menu.
-2. For MAUI, install the all-in-one package:
+2. For MAUI, install the latest release of the all-in-one package:
 
 ```shell
-dotnet add package Ansight.Maui --prerelease
+dotnet add package Ansight.Maui
 ```
 
    Then initialize before `builder.Build()`:

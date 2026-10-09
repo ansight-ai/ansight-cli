@@ -28,17 +28,15 @@ The finished app must:
 
 1. Identify the app target, bundle id, startup delegate, dependency manager,
    debug configuration, and existing developer menu.
-2. Add the aggregate SwiftPM product:
+2. Add `https://github.com/ansight-ai/ansight-sdk.git` through Xcode's package
+   dependency dialog, select the latest published release with an **Up to Next
+   Major Version** rule, and link the aggregate `Ansight` product. For a
+   `Package.swift` manifest, resolve the latest release tag from that repository
+   and use it as the `from:` lower bound.
 
-```swift
-.package(
-    url: "https://github.com/ansight-ai/ansight-sdk.git",
-    exact: "1.4.0-preview.1"
-)
-```
-
-   Use `pod 'Ansight', '1.4.0-preview.1'` when the project already uses
-   CocoaPods.
+   When the project uses CocoaPods, add `pod 'Ansight'` and run
+   `pod install --repo-update` to install the latest release. For an existing
+   installation, use `pod update Ansight` to refresh its locked version.
 3. Keep both the import and initialization behind the app's Debug or explicit
    internal-build compilation condition. Initialize once:
 

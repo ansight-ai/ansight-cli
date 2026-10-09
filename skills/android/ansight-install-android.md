@@ -26,11 +26,11 @@ The finished app must:
 ## Workflow
 
 1. Identify the app module, `Application` class, debug variant, and existing developer menu.
-2. Add the aggregate dependency, normally:
+2. Add the latest release of the aggregate dependency:
 
 ```kotlin
 dependencies {
-    debugImplementation("ai.ansight:ansight-android:1.4.0-preview.1")
+    debugImplementation("ai.ansight:ansight-android:latest.release")
 }
 ```
 

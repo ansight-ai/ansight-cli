@@ -15,7 +15,7 @@ This skill implements an explicitly selected SDK integration. If the user only w
 
 1. Inspect `pubspec.yaml`, `main.dart`, target platforms, debug guard, and
    existing developer menu.
-2. Add `ansight_flutter: 1.4.0-preview.1` and run `flutter pub get`.
+2. Run `flutter pub add ansight_flutter` to install the latest release from pub.dev.
 3. Initialize after `WidgetsFlutterBinding.ensureInitialized()` and before
    `runApp(...)`:
 

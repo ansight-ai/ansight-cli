@@ -16,10 +16,10 @@ This skill implements an explicitly selected SDK integration. If the user only w
 
 1. Inspect `package.json`, Capacitor config, web bootstrap, native projects,
    debug guard, and existing developer menu.
-2. Install and sync:
+2. Install the latest release and sync:
 
 ```shell
-npm install @ansight/capacitor
+npm install @ansight/capacitor@latest
 npx cap sync
 ```
 

@@ -15,10 +15,10 @@ This skill implements an explicitly selected SDK integration. If the user only w
 
 1. Identify the package manager, bootstrap path, native projects, app ids,
    debug guard, and existing developer menu.
-2. Install and link:
+2. Install the latest release and link:
 
 ```shell
-npm install @ansight/react-native
+npm install @ansight/react-native@latest
 npx pod-install
 ```
 

@@ -9,6 +9,8 @@ Use this skill when the user asks an agent to install or configure Ansight and t
 
 This is a routing skill. Select the capture mode first; for SDK integration, identify the app platform and load the matching platform install skill as the source of truth.
 
+Install the latest published SDK release for the selected platform. Resolve it from the package registry or repository at installation time; do not recommend a fixed SDK version from these instructions.
+
 ## Choose Capture Before App Changes
 
 Preserve an explicit SDK or external choice. If the user only asks to configure Ansight, explain the relevant options and ask which they want before changing app code:
