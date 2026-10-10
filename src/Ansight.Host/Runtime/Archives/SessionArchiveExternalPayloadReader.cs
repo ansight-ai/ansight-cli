@@ -555,6 +555,8 @@ internal static partial class SessionArchiveExternalPayloadReader
         ApplyTouches(element, builder);
         ApplyNetworkRequest(element, builder);
         ApplyImage(element, builder);
+        if (ClientEventParser.ParseSessionVisualTreeSnapshot(element) is { } tree)
+            builder.AddVisualTreeSnapshot(tree);
     }
 
 }

@@ -398,7 +398,7 @@ internal static class ClientEventParser
         }
     }
 
-    private static SessionVisualTreeSnapshot? ParseSessionVisualTreeSnapshot(JsonElement root)
+    internal static SessionVisualTreeSnapshot? ParseSessionVisualTreeSnapshot(JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
         if (!string.Equals(type, WebSocketClientEventConstants.ClientVisualTree, StringComparison.Ordinal)

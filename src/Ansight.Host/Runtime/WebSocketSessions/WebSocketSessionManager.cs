@@ -27,6 +27,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
     private readonly AppToolCatalogService toolCatalog;
     private readonly BinaryToolArtifactTransferManager binaryToolArtifactTransfers = new();
     private readonly AnnotatedFeedbackTransferManager annotatedFeedbackTransfers = new();
+    private readonly Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager offlineCaptureTransfers;
     private readonly IHostOperationTrafficLog trafficAuditLog;
     private readonly IUserPreferences? userPreferences;
     private readonly ISimulatorCrashReportCollector? simulatorCrashReportCollector;
@@ -47,6 +48,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         [Import(AllowDefault = true)] SdkIosInstrumentsCaptureManager? sdkIosInstrumentsCaptureManager = null)
     {
         this.runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
+        offlineCaptureTransfers = new(runtimeState);
         this.trafficAuditLog = trafficAuditLog ?? throw new ArgumentNullException(nameof(trafficAuditLog));
         this.userPreferences = userPreferences;
         this.simulatorCrashReportCollector = simulatorCrashReportCollector;

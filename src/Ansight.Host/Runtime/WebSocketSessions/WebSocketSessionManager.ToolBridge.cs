@@ -388,6 +388,7 @@ internal sealed partial class WebSocketSessionManager
         if (replacedConnection is not null)
         {
             const string replacementReason = "The session was replaced by a newer WebSocket connection.";
+            offlineCaptureTransfers.CancelSession(sessionId);
             annotatedFeedbackTransfers.CancelSession(sessionId, replacementReason);
             binaryToolArtifactTransfers.CancelSession(sessionId, replacementReason);
             replacedConnection.FailPendingRequests(replacementReason);
@@ -408,6 +409,7 @@ internal sealed partial class WebSocketSessionManager
 
         if (removed)
         {
+            offlineCaptureTransfers.CancelSession(sessionId);
             annotatedFeedbackTransfers.CancelSession(sessionId, reason);
             binaryToolArtifactTransfers.CancelSession(sessionId, reason);
             connection.FailPendingRequests(reason);

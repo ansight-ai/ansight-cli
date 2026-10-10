@@ -120,6 +120,9 @@ internal sealed partial class WebSocketSessionManager
                     continue;
                 }
 
+                if (incoming.MessageType == WebSocketMessageType.Binary &&
+                    offlineCaptureTransfers.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload)) continue;
+
                 if (incoming.MessageType == WebSocketMessageType.Binary
                     && annotatedFeedbackTransfers.TryHandleBinaryMessage(
                         sessionId,
@@ -509,6 +512,12 @@ internal sealed partial class WebSocketSessionManager
                         ?? HostOperationResult.Failure("Crash report storage is unavailable.");
                     return CreateControlResponse(request, result.IsSuccess, result.Message);
                 }
+                case Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager.BeginAction:
+                    offlineCaptureTransfers.Begin(sessionId, request.Payload);
+                    return CreateControlResponse(request, true, "Offline capture transfer accepted.");
+                case Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager.CommitAction:
+                    var receipt = offlineCaptureTransfers.Commit(sessionId, request.Payload);
+                    return CreateControlResponse(request, true, "Offline capture imported.", receipt);
                 case AnnotatedFeedbackTransferManager.SubmitAction:
                 {
                     var accepted = annotatedFeedbackTransfers.TryRegister(

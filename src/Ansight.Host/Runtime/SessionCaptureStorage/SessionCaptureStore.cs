@@ -368,6 +368,13 @@ internal sealed partial class SessionCaptureStore
                 WriteImportedArtifactFiles(layout, artifactBytesByRelativePath);
 
                 SaveSnapshot(snapshotCopy);
+                // An offline device may delete its only copy after import returns.
+                // Flush every imported evidence file before issuing that receipt.
+                foreach (var path in Directory.EnumerateFiles(layout.SessionDirectoryPath, "*", SearchOption.AllDirectories))
+                {
+                    using var persisted = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.Read);
+                    persisted.Flush(flushToDisk: true);
+                }
             }
             catch
             {
