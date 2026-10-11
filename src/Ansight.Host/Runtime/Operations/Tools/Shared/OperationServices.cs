@@ -29,6 +29,14 @@ internal sealed class OperationServices
         DevicePermissionsRouter? devicePermissionsRouter = null,
         DeviceMotionRouter? deviceMotionRouter = null)
     {
+        NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningManager(
+            Path.Combine(applicationPaths.ApplicationTempPath, "network-conditioning"),
+            (target, action, value) =>
+            {
+                if (target.SessionId is not null)
+                    HostSessionEvents.Publish(runtimeState, target.SessionId, "network.conditioning." + action,
+                        "NetworkConditioning", value.ToJsonString());
+            });
         DevicePermissionsRouter = devicePermissionsRouter ?? new DevicePermissionsRouter();
         DeviceMotionRouter = deviceMotionRouter ?? new DeviceMotionRouter();
         DeviceEvidence = deviceEvidence;
@@ -52,6 +60,8 @@ internal sealed class OperationServices
         RepositoryTaskRouter = repositoryTaskRouter
                                ?? new RepositoryTaskRouter(applicationPaths);
     }
+
+    public Ansight.Host.Devices.Network.NetworkConditioningManager NetworkConditioning { get; }
 
     public IExternalSessionScreenshotCaptureManager? ExternalScreenshots { get; }
 

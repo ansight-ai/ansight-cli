@@ -99,6 +99,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         operationDispatcher.ConfigureDevicePermissions(Devices, hostRuntimeOptions);
         audioInjectionEngine = new AudioInjectionEngine(runtimeState, appToolBridge, Devices, hostRuntimeOptions, ApplicationPaths);
         operationDispatcher.ConfigureAudioInjection(audioInjectionEngine);
+        NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         Audio = new AudioService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         headlessDeviceDriver = new HeadlessHostDeviceDriver(Devices, hostRuntimeOptions);
         if (externalScreenshotCaptures is ExternalSessionScreenshotCaptureManager physicalScreenshots)
@@ -195,6 +196,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         operationDispatcher.ConfigureDevicePermissions(Devices, options);
         audioInjectionEngine = new AudioInjectionEngine(runtimeState, appToolBridge, Devices, options, ApplicationPaths);
         operationDispatcher.ConfigureAudioInjection(audioInjectionEngine);
+        NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         Audio = new AudioService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
@@ -275,6 +277,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     }
 
     public AudioService Audio { get; }
+
+    public Ansight.Host.Devices.Network.NetworkConditioningService NetworkConditioning { get; }
 
     public DeviceService Devices { get; }
 
@@ -623,6 +627,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         await AppWatches.StopAsync().ConfigureAwait(false);
         currentShutdownTokenSource?.Cancel();
         await audioInjectionEngine.StopAsync().ConfigureAwait(false);
+        await operationDispatcher.StopNetworkConditioningAsync().ConfigureAwait(false);
         await RepositoryAutomations.StopAsync().ConfigureAwait(false);
         if (deviceEvidence is not null) await deviceEvidence.StopAllAsync().ConfigureAwait(false);
 

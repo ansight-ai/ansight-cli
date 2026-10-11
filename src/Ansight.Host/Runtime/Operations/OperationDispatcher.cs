@@ -89,6 +89,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
 
     public void Dispose()
     {
+        toolCatalog.StopNetworkConditioningAsync().GetAwaiter().GetResult();
         dotNetProfilingService.Dispose();
     }
 
@@ -96,6 +97,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
 
     public void ConfigureDevicePermissions(IDeviceService devices, RuntimeOptions options)
         => devicePermissionsRouter.Configure(new NativePermissionService(devices.ListAsync, new DeviceCommandRunner(), options));
+
+    public Task StopNetworkConditioningAsync() => toolCatalog.StopNetworkConditioningAsync();
 
     public void ConfigureAudioInjection(AudioInjectionEngine engine) => audioInjectionRouter.Configure(engine);
 

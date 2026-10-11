@@ -475,7 +475,7 @@ public static class CliApplication
              host run --pair <app-id>         Start the host and show a phone pairing QR
              serve                            Open the local session explorer and live inspector
              device list|start|shutdown       Discover and control devices; listings are live-only by default
-             device apps|install|launch|terminate|location|screenshot
+             device apps|install|launch|terminate|location|screenshot|network
              input tap|swipe|pinch|text|button
                                               Send real simulator or device input
              ui snapshot|find|tap|type|swipe|pinch|back|wait|assert

@@ -65,6 +65,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        await using var networkScope = Ansight.Host.Devices.Network.NetworkConditioningScope.Begin(request.RunId);
         request = request with { SourceCapture = request.CaptureTrace ? new RepositoryTaskSourceCapture() : null };
         var startedAtUtc = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
@@ -520,6 +521,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 // Audio owns bounded cancellation cleanup and the microphone route lease.
                 // Wait for it to stop playback before completing the task's call.
                 result = string.Equals(toolName, "ansight_inject_audio", StringComparison.Ordinal)
+                    || toolName.StartsWith("ansight_network_conditioning_", StringComparison.Ordinal)
                     ? await operationTask.ConfigureAwait(false)
                     : await operationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             }

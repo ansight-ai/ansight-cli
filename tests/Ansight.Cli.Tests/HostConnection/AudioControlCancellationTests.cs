@@ -66,8 +66,8 @@ public sealed class AudioControlCancellationTests
         await cancellationSignal.WaitAsync(deadline.Token);
         var exception = await Assert.ThrowsAsync<CliHostUnavailableException>(
             () => client.WaitAsync(deadline.Token));
-        Assert.Contains("did not confirm audio cancellation cleanup", exception.Message);
-        Assert.Contains("Delivery may be partial", exception.Message);
+        Assert.Contains("did not confirm operation cancellation cleanup", exception.Message);
+        Assert.Contains("The operation may have partially completed", exception.Message);
         Assert.Contains("do not retry automatically", exception.Message);
     }
 

@@ -75,6 +75,17 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     {
         switch (route)
         {
+            case "api/network/capabilities":
+            case "api/network/get":
+            case "api/network/set":
+            case "api/network/reset":
+                {
+                    var body = await ReadJsonAsync<JsonObject>(request, cancellationToken).ConfigureAwait(false);
+                    var result = await runtime.NetworkConditioning.ExecuteAsync(route["api/network/".Length..], body, cancellationToken).ConfigureAwait(false);
+                    await WriteJsonAsync(response, result.Payload, result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict, false, cancellationToken).ConfigureAwait(false);
+                    return true;
+                }
+
             case "api/location/set":
                 {
                     var body = await ReadJsonAsync<SessionExplorerSetLocationRequest>(request, cancellationToken).ConfigureAwait(false);

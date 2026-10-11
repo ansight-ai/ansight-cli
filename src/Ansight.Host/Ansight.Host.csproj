@@ -66,6 +66,7 @@
     <EmbeddedResource Include="Runtime/Automation/Resources/**/*" />
     <EmbeddedResource Include="Runtime/Sanitization/Resources/**/*" />
     <EmbeddedResource Include="Runtime/Tasks/Resources/**/*" />
+    <EmbeddedResource Include="Devices/Network/Resources/*.py" />
     <EmbeddedResource Include="SimulatorAgent/Prompts/**/*" />
     <EmbeddedResource Include="Replay/Assets/**/*" />
     <EmbeddedResource Include="Runtime/DeviceExecution/Icons/android-app-icon.dex" />

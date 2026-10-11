@@ -10,7 +10,11 @@ internal static class ControlProtocol
     public const string CancelSchema = "ansight.cli-control-cancel/v1";
 
     public static bool SupportsCooperativeCancellation(CliArguments arguments)
-        => arguments.Positionals.Count >= 2
-           && arguments.Positionals[0].Equals("audio", StringComparison.OrdinalIgnoreCase)
-           && arguments.Positionals[1].Equals("inject", StringComparison.OrdinalIgnoreCase);
+        => (arguments.Positionals.Count >= 2
+            && arguments.Positionals[0].Equals("audio", StringComparison.OrdinalIgnoreCase)
+            && arguments.Positionals[1].Equals("inject", StringComparison.OrdinalIgnoreCase))
+           || (arguments.Positionals.Count >= 3
+               && arguments.Positionals[0].ToLowerInvariant() is "device" or "devices"
+               && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase)
+               && arguments.Positionals[2].ToLowerInvariant() is "set" or "scenario");
 }

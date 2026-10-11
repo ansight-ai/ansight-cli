@@ -58,6 +58,8 @@ internal sealed class ToolCatalog
         services.AttachHostToolRegistry(tools);
     }
 
+    internal Task StopNetworkConditioningAsync() => services.NetworkConditioning.StopAsync();
+
     public JsonObject BuildToolsListResult()
     {
         return new JsonObject
@@ -211,6 +213,11 @@ internal sealed class ToolCatalog
             TaskSessionBound(new PlayDeviceLocationTool(services)),
             TaskSessionBound(new SetDeviceLocationTool(services)),
             TaskSessionBound(new ClearDeviceLocationTool(services)),
+            TaskSessionBound(new Ansight.Host.Devices.Network.NetworkConditioningTool(services, "capabilities")),
+            TaskSessionBound(new Ansight.Host.Devices.Network.NetworkConditioningTool(services, "get")),
+            TaskSessionBound(new Ansight.Host.Devices.Network.NetworkConditioningTool(services, "set")),
+            TaskSessionBound(new Ansight.Host.Devices.Network.NetworkConditioningTool(services, "reset")),
+            TaskSessionBound(new Ansight.Host.Devices.Network.NetworkConditioningTool(services, "scenario")),
             TaskSessionBound(new DeviceMotionTool(services, shake: true)),
             TaskSessionBound(new DeviceMotionTool(services, shake: false)),
             TaskSessionBound(new PermissionTool(services, "grant", null)),

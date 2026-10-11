@@ -194,11 +194,11 @@ internal static class ControlClient
         CancellationToken cancellationToken,
         TimeSpan? cleanupGrace = null)
         => ControlProtocol.SupportsCooperativeCancellation(arguments)
-            ? ReadAudioResponseAsync(reader, writer, output, cancellationToken,
+            ? ReadCancellableResponseAsync(reader, writer, output, cancellationToken,
                 cleanupGrace ?? TimeSpan.FromSeconds(10))
             : ReadResponseAsync(reader, output, cancellationToken);
 
-    private static async Task<ControlResponse?> ReadAudioResponseAsync(
+    private static async Task<ControlResponse?> ReadCancellableResponseAsync(
         TextReader reader,
         TextWriter writer,
         CliOutput output,
@@ -226,17 +226,17 @@ internal static class ControlClient
             await writer.FlushAsync(responseCancellation.Token).ConfigureAwait(false);
             return await responseTask.ConfigureAwait(false)
                 ?? throw new CliHostUnavailableException(
-                    "The host disconnected before confirming audio cancellation cleanup. Delivery may be partial; do not retry automatically.");
+                    "The host disconnected before confirming operation cancellation cleanup. The operation may have partially completed; do not retry automatically.");
         }
         catch (OperationCanceledException) when (responseCancellation.IsCancellationRequested)
         {
             throw new CliHostUnavailableException(
-                $"The host did not confirm audio cancellation cleanup within {cleanupGrace.TotalSeconds:0.###} seconds. Delivery may be partial; do not retry automatically.");
+                $"The host did not confirm operation cancellation cleanup within {cleanupGrace.TotalSeconds:0.###} seconds. The operation may have partially completed; do not retry automatically.");
         }
         catch (IOException exception) when (cancellationSent)
         {
             throw new CliHostUnavailableException(
-                $"The control pipe closed before audio cancellation cleanup was confirmed. Delivery may be partial; do not retry automatically. {exception.Message}");
+                $"The control pipe closed before operation cancellation cleanup was confirmed. The operation may have partially completed; do not retry automatically. {exception.Message}");
         }
         finally
         {
@@ -497,6 +497,7 @@ internal static class ControlClient
 
         if (command is "device" or "devices")
         {
+            if (arguments.Positionals.Count >= 2 && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase)) return true;
             return arguments.Positionals.Count >= 3
                    && arguments.Positionals[1].Equals("location", StringComparison.OrdinalIgnoreCase)
                    && arguments.Positionals[2].ToLowerInvariant() is "play" or "replay" or "status" or "stop";

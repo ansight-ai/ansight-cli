@@ -11,6 +11,8 @@ internal static class DeviceCommands
         CliOutput output,
         CancellationToken cancellationToken)
     {
+        if (arguments.Positionals.Count > 1 && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase))
+            return await DeviceNetworkCommands.RunAsync(arguments, output, cancellationToken);
         if (CliCommandHelp.IsRequested(arguments))
         {
             return CliCommandHelp.Write(output, BuildHelp());
@@ -71,7 +73,7 @@ internal static class DeviceCommands
             "location" => await RunLocationAsync(service, runtimeOptions, arguments, output, cancellationToken),
             "screenshot" => await RunScreenshotAsync(service, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown device subcommand '{subcommand}'. Expected list, start, shutdown, apps, install, launch, terminate, location, or screenshot.")
+                $"Unknown device subcommand '{subcommand}'. Expected list, start, shutdown, apps, install, launch, terminate, location, screenshot, or network.")
         };
     }
 

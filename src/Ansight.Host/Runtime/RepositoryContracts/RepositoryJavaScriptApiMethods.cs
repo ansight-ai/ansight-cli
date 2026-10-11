@@ -40,6 +40,12 @@ internal static class RepositoryJavaScriptApiMethods
                 new StandardApiMethod("grant", "ansight_grant_android_permission"),
                 new StandardApiMethod("revoke", "ansight_revoke_android_permission"),
                 new StandardApiMethod("query", "ansight_query_android_permission")),
+            ["device.network"] = Suite(
+                new StandardApiMethod("capabilities", "ansight_network_conditioning_capabilities"),
+                new StandardApiMethod("get", "ansight_network_conditioning_get"),
+                new StandardApiMethod("set", "ansight_network_conditioning_set"),
+                new StandardApiMethod("reset", "ansight_network_conditioning_reset"),
+                new StandardApiMethod("runScenario", "ansight_network_conditioning_scenario")),
             ["device"] = Suite(
                 new StandardApiMethod("audioCapabilities", "ansight_get_audio_capabilities"),
                 new StandardApiMethod("injectMicrophoneAudio", "ansight_inject_audio"),

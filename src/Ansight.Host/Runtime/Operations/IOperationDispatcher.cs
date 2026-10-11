@@ -35,6 +35,8 @@ internal interface IOperationDispatcher : IDisposable
 
     void ConfigureDevicePermissions(IDeviceService devices, RuntimeOptions options) { }
 
+    Task StopNetworkConditioningAsync() => Task.CompletedTask;
+
     void ConfigureAudioInjection(Ansight.Host.Audio.AudioInjectionEngine engine);
 
     void ConfigureUiInputDriver(IUiInputDriver? driver);

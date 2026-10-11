@@ -3167,7 +3167,59 @@ export interface TaskHostLifecycleContext {
   terminate(): Promise<AppLifecycleResult>;
 }
 /** Feature component for host device operations. */
+/** Host-side, opaque TCP conditioning; rates are aggregate kilobits/second (0 = unlimited). */
+export interface NetworkConditionProfile {
+  uploadKbps?: number;
+  downloadKbps?: number;
+  /** Delay the first payload per direction/connection; not packet-level RTT. */
+  latencyMs?: number;
+  jitterMs?: number;
+  seed?: number;
+  stall?: boolean;
+  /** Close TCP sockets; OS connectivity is unchanged. */
+  blocked?: boolean;
+}
+export interface NetworkConditionLease {
+  leaseId: string;
+  backend: "mitmproxy-local-tcp";
+  status: "ready" | "starting" | "stopped";
+  expiresAtUtc: string;
+  deviceId: string;
+  appId: string;
+  sessionId?: string | null;
+  scope: "app" | "emulator";
+  processId: number;
+  profile: NetworkConditionProfile;
+  revision: number;
+  stepIndex: number;
+  counters: { connections: number; bypassedConnections: number; uploadBytes: number; downloadBytes: number; blockedConnections: number };
+}
+export interface NetworkConditionCapabilities {
+  available: boolean;
+  reason?: string | null;
+  backend: string;
+  processId?: number | null;
+  scope: "app" | "emulator";
+  /** Preflight cannot prove routing. Check lease counters and application behavior. */
+  routingVerified: false;
+  supported: string[];
+  limitations: string[];
+}
+export interface TaskHostDeviceNetworkContext {
+  /** Requires macOS, mitmdump, and a running simulator app or Android emulator. */
+  capabilities(): Promise<NetworkConditionCapabilities>;
+  get(args: { leaseId: string }): Promise<NetworkConditionLease>;
+  /** Create a bounded lease, or replace its profile using leaseId. Updates retain expiry/ports. */
+  set(args: { profile: NetworkConditionProfile; durationMs?: number; destinationPorts?: number[]; leaseId?: string }): Promise<NetworkConditionLease>;
+  reset(args: { leaseId: string }): Promise<{ leaseId: string; status: "stopped" }>;
+  /** Starts a timed scenario asynchronously, allowing serial UI actions while the host advances it.
+   * 1–50 steps, each >=1000ms, <=300000ms total. Restores on expiry, cancellation or task exit. */
+  runScenario(args: { steps: { profile: NetworkConditionProfile; durationMs: number }[]; destinationPorts?: number[] }): Promise<NetworkConditionLease>;
+}
+
 export interface TaskHostDeviceContext {
+  /** macOS-hosted virtual devices only. Task-owned leases restore on task exit. No CA installation. */
+  readonly network: TaskHostDeviceNetworkContext;
   /**
    * Simulate a shake on the enforced iOS Simulator or Android Emulator.
    * iOS sends one fixed UIKit shake gesture; omit Android-only intensity, repetitions, and intervalMs.
