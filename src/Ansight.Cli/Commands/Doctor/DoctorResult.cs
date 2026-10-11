@@ -1,3 +1,5 @@
+using Ansight.Infrastructure.Dependencies;
+
 namespace Ansight.Cli.Commands.Doctor;
 
 internal sealed record DoctorResult(
@@ -10,6 +12,8 @@ internal sealed record DoctorResult(
     bool IsHealthy,
     DateTimeOffset CapturedUtc)
 {
+    public DependencyBaselineSnapshot DependencyBaseline => Ansight.Infrastructure.Dependencies.DependencyBaseline.Bundled;
+
     public string Signal => Checks.Any(static check => !check.IsSuccess && check.IsRequired)
         ? "red"
         : Checks.Any(static check => !check.IsSuccess)

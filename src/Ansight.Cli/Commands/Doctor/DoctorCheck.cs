@@ -1,3 +1,5 @@
+using Ansight.Infrastructure.Dependencies;
+
 namespace Ansight.Cli.Commands.Doctor;
 
 internal sealed record DoctorCheck(
@@ -8,6 +10,8 @@ internal sealed record DoctorCheck(
     string Message,
     string? Path)
 {
+    public DependencyVersionAdvice? VersionAdvice { get; init; }
+
     public string Justification => DoctorCheckGuidance.GetJustification(Name);
 
     public string InstallInstructions => Status == "not-applicable"

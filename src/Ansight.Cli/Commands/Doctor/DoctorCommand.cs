@@ -6,6 +6,7 @@ using Ansight.Host;
 using Ansight.Infrastructure.Security;
 using SkiaSharp;
 using Ansight.Host.Diagnostics;
+using Ansight.Infrastructure.Dependencies;
 
 namespace Ansight.Cli.Commands.Doctor;
 
@@ -129,6 +130,7 @@ internal static class DoctorCommand
             var capabilities = await deviceService.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
             checks.AddRange(capabilities.Select(CreateDeviceCheck));
             checks.AddRange(await AndroidReadinessDoctor.CheckAsync(target, options.AdbPath, cancellationToken));
+            await AddVersionAdviceAsync(checks, cancellationToken).ConfigureAwait(false);
         }
         RequireChecks(checks, arguments.GetOptions("require"));
 
@@ -560,7 +562,38 @@ internal static class DoctorCommand
             resolution.IsFound,
             false,
             resolution.Message,
-            resolution.IsFound ? resolution.ExecutablePath : null);
+            resolution.IsFound ? resolution.ExecutablePath : null)
+        {
+            VersionAdvice = resolution.IsFound ? DependencyBaseline.Compare("scrcpy", resolution.Version) : null
+        };
+    }
+
+    private static async Task AddVersionAdviceAsync(IList<DoctorCheck> checks, CancellationToken token)
+    {
+        for (var index = 0; index < checks.Count; index++)
+        {
+            var check = checks[index];
+            if (!check.IsSuccess || check.VersionAdvice is not null || check.Path is null) continue;
+            var dependency = check.Name switch
+            {
+                "tool.node" => "node",
+                "tool.appium" => "appium",
+                "tool.dotnet-trace" => "dotnet-trace",
+                "tool.dotnet-dsrouter" => "dotnet-dsrouter",
+                "android.sdk" => "adb",
+                "android.emulator" => "emulator",
+                _ => null
+            };
+            if (dependency is null || !File.Exists(check.Path)) continue;
+            var arguments = dependency == "adb" ? new[] { "version" }
+                : dependency == "emulator" ? ["-version"] : ["--version"];
+            var probe = await DiagnosticProcess.RunAsync(check.Path, arguments, token).ConfigureAwait(false);
+            checks[index] = check with
+            {
+                VersionAdvice = DependencyBaseline.Compare(dependency,
+                    probe.Status == "available" ? DiagnosticProcess.ParseVersion(dependency, probe.Output) : null)
+            };
+        }
     }
 
     private static string? FindExecutable(string executableName)
@@ -600,6 +633,8 @@ internal static class DoctorCommand
             $"{GetTrafficLight(check.Signal)} "
             + $"{(check.IsSuccess ? "[ok]" : check.IsRequired ? "[error]" : "[warn]")} "
             + $"{check.Name}: {check.Message}"));
+        lines.AddRange(result.Checks.Where(check => check.VersionAdvice?.Notice is not null)
+            .Select(check => $"[notice] {check.VersionAdvice!.Notice}"));
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -644,6 +679,10 @@ internal static class DoctorCommand
              simulator audio      BlackHole registration and Ansight process Accessibility permission
              Android video        scrcpy executable, version, and matching server availability
              physical iOS input   Appium CLI, XCUITest driver, and Appium server status
+
+           Dependency version notices compare this machine with the release's
+           embedded setup baseline. They do not change readiness or exit status,
+           including for --require. JSON includes the baseline and its SHA-256.
 
            Options:
              --data-dir <path>            Inspect a non-default Ansight state directory

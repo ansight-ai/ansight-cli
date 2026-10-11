@@ -66,6 +66,12 @@ execution, and remote runners.
 
 ## Build
 
+External tool version expectations live in [`ansight.dependencies.json`](ansight.dependencies.json).
+Release builds validate and embed this advisory baseline in the CLI. See
+[dependency setup baselines](docs/dependency-baseline.md) for the format and
+diagnostic output. Version notices do not change feature availability or Doctor
+exit codes.
+
 Requires .NET SDK 10.0.300 and Node.js 24 or later.
 
 ```sh

@@ -1,3 +1,5 @@
+using Ansight.Infrastructure.Dependencies;
+
 namespace Ansight.Cli.Commands.Update;
 
 internal sealed record CliVersionOutput(
@@ -12,7 +14,10 @@ internal sealed record CliVersionOutput(
     string ExecutablePath,
     bool IsInstallerManaged,
     string? ReceiptPath,
-    string? UpdateFeed);
+    string? UpdateFeed)
+{
+    public DependencyBaselineSnapshot DependencyBaseline => Ansight.Infrastructure.Dependencies.DependencyBaseline.Bundled;
+}
 
 internal sealed record CliUpdateStatusOutput(
     string Schema,

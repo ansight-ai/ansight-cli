@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-11",
+  "recordedPlatform": "macos-arm64",
+  "basis": "setup-observation",
+  "notes": "Initial targets record the development setup, not a certification of compatibility. Minimums initially equal those observations; no upper bounds have been established. Android command-line tools use the existing setup default.",
+  "dependencies": [
+    { "id": "node", "versions": { "min": "24.3.0", "target": "24.3.0" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Workspace JavaScript execution", "providers": { "homebrew": "node" } },
+    { "id": "npm", "versions": { "min": "11.4.2", "target": "11.4.2" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Installing workspace and Appium packages", "providers": { "node": "npm" } },
+    { "id": "tesseract", "versions": { "min": "5.5.1", "target": "5.5.1" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Screenshot OCR", "providers": { "homebrew": "tesseract", "apt": "tesseract-ocr", "winget": "UB-Mannheim.TesseractOCR" } },
+    { "id": "scrcpy", "versions": { "min": "3.3.1", "target": "3.3.1" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Android video with the matching scrcpy server", "providers": { "homebrew": "scrcpy", "winget": "Genymobile.scrcpy" } },
+    { "id": "mitmdump", "versions": { "min": "12.2.3", "target": "12.2.3" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Network capture and conditioning", "providers": { "homebrew-cask": "mitmproxy" } },
+    { "id": "axe", "versions": { "min": "1.8.0", "target": "1.8.0" }, "platforms": ["macos"], "usedBy": "iOS Simulator accessibility fallback", "providers": {} },
+    { "id": "blackhole", "versions": { "min": "0.7.1", "target": "0.7.1" }, "platforms": ["macos"], "usedBy": "Simulator audio loopback", "providers": { "homebrew-cask": "blackhole-2ch" } },
+    { "id": "appium", "versions": { "min": "3.6.0", "target": "3.6.0" }, "platforms": ["macos"], "usedBy": "Physical iOS input", "providers": { "npm": "appium" } },
+    { "id": "xcuitest", "versions": { "min": "12.5.0", "target": "12.5.0" }, "platforms": ["macos"], "usedBy": "Appium physical iOS driver", "providers": { "appium-driver": "xcuitest" } },
+    { "id": "dotnet", "versions": { "min": "10.0.300", "target": "10.0.300" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Optional SDK and diagnostic-tool installation", "providers": {} },
+    { "id": "dotnet-trace", "versions": { "min": "9.0.661903", "target": "9.0.661903" }, "platforms": ["macos", "linux", "windows"], "usedBy": ".NET profiling", "providers": { "dotnet-tool": "dotnet-trace" } },
+    { "id": "dotnet-dsrouter", "versions": { "min": "9.0.553101", "target": "9.0.553101" }, "platforms": ["macos", "linux", "windows"], "usedBy": ".NET diagnostics routing", "providers": { "dotnet-tool": "dotnet-dsrouter" } },
+    { "id": "java", "versions": { "min": "17.0.19", "target": "17.0.19" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Android SDK tooling", "providers": { "homebrew": "openjdk@17" } },
+    { "id": "adb", "versions": { "min": "37.0.0", "target": "37.0.0" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Android devices", "providers": { "sdkmanager": "platform-tools" } },
+    { "id": "emulator", "versions": { "min": "37.1.11", "target": "37.1.11" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Local Android emulators", "providers": { "sdkmanager": "emulator" } },
+    { "id": "android-commandline-tools", "versions": { "min": "19.0", "target": "19.0" }, "platforms": ["macos", "linux", "windows"], "usedBy": "Android setup", "providers": { "sdkmanager": "cmdline-tools;19.0" }, "basis": "setup-default" },
+    { "id": "xcode", "versions": { "min": "26.4", "target": "26.4" }, "platforms": ["macos"], "usedBy": "Apple device and Simulator tooling", "providers": {} }
+  ]
+}

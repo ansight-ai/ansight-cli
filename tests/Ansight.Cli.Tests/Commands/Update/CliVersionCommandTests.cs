@@ -41,6 +41,11 @@ public sealed class CliVersionCommandTests
         Assert.Equal(
             Environment.ProcessPath ?? "unavailable",
             document.RootElement.GetProperty("executablePath").GetString());
+        var baseline = document.RootElement.GetProperty("dependencyBaseline");
+        Assert.Equal("embedded", baseline.GetProperty("status").GetString());
+        Assert.Matches("^[a-f0-9]{64}$", baseline.GetProperty("sha256").GetString()!);
+        Assert.Contains(baseline.GetProperty("manifest").GetProperty("dependencies").EnumerateArray(),
+            item => item.GetProperty("id").GetString() == "scrcpy");
     }
 
     private static async Task<CommandResult> RunAsync(string[] commandArguments, bool json)

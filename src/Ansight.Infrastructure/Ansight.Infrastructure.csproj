@@ -8,7 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="System.ComponentModel.Composition" Version="7.0.0" />
+    <EmbeddedResource Include="../../ansight.dependencies.json" LogicalName="Ansight.DependencyBaseline.json" />
   </ItemGroup>
+
+  <Target Name="ValidateDependencyBaseline" BeforeTargets="PrepareForBuild"
+          Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="node &quot;$(MSBuildProjectDirectory)/../../scripts/build/validate-dependency-baseline.mjs&quot; &quot;$(MSBuildProjectDirectory)/../../ansight.dependencies.json&quot;" />
+  </Target>
 
   <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Host" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /><InternalsVisibleTo Include="Ansight.Host.Tests" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /></ItemGroup>

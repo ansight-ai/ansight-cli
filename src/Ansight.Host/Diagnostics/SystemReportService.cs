@@ -31,6 +31,7 @@ public sealed partial class SystemReportService
             ["installation"] = token => Task.FromResult(CollectInstallation()),
             ["host"] = token => Task.FromResult(CollectHost()),
             ["configuration"] = token => Task.FromResult(CollectConfiguration()),
+            ["dependencyBaseline"] = token => Task.FromResult(Complete(Ansight.Infrastructure.Dependencies.DependencyBaseline.Bundled)),
             ["dependencies"] = token => CollectDependenciesAsync(token),
             ["platformTooling"] = token => CollectPlatformAsync(token),
             ["apps"] = token => Task.FromResult(CollectApps(token)),
@@ -204,8 +205,11 @@ public sealed partial class SystemReportService
         var definitions = new[]
         {
             new ToolDefinition("node", options.JavaScriptExecutablePath, "Workspace tasks, triggers and sanitizers", ["--version"]),
+            new ToolDefinition("npm", null, "Workspace and Appium package installation", ["--version"]),
+            new ToolDefinition("java", null, "Android SDK tooling", ["-version"]),
             new ToolDefinition("tesseract", Environment.GetEnvironmentVariable("ANSIGHT_TESSERACT_PATH"), "Screenshot OCR", ["--version"]),
             new ToolDefinition("scrcpy", null, "Android video", ["--version"]),
+            new ToolDefinition("mitmdump", Environment.GetEnvironmentVariable("ANSIGHT_MITMDUMP_PATH"), "Network capture and conditioning", ["--version"]),
             new ToolDefinition("dotnet-trace", null, ".NET profiling", ["--version"]),
             new ToolDefinition("dotnet-dsrouter", null, ".NET diagnostics routing", ["--version"]),
             new ToolDefinition("dotnet", null, "Optional SDK and diagnostic-tool installation", ["--version"]),

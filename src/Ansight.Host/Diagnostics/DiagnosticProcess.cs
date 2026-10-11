@@ -82,7 +82,7 @@ public static class DiagnosticProcess
             paths.Where(candidate => candidate != path).ToArray(), usedBy);
     }
 
-    internal static string? ParseVersion(string name, string? output)
+    public static string? ParseVersion(string name, string? output)
     {
         if (string.IsNullOrWhiteSpace(output)) return null;
         var lines = output.Split('\n').Select(line => line.Trim())

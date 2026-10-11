@@ -71,5 +71,7 @@ internal static class CliVersionCommand
            The release identity contains both the human version string and the
            YYYYMMDDNN integer build number. The channel comes from the installer
            receipt because public releases promote the exact preview binary.
+           JSON also includes the embedded dependency setup baseline and its SHA-256.
+           Expected version ranges are advisory and never disable capabilities.
            """;
 }

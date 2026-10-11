@@ -1,10 +1,38 @@
 using System.Text.Json;
 using Ansight.Host;
+using Ansight.Infrastructure.Dependencies;
 
 namespace Ansight.Cli.Tests.Commands.Doctor;
 
 public sealed class DoctorOutputTests
 {
+    [Fact]
+    public void VersionNoticeDoesNotFailARequiredCheckOrChangeItsSignal()
+    {
+        IList<DoctorCheck> checks =
+        [
+            CreateCheck("tool.scrcpy", true, false) with
+            {
+                VersionAdvice = DependencyBaseline.Compare("scrcpy", "0.1")
+            }
+        ];
+        DoctorCommand.RequireChecks(checks, ["tool.scrcpy"]);
+        var result = CreateResult(checks.ToArray());
+        Assert.True(result.IsHealthy);
+        Assert.Equal("green", result.Signal);
+        Assert.True(checks[0].IsRequired);
+        Assert.True(checks[0].IsSuccess);
+        Assert.Equal("available", checks[0].Status);
+        Assert.Contains("[notice] scrcpy 0.1", DoctorCommand.Render(result));
+        Assert.Contains("will likely still work", DoctorCommand.Render(result));
+        using var output = new StringWriter();
+        new CliOutput(true, output, TextWriter.Null).Write(result, () => DoctorCommand.Render(result));
+        using var json = JsonDocument.Parse(output.ToString());
+        Assert.True(json.RootElement.GetProperty("isHealthy").GetBoolean());
+        Assert.Equal("below-minimum", json.RootElement.GetProperty("checks")[0].GetProperty("versionAdvice").GetProperty("status").GetString());
+        Assert.Equal("embedded", json.RootElement.GetProperty("dependencyBaseline").GetProperty("status").GetString());
+    }
+
     [Theory]
     [InlineData(true, true, "green")]
     [InlineData(false, false, "amber")]

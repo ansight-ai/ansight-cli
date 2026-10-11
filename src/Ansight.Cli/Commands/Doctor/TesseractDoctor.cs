@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Ansight.Infrastructure.Dependencies;
 
 namespace Ansight.Cli.Commands.Doctor;
 
@@ -111,7 +112,10 @@ internal static class TesseractDoctor
             version is null
                 ? "Tesseract is available for local screenshot OCR and PII redaction."
                 : $"Tesseract {version} is available for local screenshot OCR and PII redaction.",
-            executablePath);
+            executablePath)
+        {
+            VersionAdvice = DependencyBaseline.Compare("tesseract", version)
+        };
     }
 
     internal static string? ParseVersion(string? output)
