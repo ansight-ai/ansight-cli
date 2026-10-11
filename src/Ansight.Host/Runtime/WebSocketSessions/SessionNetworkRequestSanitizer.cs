@@ -77,6 +77,7 @@ internal static class SessionNetworkRequestSanitizer
                 ? Math.Max(0, request.DurationMilliseconds)
                 : Math.Max(0, (completedAtUtc - startedAtUtc).TotalMilliseconds),
             Method = Truncate(request.Method.Trim().ToUpperInvariant(), 32),
+            Performance = NormalizePerformance(request.Performance),
             Url = request.RedactSensitiveData
                 ? SanitizeUrl(request.Url)
                 : Truncate(request.Url.Trim(), 16_384),
@@ -94,6 +95,23 @@ internal static class SessionNetworkRequestSanitizer
             ErrorMessage = SanitizeErrorMessage(request.ErrorMessage, request.RedactSensitiveData)
         };
     }
+
+    private static SessionNetworkPerformance? NormalizePerformance(SessionNetworkPerformance? value)
+        => value is null ? null : new()
+        {
+            TimeToFirstByteMilliseconds = NormalizeDuration(value.TimeToFirstByteMilliseconds),
+            DnsMilliseconds = NormalizeDuration(value.DnsMilliseconds),
+            ConnectMilliseconds = NormalizeDuration(value.ConnectMilliseconds),
+            TlsMilliseconds = NormalizeDuration(value.TlsMilliseconds),
+            UploadDurationMilliseconds = NormalizeDuration(value.UploadDurationMilliseconds),
+            DownloadDurationMilliseconds = NormalizeDuration(value.DownloadDurationMilliseconds),
+            UploadedBytes = value.UploadedBytes is >= 0 ? value.UploadedBytes : null,
+            DownloadedBytes = value.DownloadedBytes is >= 0 ? value.DownloadedBytes : null,
+            ReusedConnection = value.ReusedConnection
+        };
+
+    private static double? NormalizeDuration(double? value)
+        => value is >= 0 && double.IsFinite(value.Value) ? value : null;
 
     private static IReadOnlyList<SessionNetworkHeader> SanitizeHeaders(
         IEnumerable<SessionNetworkHeader>? headers,

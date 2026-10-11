@@ -10,6 +10,7 @@ public sealed class SessionNetworkRequest
     public required DateTimeOffset StartedAtUtc { get; init; }
     public required DateTimeOffset CompletedAtUtc { get; init; }
     public required double DurationMilliseconds { get; init; }
+    public SessionNetworkPerformance? Performance { get; init; }
     public required string Method { get; init; }
     public required string Url { get; init; }
     public bool RedactSensitiveData { get; init; } = true;

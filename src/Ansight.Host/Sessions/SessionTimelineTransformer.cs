@@ -650,6 +650,9 @@ internal static class SessionTimelineTransformer
             StartedAtUtc = startedAtUtc,
             CompletedAtUtc = completedAtUtc,
             DurationMilliseconds = durationMilliseconds,
+            // A clipped request no longer contains the full measured transaction.
+            Performance = completedAtUtc - startedAtUtc == request.CompletedAtUtc - request.StartedAtUtc
+                ? request.Performance : null,
             Method = request.Method,
             Url = request.Url,
             RedactSensitiveData = request.RedactSensitiveData,

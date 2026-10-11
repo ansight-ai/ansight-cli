@@ -1124,6 +1124,19 @@ export interface NetworkBodyMetadata {
   truncated: boolean;
 }
 
+/** Passive final-transaction timings and transferred body bytes; absent values are unknown. */
+export interface NetworkPerformance {
+  timeToFirstByteMilliseconds?: number | null;
+  dnsMilliseconds?: number | null;
+  connectMilliseconds?: number | null;
+  tlsMilliseconds?: number | null;
+  uploadDurationMilliseconds?: number | null;
+  downloadDurationMilliseconds?: number | null;
+  uploadedBytes?: number | null;
+  downloadedBytes?: number | null;
+  reusedConnection?: boolean | null;
+}
+
 /** One received network capture record, excluding header values and body content. */
 export interface NetworkRequestSummary {
   /** Stable retained request identifier. */
@@ -1136,6 +1149,8 @@ export interface NetworkRequestSummary {
   completedAtUtc: string;
   /** Reported request duration, in milliseconds. */
   durationMilliseconds: number;
+  /** Passive final-transaction measurements, when supplied by the collector. */
+  performance?: NetworkPerformance | null;
   /** HTTP method. */
   method: string;
   /** Captured request URL, preserving capture sanitization. */

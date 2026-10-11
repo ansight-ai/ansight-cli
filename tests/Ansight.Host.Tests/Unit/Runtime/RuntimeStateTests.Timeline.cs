@@ -240,12 +240,16 @@ public sealed partial class RuntimeStateTests
         Assert.Equal([At(10), At(14), At(18)], trimmed.NetworkRequests.Select(request => request.StartedAtUtc).ToArray());
         Assert.Equal([At(12), At(16), At(20)], trimmed.NetworkRequests.Select(request => request.CompletedAtUtc).ToArray());
         Assert.Equal([2000, 2000, 2000], trimmed.NetworkRequests.Select(request => request.DurationMilliseconds).ToArray());
+        Assert.Null(trimmed.NetworkRequests[0].Performance);
+        Assert.Equal(25, trimmed.NetworkRequests[1].Performance?.TimeToFirstByteMilliseconds);
+        Assert.Null(trimmed.NetworkRequests[2].Performance);
 
         Assert.True(captureStore.TryLoad(sessionId, out var persisted));
         Assert.NotNull(persisted);
         Assert.Equal(At(20), persisted!.LastUpdatedUtc);
         Assert.Equal(["crosses-start", "inside", "crosses-end"], persisted.NetworkRequests.Select(request => request.Id).ToArray());
         Assert.Equal(3, persisted.TotalNetworkRequestCount);
+        Assert.Equal(25, persisted.NetworkRequests[1].Performance?.TimeToFirstByteMilliseconds);
 
         var reloadedRuntimeState = new RuntimeState(captureStore);
         Assert.True(reloadedRuntimeState.TryGetSessionSnapshot(sessionId, out var reloaded));
@@ -297,6 +301,7 @@ public sealed partial class RuntimeStateTests
         Assert.Equal(["before", "after"], trimmed.NetworkRequests.Select(request => request.Id).ToArray());
         Assert.Equal([At(5), At(15)], trimmed.NetworkRequests.Select(request => request.StartedAtUtc).ToArray());
         Assert.Equal([At(6), At(17)], trimmed.NetworkRequests.Select(request => request.CompletedAtUtc).ToArray());
+        Assert.All(trimmed.NetworkRequests, request => Assert.Equal(25, request.Performance?.TimeToFirstByteMilliseconds));
 
         Assert.True(captureStore.TryLoad(sessionId, out var persisted));
         Assert.NotNull(persisted);
@@ -316,6 +321,7 @@ public sealed partial class RuntimeStateTests
             StartedAtUtc = startedAtUtc,
             CompletedAtUtc = completedAtUtc,
             DurationMilliseconds = (completedAtUtc - startedAtUtc).TotalMilliseconds,
+            Performance = new SessionNetworkPerformance { TimeToFirstByteMilliseconds = 25 },
             Method = "GET",
             Url = "https://example.test/",
             StatusCode = 200

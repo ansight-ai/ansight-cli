@@ -30,6 +30,7 @@ public sealed class NetworkInspectionOperationTests
         var payload = Success(result);
         var request = Assert.Single(payload["requests"]!.AsArray())!;
         Assert.Equal("match", request["id"]!.GetValue<string>());
+        Assert.Equal(10, request["performance"]!["timeToFirstByteMilliseconds"]!.GetValue<double>());
         Assert.False(request.AsObject().ContainsKey("requestHeaders"));
         Assert.False(request["responseBody"]!.AsObject().ContainsKey("data"));
         Assert.Equal(11, request["responseBody"]!["capturedBytes"]!.GetValue<long>());
@@ -329,6 +330,7 @@ public sealed class NetworkInspectionOperationTests
             StartedAtUtc = startedAtUtc.AddSeconds(seconds),
             CompletedAtUtc = startedAtUtc.AddSeconds(seconds).AddMilliseconds(30),
             DurationMilliseconds = 30,
+            Performance = new SessionNetworkPerformance { TimeToFirstByteMilliseconds = 10 },
             Method = method,
             Url = url ?? "https://api.example.test/checkout",
             StatusCode = status,

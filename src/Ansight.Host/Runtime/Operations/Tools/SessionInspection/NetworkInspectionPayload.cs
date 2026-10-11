@@ -18,6 +18,7 @@ internal static class NetworkInspectionPayload
         ["startedAtUtc"] = request.StartedAtUtc,
         ["completedAtUtc"] = request.CompletedAtUtc,
         ["durationMilliseconds"] = request.DurationMilliseconds,
+        ["performance"] = request.Performance is null ? null : JsonSerializer.SerializeToNode(request.Performance, JsonUtil.Compact),
         ["statusCode"] = request.StatusCode,
         ["errorType"] = request.ErrorType,
         ["errorMessage"] = request.ErrorMessage,

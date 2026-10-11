@@ -15,6 +15,13 @@ public sealed class ClientNetworkRequestEventParserTests
                           "startedAtUtc": "2026-08-23T00:00:00Z",
                           "completedAtUtc": "2026-08-23T00:00:00.125Z",
                           "durationMilliseconds": 125,
+                          "performance": {
+                            "timeToFirstByteMilliseconds": 25,
+                            "downloadDurationMilliseconds": 100,
+                            "downloadedBytes": 4096,
+                            "uploadedBytes": 0,
+                            "reusedConnection": true
+                          },
                           "method": "get",
                           "url": "https://blob.test/orders?sv=1&sp=rw&se=tomorrow&sig=azure-secret&view=full",
                           "protocol": "2.0",
@@ -45,6 +52,13 @@ public sealed class ClientNetworkRequestEventParserTests
         Assert.Equal("GET", request.Method);
         Assert.Equal(200, request.StatusCode);
         Assert.Equal(125, request.DurationMilliseconds);
+        Assert.NotNull(request.Performance);
+        Assert.Equal(25, request.Performance.TimeToFirstByteMilliseconds);
+        Assert.Equal(100, request.Performance.DownloadDurationMilliseconds);
+        Assert.Equal(4096, request.Performance.DownloadedBytes);
+        Assert.Equal(0, request.Performance.UploadedBytes);
+        Assert.True(request.Performance.ReusedConnection);
+        Assert.Null(request.Performance.DnsMilliseconds);
         Assert.DoesNotContain("azure-secret", request.Url, StringComparison.Ordinal);
         Assert.DoesNotContain("tomorrow", request.Url, StringComparison.Ordinal);
         Assert.Contains("view=full", request.Url, StringComparison.Ordinal);
@@ -78,6 +92,25 @@ public sealed class ClientNetworkRequestEventParserTests
         var parsed = ClientEventParser.ParseText(payload);
 
         Assert.Null(parsed.NetworkRequest);
+    }
+
+    [Fact]
+    public void ParseText_RemovesInvalidPerformanceAndPreservesZero()
+    {
+        var payload = """
+            {"type":"CLIENT_NETWORK_REQUEST","request":{
+              "schema":"ansight.network-request.v1","id":"invalid","source":"test",
+              "startedAtUtc":"2026-10-11T00:00:00Z","completedAtUtc":"2026-10-11T00:00:01Z",
+              "durationMilliseconds":1000,"method":"GET","url":"https://example.test",
+              "performance":{"timeToFirstByteMilliseconds":-1,"downloadedBytes":-5,"dnsMilliseconds":0,"uploadedBytes":0}
+            }}
+            """;
+        var request = Assert.IsType<SessionNetworkRequest>(ClientEventParser.ParseText(payload).NetworkRequest);
+        Assert.NotNull(request.Performance);
+        Assert.Null(request.Performance.TimeToFirstByteMilliseconds);
+        Assert.Null(request.Performance.DownloadedBytes);
+        Assert.Equal(0, request.Performance.DnsMilliseconds);
+        Assert.Equal(0, request.Performance.UploadedBytes);
     }
 
     [Fact]
