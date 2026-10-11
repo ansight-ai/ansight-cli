@@ -44,6 +44,8 @@ internal sealed class ReplayMcpCommand(string html, ReplayBackend backend)
             Validate(tool["inputSchema"]!, input);
             if (name == "list_replays") return Result(await backend.ListAsync(input, token));
             var sessionId = Id(Text(input, "sessionId"));
+            if (name == "open_replay_in_browser")
+                return Result(await backend.OpenInBrowserAsync(sessionId, token), message: "Opened the session in the local host player.");
             if (name == "get_replay_frames")
             {
                 var ids = input["frameIds"]!.AsArray().Select(value => Id(value!.GetValue<string>())).ToArray();
@@ -108,7 +110,7 @@ internal sealed class ReplayMcpCommand(string html, ReplayBackend backend)
     }
 
     // Validate the small, explicit replay contract before dispatch; no tool accepts
-    // arbitrary CLI arguments, URLs, paths, or writes beyond annotation creation.
+    // arbitrary CLI arguments, URLs, paths, or recording writes beyond annotation creation.
     internal static void Validate(JsonNode schema, JsonNode? value)
     {
         if (schema["anyOf"] is JsonArray variants)

@@ -36,12 +36,18 @@ try {
   assert.equal(hello.serverInfo.name, 'ansight');
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const tools = (await request('tools/list')).tools;
-  assert.equal(tools.length, 6);
+  assert.equal(tools.length, 7);
+  const openTool = tools.find(tool => tool.name === 'open_replay_in_browser');
+  assert.deepEqual(openTool._meta.ui.visibility, ['app']);
+  assert.equal(openTool.annotations.readOnlyHint, false);
   const replayTool = tools.find(tool => tool.name === 'show_replay');
   const resourceUri = replayTool._meta.ui.resourceUri;
   const resource = await request('resources/read', { uri: resourceUri });
   assert.ok(resource.contents[0].text.includes('touch-overlay'));
-  assert.ok(resource.contents[0].text.includes('Show recorded touches'));
+  assert.ok(resource.contents[0].text.includes('Replay timeline'));
+  assert.ok(resource.contents[0].text.includes('Open full replay'));
+  assert.ok(!resource.contents[0].text.includes('Show recorded touches'));
+  assert.ok(!resource.contents[0].text.includes('Annotate screenshot'));
   const call = async (name, args) => {
     const result = await request('tools/call', { name, arguments: args });
     assert.equal(result.isError ?? false, false, JSON.stringify(result.content));

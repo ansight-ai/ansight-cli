@@ -10,7 +10,8 @@ namespace Ansight.Cli.Commands.Mcp;
 
 internal sealed class ReplayBackend(
     Func<string[], CancellationToken, Task<JsonObject>> run,
-    HttpClient http)
+    HttpClient http,
+    Func<Uri, string?>? openBrowser = null)
 {
     private readonly ConcurrentDictionary<string, JsonObject> replays = new();
     internal static JsonObject Json(object value) => JsonSerializer.SerializeToNode(value)!.AsObject();
@@ -76,6 +77,21 @@ internal sealed class ReplayBackend(
         if (status["isRunning"]?.GetValue<bool>() != true || Text(status, "explorerUrl").Length == 0)
             throw new InvalidOperationException("Start the local Ansight host before loading a replay.");
         return LocalHost(Text(status, "explorerUrl"));
+    }
+
+    internal async Task<JsonObject> OpenInBrowserAsync(string sessionId, CancellationToken token)
+    {
+        Id(sessionId);
+        var found = await run(["session", "list", "--search", sessionId, "--limit", "20"], token);
+        if (found["sessions"]?.AsArray().Any(item => Text(item, "sessionId") == sessionId) != true)
+            throw new ArgumentException("Local session was not found.");
+        // Resolve the current host address locally; the widget never supplies a URL.
+        var host = Host(await run(["host", "status"], token));
+        var url = new UriBuilder(host) { Query = "sessionId=" + Uri.EscapeDataString(sessionId) }.Uri;
+        token.ThrowIfCancellationRequested();
+        var warning = (openBrowser ?? CliBrowserLauncher.TryOpen)(url);
+        if (warning is not null) throw new InvalidOperationException($"Could not open the local host player: {warning}");
+        return Json(new { sessionId, replayUrl = url.AbsoluteUri });
     }
 
     internal static JsonObject MakeReplay(JsonNode summary, JsonObject images, JsonObject annotations, JsonObject touches)

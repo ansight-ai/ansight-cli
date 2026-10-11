@@ -192,6 +192,60 @@
     }
   },
   {
+    "name": "open_replay_in_browser",
+    "title": "Open local host replay",
+    "description": "Open the selected local recording in the default browser after the user clicks Open full replay. Resolves the running local host address on this machine; accepts only a session ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "replayUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "replayUrl"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/visibility": "private"
+    }
+  },
+  {
     "name": "get_replay_frames",
     "title": "Load replay screenshots",
     "description": "Load up to six screenshots for the replay widget. Screenshot bytes are UI-only.",
