@@ -67,7 +67,7 @@ ansight app execute --app-id <app-id> --platform <ios|android> \
   --device-id <device-id> --execution-mode device --prompt "<goal>" --json
 ```
 
-Do not combine a session ID with `--execution-mode` or other launch options. An attached execution reserves the session and releases it on completion; the monitor remains enabled. App Graphs and app-internal tools require an SDK provider. Tasks and triggers need schema version 2 with declared capability requirements for external execution; legacy version 1 retains its SDK requirement.
+Do not combine a session ID with `--execution-mode` or other launch options. An attached execution reserves the session and releases it on completion; the monitor remains enabled. For a final bounded verification run whose evidence is captured within `app execute`, add `--close-app-on-completion` to end the selected app process afterward. When further live checks are needed, finish those first and explicitly terminate the app during cleanup. App Graphs and app-internal tools require an SDK provider. Tasks and triggers need schema version 2 with declared capability requirements for external execution; legacy version 1 retains its SDK requirement.
 
 ## Capture Settings And Cleanup
 
@@ -79,11 +79,13 @@ ansight app watch configure <watch-id> --screenshot-interval-ms <ms> --json
 
 This preserves the monitor's other settings and updates active recordings. Re-adding a selection updates and enables it, so inspect before using `add` to change an existing monitor. `--capture-file <sandbox-relative-path>` on `add` is optional and repeatable; file access depends on platform permissions. It makes best-effort exit copies, not a transactional database snapshot. Physical iPhone watches cannot capture third-party sandbox files.
 
-Virtual recordings follow process lifetime. Physical recordings end when the app leaves the foreground. An enabled watch may capture again later, including after a host restart. Disable only the requested monitor or one exclusively created for this work:
+Virtual recordings follow process lifetime. Physical recordings end when the app leaves the foreground. After a bounded verification, retain final evidence and terminate the exact app instance dedicated to that run with `ansight device terminate <platform> <device-id> <app-id> --json`. Honor requests to keep it open and preserve app instances shared with other ongoing work. Leave the device and host running.
+
+An enabled watch may capture again later, including after a host restart. Disable a watch created exclusively for this completed run unless continued monitoring was requested. Disable a pre-existing watch only when the user asked; preserve shared monitors:
 
 ```sh
 ansight app watch disable <watch-id> --json
 ansight app watch list --json
 ```
 
-Disabling ends every active capture belonging to that watch and retains its definition and recordings. Removing a watch also removes its definition while retaining recordings. If an existing watch spans several devices, terminating the selected app ends that run without disabling the other devices' monitoring. Report remaining watch state and verify the selected session ended.
+Disabling ends every active capture belonging to that watch and retains its definition and recordings; it does not terminate the app. Removing a watch also removes its definition while retaining recordings. If an existing watch spans several devices, terminating the selected app ends that run without disabling the other devices' monitoring. Verify `isConnected: false` using `ansight session show <session-id> --json`, and check the watch's active sessions for reconnection on that device. Report remaining watch state and any cleanup failure separately from the verification outcome.

@@ -1,7 +1,7 @@
 interface:
   display_name: "Operate A Live Ansight App"
   short_description: "Control a live app with structured evidence"
-  default_prompt: "Use $ansight-operate-live-app to verify this app change and present its replay as proof, annotating only specific timeline moments or UI regions relevant to the change that need emphasis."
+  default_prompt: "Use $ansight-operate-live-app to verify this app change, retain final evidence, then close the tested app and confirm its session ended unless it must remain live. Leave the simulator and host running. Present the replay as proof, annotating only task-relevant timeline moments or UI regions that need emphasis."
 
 policy:
   allow_implicit_invocation: true

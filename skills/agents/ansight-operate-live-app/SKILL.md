@@ -45,7 +45,7 @@ For external setup, watch lifecycle, and bounded device execution, read [Externa
 
 There is no separate `ansight session start` command. Start the host and app, establish the SDK connection or external watch, then discover its session. `session delete` removes retained data; it is not a stop command.
 
-Do not stop a host, device, or app that was already running unless the user asked. A resident host can be shared by other work.
+A bounded test or feature/bug verification should end its app session after the final evidence is retained. Leave the simulator/emulator and resident host running so the retained replay remains available. Honor an explicit request to leave the app open, and preserve app instances shared with other ongoing work. Merely launching an app for the user or inspecting an existing session does not call for automatic cleanup.
 
 ## Choose Device Window Behavior
 
@@ -99,7 +99,7 @@ devices. Reusing a connected session leaves its window state unchanged.
    Follow `nextCursor` with `--cursor` only when the first filtered page does
    not contain the intended session, and keep the same filters on later pages.
 
-5. Record the session ID and initial observation timestamp or evidence IDs.
+5. Record the session ID and initial observation timestamp or evidence IDs. For a bounded verification run, also record the exact platform/device/app target, whether it was already running, and which watch this workflow created or reused. Establish whether the app is dedicated to this verification or shared with ongoing work before deciding its cleanup scope.
 
 ## Fast Direct Exploration
 
@@ -319,16 +319,24 @@ ansight ui snapshot --session <session-id> --json
 
 An action response proves that input was attempted. It does not prove the requested outcome. Use an assertion, focused observation, or resulting session evidence for that conclusion.
 
-## End Only The Intended Layer
+## Finish Verification And End The App Session
 
-- When the user wants an `app execute` run to close the app afterward, add `--close-app-on-completion`. It closes only that app process after success, failure, or cancellation, including when reusing an existing session. Multi-device runs close each selected app instance. The device, its window, and the resident host stay running. The default is to leave the app open; `--headless` controls windowless startup independently. A cleanup warning means the app may still be running; do not claim it closed without verification.
-- End an SDK stream while retaining the recording: `ansight session disconnect <session-id> --json`.
-- Stop future external capture and end its active recording: `ansight app watch disable <watch-id> --json`. Watches persist across host restarts; end or disable only the exact monitor the user asked to stop or this workflow exclusively created. See [External capture](references/external-capture.md) before changing a monitor that covers several devices.
-- Stop the app process: `ansight device terminate <platform> <device-id> <app-id> --json`.
-- Shut down a virtual target only when the user requested it or this workflow exclusively started it.
-- Stop the resident host only when explicitly requested or when this workflow started a dedicated host and no other session depends on it.
+Complete cleanup before reporting a bounded test or feature/bug verification as finished. This applies to an app launched for the run or an existing app instance dedicated to that verification. Keep it live only when the user asked, further authorized debugging still needs it, or another ongoing workflow shares it; report that exception. Do not terminate an unrelated app or guess a missing device identity.
 
-The app may reconnect while its SDK or external watch remains active. After a requested stop, confirm with `ansight session list --connected --app-id <app-id> --limit 20 --json` and, for external capture, `ansight app watch list --json`.
+1. Finish the final assertion or observation and retain its screenshot/evidence IDs and test/task result. Clean up after the whole requested run or suite, not between steps or tests that still need the session. Retain failure evidence before cleanup too; a failed or cancelled run must not leave an otherwise finished app recording indefinitely.
+2. Close any interactive bridge owned by this workflow, then terminate only the selected app instance:
+
+   ```sh
+   ansight device terminate <platform> <device-id> <app-id> --json
+   ```
+
+   For a final bounded `app execute` run, use `--close-app-on-completion` when its own final evidence is sufficient and no subsequent live checks need the app. The CLI otherwise leaves it open. The flag closes the selected app after success, failure, or cancellation, including reused sessions; multi-device runs close each selected instance. It is supported by `app execute`, not `test run`, `test run-all`, or `task run`; use explicit termination after those workflows. `--headless` independently controls device window behavior.
+3. Disable an external watch created exclusively for this run unless the user requested continued monitoring: `ansight app watch disable <watch-id> --json`. Preserve reused/shared watches; terminating the selected app ends only its run. Disabling a watch ends every capture it owns, so follow [External capture](references/external-capture.md) for watches covering several devices.
+4. Verify the exact retained session with `ansight session show <session-id> --json`; require `isConnected: false`. Use a bounded recheck if finalization is still in progress. Check `ansight session list --connected --app-id <app-id> --limit 20 --json` for an unintended reconnection on the same device, following `nextCursor` as needed, and cross-check external watches with `ansight app watch list --json`. Other devices' sessions can remain connected. Preserve the recording; never use `session delete` as cleanup.
+
+If the app cannot be terminated but ending this recording is in scope, `ansight session disconnect <session-id> --json` can end an SDK stream while retaining its evidence. It does not close the app, and the SDK may reconnect. Report that limitation instead of claiming the app stopped. A termination error, cleanup warning, or still-connected session means cleanup is incomplete; keep the verification result separate from the cleanup result.
+
+Leave the device, its window, and resident host running by default. Shut down a device or stop the host only when separately requested and within the authorized target scope; the host may serve other sessions and the replay. Annotations and replay presentation can use the ended recording without relaunching the app.
 
 ## Report The Evidence Trail
 
@@ -336,4 +344,4 @@ After implementing or exercising an app change, prefer an Ansight replay as proo
 
 Lead the handoff with the replay and a short explanation of what it demonstrates, pointing to relevant annotations when present. Prefer the inline replay tool when available, retain recorded touch overlays, and include a link to the full detail replay. When inline presentation is unavailable, provide the actual local replay link and useful timestamps or relevant marker labels. Honor requests for a read-only capture or a different output format; routine one-step controls do not need a new proof package.
 
-Report the selected App ID, device, capture mode, and session; initial observation; each state-changing CLI command; fresh verification; important timestamps or evidence IDs; and any fallback outside Ansight. Name material capability gaps and whether a persistent watch remains enabled. Distinguish observed state, executed action, and inferred explanation.
+Report the selected App ID, device, capture mode, and session; initial observation; each state-changing CLI command; fresh verification; important timestamps or evidence IDs; and any fallback outside Ansight. State whether the app stopped and the session ended, or why either remains live. Name material capability gaps and whether a persistent watch remains enabled. Distinguish observed state, executed action, and inferred explanation.

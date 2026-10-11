@@ -113,7 +113,7 @@ For an existing SDK or external session, attach explicitly:
 ansight test run <repository-root> <test-id> --session-id <live-session-id> --json
 ```
 
-The attached session determines execution mode; completion releases the execution reservation and leaves its monitor running. To install and launch an SDK-less virtual build, choose device mode explicitly (iOS simulator `.app` or Android `.apk`):
+The attached session determines execution mode; command completion releases the execution reservation and leaves its monitor running. End the tested app/session after the complete requested verification using the cleanup procedure below. To install and launch an SDK-less virtual build, choose device mode explicitly (iOS simulator `.app` or Android `.apk`):
 
 ```sh
 ansight test run <repository-root> <test-id> --app <build-path> \
@@ -331,8 +331,8 @@ against a live session with its declared capabilities before relying on it. Exte
 ### Debug Or Repair Only When In Scope
 
 Use this procedure only for requested debugging or repair, or to validate work
-authored in this request. For execution-only requests, report the terminal result
-and stop. Preserve the failed task result and its evidence before editing or replaying.
+authored in this request. For execution-only requests, retain the terminal result,
+complete app/session cleanup below, and report without starting repairs. Preserve the failed task result and its evidence before editing or replaying.
 Start with the first failed tool call rather than the final exception or a nearby
 application log:
 
@@ -432,8 +432,23 @@ npx tsc -p ansight/sanitizers/tsconfig.json
 
 Resolve every validation warning. The runtime strips TypeScript types but does not type-check modules before execution. Re-run discovery after external edits, and reconnect triggers after changing them. Treat the installed host as authoritative when checked-in schemas or declarations disagree with it.
 
+## Finish Executed Verification
+
+After the complete requested test/task run or suite, retain the terminal result, named assertions, and final screenshot/evidence IDs, then close the tested app so its Ansight recording ends. Apply this to a launched app or an existing instance dedicated to the verification. Do not close between steps, child tasks, or tests that still need the session. On failure or cancellation, preserve available failure evidence and perform the same cleanup once no further authorized live debugging needs it.
+
+Record each selected platform/device/app/session and whether its external watch was created or reused. Follow `https://www.ansight.ai/skills/agents/ansight-operate-live-app/SKILL.md` for exact lifecycle handling. For `test run`, `test run-all`, `task run`, and interactive task execution, terminate the selected app explicitly after execution finishes; `--close-app-on-completion` is an `app execute` option only:
+
+```sh
+ansight device terminate <platform> <device-id> <app-id> --json
+ansight session show <session-id> --json
+```
+
+Require `isConnected: false` for the exact retained session, with a bounded recheck if needed, and check for reconnection on that device. Disable a watch created exclusively for this run unless continued monitoring was requested; preserve reused/shared watches. Leave the simulator/emulator and resident host running for replay access. Never delete the recording or relaunch solely to add annotations or present it.
+
+Respect an explicit request to leave the app open and preserve instances shared with other ongoing work. Report those exceptions or any cleanup failure separately from the test result. Authoring, static validation, reading recorded evidence, and configuring ongoing triggers do not call for app termination.
+
 ## Report Results
 
 When a requested test or task was executed against an app, prefer a replay of that run as proof of work. Add or highlight annotations only when a specific timeline moment or screenshot/UI region directly relates to the feature, bug, or task worked on and benefits from emphasis; do not annotate every assertion or routine step. Use `https://www.ansight.ai/skills/agents/ansight-annotate-session/SKILL.md` for native annotation writes and replay handoff details. Tie any markers to relevant assertions and retained evidence, and verify they were saved. Present the replay without new annotations if no area needs emphasis; do not replay state-changing steps merely to produce a nicer recording. Prefer inline presentation with recorded touches when available, and include the full detail replay link. Authoring or validation alone does not justify running the app or claiming runtime proof.
 
-Report the workspace root, App ID, capture mode and capability gaps, registration state, component type, path-derived ID, scaffold or files changed, validation and discovery performed, and whether execution was requested. For tests, report the outcome and whether `--trace` was enabled. For tasks, report terminal status and named assertions. For triggers, report connection and run state. For Trends, distinguish validation from an actual runtime evaluation. For sanitizers, report the output archive and inspection performed without claiming that the original session was modified.
+Report the workspace root, App ID, capture mode and capability gaps, registration state, component type, path-derived ID, scaffold or files changed, validation and discovery performed, and whether execution was requested. For tests, report the outcome and whether `--trace` was enabled. For tasks, report terminal status and named assertions. For executed tests/tasks, state whether the app stopped and session ended, or why either remains live, including any remaining watch. For triggers, report connection and run state. For Trends, distinguish validation from an actual runtime evaluation. For sanitizers, report the output archive and inspection performed without claiming that the original session was modified.
