@@ -7,6 +7,16 @@ description: Add, update, verify, or remove timeline and UI-anchored annotations
 
 Attach concise review metadata to one exact session. Keep the observed fact in the label, supporting context in notes, and inference explicitly qualified.
 
+## Mark Proof Of Work
+
+Use native Ansight annotations only to emphasize a specific area of interest that directly relates to the feature, bug, or task worked on. A timeline marker or range should identify a relevant moment or interval; screenshot/UI geometry should draw attention to the relevant region. Add or highlight an annotation only when that emphasis helps the user understand the work or its evidence. Reuse the captured run and suitable existing annotations. If nothing needs emphasis, present the replay without adding annotations.
+
+Before marking anything, identify which part of the requested work it illustrates. Avoid annotating routine navigation, unrelated observations, or every passed check merely to decorate the replay or produce a completion checklist. A failure or unresolved check warrants a marker only when it concerns the task and has a specific captured moment or region worth highlighting.
+
+Labels should describe the observed result, such as "Search results collapse by type"; notes should connect it to the requested change, reproduction step, assertion, and evidence IDs. Anchor every marker to actual capture timestamps and every shape to an inspected frame. Touches establish input, while a fresh screenshot, assertion, or other retained evidence establishes the outcome. Do not manufacture a before/after comparison when only the result was recorded.
+
+Use the annotation commands and verification below when a relevant area needs emphasis, preserving existing user annotations. Respect a user's read-only or no-annotation constraint. A read-only investigation should reuse relevant existing markers unless annotation writes were also requested. Do not upload or publish a capture just to provide proof.
+
 ## Prerequisites And Routing
 
 CLI annotation requires the Ansight CLI and a session available from local history or an imported archive. The app does not need to remain installed or connected, and its SDK does not need to be present, when annotating retained evidence.
@@ -154,3 +164,12 @@ ansight session annotation delete <session-id> <annotation-id> --json
 ```
 
 Report the session ID, annotation ID, source, time range, frame and snapshot IDs, geometry kind and normalized bounds, verification performed, and whether an existing annotation was replaced or removed.
+
+## Present The Replay
+
+Present the same session as the review artifact, reading back any annotations added or changed first. Annotations are optional emphasis, not a prerequisite for presenting proof:
+
+- Prefer an available Ansight inline replay tool. If `show_replay` is exposed, use its advertised schema with the exact `sessionId`. Supply a verified `annotationId` only when it highlights a moment or region directly relevant to the work; otherwise omit it. Discover the installed tool; do not assume it is available or print a tool call as a substitute for invoking it.
+- Keep recorded touch overlays visible when supported. A timeline scrubber is sufficient. Missing touches are a capture gap, not permission to invent an overlay from intended actions.
+- Include an actual link to the full detail replay even when presenting an inline widget. For a local host, obtain `explorerUrl` from `ansight host status --json` and set its `sessionId` query parameter to the URL-encoded exact session ID, preserving other query parameters. Do not guess a port or invent an annotation deep-link parameter. If the explorer is unavailable, `ansight session serve <session-id> --json` can return a local `replayUrl`; report a failure to obtain one instead of fabricating a link. Local links require access to the machine serving them.
+- Finish with what was verified and any remaining gaps. Mention relevant marker labels and timestamps when they help the user locate a specific area of interest. If inline tools are unavailable or fail, use the full replay link and state that it opens separately. An exported screenshot can supplement the replay when useful, but is not an interactive replay.

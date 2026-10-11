@@ -1,4 +1,4 @@
 interface:
   display_name: "Ansight Workspace Automation"
   short_description: "Build, extract, and debug Ansight automation"
-  default_prompt: "Use $ansight-ui-testing to initialize or maintain this Ansight workspace and choose, scaffold, extract, debug, validate, or run the correct workspace component."
+  default_prompt: "Use $ansight-ui-testing to author, validate, or run the requested workspace component and present replay evidence for requested app runs, annotating only specific areas relevant to the task that need emphasis."

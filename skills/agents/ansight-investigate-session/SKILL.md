@@ -156,6 +156,8 @@ Prefer runtime evidence over a source-only explanation. Read source after the ob
 
 ## Report A Reproducible Evidence Trail
 
+Prefer presenting the relevant replay alongside the findings so the user can inspect the evidence. Highlight existing Ansight annotations only when they emphasize a specific timeline moment or screenshot/UI region directly related to the feature, bug, or task investigated. Start at such an annotation when an inline replay tool supports it; otherwise present the replay without selecting a marker. Include the actual full replay link and useful UTC timestamps or relevant marker labels. Keep this investigation read-only: route to `https://www.ansight.ai/skills/agents/ansight-annotate-session/SKILL.md` only when adding review metadata is part of the user's request. If replay presentation is unavailable, state that limitation and provide the retained evidence IDs without claiming an embedded replay was shown.
+
 Report the selected session, capture mode, providers, and why it matched; UTC interval and anchor; material commands and filters; timestamped observations with IDs; strongest supported explanation and confidence; contradictory or missing evidence; any derived slice and its session ID; and the smallest next verification step.
 
 Do not present detector output, an input attempt, or a single coincident log as proof by itself.

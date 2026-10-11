@@ -332,4 +332,8 @@ The app may reconnect while its SDK or external watch remains active. After a re
 
 ## Report The Evidence Trail
 
+After implementing or exercising an app change, prefer an Ansight replay as proof of work. Reuse the verification session. Add or highlight native Ansight annotations only to emphasize specific timeline moments or screenshot/UI regions directly relevant to the feature, bug, or task worked on. If no area needs emphasis, present the replay without new annotations. Use `https://www.ansight.ai/skills/agents/ansight-annotate-session/SKILL.md` for annotation writes and replay handoff details. A successful build, launch, or delivered tap alone does not establish that a UI fix works.
+
+Lead the handoff with the replay and a short explanation of what it demonstrates, pointing to relevant annotations when present. Prefer the inline replay tool when available, retain recorded touch overlays, and include a link to the full detail replay. When inline presentation is unavailable, provide the actual local replay link and useful timestamps or relevant marker labels. Honor requests for a read-only capture or a different output format; routine one-step controls do not need a new proof package.
+
 Report the selected App ID, device, capture mode, and session; initial observation; each state-changing CLI command; fresh verification; important timestamps or evidence IDs; and any fallback outside Ansight. Name material capability gaps and whether a persistent watch remains enabled. Distinguish observed state, executed action, and inferred explanation.

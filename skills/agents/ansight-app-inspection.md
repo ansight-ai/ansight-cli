@@ -33,6 +33,7 @@ This table selects ownership, not a sequence. The chosen specialist owns its pre
 
 - Pair live operation with remote tools only when the request needs both visible UI behavior and in-process state or operations.
 - Pair a core evidence skill with one platform inspection skill only when framework internals, platform logging, reflection suites, or platform-specific tool semantics matter.
+- Pair live verification or an executed workspace test with annotation only when a specific timeline moment or screenshot/UI region directly related to the feature, bug, or task worked on needs emphasis. Present the replay without new annotations otherwise. Respect read-only requests and reuse relevant existing markers where sufficient.
 - Pair investigation with annotation only when the user asks both to analyze evidence and to write review metadata. Reading an annotation does not require the annotation skill.
 - A readiness audit may use live operation, remote tools, investigation, or a platform skill as evidence helpers, but the readiness skill remains the owner of scoring and reporting. Load those helpers directly; never reload this router.
 - Workspace authoring does not require live-operation or investigation skills unless the user also requests execution or runtime verification.

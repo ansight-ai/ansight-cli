@@ -1,7 +1,7 @@
 interface:
   display_name: "Annotate An Ansight Session"
   short_description: "Mark timeline moments and UI regions"
-  default_prompt: "Use $ansight-annotate-session to add a verified timeline or UI-anchored annotation to this Ansight session."
+  default_prompt: "Use $ansight-annotate-session to emphasize only specific timeline moments or screenshot/UI regions directly relevant to the feature, bug, or task worked on, and present the replay."
 
 policy:
   allow_implicit_invocation: true
