@@ -169,6 +169,14 @@ public sealed class SimulatorAgentService : IDisposable
         return secretStore.GetMetadata(appId, alias, secretResolver);
     }
 
+    internal IReadOnlyDictionary<string, string> ResolveTestSecrets(
+        string appId, IReadOnlyList<string> aliases, Func<string, string?>? resolver)
+    {
+        ThrowIfDisposed();
+        var access = secretStore.CreateRunAccess(appId, aliases, resolver);
+        return access.Secrets.Keys.ToDictionary(alias => alias, alias => access.Resolve(alias)!, StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<SimulatorAgentRunResult> RunAsync(
         SimulatorAgentRunRequest request,
         IProgress<SimulatorAgentProgress>? progress = null,

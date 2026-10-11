@@ -218,7 +218,7 @@ public sealed class WorkspaceTestCatalogTests
 
         Assert.Empty(result.Tests);
         Assert.Single(result.Warnings);
-        Assert.Contains("prompt is required", result.Warnings[0], StringComparison.Ordinal);
+        Assert.Contains("prompt or taskId is required", result.Warnings[0], StringComparison.Ordinal);
     }
 
     [Fact]

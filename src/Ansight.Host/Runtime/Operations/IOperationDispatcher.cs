@@ -62,5 +62,6 @@ internal interface IOperationDispatcher : IDisposable
         string taskId,
         JsonObject? suppliedInput,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? secretValues = null);
+        IReadOnlyDictionary<string, string>? secretValues = null,
+        OperationExecutionContext? context = null);
 }

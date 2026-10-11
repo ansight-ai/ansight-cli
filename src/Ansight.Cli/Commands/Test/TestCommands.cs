@@ -136,7 +136,7 @@ internal static class TestCommands
             options.DataDirectory,
             arguments.GetOption("result-file"),
             testId,
-            result.AgentResult?.Audit.RunId);
+            result.RunAudit?.RunId);
         var response = new TestRunOutput(
             "ansight.workspace-test-run/v3",
             DateTimeOffset.UtcNow,
@@ -503,6 +503,11 @@ internal static Task<int> RetryMeteringAsync(
             lines.AddRange(audit.ToolCalls.Select(call =>
                 $"TOOL {call.Sequence}\t{(call.IsError ? "FAILED" : "OK")}\t{call.ToolName}\t"
                 + $"{call.DurationMilliseconds:N0}ms\t{call.Message}"));
+            if (audit.TaskResult is { } task)
+            {
+                lines.Add($"Task: {task.TaskId} ({task.Status})");
+                AppendTaskAssertions(lines, task);
+            }
             lines.Add($"Audit: {entry.FilePath}");
         }
 
@@ -536,8 +541,8 @@ internal static Task<int> RetryMeteringAsync(
         bool includeAudit,
         string? requestedTestId = null)
     {
-        var trafficLight = result.IsSuccess ? "🟢" : result.IsSkipped ? "🟡" : "🔴";
-        var status = result.IsSuccess ? "PASSED" : result.IsSkipped ? "SKIPPED" : "FAILED";
+        var trafficLight = result.IsSuccess ? "🟢" : result.IsSkipped || result.WasCancelled ? "🟡" : "🔴";
+        var status = result.IsSuccess ? "PASSED" : result.WasCancelled ? "CANCELLED" : result.IsSkipped ? "SKIPPED" : "FAILED";
         var resolvedTestId = result.Test?.TestId ?? requestedTestId;
         var testLabel = result.Test is { } test
             ? $"{test.TestId} — {test.Name}"
@@ -559,6 +564,15 @@ internal static Task<int> RetryMeteringAsync(
             {
                 AppendAudit(lines, agentResult);
             }
+        }
+
+        if (result.TaskResult is { } taskResult)
+        {
+            lines.Add($"Run: {taskResult.RunId}");
+            lines.Add($"Task: {taskResult.TaskId} ({taskResult.Status})");
+            AppendTaskAssertions(lines, taskResult);
+            if (includeAudit) lines.Add($"Audit trace: {result.TaskAuditFilePath ?? "not persisted"}");
+            if (result.TaskAuditPersistenceError is { } error) lines.Add($"Audit persistence failed: {error}");
         }
 
         if (!string.IsNullOrWhiteSpace(result.SessionId))
@@ -618,6 +632,13 @@ internal static Task<int> RetryMeteringAsync(
                 + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
         if (includeAudit)
         {
+            foreach (var taskResult in result.Results.Where(static candidate => candidate.TaskResult is not null))
+            {
+                lines.Add($"Task: {taskResult.Test?.TestId} = {taskResult.TaskResult!.TaskId} ({taskResult.TaskResult.Status})");
+                lines.Add($"Run: {taskResult.TaskResult.RunId}");
+                AppendTaskAssertions(lines, taskResult.TaskResult);
+                lines.Add($"Audit trace: {taskResult.TaskAuditFilePath ?? "not persisted"}");
+            }
             foreach (var testResult in result.Results.Where(static candidate => candidate.AgentResult is not null))
             {
                 lines.Add($"Execution audit: {testResult.Test?.TestId ?? "unknown"}"
@@ -639,6 +660,12 @@ internal static Task<int> RetryMeteringAsync(
         => string.IsNullOrWhiteSpace(deviceIdentifier)
             ? string.Empty
             : $" [{deviceIdentifier}]";
+
+    private static void AppendTaskAssertions(List<string> lines, RepositoryTaskRunResult task)
+    {
+        foreach (var assertion in task.Assertions)
+            lines.Add($"{(assertion.Passed ? "PASS" : "FAIL")}\t{assertion.AssertionId}\t{assertion.Message}");
+    }
 
     internal static void AppendAudit(List<string> lines, SimulatorAgentRunResult agentResult)
     {
@@ -671,6 +698,9 @@ internal static Task<int> RetryMeteringAsync(
         {
             return CliExitCodes.CapabilityUnavailable;
         }
+
+        if (result.WasCancelled) return CliExitCodes.Cancelled;
+        if (result.TaskResult is not null) return CliExitCodes.TestFailed;
 
         if (result.Test is null || result.MissingSecrets.Count > 0)
         {

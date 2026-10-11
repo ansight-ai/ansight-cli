@@ -30,6 +30,8 @@ public sealed record WorkspaceTestBatchItemAudit(
 {
     public string? RequestedDeviceIdentifier { get; init; }
 
+    public string? TaskRunId { get; init; }
+
     public static WorkspaceTestBatchItemAudit Pending(
         int index,
         WorkspaceTestDefinition test,
@@ -64,7 +66,7 @@ public sealed record WorkspaceTestBatchItemAudit(
     {
         ArgumentNullException.ThrowIfNull(test);
         ArgumentNullException.ThrowIfNull(result);
-        var audit = result.AgentResult?.Audit;
+        var audit = result.RunAudit;
         var status = result.IsSkipped
             ? WorkspaceTestHistoryStatuses.Skipped
             : audit?.Status == SimulatorAgentRunStatus.Cancelled
@@ -79,16 +81,17 @@ public sealed record WorkspaceTestBatchItemAudit(
             test.AppId,
             status,
             result.Message,
-            audit?.RunId,
+            result.AgentResult?.Audit.RunId,
             result.SessionId,
             result.Target,
-            result.AgentResult?.AuditFilePath,
+            result.AgentResult?.AuditFilePath ?? result.TaskAuditFilePath,
             audit?.DurationMilliseconds ?? 0,
             audit?.Tokens.TotalTokens ?? 0,
             audit?.ModelPassCount ?? 0,
             audit?.AnsightToolCallCount ?? 0)
         {
-            RequestedDeviceIdentifier = requestedTarget?.DeviceIdentifier
+            RequestedDeviceIdentifier = requestedTarget?.DeviceIdentifier,
+            TaskRunId = result.TaskResult?.RunId
         };
     }
 
@@ -204,6 +207,8 @@ public sealed record WorkspaceTestRunHistorySummary(
     string FilePath)
 {
     public string? Reasoning { get; init; }
+
+    public string ExecutionKind { get; init; } = "agent";
 
     public SimulatorAgentRunCost? CalculatedCost { get; init; }
 }

@@ -7,7 +7,7 @@ Read the full [Ansight workspace guide](https://www.ansight.ai/docs/workspace).
 
 ## The simple map
 
-- `tests/` describes user journeys an agent should perform and verify.
+- `tests/` defines prompt journeys for an agent or task-only tests that run directly.
 - `tasks/` contains deterministic recipes that a person or agent starts by ID.
 - `triggers/` contains small reactions to app or session events.
 - `trends/` defines event-bounded telemetry metrics, budgets, and regression monitoring.

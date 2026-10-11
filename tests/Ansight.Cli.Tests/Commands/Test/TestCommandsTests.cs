@@ -1,11 +1,36 @@
 using Ansight.Host;
 using Ansight.Host.Trends;
 using Ansight.Host.Workspaces;
+using Ansight.Host.Runtime.Tasks;
 
 namespace Ansight.Cli.Tests.Commands.Test;
 
 public sealed class TestCommandsTests
 {
+    [Theory]
+    [InlineData(RepositoryTaskRunStatus.Passed, CliExitCodes.Success, "PASSED")]
+    [InlineData(RepositoryTaskRunStatus.Failed, CliExitCodes.TestFailed, "FAILED")]
+    [InlineData(RepositoryTaskRunStatus.Inconclusive, CliExitCodes.TestFailed, "FAILED")]
+    [InlineData(RepositoryTaskRunStatus.Cancelled, CliExitCodes.Cancelled, "CANCELLED")]
+    public void TaskOnlyResultsRenderAssertionsAndReturnCorrectExitCode(RepositoryTaskRunStatus status, int exitCode, string label)
+    {
+        var result = CreateRunResult("task-session") with
+        {
+            IsSuccess = status == RepositoryTaskRunStatus.Passed,
+            TaskResult = new RepositoryTaskRunResult("task-run", "/workspace", "com.example", "task-session",
+                "checkout", status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 10, "Task completed.", new(), null,
+                [new RepositoryTaskAssertion("receipt", status == RepositoryTaskRunStatus.Passed, "Receipt checked.", null, null)],
+                [], string.Empty)
+        };
+        Assert.Equal(exitCode, TestCommands.ResolveRunExitCode(result));
+        var rendered = TestCommands.RenderRun(result, "/result.json", includeAudit: true);
+        Assert.Contains(label, rendered);
+        Assert.Contains("Run: task-run", rendered);
+        Assert.Contains("Task: checkout", rendered);
+        Assert.Contains("receipt", rendered);
+        Assert.DoesNotContain("Model passes:", rendered);
+    }
+
     [Fact]
     public void BatchRunIdIsTrimmedForSingleTestCorrelation()
     {

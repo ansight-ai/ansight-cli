@@ -30,6 +30,11 @@ public sealed record SimulatorAgentRunAudit(
     IReadOnlyList<SimulatorAgentModelPassAudit> ModelPasses,
     IReadOnlyList<SimulatorAgentToolCallAudit> ToolCalls)
 {
+    // The shared test-history envelope also carries deterministic runs, with no model activity.
+    public string ExecutionKind { get; init; } = "agent";
+
+    public Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult? TaskResult { get; init; }
+
     public IReadOnlyList<SimulatorAgentStartupStep> StartupSteps { get; init; } = [];
 
     public string? AppId { get; init; }

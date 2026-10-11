@@ -11,14 +11,14 @@ Build and maintain the repository-owned `ansight/` playbook for one app. Prefer 
 
 | Component | What it accomplishes | Why use it |
 | --- | --- | --- |
-| Test (`ansight/tests/**/*.yaml`, with `.yml` and legacy `.json` accepted) | Gives a bounded agent a natural-language user journey and observable final-state validation. | Use it when the path requires observation or decisions and success can be proved through Ansight evidence. |
+| Test (`ansight/tests/**/*.yaml`, with `.yml` and legacy `.json` accepted) | Runs a prompt-driven journey or a saved deterministic task through the test runner. | Use a prompt when the path requires observation or decisions; use `taskId` without `prompt` when a task already defines the steps and assertions. |
 | Task (`ansight/tasks/**/*.ts`) | Encodes an explicitly invoked, deterministic sequence of known tool calls with named assertions. | Use it to make a stable app-specific workflow faster, cheaper, and repeatable without asking an agent to rediscover every step. |
 | Trigger (`ansight/triggers/**/*.ts`) | Reacts automatically to one matching app or session event and may request one bounded app action. | Use it to enrich future session evidence at a meaningful moment, such as capturing app-owned diagnostics after an error. Do not use it as a scheduler or general background worker. |
 | Trends (`ansight/trends/**/*.json`) | Defines a stable span from SDK/host events or captured logs, calculates deterministic telemetry metrics, evaluates fixed budgets, and optionally compares each metric with comparable historical runs. | Use it for repeatable FPS, memory, duration, evidence, or other numeric trend rules and regression monitoring rather than subjective agent judgment. |
 | Sanitizer (`ansight/sanitizers/**/*.ts`) | Redacts, transforms, or removes sensitive content while Ansight creates a separate session archive. | Use it before exporting or sharing captured data; it does not modify the original session. |
 | Schemas and support files (`ansight/schema`, declarations, and `tsconfig.json`) | Provide versioned contracts, editor completion, and local or CI validation. | Use them to author against the installed host contract and catch invalid definitions before discovery or execution. They are not runtime workflows. |
 
-A test is agentic; a task is deterministic; a trigger is event-driven; Trends turns event instrumentation into an observation span, metric budgets, and optional regression monitoring; and a sanitizer protects an exported copy.
+A test selects either agentic or deterministic execution; a task is deterministic; a trigger is event-driven; Trends turns event instrumentation into an observation span, metric budgets, and optional regression monitoring; and a sanitizer protects an exported copy.
 
 ## Prerequisites And Scope
 
@@ -72,9 +72,30 @@ Then edit the generated definition. Existing files fail safely unless `--force` 
 
 Derive stable IDs from paths by removing the extension and replacing directory separators with dots. Preserve local naming conventions. Use YAML block text for test prompts, strict portable JSON for Trends, and the canonical declarations produced by the installed host. Tests, Trends, and sanitizers use their own version 1 contracts; tasks and triggers use version 2 when capability-aware external execution is intended. Do not invent runtime APIs or schema fields.
 
-## Tests: Agentic Journeys
+## Tests: Prompts Or Deterministic Tasks
 
 Read the current [Workspace Tests](https://www.ansight.ai/docs/workspace/tests) contract before authoring. Put actions and observable checks together in `prompt`, checking transient state at the relevant point in the journey. `validation` is optional; retain it when a separate checklist is useful. Use `@task/ID` for an exact workspace task and `@selector/ID` for an exact observed automation ID; percent-encode special characters in IDs. The YAML editor completes both references from workspace tasks and recorded automation IDs. Unknown or disabled task references fail before execution; an unrecorded selector needs evidence review. Require the exact `appId`. Put only secret aliases in `requiredSecrets`, never secret values. Trends evaluation is session-driven and independent of workspace test outcomes.
+
+For a deterministic test, omit `prompt` and supply the exact path-derived `taskId`:
+
+```yaml
+schemaVersion: 1
+appId: com.example.app
+taskId: onboarding.complete
+taskInput:
+  accountName: Test account
+```
+
+The test runner executes that task directly without a model or cloud agent
+gateway. It retains normal target/session handling, secrets, batch scheduling,
+history, assertions, and optional traces. `taskInput` must be an object matching
+the task's input schema. Only a task status of `Passed` passes the test; a normal
+return without assertions is `Inconclusive` and fails the test. Put checks inside
+the task with named `check` or `expect` assertions. Task-only tests cannot declare
+`validation` or `hintTasks` and require workspace tools to remain enabled.
+
+A test with both `prompt` and `taskId` still runs through the agent. An explicitly
+empty `prompt` is invalid. Reasoning options apply only to prompt tests.
 
 List and validate before execution:
 
@@ -100,7 +121,7 @@ available; otherwise the generated test is disabled until its generic outcome
 is replaced. Review the starting state and any omitted input values, then run
 `ansight test validate` before relying on the test.
 
-Run only when requested. Add `--trace` when the result needs the full model context, tool payloads, and exportable execution graph rather than lightweight audit metadata:
+Run only when requested. Add `--trace` to retain tool payloads and an exportable execution graph; prompt tests also retain model context:
 
 ```sh
 ansight test run <repository-root> <test-id> --trace --json

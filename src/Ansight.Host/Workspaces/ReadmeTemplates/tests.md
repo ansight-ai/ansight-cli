@@ -1,6 +1,6 @@
 # Tests
 
-A test describes a user journey and its observable finish line. Ansight gives
+A prompt test describes a user journey and its observable finish line. Ansight gives
 the instructions to an agent, which operates the app and verifies each requested
 check using evidence. Put actions and checks together in the prompt; a separate
 validation block is optional.
@@ -54,3 +54,25 @@ This applies to every target in multi-device runs. iOS skips opening
 Simulator.app; newly started Android emulators use `-no-window`. Existing
 windows and physical devices are left alone. `--headless` is a CLI option,
 not a field in the test definition.
+
+## Deterministic task tests
+
+Supply `taskId` and omit `prompt` to run a saved task directly, with no model
+calls or AI gateway preparation:
+
+```yaml
+schemaVersion: 1
+id: checkout.smoke
+appId: com.example.app
+taskId: checkout.complete
+```
+
+Run it with `ansight test run . checkout.smoke` or `ansight test run-all .`.
+The runner handles the target and app lifecycle, retains evidence and history,
+and uses the task's assertions and limits. Only a `Passed` task result passes.
+Use optional `taskInput: { ... }` for arguments declared by the task's input
+schema. Keep secret aliases in `requiredSecrets` and read them via the task's
+`secrets` API. Task-only tests reject `validation` and `hintTasks`; put checks
+in the task. `taskInput` is not accepted with `prompt`.
+
+Existing tests with both `taskId` and `prompt` retain agent execution.

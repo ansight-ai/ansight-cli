@@ -9,6 +9,20 @@ public sealed record WorkspaceTestRunResult(
     IReadOnlyList<string> MissingSecrets,
     WorkspaceTestTarget? Target = null)
 {
+    public Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult? TaskResult { get; init; }
+
+    public SimulatorAgentRunAudit? TaskAudit { get; init; }
+
+    public string? TaskAuditFilePath { get; init; }
+
+    public string? TaskAuditPersistenceError { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public SimulatorAgentRunAudit? RunAudit => AgentResult?.Audit ?? TaskAudit;
+
+    public bool WasCancelled => AgentResult?.Status == SimulatorAgentRunStatus.Cancelled
+        || TaskResult?.Status == Ansight.Host.Runtime.Tasks.RepositoryTaskRunStatus.Cancelled;
+
     public string? AppiumSessionId { get; init; }
 
     public bool IsSkipped { get; init; }

@@ -129,7 +129,7 @@ public sealed partial class WorkspaceTestHistoryService
                 ? batch
                 : FilterBatchHistoryEntry(batch, normalizedAppId);
             var childRunIds = filteredBatch.Audit.Tests
-                .Select(static test => test.AgentRunId)
+                .Select(static test => test.AgentRunId ?? test.TaskRunId)
                 .Where(static childRunId => !string.IsNullOrWhiteSpace(childRunId))
                 .Cast<string>()
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -381,6 +381,7 @@ public sealed partial class WorkspaceTestHistoryService
         }
 
         var candidates = tests
+            .Where(test => !test.IsTaskOnly)
             .Where(test => string.IsNullOrWhiteSpace(appId)
                            || string.Equals(test.AppId, appId, StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -475,6 +476,7 @@ public sealed partial class WorkspaceTestHistoryService
             entry.FilePath)
         {
             Reasoning = audit.Reasoning,
+            ExecutionKind = audit.ExecutionKind,
             CalculatedCost = audit.CalculatedCost
         };
     }

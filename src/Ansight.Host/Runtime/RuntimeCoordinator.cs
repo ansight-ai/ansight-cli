@@ -428,6 +428,16 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     }
 
 
+    internal async Task<RepositoryTaskRunResult> RunWorkspaceTestTaskAsync(
+        string workspacePath, string appId, string sessionId, string taskId, JsonObject? input,
+        string? targetDeviceIdentifier, Operations.OperationExecutionContext? context,
+        IReadOnlyDictionary<string, string> secretValues, CancellationToken cancellationToken)
+    {
+        using var scope = operationDispatcher.BeginSimulatorAgentRun(sessionId, targetDeviceIdentifier);
+        return await operationDispatcher.RunRepositoryTaskAsync(workspacePath, appId, sessionId, taskId,
+            input, cancellationToken, secretValues, context).ConfigureAwait(false);
+    }
+
     public void SetFocusedControl(RuntimeFocusedControlSnapshot snapshot)
     {
         runtimeState.SetFocusedControl(snapshot);

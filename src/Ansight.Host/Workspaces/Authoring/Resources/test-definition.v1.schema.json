@@ -4,7 +4,13 @@
   "title": "Ansight workspace test",
   "type": "object",
   "additionalProperties": false,
-  "required": ["appId", "prompt"],
+  "required": ["appId"],
+  "anyOf": [{ "required": ["prompt"] }, { "required": ["taskId"] }],
+  "allOf": [{
+    "if": { "required": ["prompt"] },
+    "then": { "not": { "required": ["taskInput"] } },
+    "else": { "not": { "anyOf": [{ "required": ["validation"] }, { "required": ["hintTasks"] }] } }
+  }],
   "properties": {
     "schemaVersion": {
       "const": 1,
@@ -33,7 +39,11 @@
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "description": "Optional repository task to run for this test. The runner loads it from this app's workspace and checks target compatibility before execution."
+      "description": "Repository task to run. Without prompt, runs deterministically with no agent; with prompt, the agent is instructed to run the task. Target compatibility is checked before execution."
+    },
+    "taskInput": {
+      "type": "object",
+      "description": "Input arguments for a task-only test. Validated against the task input schema before launch. Only supported when prompt is omitted."
     },
     "hintTasks": {
       "type": "array",
@@ -45,7 +55,7 @@
     "prompt": {
       "type": "string",
       "minLength": 1,
-      "description": "Actions and observable checks for the agent, in order. Supports @task/ID for exact workspace tasks and @selector/ID for exact automation IDs; percent-encode special characters in IDs."
+      "description": "Actions and observable checks for the agent, in order. Omit when taskId should run directly without an agent. Supports @task/ID and @selector/ID references."
     },
     "validation": {
       "description": "Optional additional checks. Checks can also be written directly in prompt. Use a validation string, or an object with a prompt, assertions, or both.",

@@ -121,11 +121,26 @@ public static class WorkspaceTestCatalog
         var name = NormalizeOptionalString(root, "name")
                    ?? Humanize(Path.GetFileNameWithoutExtension(testPath));
         var appId = NormalizeRequiredString(root, "appId");
-        var prompt = NormalizeRequiredString(root, "prompt");
+        var prompt = root.TryGetProperty("prompt", out _)
+            ? NormalizeRequiredString(root, "prompt") : string.Empty;
         var validation = ReadValidation(root);
         var requiredSecrets = ReadRequiredSecrets(root);
         var hintTasks = ReadHintTasks(root);
         var taskId = NormalizeOptionalString(root, "taskId");
+        if (prompt.Length == 0 && taskId is null)
+            throw new InvalidDataException("prompt or taskId is required.");
+        var taskOnly = prompt.Length == 0;
+        if (taskOnly && (root.TryGetProperty("validation", out _) || root.TryGetProperty("hintTasks", out _)))
+            throw new InvalidDataException("Task-only tests cannot declare validation or hintTasks. Put assertions in the task.");
+        JsonObject? taskInput = null;
+        if (root.TryGetProperty("taskInput", out var inputElement))
+        {
+            if (!taskOnly)
+                throw new InvalidDataException("taskInput is only supported by task-only tests (omit prompt).");
+            if (inputElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("taskInput must be an object.");
+            taskInput = JsonNode.Parse(inputElement.GetRawText())!.AsObject();
+        }
         WorkspacePromptReferences.Read(string.Join("\n", new[] { prompt, validation.Prompt }.Concat(validation.Assertions)));
         if (root.TryGetProperty("validation", out _)
             && string.IsNullOrWhiteSpace(validation.Prompt) && validation.Assertions.Count == 0)
@@ -145,6 +160,7 @@ public static class WorkspaceTestCatalog
         {
             Enabled = ReadEnabled(root),
             TaskId = taskId,
+            TaskInput = taskInput,
             HintTasks = hintTasks
         };
     }
@@ -343,7 +359,7 @@ public static class WorkspaceTestCatalog
                 throw new InvalidDataException("The test definition must contain one YAML mapping.");
             }
             var nodeCount = 0;
-            return ConvertYamlNode(root, string.Empty, 0, ref nodeCount).ToJsonString();
+            return ConvertYamlNode(root, string.Empty, 0, ref nodeCount)!.ToJsonString();
         }
         catch (YamlException exception)
         {
@@ -355,7 +371,8 @@ public static class WorkspaceTestCatalog
         }
     }
 
-    private static JsonNode ConvertYamlNode(YamlNode node, string propertyName, int depth, ref int nodeCount)
+    private static JsonNode? ConvertYamlNode(YamlNode node, string propertyName, int depth, ref int nodeCount,
+        bool taskInput = false)
     {
         if (depth > 32 || ++nodeCount > 4096)
         {
@@ -370,7 +387,8 @@ public static class WorkspaceTestCatalog
                 {
                     throw new InvalidDataException("YAML mapping keys must be unique strings.");
                 }
-                result[name] = ConvertYamlNode(value, name, depth + 1, ref nodeCount);
+                result[name] = ConvertYamlNode(value, name, depth + 1, ref nodeCount,
+                    taskInput || depth == 0 && name == "taskInput");
             }
             return result;
         }
@@ -379,13 +397,30 @@ public static class WorkspaceTestCatalog
             var result = new JsonArray();
             foreach (var value in sequence.Children)
             {
-                result.Add(ConvertYamlNode(value, propertyName, depth + 1, ref nodeCount));
+                result.Add(ConvertYamlNode(value, propertyName, depth + 1, ref nodeCount, taskInput));
             }
             return result;
         }
-        if (node is not YamlScalarNode scalar || scalar.Value is null)
+        if (node is not YamlScalarNode scalar)
         {
             throw new InvalidDataException("YAML test values must be strings, arrays, or mappings.");
+        }
+        if (taskInput)
+        {
+            var value = scalar.Value ?? string.Empty;
+            if (scalar.Style == ScalarStyle.Plain && scalar.Tag.ToString() != "tag:yaml.org,2002:str")
+            {
+                if (value.Length == 0 || value == "~" || value.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    return null;
+                if (bool.TryParse(value, out var boolean)) return JsonValue.Create(boolean);
+                try
+                {
+                    var number = JsonNode.Parse(value);
+                    if (number?.GetValueKind() == JsonValueKind.Number) return number;
+                }
+                catch (JsonException) { /* Unquoted non-JSON scalars remain strings. */ }
+            }
+            return JsonValue.Create(value);
         }
         if (propertyName == "schemaVersion")
         {

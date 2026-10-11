@@ -13,6 +13,10 @@ public sealed record WorkspaceTestDefinition(
 
     public string? TaskId { get; init; }
 
+    public System.Text.Json.Nodes.JsonObject? TaskInput { get; init; }
+
+    public bool IsTaskOnly => !string.IsNullOrWhiteSpace(TaskId) && string.IsNullOrWhiteSpace(Prompt);
+
     public IReadOnlyList<string> HintTasks { get; init; } = [];
 
     public IReadOnlyList<string> GetReferencedTaskIds()
@@ -24,6 +28,8 @@ public sealed record WorkspaceTestDefinition(
 
     public string BuildRunnerPrompt(string? promptOverride = null)
     {
+        if (IsTaskOnly) return string.Empty;
+
         var scenario = string.IsNullOrWhiteSpace(promptOverride)
             ? Prompt.Trim()
             : promptOverride.Trim();

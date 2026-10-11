@@ -115,7 +115,7 @@ public sealed partial class WorkspaceTestBatchRunner
             var result = new WorkspaceTestBatchResult(
                 results,
                 results.Count(static result => result.IsSuccess),
-                results.Count(static result => !result.IsSuccess && !result.IsSkipped && result.Test is not null),
+                results.Count(static result => !result.IsSuccess && !result.IsSkipped && !result.WasCancelled && result.Test is not null),
                 results.Count(static result => result.IsSkipped) + Math.Max(0, totalRunCount - results.Count),
                 wasCancelled)
             {
@@ -181,6 +181,7 @@ public sealed partial class WorkspaceTestBatchRunner
                     startBarrier?.CreateParticipant())).ToArray();
                 var testResults = await Task.WhenAll(targetRuns).ConfigureAwait(false);
                 results.AddRange(testResults);
+                wasCancelled |= testResults.Any(static result => result.WasCancelled);
                 for (var targetIndex = 0; targetIndex < testResults.Length; targetIndex++)
                 {
                     var testResult = testResults[targetIndex];
@@ -197,6 +198,7 @@ public sealed partial class WorkspaceTestBatchRunner
                             requestedTarget));
                 }
                 historySave = batchAuditStore.Save(batchAudit);
+                if (wasCancelled) break;
                 if (testResults.Any(static result => !result.IsSuccess && !result.IsSkipped)
                     && !request.ContinueAfterTestFailure)
                 {
@@ -256,6 +258,10 @@ public sealed partial class WorkspaceTestBatchRunner
                         workerCount,
                         startParticipant).ConfigureAwait(false);
                     testResults[testIndex] = testResult;
+                    if (testResult.WasCancelled)
+                    {
+                        lock (scheduleGate) { wasCancelled = true; stopScheduling = true; }
+                    }
                     resolvedTargets[workerIndex] = WorkspaceTestService.PinBatchTarget(
                         requestedTarget,
                         testResult.Target);

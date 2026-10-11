@@ -225,8 +225,8 @@ public sealed partial class WorkspaceTestService
             () => RunMeasuredCoreAsync(request, progress, cancellationToken),
             result => result.IsSuccess ? "succeeded"
                 : result.IsSkipped ? "skipped"
-                : result.AgentResult?.Status == SimulatorAgentRunStatus.Cancelled ? "cancelled"
-                : result.AgentResult is null ? "blocked" : "failed");
+                : result.WasCancelled ? "cancelled"
+                : result.RunAudit is null ? "blocked" : "failed");
 
     private async Task<WorkspaceTestRunResult> RunMeasuredCoreAsync(
         WorkspaceTestRunRequest request,
@@ -259,6 +259,9 @@ public sealed partial class WorkspaceTestService
                 $"Workspace test '{test.TestId}' is disabled.",
                 test);
         }
+
+        if (test.IsTaskOnly && !request.EnableWorkspaceTools)
+            return WorkspaceTestRunResult.Failure("Task-only tests require workspace tools to be enabled.", test);
 
         using var draftTaskScope = string.IsNullOrWhiteSpace(request.DraftTaskRootPath)
             ? null
@@ -299,7 +302,7 @@ public sealed partial class WorkspaceTestService
             declaredTask = taskCatalog.Tasks.FirstOrDefault(candidate => string.Equals(
                 candidate.TaskId,
                 test.TaskId,
-                StringComparison.OrdinalIgnoreCase));
+                test.IsTaskOnly ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase));
             if (declaredTask is null)
             {
                 var warningDetails = taskCatalog.Warnings.Count == 0
@@ -309,6 +312,15 @@ public sealed partial class WorkspaceTestService
                     $"Workspace test '{test.TestId}' references repository task '{test.TaskId}', but that task was not loaded."
                     + warningDetails,
                     test);
+            }
+
+            if (test.IsTaskOnly)
+            {
+                if (!declaredTask.Enabled)
+                    return WorkspaceTestRunResult.Failure($"Repository task '{declaredTask.TaskId}' is disabled.", test);
+                if (!RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
+                        declaredTask.InputSchema, test.TaskInput, out _, out var inputError))
+                    return WorkspaceTestRunResult.Failure(inputError, test);
             }
 
             if (!SupportsRequestedTarget(declaredTask, request.Target))
@@ -485,6 +497,18 @@ public sealed partial class WorkspaceTestService
             progress?.Report(new WorkspaceTestRunProgress(
                 "session.selected",
                 $"Using Ansight session '{session.SessionId}' for '{test.AppId}'."));
+
+            if (test.IsTaskOnly)
+            {
+                if (startParticipant is not null)
+                {
+                    progress?.Report(new WorkspaceTestRunProgress("run.ready",
+                        $"Ready to start '{test.Name}' on session '{session.SessionId}'; waiting for the other targets."));
+                    await startParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                return await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
+                    launchedTarget, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
+            }
 
             var preparation = runGateway is null
                 ? WorkspaceTestRunPreparation.Failure(

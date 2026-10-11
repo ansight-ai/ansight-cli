@@ -1847,7 +1847,8 @@ public sealed partial class SimulatorAgentToolGatewayTests
             string taskId,
             JsonObject? suppliedInput,
             CancellationToken cancellationToken,
-            IReadOnlyDictionary<string, string>? secretValues = null)
+            IReadOnlyDictionary<string, string>? secretValues = null,
+            OperationExecutionContext? context = null)
             => throw new NotSupportedException();
 
         public void Dispose()

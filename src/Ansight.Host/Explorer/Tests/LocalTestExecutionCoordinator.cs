@@ -123,7 +123,7 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                     execution.Cancellation.Token)
                 .ConfigureAwait(false);
             execution.Complete(
-                result.IsSuccess ? "succeeded" : "failed",
+                result.IsSuccess ? "succeeded" : result.WasCancelled ? "cancelled" : result.IsSkipped ? "skipped" : "failed",
                 result.Message,
                 new LocalTestExecutionResult(
                     result.IsSuccess,
@@ -131,16 +131,16 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                     result.Test?.TestId ?? testId,
                     result.SessionId,
                     result.IsSuccess ? 1 : 0,
-                    result.IsSuccess ? 0 : 1,
-                    0,
-                    false)
+                    result.IsSuccess || result.IsSkipped || result.WasCancelled ? 0 : 1,
+                    result.IsSkipped ? 1 : 0,
+                    result.WasCancelled)
                 {
-                    TraceRunId = result.AgentResult?.Audit.TraceEnabled == true
-                        && result.AgentResult.AuditFilePath is not null
-                            ? result.AgentResult.Audit.RunId : null,
+                    TraceRunId = result.RunAudit?.TraceEnabled == true
+                        && (result.AgentResult?.AuditFilePath ?? result.TaskAuditFilePath) is not null
+                            ? result.RunAudit.RunId : null,
                     TraceError = request.CaptureTrace
-                        ? result.AgentResult?.AuditPersistenceError
-                          ?? (result.AgentResult is null ? "The run stopped before the agent trace began." : null)
+                        ? result.AgentResult?.AuditPersistenceError ?? result.TaskAuditPersistenceError
+                          ?? (result.RunAudit is null ? "The run stopped before the trace began." : null)
                         : null
                 });
         }
