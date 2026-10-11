@@ -134,17 +134,19 @@ public sealed class CommandHelpTests
         Assert.Contains("Cloud:", result.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("host run|status|logs|stop", result.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("All local developer features are free and require no account", result.StandardOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain("mcp", result.StandardOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("mcp serve", result.StandardOutput, StringComparison.Ordinal);
         Assert.Equal(string.Empty, result.StandardError);
     }
 
     [Fact]
-    public async Task RemovedMcpCommandIsNotDispatchable()
+    public async Task McpHelpDescribesEmbeddedReplayStdio()
     {
         var result = await RunAsync(["mcp", "help"]);
 
-        Assert.Equal(CliExitCodes.Usage, result.ExitCode);
-        Assert.Contains("Unknown command 'mcp'", result.StandardError, StringComparison.Ordinal);
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Contains("ansight mcp serve", result.StandardOutput, StringComparison.Ordinal);
+        Assert.Contains("MCP stdio", result.StandardOutput, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, result.StandardError);
     }
 
     [Fact]
