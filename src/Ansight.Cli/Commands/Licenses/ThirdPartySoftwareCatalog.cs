@@ -245,7 +245,7 @@ internal static class ThirdPartySoftwareCatalog
             NuGet("Microsoft.Data.Sqlite.Core", "10.0.10", "MIT", "SQLite data access", "https://github.com/dotnet/efcore"),
             NuGet("Microsoft.Diagnostics.NETCore.Client", "0.2.510501", "MIT", ".NET diagnostics transport", "https://github.com/dotnet/diagnostics"),
             NuGet("Microsoft.Diagnostics.Tracing.TraceEvent", "3.2.5", "MIT", ".NET trace processing", "https://github.com/microsoft/perfview"),
-            NuGet("Microsoft.Extensions.DependencyInjection.Abstractions", "6.0.0", "MIT", "Runtime dependency injection", "https://github.com/dotnet/runtime"),
+            NuGet("Microsoft.Extensions.DependencyInjection.Abstractions", "10.0.10", "MIT", "Runtime dependency injection", "https://github.com/dotnet/runtime"),
             NuGet("Microsoft.Extensions.DependencyInjection", "6.0.0", "MIT", "Runtime dependency injection", "https://github.com/dotnet/runtime"),
             NuGet("Microsoft.Extensions.Logging.Abstractions", "10.0.10", "MIT", "Runtime logging", "https://github.com/dotnet/runtime"),
             NuGet("Microsoft.Extensions.AI.Abstractions", "10.8.3", "MIT", "MCP tool contracts", "https://github.com/dotnet/extensions"),
