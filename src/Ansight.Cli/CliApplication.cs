@@ -234,6 +234,8 @@ public static class CliApplication
                 cancellationToken).ConfigureAwait(false);
 
             var commandName = arguments.Positionals[0].ToLowerInvariant();
+            if (commandName == "mcp")
+                return await Commands.Mcp.ReplayMcpCommand.RunAsync(arguments, output, cancellationToken).ConfigureAwait(false);
             if (AppInteractionCommand.IsMatch(arguments))
             {
                 return await AppInteractionCommand.RunAsync(arguments, output,
@@ -359,7 +361,8 @@ public static class CliApplication
 
     internal static bool ShouldSuggestUpdate(CliArguments arguments)
     {
-        if (AppInteractionCommand.IsMatch(arguments)
+        if (arguments.Positionals.FirstOrDefault()?.Equals("mcp", StringComparison.OrdinalIgnoreCase) == true
+            || AppInteractionCommand.IsMatch(arguments)
             || IsFullSystemReport(arguments)
             || arguments.IsJson
             || arguments.IsSilent
@@ -387,7 +390,7 @@ public static class CliApplication
     internal static bool ShouldInitializeAnalytics(CliArguments arguments)
     {
         // Full diagnostics must not open/migrate credential stores for analytics.
-        if (IsFullSystemReport(arguments)) return false;
+        if (IsFullSystemReport(arguments) || arguments.Positionals.FirstOrDefault()?.Equals("mcp", StringComparison.OrdinalIgnoreCase) == true) return false;
         if (arguments.Positionals.Count == 0)
         {
             return arguments.HasFlag("version");
@@ -498,6 +501,7 @@ public static class CliApplication
              session cache status|plan|prune|compact
                                               Manage retention and recorded-session cache size
              session serve|share|summary|summary-local|url  Play, share, or summarize replay evidence
+             mcp serve                                    Present local replay in compatible chats
              session import|export|sanitize   Move portable or sanitized session ZIP files
 
            Workspace:

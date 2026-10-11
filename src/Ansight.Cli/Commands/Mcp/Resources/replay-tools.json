@@ -1,0 +1,492 @@
+[
+  {
+    "name": "list_replays",
+    "title": "Find local Ansight captures",
+    "description": "Find local Ansight recordings by title, app, or session ID. Returns lightweight summaries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "limit": {
+          "default": 10,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "appName": {
+                "type": "string"
+              },
+              "createdUtc": {
+                "type": "string"
+              },
+              "lastUpdatedUtc": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionId",
+              "title",
+              "appName",
+              "createdUtc",
+              "lastUpdatedUtc"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sessions",
+        "nextCursor"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "model",
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true
+    }
+  },
+  {
+    "name": "show_replay",
+    "title": "Show Ansight replay",
+    "description": "Display an interactive Ansight replay inside the conversation. First select an exact sessionId from list_replays. Optionally start at an annotationId.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "annotationId": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "viewerBuild": {
+          "type": "string"
+        },
+        "frameCount": {
+          "type": "number"
+        },
+        "touchCount": {
+          "type": "number"
+        },
+        "durationSeconds": {
+          "type": "number"
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "capturedAtUtc": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "capturedAtUtc"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "sessionId",
+        "title",
+        "viewerBuild",
+        "frameCount",
+        "touchCount",
+        "durationSeconds",
+        "markers"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "__RESOURCE_URI__",
+        "visibility": [
+          "model",
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/outputTemplate": "__RESOURCE_URI__",
+      "openai/toolInvocation/invoking": "Loading replay…",
+      "openai/toolInvocation/invoked": "Replay ready"
+    }
+  },
+  {
+    "name": "get_replay_frames",
+    "title": "Load replay screenshots",
+    "description": "Load up to six screenshots for the replay widget. Screenshot bytes are UI-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "frameIds": {
+          "minItems": 1,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+          }
+        }
+      },
+      "required": [
+        "sessionId",
+        "frameIds"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "frameIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "sessionId",
+        "frameIds"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/visibility": "private"
+    }
+  },
+  {
+    "name": "refresh_replay_annotations",
+    "title": "Refresh Ansight annotations",
+    "description": "Reload annotations saved in Ansight, including annotations created in its full replay viewer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "annotationCount": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sessionId",
+        "annotationCount"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/visibility": "private"
+    }
+  },
+  {
+    "name": "read_replay_annotation",
+    "title": "Read Ansight annotation and screenshot",
+    "description": "Read one saved Ansight annotation and its actual screenshot. Use this before acting on an annotation sent by the user.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "annotationId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        }
+      },
+      "required": [
+        "sessionId",
+        "annotationId"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "annotation": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "sessionId",
+        "annotation"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "model",
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true
+    }
+  },
+  {
+    "name": "create_replay_annotation",
+    "title": "Save Ansight annotation",
+    "description": "Save a new native Ansight point or rectangle annotation after the user explicitly submits the widget editor. Writes to the local recording through Ansight’s annotation endpoint. Cannot replace existing annotations.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "annotationId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "frameId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "comment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "geometry": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "const": 0
+                },
+                {
+                  "type": "number",
+                  "const": 1
+                }
+              ]
+            },
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "kind",
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "sessionId",
+        "annotationId",
+        "frameId",
+        "comment",
+        "geometry"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "annotationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "annotationId"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/visibility": "private"
+    }
+  }
+]

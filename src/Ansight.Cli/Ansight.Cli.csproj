@@ -42,30 +42,16 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Commands/AppGraph/Resources/**/*" />
-    <Content Include="$(SessionVideoMacNativeLibrary)"
-             Link="libAnsightSessionVideoMac.dylib"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest"
-             ExcludeFromSingleFile="true"
-             Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
+    <EmbeddedResource Include="Commands/Mcp/Resources/**/*" />
+    <Content Include="$(SessionVideoMacNativeLibrary)" Link="libAnsightSessionVideoMac.dylib" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
   </ItemGroup>
 
-  <Target
-      Name="BuildMacSessionVideoNativeLibrary"
-      BeforeTargets="CoreCompile"
-      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
-      Inputs="$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.h"
-      Outputs="$(SessionVideoMacNativeLibrary)">
+  <Target Name="BuildMacSessionVideoNativeLibrary" BeforeTargets="CoreCompile" Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" Inputs="$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.h" Outputs="$(SessionVideoMacNativeLibrary)">
     <MakeDir Directories="$(SessionVideoMacNativeDirectory)" />
-    <Exec
-        Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang++ -target $(SessionVideoMacTargetTriple) -std=c++17 -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm&quot; -framework Foundation -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework CoreVideo -framework ImageIO -framework VideoToolbox -install_name @rpath/libAnsightSessionVideoMac.dylib -o &quot;$(SessionVideoMacNativeLibrary)&quot;"
-        IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang++ -target $(SessionVideoMacTargetTriple) -std=c++17 -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(MSBuildProjectDirectory)/SessionVideo/Native/AnsightSessionVideoMac.mm&quot; -framework Foundation -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework CoreVideo -framework ImageIO -framework VideoToolbox -install_name @rpath/libAnsightSessionVideoMac.dylib -o &quot;$(SessionVideoMacNativeLibrary)&quot;" IgnoreStandardErrorWarningFormat="true" />
   </Target>
 
-  <Target
-      Name="IncludeMacSimulatorHidInPublish"
-      AfterTargets="ComputeFilesToPublish"
-      Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
+  <Target Name="IncludeMacSimulatorHidInPublish" AfterTargets="ComputeFilesToPublish" Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
     <PropertyGroup>
       <SimulatorHidArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</SimulatorHidArchitecture>
       <SimulatorHidArchitecture Condition="'$(SimulatorHidArchitecture)' == ''">arm64</SimulatorHidArchitecture>
@@ -79,10 +65,7 @@
     </ItemGroup>
   </Target>
 
-  <Target
-      Name="IncludeMacSimulatorRtcInPublish"
-      AfterTargets="ComputeFilesToPublish"
-      Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
+  <Target Name="IncludeMacSimulatorRtcInPublish" AfterTargets="ComputeFilesToPublish" Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">
     <PropertyGroup>
       <SimulatorRtcArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</SimulatorRtcArchitecture>
       <SimulatorRtcArchitecture Condition="'$(SimulatorRtcArchitecture)' == ''">arm64</SimulatorRtcArchitecture>
@@ -97,4 +80,8 @@
   </Target>
 
   <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /></ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+  </ItemGroup>
 </Project>

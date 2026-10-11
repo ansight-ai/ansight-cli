@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <Target Name="PreparePlayerAssets">
-    <Error Condition="!Exists('$(AnsightPlayerAssets)/session-replay.html') or !Exists('$(AnsightPlayerAssets)/session-replay.js') or !Exists('$(AnsightPlayerAssets)/session-replay.css')"
+    <Error Condition="!Exists('$(AnsightPlayerAssets)/session-replay.html') or !Exists('$(AnsightPlayerAssets)/session-replay.js') or !Exists('$(AnsightPlayerAssets)/session-replay.css') or !Exists('$(AnsightPlayerAssets)/chat-replay.html')"
            Text="Missing player build in $(AnsightPlayerAssets). Build ansight-player or install its release package with npm ci." />
     <ItemGroup>
       <PlayerAsset Include="$(AnsightPlayerAssets)/**/*" />

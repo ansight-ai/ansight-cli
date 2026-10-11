@@ -64,6 +64,24 @@ execution, and remote runners.
 [Getting started](https://www.ansight.ai/docs/getting-started) ·
 [Capture modes](https://www.ansight.ai/docs/capture-modes)
 
+## Replay inside a chat
+
+The CLI includes `ansight mcp serve`, a local stdio MCP server for compatible
+chat clients. It serves the embedded replay viewer with a timeline scrubber,
+recorded touches, native screenshot annotations, and an **Open full replay** link.
+The Ansight OpenAI plugin starts this command; no separate replay package or
+Node server is required. Keep the resident host running to read local recordings.
+
+For a client with manual MCP configuration:
+
+```json
+{"mcpServers":{"ansight":{"command":"ansight","args":["mcp","serve"]}}}
+```
+
+The connection can list/read local recordings and save annotations explicitly
+submitted in the viewer. It does not upload captures. Start a new chat after
+updating the CLI/plugin to refresh its tool connection and viewer resource.
+
 ## Build
 
 External tool version expectations live in [`ansight.dependencies.json`](ansight.dependencies.json).
