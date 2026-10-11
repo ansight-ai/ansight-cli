@@ -50,7 +50,7 @@ internal static class SessionTimelineBuilder
                 events,
                 appEvent.CapturedAtUtc,
                 sequence++,
-                isMotion ? "motion" : "applicationEvent",
+                Ansight.Host.Connectivity.SessionConnectivity.IsConnectivity(appEvent) ? "connectivity" : isMotion ? "motion" : "applicationEvent",
                 appEvent.EventType,
                 new JsonObject
                 {

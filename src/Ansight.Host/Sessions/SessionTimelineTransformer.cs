@@ -55,10 +55,7 @@ internal static class SessionTimelineTransformer
                 .ToArray(),
             VisualTreeSnapshots = sourceSnapshot.VisualTreeSnapshots.ToArray(),
             ArtifactSnapshots = sourceSnapshot.ArtifactSnapshots.ToArray(),
-            ApplicationEvents = sourceSnapshot.ApplicationEvents
-                .Where(appEvent => appEvent.CapturedAtUtc >= rangeStartUtc
-                                   && appEvent.CapturedAtUtc <= rangeEndUtc)
-                .ToArray(),
+            ApplicationEvents = Ansight.Host.Connectivity.SessionConnectivity.Extract(sourceSnapshot.ApplicationEvents, rangeStartUtc, rangeEndUtc),
             LogStreams = logStreams,
             Logs = SessionLogStreams.Flatten(logStreams),
             MetricChannels = sourceSnapshot.MetricChannels.ToArray(),
@@ -173,7 +170,23 @@ internal static class SessionTimelineTransformer
         changed |= TrimNetworkRequests(session.NetworkRequests, rangeStartUtc, rangeEndUtc, mode, report);
         changed |= TrimTimestampedItems(session.VisualTreeSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering visual trees…", report);
         changed |= TrimTimestampedItems(session.ArtifactSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering artifacts…", report);
+        var connectivityBoundary = Ansight.Host.Connectivity.SessionConnectivity.Read(session.ApplicationEvents)
+            .LastOrDefault(record => mode == SessionTimelineTrimMode.CutSelection ? record.CapturedAtUtc <= rangeEndUtc : record.CapturedAtUtc < rangeStartUtc);
         changed |= TrimTimestampedItems(session.ApplicationEvents, appEvent => appEvent.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering application events…", report);
+        if (connectivityBoundary is not null && (mode != SessionTimelineTrimMode.CutSelection || rangeEndUtc < recordingEndUtc))
+        {
+            if (mode == SessionTimelineTrimMode.CutSelection)
+            {
+                connectivityBoundary = connectivityBoundary with { Id = Guid.NewGuid().ToString(), Kind = "snapshot", PreviousSnapshot = null,
+                    OriginalCapturedAtUtc = connectivityBoundary.OriginalCapturedAtUtc ?? connectivityBoundary.CapturedAtUtc,
+                    CapturedAtUtc = rangeEndUtc.AddTicks(1), Reason = "cut-boundary" };
+            }
+            if (!session.ApplicationEvents.Any(value => value.EventId == connectivityBoundary.Id))
+            {
+                session.ApplicationEvents.Add(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(connectivityBoundary));
+                changed = true;
+            }
+        }
         changed |= TrimTimestampedItems(session.Metrics, sample => sample.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering telemetry…", report);
         report?.Invoke(new("Updating annotations and timeline bounds…"));
         changed |= TrimAnnotations(session.Annotations, rangeStartUtc, rangeEndUtc, mode);
@@ -364,7 +377,7 @@ internal static class SessionTimelineTransformer
         changed |= ShiftTimestampedItemsAfterCut(
             session.ApplicationEvents,
             appEvent => appEvent.CapturedAtUtc,
-            (appEvent, shiftedCapturedAtUtc) => appEvent with { CapturedAtUtc = shiftedCapturedAtUtc },
+            (appEvent, shiftedCapturedAtUtc) => Ansight.Host.Connectivity.SessionConnectivity.ShiftEvent(appEvent, shiftedCapturedAtUtc),
             cutoffUtc,
             offset);
         changed |= ShiftTimestampedItemsAfterCut(

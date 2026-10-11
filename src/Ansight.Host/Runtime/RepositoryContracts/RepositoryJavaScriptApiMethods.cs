@@ -65,6 +65,10 @@ internal static class RepositoryJavaScriptApiMethods
                 new StandardApiMethod("getTimeline", "ansight_get_log_timeline"),
                 new StandardApiMethod("summarizeWindow", "ansight_summarize_log_window"),
                 new StandardApiMethod("extractExceptions", "ansight_extract_exceptions")),
+            ["connectivity"] = Suite(
+                new StandardApiMethod("summary", "ansight_get_connectivity_summary"),
+                new StandardApiMethod("timeline", "ansight_get_connectivity_timeline"),
+                new StandardApiMethod("at", "ansight_get_connectivity_at")),
             ["network"] = Suite(
                 new StandardApiMethod("get", "ansight_get_network_requests"),
                 new StandardApiMethod("getRequest", "ansight_get_network_request"),

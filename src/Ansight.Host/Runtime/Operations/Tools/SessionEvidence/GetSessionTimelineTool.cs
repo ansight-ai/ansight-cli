@@ -76,6 +76,7 @@ internal sealed class GetSessionTimelineTool : Operation
                     "screenshot",
                     "touch",
                     "motion",
+                    "connectivity",
                     "annotation",
                     "visualTree",
                     "uiAction",

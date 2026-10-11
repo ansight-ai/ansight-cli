@@ -250,7 +250,7 @@ internal static partial class SessionSnapshotReader
         var motionEvents = TryLoadDocument<SessionApplicationEventsBlobDocument>(
             SessionMotionEvents.GetFilePath(sessionDirectoryPath), cancellationToken)?.Events
                            ?? Array.Empty<SessionApplicationEvent>();
-        return appEvents.Concat(motionEvents)
+        return appEvents.Concat(motionEvents).Concat(Ansight.Host.Connectivity.SessionConnectivityArchive.ReadDirectory(sessionDirectoryPath))
             .DistinctBy(appEvent => appEvent.EventId)
             .OrderBy(appEvent => appEvent.CapturedAtUtc)
             .ToArray();

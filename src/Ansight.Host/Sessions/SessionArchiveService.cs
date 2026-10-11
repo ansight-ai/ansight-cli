@@ -286,6 +286,8 @@ public sealed class SessionArchiveService
                 },
                 JsonUtil.Compact);
 
+            Ansight.Host.Connectivity.SessionConnectivityArchive.WriteZip(archive, Ansight.Host.Connectivity.SessionConnectivity.Read(exportSnapshot.ApplicationEvents));
+
             var networkRequests = exportSnapshot.NetworkRequests
                          .OrderBy(static request => request.StartedAtUtc)
                          .ThenBy(static request => request.Id, StringComparer.Ordinal)
@@ -722,7 +724,7 @@ public sealed class SessionArchiveService
             NetworkRequests = Array.Empty<SessionNetworkRequest>(),
             VisualTreeSnapshots = Array.Empty<SessionVisualTreeSnapshot>(),
             ArtifactSnapshots = snapshot.ArtifactSnapshots,
-            ApplicationEvents = snapshot.ApplicationEvents,
+            ApplicationEvents = snapshot.ApplicationEvents.Where(value => !Ansight.Host.Connectivity.SessionConnectivity.IsConnectivity(value)).ToArray(),
             LogStreams = snapshot.LogStreams
                 .Select(stream => new SessionLogStream
                 {

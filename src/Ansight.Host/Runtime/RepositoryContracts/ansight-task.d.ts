@@ -995,6 +995,7 @@ export type SessionTimelineCategory =
   | "appState"
   | "applicationEvent"
   | "motion"
+  | "connectivity"
   | "networkRequest"
   | "log"
   | "screenshot"
@@ -2914,6 +2915,91 @@ export interface TaskHostKeyboardContext {
   /** Close an open software keyboard safely. If it is already closed, no back or Escape input is sent. */
   dismiss(args?: KeyboardDismissArguments): Promise<KeyboardActionResult>;
 }
+/** ISO-8601 or mm:ss / hh:mm:ss offsets from capture start. */
+export interface ConnectivityArguments {
+  from?: string;
+  to?: string;
+  at?: string;
+  annotationId?: string;
+  beforeSeconds?: number;
+  afterSeconds?: number;
+  kind?: "snapshot" | "change" | "quality" | "gap";
+  limit?: number;
+  cursor?: string;
+}
+export interface ConnectivitySnapshot {
+  availability: "available" | "unavailable" | "unknown";
+  transports: Array<"wifi" | "cellular" | "ethernet" | "bluetooth" | "other">;
+  vpn?: boolean | null;
+  internetValidated?: boolean | null;
+  captivePortal?: boolean | null;
+  metered?: boolean | null;
+  expensive?: boolean | null;
+  lowDataMode?: boolean | null;
+}
+export interface ConnectivityRecord {
+  schema: "ansight.connectivity.v1";
+  id: string;
+  observationId: string;
+  sequence: number;
+  capturedAtUtc: string;
+  originalCapturedAtUtc?: string;
+  elapsedMilliseconds: number;
+  kind: "snapshot" | "change" | "quality" | "gap";
+  source: string;
+  snapshot: ConnectivitySnapshot;
+  previousSnapshot?: ConnectivitySnapshot;
+  supportedMeasurements: string[];
+  reason?: string;
+  quality?: {
+    measuredAtUtc: string;
+    originalMeasuredAtUtc?: string;
+    source: string;
+    linkQuality?: "unknown" | "minimal" | "moderate" | "good";
+    signalStrength?: number;
+    signalStrengthUnit?: "dBm" | "level" | "bearer-specific";
+    estimatedDownstreamKbps?: number;
+    estimatedUpstreamKbps?: number;
+  };
+}
+export interface ConnectivityResult {
+  schema: "ansight.session-connectivity.v1";
+  sessionId: string;
+  captured: boolean;
+  recordCount: number;
+  malformedRecordCount: number;
+  supportedMeasurements: string[];
+  fromUtc: string;
+  toUtc: string;
+  captureFromUtc: string;
+  captureToUtc: string;
+  rangeClipped: boolean;
+  precedingRecord?: ConnectivityRecord | null;
+  record?: ConnectivityRecord | null;
+  records?: ConnectivityRecord[];
+  atUtc?: string;
+  availability?: "available" | "unavailable" | "unknown";
+  measurementAgeMilliseconds?: number | null;
+  availabilityDurationMilliseconds?: { available: number; unavailable: number; unknown: number };
+  changeCount?: number;
+  disconnectionCount?: number;
+  reconnectionCount?: number;
+  gapCount?: number;
+  qualitySampleCount?: number;
+  transports?: string[];
+  matchedRecordCount?: number;
+  returnedRecordCount?: number;
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+/** Session-bound passive connectivity inspection, including imported offline captures. */
+export interface TaskHostConnectivityContext {
+  summary(args?: ConnectivityArguments): Promise<ConnectivityResult>;
+  /** Repeat filters with nextCursor; a changed live capture invalidates a cursor. */
+  timeline(args?: ConnectivityArguments): Promise<ConnectivityResult>;
+  /** Requires at or annotationId. Unknown means no observation covers the requested time. */
+  at(args: ConnectivityArguments): Promise<ConnectivityResult>;
+}
 /** Session-bound inspection of received network capture records. */
 export interface TaskHostNetworkContext {
   /**
@@ -4640,6 +4726,8 @@ export interface AnsightHost {
   readonly logs: TaskHostLogsContext;
   /** Captured HTTP request, header, and bounded body inspection operations. */
   readonly network: TaskHostNetworkContext;
+  /** Passive OS connection state, changes, quality, and observation gaps. */
+  readonly connectivity: TaskHostConnectivityContext;
   /** Live and persisted screenshot operations. */
   readonly screenshots: TaskHostScreenshotsContext;
   /** Session state, properties, and timeline operations. */

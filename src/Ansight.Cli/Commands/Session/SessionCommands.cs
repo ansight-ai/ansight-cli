@@ -30,6 +30,7 @@ internal static class SessionCommands
             "list" => await ListAsync(runtime, arguments, output, cancellationToken),
             "show" => await ShowAsync(runtime, arguments, output, cancellationToken),
             "logs" => await LogsAsync(runtime, arguments, output, cancellationToken),
+            "connectivity" => await ConnectivityAsync(runtime, arguments, output, cancellationToken),
             "network" or "requests" => await NetworkAsync(runtime, arguments, output, cancellationToken),
             "metrics" => await MetricsAsync(runtime, arguments, output, cancellationToken),
             "telemetry" => await TelemetryAsync(runtime, arguments, output, cancellationToken),
@@ -129,7 +130,7 @@ internal static class SessionCommands
             "sanitize" or "sanitise" => await SanitizeAsync(runtime, arguments, output, cancellationToken),
             "import" => await ImportAsync(runtime, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown session action '{action}'. Expected list, show, logs, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
+                $"Unknown session action '{action}'. Expected list, show, logs, connectivity, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
         };
     }
 
@@ -746,6 +747,33 @@ internal static class SessionCommands
         }
 
         throw new CliUsageException($"--{optionName} must be an ISO-8601 timestamp.");
+    }
+
+    internal static async Task<int> ConnectivityAsync(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
+    {
+        if (arguments.Positionals.Count is < 3 or > 4)
+            throw new ArgumentException("Usage: ansight session connectivity <session-id> [summary|events|quality|timeline|at] [--from <time>] [--to <time>] [--offset <time>] [--limit <n>] [--cursor <cursor>] [--json]");
+        var sessionId = arguments.RequirePositional(2, "session identifier");
+        var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken).ConfigureAwait(false);
+        if (snapshot is null) return WriteSessionNotFound(sessionId, output);
+        var mode = arguments.Positionals.Count == 4 ? arguments.RequirePositional(3, "connectivity action").ToLowerInvariant() : "summary";
+        var origin = snapshot.CreatedUtc;
+        var from = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("from"), origin);
+        var to = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("to"), origin);
+        var at = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("offset") ?? arguments.GetOption("at"), origin);
+        var annotationId = arguments.GetOption("annotation");
+        if (annotationId is not null)
+        {
+            var annotation = snapshot.Annotations.FirstOrDefault(value => value.AnnotationId == annotationId)
+                ?? throw new ArgumentException("Annotation was not found in this session.");
+            at ??= annotation.StartUtc;
+            from ??= annotation.StartUtc.AddSeconds(-arguments.GetIntOption("before", 120, 1, 3600));
+            to ??= (annotation.EndUtc ?? annotation.StartUtc).AddSeconds(arguments.GetIntOption("after", 30, 1, 3600));
+        }
+        var payload = Ansight.Host.Connectivity.SessionConnectivity.Query(snapshot, mode, from, to, at,
+            arguments.GetOption("kind"), arguments.GetIntOption("limit", 200, 1, 1000), arguments.GetOption("cursor"));
+        output.Write(payload, () => payload.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        return 0;
     }
 
     internal static async Task<int> NetworkAsync(
@@ -1421,6 +1449,7 @@ internal static Task<int> SummaryAsync(
              ansight session list [filters] [--limit <count>] [--cursor <cursor>]
              ansight session show <session-id>
              ansight session logs <session-id> [filters]
+             ansight session connectivity <session-id> [summary|events|quality|timeline|at] [filters]
              ansight session network <session-id> [filters]
              ansight session metrics <session-id> [--limit <count>] [--channel <id>]
              ansight session telemetry analyze <session-id> [options]
@@ -1455,6 +1484,7 @@ internal static Task<int> SummaryAsync(
              list          List recorded and live sessions; --connected filters to live sessions
              show          Show session identity, status, connection state, and evidence totals
              logs          Return recent logs with optional text and stream filters
+             connectivity  Inspect connection state, changes and quality (summary, events, quality, at)
              network       Query captured HTTP requests by method, status, host, time, or text
              metrics       Return telemetry channels and samples
              telemetry     Analyze replay telemetry for FPS drops and memory spikes

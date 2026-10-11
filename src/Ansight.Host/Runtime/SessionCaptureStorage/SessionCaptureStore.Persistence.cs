@@ -349,6 +349,7 @@ internal sealed partial class SessionCaptureStore
                 Events = snapshot.ApplicationEvents.Where(appEvent => !SessionMotionEvents.IsMotion(appEvent)).ToArray()
             });
         WriteMotionEvents(layout, savedAtUtc, snapshot.ApplicationEvents);
+        Ansight.Host.Connectivity.SessionConnectivityArchive.WriteDirectory(layout.SessionDirectoryPath, Ansight.Host.Connectivity.SessionConnectivity.Read(snapshot.ApplicationEvents));
 
         ReconcileNetworkRequestDocuments(layout.NetworkRequestsDirectoryPath, snapshot.NetworkRequests);
 
@@ -586,6 +587,7 @@ internal sealed partial class SessionCaptureStore
                     Events = snapshot.ApplicationEvents.Where(appEvent => !SessionMotionEvents.IsMotion(appEvent)).ToArray()
                 });
             WriteMotionEvents(layout, savedAtUtc, snapshot.ApplicationEvents);
+            Ansight.Host.Connectivity.SessionConnectivityArchive.WriteDirectory(layout.SessionDirectoryPath, Ansight.Host.Connectivity.SessionConnectivity.Read(snapshot.ApplicationEvents));
             persistenceState.PersistedApplicationEventsSource = snapshot.ApplicationEvents;
         }
 

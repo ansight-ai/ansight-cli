@@ -543,7 +543,8 @@ internal static partial class SessionArchiveExternalPayloadReader
         IReadOnlyList<SessionMetricSample> metrics,
         IReadOnlyList<SessionTouchInputRecord> touches,
         IReadOnlyList<SessionNetworkRequest> networkRequests,
-        IReadOnlyList<SessionVisualTreeSnapshot> visualTreeSnapshots)
+        IReadOnlyList<SessionVisualTreeSnapshot> visualTreeSnapshots,
+        IReadOnlyList<SessionApplicationEvent> applicationEvents)
     {
         return new AppSessionSnapshot
         {
@@ -581,12 +582,12 @@ internal static partial class SessionArchiveExternalPayloadReader
             NetworkRequests = networkRequests,
             VisualTreeSnapshots = visualTreeSnapshots,
             ArtifactSnapshots = snapshot.ArtifactSnapshots,
-            ApplicationEvents = snapshot.ApplicationEvents,
+            ApplicationEvents = applicationEvents,
             LogStreams = logStreams,
             Logs = logs,
             MetricChannels = metricChannels,
             Metrics = metrics,
-            TotalApplicationEventCount = snapshot.TotalApplicationEventCount,
+            TotalApplicationEventCount = Math.Max(snapshot.TotalApplicationEventCount, applicationEvents.Count),
             TotalNetworkRequestCount = Math.Max(snapshot.TotalNetworkRequestCount, networkRequests.Count)
         };
     }

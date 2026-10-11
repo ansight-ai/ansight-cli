@@ -104,6 +104,7 @@ internal static partial class SessionArchiveExternalPayloadReader
             ApplyOfflineCaptureArchiveMetadata(archive, builder);
             ApplyOfflineAnnotatedFeedbackBundles(archive, builder);
             ApplyNetworkRequestDocuments(archive, builder);
+            ApplyConnectivityDocuments(archive, builder);
 
             var jsonLinesEntries = archive.Entries
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
@@ -233,6 +234,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         ApplyNetworkRequestDocuments(archive, builder);
+        ApplyConnectivityDocuments(archive, builder);
 
         return CopySnapshot(
             snapshot,
@@ -242,7 +244,8 @@ internal static partial class SessionArchiveExternalPayloadReader
             metrics,
             touches,
             builder.HasNetworkRequests ? builder.NetworkRequests : snapshot.NetworkRequests,
-            visualTreeSnapshots);
+            visualTreeSnapshots,
+            snapshot.ApplicationEvents.Concat(builder.ApplicationEvents).DistinctBy(value => value.EventId).OrderBy(value => value.CapturedAtUtc).ToArray());
     }
 
     private static void ApplyOfflineCaptureArchiveMetadata(
@@ -272,6 +275,20 @@ internal static partial class SessionArchiveExternalPayloadReader
             {
                 ReadArchiveJsonElement(entry, root => ApplyOfflineCaptureCustomProperties(root, builder));
             }
+        }
+    }
+
+    private static void ApplyConnectivityDocuments(ISessionArchiveReader archive, JsonLinesSessionBuilder builder)
+    {
+        foreach (var entry in archive.Entries.Where(entry =>
+            entry.FullName.Replace('\\', '/').Contains("connectivity/segments/", StringComparison.OrdinalIgnoreCase)
+            && entry.FullName.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase)).OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+        {
+            using var stream = entry.Open();
+            using var reader = new StreamReader(stream);
+            while (reader.ReadLine() is { } line)
+                if (Ansight.Host.Connectivity.ConnectivityJson.Parse(line) is { } record)
+                    builder.AddApplicationEvent(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(record));
         }
     }
 
@@ -545,6 +562,12 @@ internal static partial class SessionArchiveExternalPayloadReader
             return;
         }
 
+        if (TryGetString(element, "schema") == "ansight.connectivity.v1"
+            && Ansight.Host.Connectivity.ConnectivityJson.Parse(element.GetRawText()) is { } connectivity)
+        {
+            builder.AddApplicationEvent(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(connectivity));
+            return;
+        }
         ApplySessionMetadata(element, builder);
         ApplySessionObject(element, builder);
         ApplyDeviceProfile(element, builder);
