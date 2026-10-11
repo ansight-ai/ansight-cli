@@ -431,12 +431,12 @@ FodyWeavers.xsd
 .vs/
 
 # Source folders relocated by the host refactor, not generated logs or artifacts.
-!/Ansight.Host/Sessions/Artifacts/
-!/Ansight.Host/Sessions/Artifacts/*.cs
-!/Ansight.Host/Sessions/Logs/
-!/Ansight.Host/Sessions/Logs/*.cs
-!/Ansight.Host/Explorer/Artifacts/
-!/Ansight.Host/Explorer/Artifacts/*.cs
+!/src/Ansight.Host/Sessions/Artifacts/
+!/src/Ansight.Host/Sessions/Artifacts/*.cs
+!/src/Ansight.Host/Sessions/Logs/
+!/src/Ansight.Host/Sessions/Logs/*.cs
+!/src/Ansight.Host/Explorer/Artifacts/
+!/src/Ansight.Host/Explorer/Artifacts/*.cs
 
 # CLI, player and local workstation outputs.
 node_modules

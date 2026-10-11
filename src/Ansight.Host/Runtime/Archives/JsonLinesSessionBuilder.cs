@@ -158,6 +158,12 @@ internal sealed class JsonLinesSessionBuilder
         imageBytesByFrameId[image.FrameId] = bytes;
     }
 
+    public void AddVisualTreeSnapshot(SessionVisualTreeSnapshot snapshot)
+    {
+        visualTreeSnapshots.RemoveAll(existing => existing.SnapshotId == snapshot.SnapshotId);
+        visualTreeSnapshots.Add(snapshot);
+    }
+
     public void AddAnnotatedFeedback(AnnotatedFeedbackBundleContent content)
     {
         var screenshotFrame = content.CreateScreenshotFrame();
