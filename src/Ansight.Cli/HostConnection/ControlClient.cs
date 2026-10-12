@@ -303,6 +303,19 @@ internal static class ControlClient
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
         var forwardedArguments = arguments.OriginalArguments.ToArray();
+        if (arguments.Positionals.Count >= 2
+            && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
+            && arguments.Positionals[1].Equals("export", StringComparison.OrdinalIgnoreCase))
+        {
+            var exportWorkingDirectory = Path.GetFullPath(workingDirectory);
+            if (arguments.Positionals.Count >= 3)
+            {
+                var sourceIndex = arguments.GetOriginalArgumentIndexForPositional(2);
+                forwardedArguments[sourceIndex] = ResolvePath(forwardedArguments[sourceIndex], exportWorkingDirectory);
+            }
+            ResolvePathOptions(forwardedArguments, exportWorkingDirectory);
+            return forwardedArguments;
+        }
         if (arguments.Positionals.Count >= 3
             && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
             && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize")
@@ -506,7 +519,9 @@ internal static class ControlClient
         if (command is "workspace" or "workspaces")
         {
             return arguments.Positionals.Count > 1
-                   && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize";
+                   && (arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize"
+                       || arguments.Positionals[1].Equals("export", StringComparison.OrdinalIgnoreCase)
+                       && arguments.HasFlag("app-id"));
         }
 
         if (command == "trends")

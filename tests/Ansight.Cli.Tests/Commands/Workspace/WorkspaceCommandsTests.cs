@@ -26,6 +26,8 @@ public sealed class WorkspaceCommandsTests
         var help = standardOutput.ToString();
         Assert.Contains("What init creates:", help, StringComparison.Ordinal);
         Assert.Contains("ansight workspace list", help, StringComparison.Ordinal);
+        Assert.Contains("ansight workspace export --app-id", help, StringComparison.Ordinal);
+        Assert.Contains("ansight workspace import", help, StringComparison.Ordinal);
         Assert.Contains("ansight/tasks/", help, StringComparison.Ordinal);
         Assert.Contains("ansight/tests/", help, StringComparison.Ordinal);
         Assert.Contains("ansight/triggers/", help, StringComparison.Ordinal);

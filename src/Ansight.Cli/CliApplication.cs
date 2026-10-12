@@ -507,6 +507,7 @@ public static class CliApplication
            Workspace:
              workspace list                   Show app registrations linked to trusted codebases
              workspace init|add               Scaffold tests, trends, sanitizers, tasks, and triggers
+             workspace export|import          Transfer workspace files as ZIP archives (export accepts --app-id)
 
            Automation and testing:
              test list|validate|run|run-inline|run-all

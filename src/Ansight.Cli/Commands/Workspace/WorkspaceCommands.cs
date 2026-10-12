@@ -25,6 +25,11 @@ internal static class WorkspaceCommands
         var service = new WorkspaceAuthoringService();
         try
         {
+            if (action is "export" or "import")
+            {
+                return await WorkspaceArchiveCommands.RunAsync(arguments, output, cancellationToken).ConfigureAwait(false);
+            }
+
             if (action is "init" or "initialize")
             {
                 return await InitializeAsync(
@@ -38,7 +43,7 @@ internal static class WorkspaceCommands
             {
                 "add" or "create" => Add(service, arguments),
                 _ => throw new CliUsageException(
-                    $"Unknown workspace action '{action}'. Expected list, init, or add.")
+                    $"Unknown workspace action '{action}'. Expected list, init, add, export, or import.")
             };
             output.Write(
                 new WorkspaceAuthoringOutput(
@@ -244,10 +249,13 @@ internal static class WorkspaceCommands
 
     private static string BuildHelp()
         => """
-           Create and extend an Ansight workspace
+           Create, transfer, and extend an Ansight workspace
 
            Usage:
              ansight workspace list
+             ansight workspace export <workspace-path> --output <archive.zip> [--force]
+             ansight workspace export --app-id <id> --output <archive.zip> [--force]
+             ansight workspace import <archive.zip> <workspace-path> [--force]
              ansight workspace init <workspace-path> [--app-id <id>] [--name <name>] [--no-register] [--force]
              ansight workspace add task <workspace-path> <id> [options]
              ansight workspace add test <workspace-path> <id> --app-id <id> [options]
@@ -256,6 +264,19 @@ internal static class WorkspaceCommands
 
            `workspace list` shows app registrations that are linked to trusted codebases.
            Find every known app ID with `ansight app list`.
+
+           ZIP transfer:
+             Export includes the workspace's ansight/ tree and support files, excluding .git,
+             node_modules, and .DS_Store. --app-id uses the registered app's linked codebase;
+             provide either a workspace path or --app-id. Write the ZIP outside ansight/.
+             Import merges an ansight/ ZIP into the destination workspace. Existing files
+             require --force (or --overwrite); other destination files are preserved.
+             Archives are limited to 100,000 entries and 2 GiB expanded. Unsafe paths,
+             duplicate paths, links, and corrupt entries are rejected before importing.
+             Host secrets, app registrations, and session history are not transferred.
+             Import does not register or execute the workspace. Link it separately with:
+               ansight app register <app-id> --codebase <workspace-path>
+             --json emits ansight.workspace-archive/v1 with paths, file count, and size.
 
            Init registration:
              Interactive terminals prompt for an App ID and link it to this workspace so every
