@@ -8,6 +8,133 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed class ExternalSessionScreenshotCaptureManagerTests
 {
     [Fact]
+    public async Task OverlappingAttachmentsCannotLeaveAnUntrackedCaptureRunning()
+    {
+        using var context = new CaptureTestContext();
+        var firstProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var captureCount = 0;
+        context.Manager.ConfigurePhysicalIosCapture(async (_, _, _) =>
+        {
+            if (Interlocked.Increment(ref captureCount) == 1)
+            {
+                firstProbeStarted.TrySetResult();
+                await releaseFirstProbe.Task;
+            }
+            return context.Bytes;
+        });
+
+        var firstAttach = context.AttachAsync();
+        try
+        {
+            await firstProbeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var secondPolicy = await context.AttachAsync();
+            Assert.Equal("host", secondPolicy.Mode);
+            await TestWait.UntilAsync(() => context.Snapshot.Images.Count == 1);
+            releaseFirstProbe.TrySetResult();
+            var firstPolicy = await firstAttach.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal("app", firstPolicy.Mode);
+            Assert.Single(context.Snapshot.Images);
+            await context.Manager.StopAsync(context.SessionId, "test completed");
+            Assert.Null(await context.Manager.CaptureFrameAsync(context.SessionId, CancellationToken.None));
+        }
+        finally
+        {
+            releaseFirstProbe.TrySetResult();
+            await firstAttach;
+            await context.Manager.StopAsync(context.SessionId, "test completed");
+        }
+    }
+
+    [Fact]
+    public async Task StopDuringProbePreventsLateAttachmentAndFrames()
+    {
+        using var context = new CaptureTestContext();
+        var probeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseProbe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Manager.ConfigurePhysicalIosCapture(async (_, _, _) =>
+        {
+            probeStarted.TrySetResult();
+            await releaseProbe.Task; // Model a device command that completes despite cancellation.
+            return context.Bytes;
+        });
+
+        var attach = context.AttachAsync();
+        try
+        {
+            await probeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await context.Manager.StopAsync(context.SessionId, "Live app connection closed.");
+            releaseProbe.TrySetResult();
+            var policy = await attach.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal("app", policy.Mode);
+            Assert.Empty(context.Snapshot.Images);
+            Assert.Null(await context.Manager.CaptureFrameAsync(context.SessionId, CancellationToken.None));
+        }
+        finally
+        {
+            releaseProbe.TrySetResult();
+            await attach;
+            await context.Manager.StopAsync(context.SessionId, "test completed");
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InFlightFrameCannotExtendAStoppedCapture(bool disconnectSession)
+    {
+        using var context = new CaptureTestContext();
+        var frameStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFrame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var captureCount = 0;
+        context.Manager.ConfigurePhysicalIosCapture(async (_, _, _) =>
+        {
+            if (Interlocked.Increment(ref captureCount) > 1)
+            {
+                frameStarted.TrySetResult();
+                await releaseFrame.Task;
+                return context.ChangedBytes;
+            }
+            return context.Bytes;
+        });
+
+        try
+        {
+            await context.AttachAsync(100);
+            await frameStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await TestWait.UntilAsync(() => context.Snapshot.Images.Count == 1);
+            if (disconnectSession)
+                context.State.SetSessionStatus(context.SessionId, "WebSocket Closed");
+            var endUtc = context.Snapshot.LastUpdatedUtc;
+            var stopping = disconnectSession ? Task.CompletedTask
+                : context.Manager.StopAsync(context.SessionId, "Live app connection closed.");
+            releaseFrame.TrySetResult();
+            await stopping.WaitAsync(TimeSpan.FromSeconds(5));
+            // A historical session must stop its own pump, even before finalization reaches it.
+            if (disconnectSession)
+            {
+                await TestWait.UntilAsync(() =>
+                {
+                    try { using var scope = context.Manager.BeginTestRun(context.SessionId); return false; }
+                    catch (InvalidOperationException) { return true; }
+                }, timeout: TimeSpan.FromSeconds(5));
+            }
+
+            // Image persistence is asynchronous; let any incorrectly accepted frame finish saving.
+            await Task.Delay(200);
+            Assert.Single(context.Snapshot.Images);
+            Assert.Equal(endUtc, context.Snapshot.LastUpdatedUtc);
+        }
+        finally
+        {
+            releaseFrame.TrySetResult();
+            await context.Manager.StopAsync(context.SessionId, "test completed");
+        }
+    }
+
+    [Fact]
     public void SdkSimulatorWithoutHostCaptureUsesAppManagedScreenshotScope()
     {
         using var environment = new TestEnvironment();
@@ -165,5 +292,48 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         string CreateSession(string appId)
             => state.CreateDeviceSession(new WorkspaceTestTarget("ios", Guid.NewGuid().ToString(), "iPhone",
                 appId, false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+    }
+    private sealed class CaptureTestContext : IDisposable
+    {
+        private readonly TestEnvironment environment = new();
+
+        public CaptureTestContext()
+        {
+            State = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+            Manager = new ExternalSessionScreenshotCaptureManager(State, new UserPreferences(
+                new FilePreferencesStore(Path.Combine(environment.RootPath, "preferences.json"))));
+            SessionId = State.CreateDeviceSession(new WorkspaceTestTarget("ios", "test-phone", "iPhone",
+                "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            Bytes = CreateImage(SKColors.White);
+            ChangedBytes = CreateImage(SKColors.Blue);
+        }
+
+        public RuntimeState State { get; }
+        public ExternalSessionScreenshotCaptureManager Manager { get; }
+        public string SessionId { get; }
+        public byte[] Bytes { get; }
+        public byte[] ChangedBytes { get; }
+        public AppSessionSnapshot Snapshot
+        {
+            get
+            {
+                Assert.True(State.TryGetSessionSnapshot(SessionId, out var snapshot));
+                return snapshot!;
+            }
+        }
+
+        public Task<ExternalSessionScreenshotCapturePolicy> AttachAsync(int intervalMilliseconds = 60_000)
+            => Manager.AttachAsync(SessionId, Snapshot.DeviceProfile, Snapshot.DeviceProfileJson,
+                new ExternalSessionScreenshotCaptureRequest(1024, intervalMilliseconds));
+
+        public void Dispose() => environment.Dispose();
+
+        private static byte[] CreateImage(SKColor color)
+        {
+            using var bitmap = new SKBitmap(20, 40);
+            bitmap.Erase(color);
+            using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
     }
 }

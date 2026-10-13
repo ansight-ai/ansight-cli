@@ -21,6 +21,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     private readonly IUserPreferences userPreferences;
     private readonly Lock captureGate = new();
     private readonly Dictionary<string, CaptureHandle> capturesBySessionId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CancellationTokenSource> pendingAttachmentsBySessionId = new(StringComparer.Ordinal);
     private Func<string, string, CancellationToken, Task<byte[]>>? physicalIosCapture;
 
     [ImportingConstructor]
@@ -46,12 +47,46 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     {
         ArgumentNullException.ThrowIfNull(captureRequest);
 
-        await StopAsync(sessionId, "External screenshot target changed.").ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(sessionId) || profile is null)
         {
+            await StopAsync(sessionId, "External screenshot target changed.").ConfigureAwait(false);
             return ExternalSessionScreenshotCapturePolicy.App("The session did not provide a device profile.");
         }
 
+        using var probeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        CaptureHandle? previousHandle;
+        lock (captureGate)
+        {
+            previousHandle = DetachCapture(sessionId);
+            // Reserve ownership before probing: concurrent profiles must not create orphan pumps.
+            pendingAttachmentsBySessionId[sessionId] = probeCancellation;
+        }
+
+        try
+        {
+            await StopCaptureAsync(sessionId, previousHandle, "External screenshot target changed.").ConfigureAwait(false);
+            return await AttachCoreAsync(sessionId, profile, profileJson, captureRequest, probeCancellation,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (captureGate)
+            {
+                if (pendingAttachmentsBySessionId.TryGetValue(sessionId, out var pending)
+                    && ReferenceEquals(pending, probeCancellation))
+                    pendingAttachmentsBySessionId.Remove(sessionId);
+            }
+        }
+    }
+
+    private async Task<ExternalSessionScreenshotCapturePolicy> AttachCoreAsync(
+        string sessionId,
+        DeviceAppProfile profile,
+        string? profileJson,
+        ExternalSessionScreenshotCaptureRequest captureRequest,
+        CancellationTokenSource probeCancellation,
+        CancellationToken cancellationToken)
+    {
         var osName = profile.Device?.OsName?.Trim();
         var isPhysicalDevice = profile.Device?.IsVirtual != true && profile.Device?.IsEmulator != true;
         var physicalIosDeviceSession = isPhysicalDevice
@@ -71,7 +106,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
 
         try
         {
-            using var probeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            probeCancellation.Token.ThrowIfCancellationRequested();
             probeCancellation.CancelAfter(captureTimeout);
             CaptureTarget? target;
             if (physicalIosDeviceSession)
@@ -95,15 +130,17 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             }
 
             var probe = await target.CaptureAsync(probeCancellation.Token).ConfigureAwait(false);
-            AddFrame(
-                sessionId,
-                probe,
-                ExternalSessionScreenshotCaptureProfile.Standard(captureRequest));
-
-            var cancellation = new CancellationTokenSource();
-            var handle = new CaptureHandle(cancellation, target, captureRequest);
             lock (captureGate)
             {
+                probeCancellation.Token.ThrowIfCancellationRequested();
+                if (!pendingAttachmentsBySessionId.TryGetValue(sessionId, out var pending)
+                    || !ReferenceEquals(pending, probeCancellation)
+                    || !IsSessionActive(sessionId))
+                    return ExternalSessionScreenshotCapturePolicy.App("External screenshot capture was stopped.");
+
+                AddFrame(sessionId, probe, ExternalSessionScreenshotCaptureProfile.Standard(captureRequest));
+                var handle = new CaptureHandle(new CancellationTokenSource(), target, captureRequest);
+                pendingAttachmentsBySessionId.Remove(sessionId);
                 capturesBySessionId[sessionId] = handle;
                 handle.Task = Task.Run(() => RunCapturePumpAsync(sessionId, handle));
             }
@@ -115,6 +152,10 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException) when (probeCancellation.IsCancellationRequested)
+        {
+            return ExternalSessionScreenshotCapturePolicy.App("External screenshot capture was stopped or timed out.");
         }
         catch (Exception ex)
         {
@@ -199,13 +240,27 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         CaptureHandle? handle;
         lock (captureGate)
         {
-            if (!capturesBySessionId.Remove(sessionId, out handle))
-            {
-                return;
-            }
+            handle = DetachCapture(sessionId);
         }
 
+        await StopCaptureAsync(sessionId, handle, reason).ConfigureAwait(false);
+    }
+
+    // Called under captureGate, including cancellation so a superseded probe cannot publish a frame.
+    private CaptureHandle? DetachCapture(string sessionId)
+    {
+        if (pendingAttachmentsBySessionId.Remove(sessionId, out var pending))
+            pending.Cancel();
+        if (!capturesBySessionId.Remove(sessionId, out var handle))
+            return null;
         handle.Cancellation.Cancel();
+        return handle;
+    }
+
+    private static async Task StopCaptureAsync(string sessionId, CaptureHandle? handle, string reason)
+    {
+        if (handle is null) return;
+
         if (handle.Task is not null && Task.CurrentId != handle.Task.Id)
         {
             try
@@ -241,11 +296,15 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                 }
 
                 if (runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
-                    && snapshot?.AppState == global::Ansight.AppLifecycleState.Background)
+                    && snapshot is { IsHistorical: false })
                 {
-                    lastCaptureStarted = Stopwatch.GetTimestamp();
-                    continue;
+                    if (snapshot.AppState == global::Ansight.AppLifecycleState.Background)
+                    {
+                        lastCaptureStarted = Stopwatch.GetTimestamp();
+                        continue;
+                    }
                 }
+                else break;
 
                 try
                 {
@@ -256,7 +315,15 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                     var bytes = await handle.Target
                         .CaptureAsync(captureCancellation.Token)
                         .ConfigureAwait(false);
-                    AddFrame(sessionId, bytes, ResolveCaptureProfile(handle));
+                    lock (captureGate)
+                    {
+                        if (handle.Cancellation.IsCancellationRequested
+                            || !capturesBySessionId.TryGetValue(sessionId, out var current)
+                            || !ReferenceEquals(current, handle)
+                            || !IsSessionActive(sessionId))
+                            break;
+                        AddFrame(sessionId, bytes, ResolveCaptureProfile(handle));
+                    }
                     consecutiveFailures = 0;
                 }
                 catch (OperationCanceledException) when (handle.Cancellation.IsCancellationRequested)
@@ -309,6 +376,10 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             return handle.TestRunCount > 0;
         }
     }
+
+    private bool IsSessionActive(string sessionId)
+        => runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
+           && snapshot is { IsHistorical: false };
 
     private ExternalSessionScreenshotCaptureProfile ResolveCaptureProfile(CaptureHandle handle)
     {
