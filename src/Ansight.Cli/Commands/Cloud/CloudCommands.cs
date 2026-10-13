@@ -109,6 +109,8 @@ internal static class CloudCommands
              runners:read              List registered remote runners and app-scoped jobs
              runners:write             Submit and cancel app-scoped remote jobs
              sessions:write            Upload team-only captured sessions
+             sessions:summarize        Summarize local sessions using hosted AI
+             ai:execute                Run CLI AI actions for the key-bound app
              trends:write              Upload local trends metrics and history
              tests:write               Upload Ansight or imported Appium/JUnit test results
 

@@ -24,8 +24,10 @@ public sealed class CliControlOutputTests
         Assert.Equal($"Starting workspace test.{Environment.NewLine}", message.Value);
     }
 
-    [Fact]
-    public async Task ClientWritesStreamFramesBeforeReturningFinalResponse()
+    [Theory]
+    [InlineData(ControlProtocol.ResponseSchema)]
+    [InlineData(ControlProtocol.RunnerAiResponseSchema)]
+    public async Task ClientWritesStreamFramesBeforeReturningFinalResponse(string responseSchema)
     {
         var messages = new object[]
         {
@@ -38,7 +40,7 @@ public sealed class CliControlOutputTests
                 ControlOutputStreams.StandardOutput,
                 $"Workspace tests complete.{Environment.NewLine}"),
             new ControlResponse(
-                ControlProtocol.ResponseSchema,
+                responseSchema,
                 CliExitCodes.Success,
                 string.Empty,
                 string.Empty)

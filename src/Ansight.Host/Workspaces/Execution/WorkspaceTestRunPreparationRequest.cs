@@ -12,4 +12,6 @@ public sealed record WorkspaceTestRunPreparationRequest(
     bool IsDefinition = true)
 {
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
+    // Only this operation may use an app-scoped session summarisation key.
+    public bool IsSessionSummary { get; init; }
 }

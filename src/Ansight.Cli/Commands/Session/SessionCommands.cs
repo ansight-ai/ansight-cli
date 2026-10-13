@@ -1500,6 +1500,11 @@ internal static Task<int> SummaryAsync(
              summary --local | summary-local
                            Summarize local capture evidence with AI;
                            save the result locally without sharing the capture
+                           Hosted AI still receives selected evidence. Accepts a signed-in
+                           account or ANSIGHT_RUNNER_API_KEY + ANSIGHT_TEAM_ID with
+                           sessions:summarize (or ai:execute). Upload later with sessions:write.
+             Cloud summary and other CLI AI actions accept runner keys with ai:execute.
+             Keys remain bound to their organisation and app; AI usage is metered.
 
            Session list filters:
              --app-id <id>                  Exact application ID

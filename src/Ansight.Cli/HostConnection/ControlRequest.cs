@@ -6,4 +6,5 @@ internal sealed record ControlRequest(
     string? SecretValue,
     bool StreamOutput = false,
     IReadOnlyDictionary<string, string>? SecretValues = null,
-    string? CallerUserId = null);
+    string? CallerUserId = null,
+    Ansight.Host.Workspaces.Execution.RunnerAiCredentials? RunnerAiCredentials = null);

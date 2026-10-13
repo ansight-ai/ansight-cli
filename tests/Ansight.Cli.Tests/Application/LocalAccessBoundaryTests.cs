@@ -26,6 +26,23 @@ public sealed class LocalAccessBoundaryTests
         Assert.True(CliApplication.ShouldInitializeAnalytics(arguments));
     }
 
+    [Theory]
+    [InlineData("summary")]
+    [InlineData("summarize")]
+    [InlineData("summarise")]
+    [InlineData("summary-local")]
+    [InlineData("summarize-local")]
+    [InlineData("summarise-local")]
+    public void SummaryAliasesAcceptRunnerCredentials(string action)
+    {
+        foreach (var command in new[] { "session", "sessions" })
+        {
+            var arguments = CliArguments.Parse([command, action, "capture", "--local"]);
+            Assert.Equal(CliAccessClass.Runner, CliCommandAccessPolicy.Classify(arguments, true));
+            Assert.Equal(CliAccessClass.Cloud, CliCommandAccessPolicy.Classify(arguments));
+        }
+    }
+
     [Fact]
     public void ResidentHostHasAnAccountFreeLifetime()
     {
@@ -57,5 +74,30 @@ public sealed class LocalAccessBoundaryTests
             CliArguments.Parse(["session", "share"]), runnerConfigured: true));
         Assert.Equal(CliAccessClass.Bootstrap, CliCommandAccessPolicy.Classify(
             CliArguments.Parse(["session", "show"]), runnerConfigured: true));
+    }
+
+    [Theory]
+    [InlineData(true, "session", "summary")]
+    [InlineData(true, "sessions", "summarise-local")]
+    [InlineData(true, "session", "share")]
+    [InlineData(true, "cloud", "analysis", "run")]
+    [InlineData(true, "test", "run")]
+    [InlineData(false, "session", "show")]
+    [InlineData(false, "cloud", "key", "issue")]
+    [InlineData(false, "cloud", "team", "list")]
+    public void OnlySupportedOperationsReceiveRequestScopedRunnerCredentials(bool expected, params string[] command)
+        => Assert.Equal(expected, CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(CliArguments.Parse(command)));
+
+    [Fact]
+    public void ForwardedCredentialsClassifySummaryAsRunnerOnlyForTheirRequest()
+    {
+        var prior = Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current;
+        using (Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Push(new("request-key", Guid.NewGuid().ToString())))
+        {
+            Assert.True(CliCommandAccessPolicy.HasRunnerCredentials);
+            Assert.Equal(CliAccessClass.Runner, CliCommandAccessPolicy.Classify(
+                CliArguments.Parse(["session", "summary", "capture", "--local"]), CliCommandAccessPolicy.HasRunnerCredentials));
+        }
+        Assert.Same(prior, Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current);
     }
 }

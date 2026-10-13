@@ -3,6 +3,18 @@ namespace Ansight.Cli.Tests.Commands.Test;
 public sealed class WorkspaceTestTeamOptionsTests
 {
     [Fact]
+    public void ForwardedRunnerTeamIsAvailableWithoutHostEnvironmentAndExplicitOptionTakesPrecedence()
+    {
+        var forwardedTeamId = Guid.NewGuid();
+        var explicitTeamId = Guid.NewGuid();
+        using var scope = Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Push(
+            new("request-key", forwardedTeamId.ToString("D")));
+        Assert.Equal(forwardedTeamId, WorkspaceTestTeamOptions.Resolve(CliArguments.Parse(["test", "run"])));
+        Assert.Equal(explicitTeamId, WorkspaceTestTeamOptions.Resolve(CliArguments.Parse(
+            ["test", "run", "--team-id", explicitTeamId.ToString("D")])));
+    }
+
+    [Fact]
     public void ResolveReturnsNullWithoutTeamOption()
     {
         var arguments = CliArguments.Parse(["test", "run", "/workspace", "test-id"]);

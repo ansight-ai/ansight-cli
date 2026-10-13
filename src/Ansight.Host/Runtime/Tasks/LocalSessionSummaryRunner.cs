@@ -97,7 +97,8 @@ internal static partial class LocalSessionSummaryRunner
                 InstructionCount: 1,
                 IsDefinition: false)
             {
-                Reasoning = reasoning
+                Reasoning = reasoning,
+                IsSessionSummary = !isSection
             },
             cancellationToken).ConfigureAwait(false);
         if (!preparation.IsSuccess)

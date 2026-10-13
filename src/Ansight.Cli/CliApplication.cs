@@ -124,9 +124,11 @@ public static class CliApplication
                     residentHostForwarder).ConfigureAwait(false);
             }
 
-            // Cloud identity belongs to the calling process. Never reuse the local host's
-            // account-free lifetime or forward the caller's cloud credentials to it.
-            allowResidentHostForwarding = false;
+            // Account identity belongs to the calling process. Runner operations may use
+            // the host's session storage with request-scoped keys after authorization;
+            // the host independently authorizes the key before executing the command.
+            allowResidentHostForwarding &= accessClass == CliAccessClass.Runner
+                && CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments);
             accessAuthorizer = accessClass == CliAccessClass.Runner
                 ? Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<ICliAccessAuthorizer>("Access.CreateRunnerAuthorizer", [arguments])
                 : accessAuthorizer is CliLocalAccessAuthorizer || accessAuthorizer is null

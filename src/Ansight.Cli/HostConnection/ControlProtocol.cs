@@ -2,6 +2,8 @@ namespace Ansight.Cli.HostConnection;
 
 internal static class ControlProtocol
 {
+    public const string RunnerAiRequestSchema = "ansight.cli-control-request/v3";
+    public const string RunnerAiResponseSchema = "ansight.cli-control-response/v3";
     public const string RequestSchema = "ansight.cli-control-request/v1";
     public const string HostLeaseRequestSchema = "ansight.cli-control-request/v2";
     public const string ResponseSchema = "ansight.cli-control-response/v1";

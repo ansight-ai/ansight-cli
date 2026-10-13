@@ -42,8 +42,9 @@ internal static class CliCommandAccessPolicy
             return CliAccessClass.Bootstrap;
         }
 
-        // These commands only upload through scoped, organization-authorized backend APIs.
-        // A runner key never authorizes local execution, capture, testing or host startup.
+        // These commands use scoped, organization-authorized backend APIs.
+        // Local tools and host startup remain independent of cloud authorization;
+        // AI model requests enforce their own scoped runner-key access at the gateway.
         if (runnerConfigured)
         {
             var operation = parts.Count > 2 ? parts[2].ToLowerInvariant() : string.Empty;
@@ -51,7 +52,10 @@ internal static class CliCommandAccessPolicy
                 && (action is "build" or "workspace" && operation is "upload" or "get" or "list"
                     || action == "trends" && operation is "upload" or "sync"
                     || action is "test" or "tests" && operation is "upload" or "sync" or "import")
-                || command is "session" or "sessions" && action == "share")
+                || command == "cloud" && action is "analysis" or "analyses"
+                || command is "session" or "sessions" && (action == "share"
+                    || action is "summary-local" or "summarize-local" or "summarise-local"
+                    || action is "summary" or "summarize" or "summarise"))
             {
                 return CliAccessClass.Runner;
             }
@@ -84,7 +88,32 @@ internal static class CliCommandAccessPolicy
         return CliAccessClass.Bootstrap;
     }
 
+    // AI credentials belong to the invoking process, not an already-running host.
+    internal static bool UsesAiGateway(CliArguments arguments)
+    {
+        var parts = arguments.Positionals;
+        if (parts.Count < 2) return false;
+        var command = parts[0].ToLowerInvariant();
+        var action = parts[1].ToLowerInvariant();
+        return command == "app" && action == "execute"
+            || command is "app-graph" or "app-graphs" && action is "explore" or "run"
+            || command is "test" or "tests" && action is "run" or "run-all" or "run-inline" or "retry-metering"
+            || command is "task" or "tasks" && action is "run" or "extract"
+            || command == "replay";
+    }
+
+    internal static bool UsesRequestScopedRunnerCredentials(CliArguments arguments)
+    {
+        if (UsesAiGateway(arguments)) return true;
+        var parts = arguments.Positionals;
+        if (parts.Count < 2) return false;
+        var command = parts[0].ToLowerInvariant();
+        return (command is "session" or "sessions" || command == "cloud" && parts[1].ToLowerInvariant() is "analysis" or "analyses")
+            && Classify(arguments, runnerConfigured: true) == CliAccessClass.Runner;
+    }
+
     public static bool HasRunnerCredentials
-        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY"))
+        => !string.IsNullOrWhiteSpace(Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.ApiKey)
+           || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY"))
            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_API_KEY"));
 }

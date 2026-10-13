@@ -8,6 +8,7 @@ internal static class WorkspaceTestTeamOptions
     {
         ArgumentNullException.ThrowIfNull(arguments);
         var value = arguments.GetOption("team-id")
+                    ?? Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.TeamId
                     ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID");
         if (value is null)
         {

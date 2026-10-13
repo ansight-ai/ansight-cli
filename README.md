@@ -66,6 +66,10 @@ execution, and remote runners.
 
 ## Replay inside a chat
 
+See the [ChatGPT and Codex guide](https://www.ansight.ai/chatgpt-codex) for
+setup prompts and a captioned Red-Point demo of `app interact`, with captured
+screens, UI data, and performance samples side by side.
+
 The CLI includes `ansight mcp serve`, a local stdio MCP server for compatible
 chat clients. It serves the embedded replay viewer with a timeline scrubber,
 recorded touches, native screenshot annotations, and an **Open full replay** link.

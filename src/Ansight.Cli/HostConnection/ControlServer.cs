@@ -149,7 +149,7 @@ internal sealed class ControlServer : IAsyncDisposable
 
         var request = JsonSerializer.Deserialize<ControlRequest>(requestLine, jsonOptions)
                       ?? throw new InvalidDataException("The CLI control request is invalid.");
-        if (request.Schema is not (ControlProtocol.RequestSchema or ControlProtocol.HostLeaseRequestSchema)
+        if (request.Schema is not (ControlProtocol.RequestSchema or ControlProtocol.HostLeaseRequestSchema or ControlProtocol.RunnerAiRequestSchema)
             || request.Arguments is null
             || request.Arguments.Length == 0
             || request.Arguments.Length > MaximumArgumentCount
@@ -189,10 +189,13 @@ internal sealed class ControlServer : IAsyncDisposable
                 }
             }
         }
-        catch (Exception exception) when (request.Schema == ControlProtocol.HostLeaseRequestSchema)
+        catch (Exception exception) when (request.Schema is ControlProtocol.HostLeaseRequestSchema or ControlProtocol.RunnerAiRequestSchema)
         {
-            return new ControlResponse(ControlProtocol.HostLeaseResponseSchema, CliExitCodes.Failure,
-                string.Empty, $"Error: {exception.GetBaseException().Message}{Environment.NewLine}");
+            var message = exception.GetBaseException().Message;
+            if (!string.IsNullOrEmpty(request.RunnerAiCredentials?.ApiKey))
+                message = message.Replace(request.RunnerAiCredentials.ApiKey, "[redacted]", StringComparison.Ordinal);
+            return new ControlResponse(ResponseSchemaFor(request), CliExitCodes.Failure,
+                string.Empty, $"Error: {message}{Environment.NewLine}");
         }
     }
 
@@ -257,6 +260,11 @@ internal sealed class ControlServer : IAsyncDisposable
             if (localFailure is not null) return localFailure.WriteFailure(output);
             if (accessLease.IsDenied) return accessLease.Failure.WriteFailure(output);
         }
+        if (request.Schema == ControlProtocol.RunnerAiRequestSchema
+            && (string.IsNullOrWhiteSpace(request.RunnerAiCredentials?.ApiKey) || !CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments)))
+            throw new InvalidDataException("Runner credentials require a supported scoped command.");
+        using var runnerContext = request.Schema == ControlProtocol.RunnerAiRequestSchema
+            ? Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Push(request.RunnerAiCredentials!) : null;
         using var context = CliCommandContext.Push(
             runtime,
             dataDirectory,
@@ -272,7 +280,8 @@ internal sealed class ControlServer : IAsyncDisposable
     }
 
     private static string ResponseSchemaFor(ControlRequest request)
-        => request.Schema == ControlProtocol.HostLeaseRequestSchema
+        => request.Schema == ControlProtocol.RunnerAiRequestSchema ? ControlProtocol.RunnerAiResponseSchema
+            : request.Schema == ControlProtocol.HostLeaseRequestSchema
             ? ControlProtocol.HostLeaseResponseSchema : ControlProtocol.ResponseSchema;
 
     internal static async Task WaitForDisconnectAsync(

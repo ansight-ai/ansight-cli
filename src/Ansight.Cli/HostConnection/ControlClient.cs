@@ -52,13 +52,22 @@ internal static class ControlClient
             CliArguments.Parse(forwardedArguments),
             CliCommandContext.ResolveScopedSecret,
             cancellationToken);
+        Ansight.Host.Workspaces.Execution.RunnerAiCredentials? runnerAiCredentials = null;
+        if (CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments) && CliCommandAccessPolicy.HasRunnerCredentials)
+        {
+            var key = Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY");
+            if (string.IsNullOrWhiteSpace(key)) key = Environment.GetEnvironmentVariable("ANSIGHT_API_KEY");
+            runnerAiCredentials = new(key!.Trim(), arguments.GetOption("team-id") ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
+        }
         var request = new ControlRequest(
-            callerUserId is null ? ControlProtocol.RequestSchema : ControlProtocol.HostLeaseRequestSchema,
+            runnerAiCredentials is not null ? ControlProtocol.RunnerAiRequestSchema
+                : callerUserId is null ? ControlProtocol.RequestSchema : ControlProtocol.HostLeaseRequestSchema,
             forwardedArguments,
             secretValue,
             StreamOutput: true,
             SecretValues: secretValues,
-            CallerUserId: callerUserId);
+            CallerUserId: callerUserId,
+            RunnerAiCredentials: runnerAiCredentials);
 
         using var pipe = new NamedPipeClientStream(
             ".",
@@ -104,17 +113,17 @@ internal static class ControlClient
             throw new CliHostUnavailableException(
                 "The resident host disconnected before returning the command result. The operation may have run partially; inspect the latest trace before retrying.");
         }
-        if (callerUserId is not null
+        if (runnerAiCredentials is null && callerUserId is not null
             && string.Equals(response.Schema, ControlProtocol.ResponseSchema, StringComparison.Ordinal))
         {
             // An older host rejected v2 before executing anything. Use the normal access path.
             return null;
         }
-        var expectedSchema = callerUserId is null
-            ? ControlProtocol.ResponseSchema : ControlProtocol.HostLeaseResponseSchema;
+        var expectedSchema = runnerAiCredentials is not null ? ControlProtocol.RunnerAiResponseSchema
+            : callerUserId is null ? ControlProtocol.ResponseSchema : ControlProtocol.HostLeaseResponseSchema;
         if (!string.Equals(response.Schema, expectedSchema, StringComparison.Ordinal))
         {
-            throw new CliHostUnavailableException("The resident host returned an invalid CLI control response.");
+            throw new CliHostUnavailableException("The resident host returned an incompatible CLI control response. Restart it with this CLI version before using runner AI credentials.");
         }
 
         output.WriteRaw(response.StandardOutput, response.StandardError);
@@ -267,7 +276,7 @@ internal static class ControlClient
             var schema = document.RootElement.TryGetProperty("schema", out var schemaElement)
                 ? schemaElement.GetString()
                 : null;
-            if (schema is ControlProtocol.ResponseSchema or ControlProtocol.HostLeaseResponseSchema)
+            if (schema is ControlProtocol.ResponseSchema or ControlProtocol.HostLeaseResponseSchema or ControlProtocol.RunnerAiResponseSchema)
             {
                 return JsonSerializer.Deserialize<ControlResponse>(responseLine, jsonOptions);
             }
