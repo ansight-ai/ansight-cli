@@ -73,6 +73,10 @@ resolve missing semantic targets or attempt OCR. Read focused semantic evidence 
 source, then report persistent gaps. Navigation structure describes hierarchy; verify visible destination content
 after navigation. Use only published framework tools and follow their controller guidance. Do not infer a UI
 toolkit from programming language, or apply MAUI rules without exact maui.* tools or MAUI tree evidence.
+For a confirmed MAUI app, prefer its published native visual tree and device accessibility for visible UI.
+Custom sheets and dialogs can be separate native windows absent from MAUI currentPage, rootPage, and window
+captures. Use MAUI trees for framework state and bindings. Keep native sheet evidence authoritative, scope
+queries to that sheet, and do not interact with its background page. Truncation is not proof of absence.
 <!-- /template -->
 
 <!-- template:lifecycle -->

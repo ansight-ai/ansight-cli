@@ -36,7 +36,7 @@ public sealed class SimulatorAgentService : IDisposable
     private const int MaximumAuditOcrResultCharacters = 1_000_000;
     private const int MaximumAppGraphGuidanceCharacters = 16_000;
     private const int AuditSchemaVersion = 17;
-    private const string PromptCacheKey = "ansight-simulator-agent-v42";
+    private const string PromptCacheKey = "ansight-simulator-agent-v43";
     private static readonly HashSet<string> strongTaskMatchIgnoredWords = new(StringComparer.Ordinal)
     {
         "a", "an", "and", "for", "from", "in", "into", "it", "its", "no", "of", "on", "or",
@@ -1922,6 +1922,17 @@ public sealed class SimulatorAgentService : IDisposable
         {
             instructions +=
                 " No app-tree provider is published; do not invent a toolId.";
+        }
+
+        if (capabilities.VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
+            || capabilities.NavigationFrameworks.Contains("maui", StringComparer.Ordinal))
+        {
+            instructions += " For MAUI apps, use native visual trees and device accessibility as the source of truth for visible controls, sheets, dialogs, and the active window.";
+            if (capabilities.VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal))
+            {
+                instructions += " Prefer toolId=ui.get_visual_tree when requesting an app tree.";
+            }
+            instructions += " MAUI currentPage, rootPage, and window trees describe the logical framework hierarchy and may omit custom sheets hosted in separate native windows. Use them for bindings, framework state, or navigation structure; do not let an unchanged MAUI page tree override native evidence of a visible sheet. Scope controls to the observed native sheet, not the page behind it. A truncated native tree is incomplete evidence: use a focused query or increase its bounded depth before declaring a control missing.";
         }
 
         return instructions

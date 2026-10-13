@@ -28,9 +28,14 @@ internal sealed record SessionCapabilities(
     public JsonObject CreateInitialObservationArguments()
     {
         var arguments = new JsonObject { ["root"] = VisualTreeContract.CurrentPageRootScope };
-        // Published framework trees carry the page and automation IDs used by tasks.
+        // MAUI custom sheets can live outside its logical page tree. Start with the
+        // published native hierarchy so those windows and their controls are included.
+        var preferredToolId = VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
+                              && VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal)
+            ? VisualTreeContract.NativeToolId
+            : VisualTreeToolIds.FirstOrDefault();
         // With no published provider, retain the normal device-accessibility fallback.
-        if (VisualTreeToolIds.FirstOrDefault() is { } toolId)
+        if (preferredToolId is { } toolId)
         {
             arguments["toolId"] = toolId;
         }
