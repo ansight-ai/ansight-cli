@@ -19,6 +19,13 @@ internal interface IAppToolBridge
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext? requestContext = null);
 
+    // Capability discovery needs every tool's ID and availability, without schema definitions or paging.
+    Task<AppToolBridgeResponse> QueryToolIndexAsync(
+        string sessionId,
+        CancellationToken cancellationToken,
+        AppToolBridgeRequestContext? requestContext = null)
+        => QueryToolsAsync(sessionId, cancellationToken, requestContext);
+
     Task<AppToolBridgeResponse> CallToolAsync(
         string sessionId,
         string toolId,

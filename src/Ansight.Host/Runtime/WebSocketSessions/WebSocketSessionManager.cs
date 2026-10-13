@@ -184,6 +184,13 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         return response;
     }
 
+    public Task<AppToolBridgeResponse> QueryToolIndexAsync(
+        string sessionId,
+        CancellationToken cancellationToken,
+        AppToolBridgeRequestContext? requestContext = null)
+        => toolCatalog.QueryAsync(sessionId, filterArguments: null, callerRevision: null,
+            cancellationToken, requestContext, includeDefinitions: false);
+
     public Task<AppToolBridgeResponse> QueryToolsSinceAsync(
         string sessionId,
         string? ifRevision,

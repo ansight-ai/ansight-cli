@@ -150,7 +150,7 @@ internal sealed class AppToolCatalogCache
         }
     }
 
-    public JsonObject? BuildCatalog(JsonObject? arguments)
+    public JsonObject? BuildCatalog(JsonObject? arguments, bool includeDefinitions = true)
     {
         lock (gate)
         {
@@ -164,7 +164,7 @@ internal sealed class AppToolCatalogCache
             {
                 return filtered;
             }
-            if (string.Equals(
+            if (!includeDefinitions || string.Equals(
                     ReadString(arguments?["detail"]),
                     "summary",
                     StringComparison.OrdinalIgnoreCase))

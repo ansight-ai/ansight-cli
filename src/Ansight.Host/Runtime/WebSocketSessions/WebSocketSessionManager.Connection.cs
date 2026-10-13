@@ -64,7 +64,7 @@ internal sealed partial class WebSocketSessionManager
         }
     }
 
-    private async Task<bool> RunConnectedSessionAsync(
+    internal async Task<bool> RunConnectedSessionAsync(
         string sessionId,
         WebSocket socket,
         PairingSessionAuthorization authorization)
@@ -72,6 +72,7 @@ internal sealed partial class WebSocketSessionManager
         var telemetrySegmentId = runtimeState.BeginSessionConnection(sessionId);
         var liveConnection = new LiveSessionConnection(sessionId, socket, authorization);
         RegisterConnection(sessionId, liveConnection);
+        var catalogCaptureStarted = false;
 
         try
         {
@@ -82,7 +83,6 @@ internal sealed partial class WebSocketSessionManager
                 status: "WebSocket Open",
                 message: "WebSocket handshake accepted.");
             runtimeState.AddSessionLog(sessionId, CreateLogEntry("Awaiting client control requests.", "WebSocket"));
-            CaptureSessionAppToolCatalogAsync(sessionId).SafeFireAndForget();
 
             while (socket.State == WebSocketState.Open)
             {
@@ -112,6 +112,15 @@ internal sealed partial class WebSocketSessionManager
                     var controlResponse = await HandleControlRequestAsync(sessionId, controlRequest);
                     await SendJsonAsync(socket, controlResponse, CancellationToken.None);
                     runtimeState.AddSessionLog(sessionId, CreateLogEntry($"Sent control response for {controlRequest.Action}.", "WebSocket"));
+                    // SDKs install their tool receiver before opening the logical session.
+                    // Sending on the WebSocket handshake can otherwise lose the first query.
+                    if (!catalogCaptureStarted && controlResponse.Success
+                        && string.Equals(controlRequest.Action, PairingControlActions.SessionOpen, StringComparison.Ordinal)
+                        && ReferenceEquals(connectionRegistry.Get(sessionId), liveConnection))
+                    {
+                        catalogCaptureStarted = true;
+                        CaptureSessionAppToolCatalogAsync(sessionId, liveConnection).SafeFireAndForget();
+                    }
                     if (string.Equals(controlRequest.Action, PairingControlActions.SessionComplete, StringComparison.Ordinal))
                     {
                         break;

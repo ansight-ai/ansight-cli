@@ -301,7 +301,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         if (runtimeState.IsDeviceSessionActive(sessionId)) return null;
-        var response = await appToolBridge.QueryToolsAsync(
+        var response = await appToolBridge.QueryToolIndexAsync(
                 sessionId.Trim(),
                 cancellationToken,
                 new AppToolBridgeRequestContext(

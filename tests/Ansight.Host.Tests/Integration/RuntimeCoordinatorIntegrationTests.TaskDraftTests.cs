@@ -20,6 +20,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{connection.WebSocketPort}{connection.WebSocketPath}?token={connection.WebSocketToken}"), CancellationToken.None);
         string? sessionId = null;
         await TestWait.UntilAsync(() => (sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault()) is not null);
+        await OpenClientSessionAsync(socket);
         await using var catalog = new TaskDraftCatalogResponder(socket, sessionId!);
         await TestWait.UntilAsync(() => runtime.Sessions.TryGetSnapshot(sessionId!, out var snapshot) && snapshot?.AppToolCatalog is not null);
 

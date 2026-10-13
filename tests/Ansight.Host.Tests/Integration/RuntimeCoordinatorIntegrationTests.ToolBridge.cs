@@ -11,7 +11,7 @@ namespace Ansight.Host.Tests.Integration;
 public sealed partial class RuntimeCoordinatorIntegrationTests
 {
     [Fact(Timeout = 60000)]
-    public async Task SessionHandshake_CapturesToolAndArtifactCatalogForHistoricalAuthoring()
+    public async Task SessionOpen_CapturesToolAndArtifactCatalogForHistoricalAuthoring()
     {
         using var environment = new TestEnvironment();
         var pairingConfig = environment.SeedPairingConfig("com.example.authoring-catalog", "Authoring Catalog App");
@@ -35,6 +35,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             },
             because: "The paired app should appear as a connected tool session.");
 
+        await OpenClientSessionAsync(socket);
         var catalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, catalogRequest["type"]?.GetValue<string>());
         var catalogRequestId = Assert.IsAssignableFrom<JsonValue>(catalogRequest["id"]).GetValue<string>();
@@ -98,7 +99,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await TestWait.UntilAsync(
             () => runtime.Sessions.TryGetSnapshot(sessionId!, out snapshot)
                   && snapshot?.AppToolCatalog?.ArtifactCatalog is not null,
-            because: "The handshake catalog and artifact providers should be retained on the session.");
+            because: "The session-open catalog and artifact providers should be retained on the session.");
         Assert.Contains(
             snapshot!.AppToolCatalog!.ToolCatalog["tools"]!.AsArray(),
             tool => tool?["id"]?.GetValue<string>() == "map.query_state");

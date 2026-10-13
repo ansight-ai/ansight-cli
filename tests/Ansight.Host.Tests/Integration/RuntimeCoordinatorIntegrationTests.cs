@@ -103,6 +103,20 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         }
     }
 
+    private static async Task OpenClientSessionAsync(ClientWebSocket socket)
+    {
+        await SendJsonAsync(socket, new JsonObject
+        {
+            ["type"] = PairingControlEnvelope.RequestType,
+            ["id"] = "session-open",
+            ["action"] = PairingControlActions.SessionOpen
+        });
+        var response = await ReceiveJsonAsync(socket);
+        Assert.Equal(PairingControlEnvelope.ResponseType, response["type"]?.GetValue<string>());
+        Assert.Equal("session-open", response["replyTo"]?.GetValue<string>());
+        Assert.True(response["success"]?.GetValue<bool>());
+    }
+
     private static async Task SendJsonAsync(ClientWebSocket socket, JsonObject payload)
     {
         var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));

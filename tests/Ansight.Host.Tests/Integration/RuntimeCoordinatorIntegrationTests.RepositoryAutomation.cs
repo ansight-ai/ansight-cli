@@ -43,6 +43,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             },
             because: "The newly paired app should appear as a connected tool session.");
 
+        await OpenClientSessionAsync(socket);
         await SendRepositoryAutomationEventAsync(socket, "automation-event-1");
 
         var catalogRequest = await ReceiveJsonAsync(socket);
@@ -117,6 +118,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             },
             because: "The newly paired app should appear as a connected tool session.");
 
+        await OpenClientSessionAsync(socket);
         await SendRepositoryAutomationEventAsync(socket, "automation-event-refresh");
 
         var initialIndexRequest = await ReceiveJsonAsync(socket);
@@ -224,6 +226,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             },
             because: "The newly paired app should appear as a connected tool session.");
 
+        await OpenClientSessionAsync(socket);
         await SendRepositoryAutomationEventAsync(socket, "automation-event-denied");
 
         var catalogRequest = await ReceiveJsonAsync(socket);

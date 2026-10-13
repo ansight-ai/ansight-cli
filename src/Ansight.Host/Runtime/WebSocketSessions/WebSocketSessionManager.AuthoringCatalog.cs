@@ -9,7 +9,7 @@ internal sealed partial class WebSocketSessionManager
 {
     private const string ArtifactQueryToolId = "artifacts.query";
 
-    private async Task CaptureSessionAppToolCatalogAsync(string sessionId)
+    private async Task CaptureSessionAppToolCatalogAsync(string sessionId, LiveSessionConnection connection)
     {
         try
         {
@@ -20,6 +20,7 @@ internal sealed partial class WebSocketSessionManager
                     CancellationToken.None,
                     new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"))
                 .ConfigureAwait(false);
+            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
             if (!catalogResponse.Success
                 || catalogResponse.Envelope?.Payload is not JsonObject toolCatalogPayload)
             {
@@ -50,6 +51,7 @@ internal sealed partial class WebSocketSessionManager
                 }
             }
 
+            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
             runtimeState.SetSessionAppToolCatalog(
                 sessionId,
                 new SessionAppToolCatalogSnapshot(

@@ -5,6 +5,7 @@ using Ansight.Tools;
 
 internal sealed class AppToolCatalogService
 {
+    private static readonly TimeSpan initialCaptureTimeout = TimeSpan.FromSeconds(2);
     private readonly SessionConnectionRegistry connections;
     private readonly Func<
         string,
@@ -32,7 +33,35 @@ internal sealed class AppToolCatalogService
         string? callerRevision,
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext? requestContext,
-        bool forceRefresh = false)
+        bool forceRefresh = false,
+        bool includeDefinitions = true)
+    {
+        // Initial capture is best effort and shares the catalog lock with execution.
+        // A missing startup reply must not block an agent behind the 20-second tool timeout.
+        using var captureCancellation = requestContext?.Source == "session-capture"
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        captureCancellation?.CancelAfter(initialCaptureTimeout);
+        try
+        {
+            return await QueryCoreAsync(sessionId, filterArguments, callerRevision,
+                captureCancellation?.Token ?? cancellationToken, requestContext, forceRefresh, includeDefinitions).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (captureCancellation?.IsCancellationRequested == true
+                                                  && !cancellationToken.IsCancellationRequested)
+        {
+            return AppToolBridgeResponse.FromFailure("Initial app tool catalog capture timed out; execution can retry discovery.");
+        }
+    }
+
+    private async Task<AppToolBridgeResponse> QueryCoreAsync(
+        string sessionId,
+        JsonObject? filterArguments,
+        string? callerRevision,
+        CancellationToken cancellationToken,
+        AppToolBridgeRequestContext? requestContext,
+        bool forceRefresh,
+        bool includeDefinitions)
     {
         if (!TryGetCatalogCache(sessionId, out var connection, out var cache, out var cacheError))
         {
@@ -43,12 +72,17 @@ internal sealed class AppToolCatalogService
         await connection!.ToolCatalogQueryLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (!ReferenceEquals(connections.Get(sessionId.Trim()), connection))
+            {
+                return AppToolBridgeResponse.FromFailure("The app connection changed during catalog discovery; retry on the current connection.");
+            }
             if (forceRefresh)
             {
                 connection.InvalidateToolCatalog();
             }
             else if (cache.GetSnapshot().UpdateVersion != observedUpdateVersion
-                     && cache.BuildCatalog(filterArguments) is { } coalescedCatalog)
+                     && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
+                     && cache.BuildCatalog(filterArguments, includeDefinitions) is { } coalescedCatalog)
             {
                 return CreateCoalescedResponse(
                     sessionId,
@@ -57,7 +91,8 @@ internal sealed class AppToolCatalogService
                     coalescedCatalog);
             }
             else if (cache.TryTakeInitialCaptureReuse()
-                     && cache.BuildCatalog(filterArguments) is { } initialCatalog)
+                     && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
+                     && cache.BuildCatalog(filterArguments, includeDefinitions) is { } initialCatalog)
             {
                 return CreateCoalescedResponse(
                     sessionId,
@@ -72,6 +107,7 @@ internal sealed class AppToolCatalogService
                     callerRevision,
                     connection,
                     cache!,
+                    includeDefinitions,
                     cancellationToken,
                     requestContext)
                 .ConfigureAwait(false);
@@ -88,6 +124,10 @@ internal sealed class AppToolCatalogService
             connection.ToolCatalogQueryLock.Release();
         }
     }
+
+    private static bool HasRequiredDefinitions(AppToolCatalogCache cache, JsonObject? arguments, bool includeDefinitions)
+        => !includeDefinitions || string.Equals(ReadString(arguments?["detail"]), "summary", StringComparison.OrdinalIgnoreCase)
+           || cache.GetMissingDefinitionIds(cache.GetSelectedToolIds(arguments)).Count == 0;
 
     private static AppToolBridgeResponse CreateCoalescedResponse(
         string sessionId,
@@ -122,6 +162,7 @@ internal sealed class AppToolCatalogService
         string? callerRevision,
         LiveSessionConnection connection,
         AppToolCatalogCache cache,
+        bool includeDefinitions,
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext? requestContext)
     {
@@ -175,7 +216,7 @@ internal sealed class AppToolCatalogService
         }
 
         var selectedToolIds = cache.GetSelectedToolIds(filterArguments);
-        var includeDefinitions = !string.Equals(
+        includeDefinitions &= !string.Equals(
             ReadString(filterArguments?["detail"]),
             "summary",
             StringComparison.OrdinalIgnoreCase);
@@ -210,7 +251,7 @@ internal sealed class AppToolCatalogService
             ApplyCachedCatalog(connection, snapshot.IndexCatalog);
         }
 
-        var catalog = cache.BuildCatalog(filterArguments);
+        var catalog = cache.BuildCatalog(filterArguments, includeDefinitions);
         if (catalog is null)
         {
             return AppToolBridgeResponse.FromFailure(
