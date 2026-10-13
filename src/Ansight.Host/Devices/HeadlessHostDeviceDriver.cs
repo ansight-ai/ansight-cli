@@ -24,14 +24,11 @@ public sealed partial class HeadlessHostDeviceDriver :
     private const string IosWdaAccessibilityBackend = "ios-webdriveragent-accessibility";
     private const string IosAppiumAccessibilityBackend = "appium-xcuitest-webdriveragent-accessibility";
     private const string AndroidAccessibilityDumpPath = "/sdcard/ansight-accessibility.xml";
-    private static readonly TimeSpan DeviceResolutionCacheDuration = TimeSpan.FromSeconds(2);
     private readonly DeviceService devices;
     private readonly string? configuredAdbPath;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> inputGates =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Lock deviceResolutionGate = new();
-    private readonly Dictionary<string, DeviceResolutionCacheEntry> deviceResolutionCache =
-        new(StringComparer.OrdinalIgnoreCase);
+    private readonly DeviceTargetResolver deviceTargetResolver;
     private readonly IosPhysicalDeviceAppiumClient iosPhysicalDeviceInput;
     private readonly IosSimulatorAccessibilityClient iosSimulatorAccessibility;
     private readonly IosWebDriverAgentClient? iosWebDriverAgentAccessibility;
@@ -46,6 +43,9 @@ public sealed partial class HeadlessHostDeviceDriver :
         this.devices = devices ?? throw new ArgumentNullException(nameof(devices));
         ArgumentNullException.ThrowIfNull(options);
         configuredAdbPath = options.AdbPath;
+        deviceTargetResolver = new DeviceTargetResolver(
+            devices.ListAsync,
+            cancellationToken => CreateAdbClient().GetDevicesAsync(cancellationToken));
         iosPhysicalDeviceInput = new IosPhysicalDeviceAppiumClient(
             IosPhysicalDeviceAppiumOptions.Resolve(options));
         iosSimulatorAccessibility = new IosSimulatorAccessibilityClient(options.IosSimulatorAxePath);
@@ -1074,53 +1074,10 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
     }
 
-    private async Task<DeviceDescriptor?> ResolveDeviceAsync(
+    private Task<DeviceDescriptor?> ResolveDeviceAsync(
         string deviceIdentifier,
         CancellationToken cancellationToken)
-    {
-        var normalizedIdentifier = string.IsNullOrWhiteSpace(deviceIdentifier)
-            ? string.Empty
-            : deviceIdentifier.Trim();
-        if (normalizedIdentifier.Length == 0)
-        {
-            return null;
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        lock (deviceResolutionGate)
-        {
-            if (deviceResolutionCache.TryGetValue(normalizedIdentifier, out var cached)
-                && now - cached.ResolvedAtUtc <= DeviceResolutionCacheDuration)
-            {
-                return cached.Device;
-            }
-        }
-
-        var inventory = await devices.ListAsync(cancellationToken).ConfigureAwait(false);
-        var resolved = inventory.Devices.FirstOrDefault(device => string.Equals(
-                           device.Identifier,
-                           normalizedIdentifier,
-                           StringComparison.OrdinalIgnoreCase))
-                       ?? inventory.Devices.FirstOrDefault(device =>
-                device.IsBooted &&
-                device.Platform == DevicePlatforms.Android &&
-                device.IsVirtual &&
-                string.Equals(device.Name, normalizedIdentifier, StringComparison.OrdinalIgnoreCase));
-        lock (deviceResolutionGate)
-        {
-            if (resolved?.IsBooted == true)
-            {
-                deviceResolutionCache[normalizedIdentifier] = new DeviceResolutionCacheEntry(
-                    DateTimeOffset.UtcNow,
-                    resolved);
-            }
-            else
-            {
-                deviceResolutionCache.Remove(normalizedIdentifier);
-            }
-        }
-        return resolved;
-    }
+        => deviceTargetResolver.ResolveAsync(deviceIdentifier, cancellationToken);
 
     private async Task<HeadlessAndroidDisplaySize> GetAndroidDisplaySizeAsync(
         string deviceIdentifier,
@@ -1331,9 +1288,6 @@ public sealed partial class HeadlessHostDeviceDriver :
         return applicationIdentifier.Trim();
     }
 
-    private sealed record DeviceResolutionCacheEntry(
-        DateTimeOffset ResolvedAtUtc,
-        DeviceDescriptor Device);
 
     [GeneratedRegex(@"(\d+)x(\d+)", RegexOptions.CultureInvariant)]
     private static partial Regex AndroidDisplaySizePattern();
