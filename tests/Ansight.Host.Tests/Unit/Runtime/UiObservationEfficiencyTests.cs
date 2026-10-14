@@ -5,6 +5,53 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed class UiObservationEfficiencyTests
 {
     [Fact]
+    public void DeepNativeTreeKeepsLateBottomNavigationWithinTheModelBudget()
+    {
+        var children = new JsonArray(Enumerable.Range(0, 1500).Select(index => (JsonNode?)new JsonObject
+        {
+            ["id"] = "content-" + index, ["typeId"] = 1, ["label"] = new string('x', 100),
+            ["automationId"] = "control-" + index, ["visible"] = true, ["enabled"] = true,
+            ["supportedActions"] = new JsonArray("tap"), ["bounds"] = new JsonArray(0, 100, 200, 40)
+        }).ToArray());
+        foreach (var label in new[] { "Explore", "Map", "Profile" })
+            children.Add(new JsonObject
+            {
+                ["id"] = "tab-" + label, ["automationId"] = "tab-" + label, ["label"] = label,
+                ["typeId"] = 2, ["role"] = "group", ["visible"] = true, ["enabled"] = true,
+                ["supportedActions"] = new JsonArray("tap"), ["bounds"] = new JsonArray(0, 800, 100, 40)
+            });
+        var source = new JsonObject
+        {
+            ["format"] = "ansight.native.visual-tree.compact.v2", ["platform"] = "android",
+            ["types"] = new JsonArray("android.view.WindowRoots", "FrameLayout", "BottomNavigationItemView"),
+            ["root"] = new JsonObject { ["id"] = "root", ["typeId"] = 0, ["visible"] = true, ["enabled"] = true,
+                ["bounds"] = new JsonArray(0, 0, 390, 844), ["children"] = children }
+        };
+        var observation = Assert.IsType<JsonObject>(VisualTreeObservation.Build(source, "session", "app", "ui.get_visual_tree"));
+        Assert.InRange(observation.ToJsonString().Length, 1, 8000);
+        foreach (var label in new[] { "Explore", "Map", "Profile" })
+            Assert.Contains("tab-" + label, observation.ToJsonString());
+        Assert.True(observation["truncated"]!.GetValue<bool>());
+        var actionableNodes = Descendants(observation).OfType<JsonObject>()
+            .Where(node => node["tapHint"] is JsonObject).ToArray();
+        foreach (var label in new[] { "Explore", "Map", "Profile" })
+        {
+            var hint = Assert.Single(actionableNodes, node => node["automationId"]?.GetValue<string>() == "tab-" + label)["tapHint"]!;
+            Assert.Equal("ui.get_visual_tree", hint["selector"]!["targetSource"]!.GetValue<string>());
+            Assert.False(string.IsNullOrWhiteSpace(hint["selector"]!["targetFingerprint"]!.GetValue<string>()));
+        }
+    }
+
+    private static IEnumerable<JsonNode> Descendants(JsonNode node)
+    {
+        yield return node;
+        IEnumerable<JsonNode?> children = node is JsonObject obj ? obj.Select(entry => entry.Value)
+            : node is JsonArray array ? array : [];
+        foreach (var child in children.Where(child => child is not null))
+            foreach (var descendant in Descendants(child!)) yield return descendant;
+    }
+
+    [Fact]
     public void CompleteEnvelopeBudgetPreservesNavigationVerdictAndExactTarget()
     {
         var children = new JsonArray(Enumerable.Range(0, 60).Select(index => (JsonNode?)new JsonObject

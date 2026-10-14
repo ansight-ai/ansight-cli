@@ -87,7 +87,6 @@ internal static class UiObservationBudget
         return false;
     }
     private static bool IsNavigation(JsonObject node)
-        => node["role"]?.GetValue<string>() is "tab" or "tablist" or "dialog" or "alertdialog" or "navigation"
-           || node["currentPage"]?.GetValue<bool>() == true || node["activePage"]?.GetValue<bool>() == true
-           || node["type"]?.GetValue<string>()?.Contains("Page", StringComparison.OrdinalIgnoreCase) == true;
+        => UiNavigationContext.HasNavigationSemantics(node["type"]?.GetValue<string>(), node["role"]?.GetValue<string>())
+           || node["currentPage"]?.GetValue<bool>() == true || node["activePage"]?.GetValue<bool>() == true;
 }

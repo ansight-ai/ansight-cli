@@ -223,7 +223,7 @@ export interface UiBounds {
 
 /** A normalized node returned from an Ansight visual-tree query. */
 export interface UiNode {
-  /** Stable identifier of the visual-tree node. */
+  /** Capture-specific node identifier. Prefer the complete tapHint selector for actions. */
   id?: string;
   /** Accessibility or automation identifier exposed by the app. */
   automationId?: string;
@@ -449,6 +449,8 @@ export interface UiActionResult extends SessionResultIdentity {
 export interface UiTapArguments extends UiSelector {
   /** Opaque freshness value from a discovered tapHint; copy unchanged and rediscover if rejected. */
   targetFingerprint?: string;
+  /** Capture provider from the returned target hint. Preserve it with its selector and fingerprint. */
+  targetSource?: string;
   /** Optional recorded viewport-normalized horizontal coordinate from 0 through 1. */
   normalizedX?: number;
   /** Optional recorded viewport-normalized vertical coordinate from 0 through 1. */
@@ -469,6 +471,8 @@ export interface UiTapArguments extends UiSelector {
 export interface UiTypeTextArguments extends UiSelector {
   /** Opaque freshness value from a discovered tapHint; copy unchanged and rediscover if rejected. */
   targetFingerprint?: string;
+  /** Capture provider from the returned target hint. Preserve it with its selector and fingerprint. */
+  targetSource?: string;
   /** Text to enter into the selected UI node. */
   value: string;
   /** Whether existing text should be cleared before typing. */

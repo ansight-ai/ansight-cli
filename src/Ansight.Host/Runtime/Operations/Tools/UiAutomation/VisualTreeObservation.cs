@@ -86,6 +86,16 @@ internal static class VisualTreeObservation
                        ?? LiveUiNodeQuery.ReadBounds(root);
         var selectedMatches = new Dictionary<JsonObject, LiveUiNodeMatch>(ReferenceEqualityComparer.Instance);
         var returnedNodes = BuildBoundedNodeList(candidateNodes, visualTree, viewport, selectedMatches, options);
+        if (LiveUiTreeCapture.IsTargetSource(toolId))
+        {
+            foreach (var entry in selectedMatches)
+            {
+                var actions = LiveUiNodeQuery.ReadSupportedActions(entry.Value.Node, typeRegistry);
+                if (actions.Contains("tap") || actions.Contains("typeText"))
+                    entry.Key["tapHint"] = FindLiveUiTool.BuildTapHint(root, entry.Value, viewport,
+                        LiveUiSelector.Parse(null), visualTree, toolId);
+            }
+        }
         var observation = new JsonObject
         {
             ["capability"] = "ui.observe",

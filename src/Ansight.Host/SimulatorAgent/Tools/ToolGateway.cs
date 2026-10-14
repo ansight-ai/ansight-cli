@@ -1346,7 +1346,7 @@ internal sealed class ToolGateway : IToolGateway
     {
         if (string.Equals(toolName, "ansight_get_live_visual_tree", StringComparison.Ordinal))
         {
-            arguments["maxNodes"] = Math.Clamp(ReadInteger(arguments, "maxNodes", 250), 1, 400);
+            arguments["maxNodes"] = Math.Clamp(ReadInteger(arguments, "maxNodes", 250), 1, 2000);
             arguments["maxDepth"] = Math.Clamp(ReadInteger(arguments, "maxDepth", 24), 1, 32);
             arguments["includeProperties"] = false;
             arguments["includeBindableProperties"] = false;

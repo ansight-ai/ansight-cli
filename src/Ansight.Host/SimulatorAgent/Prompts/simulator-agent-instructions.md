@@ -48,8 +48,8 @@ stops on failure or ambiguous discovery, and returns all results. Use another mo
 results or when the next action depends on interpreting new evidence. Completion always follows the results.
 
 Use observed exact automation IDs, text, or returned selectors. Never guess coordinates, selectors, roles, types,
-or same-named substitutes. Selector fields are ANDed on one node; reuse tapHint.selector unchanged, including its
-index and targetFingerprint when supplied. For duplicate names, compare nearbyText and row context against the
+or same-named substitutes. Selector fields are ANDed on one node; prefer tapHint.selector from initial or later
+observations unchanged, including targetSource, index and targetFingerprint. For duplicate names, compare nearbyText and row context against the
 requested result. Nearby text is spatial context, not proof of ancestry. If the instruction permits any matching
 result, use the first qualifying visible result's complete hint and verify its destination. If a hint is rejected
 because the target changed, rediscover it; never strip the freshness check or invent a different index.

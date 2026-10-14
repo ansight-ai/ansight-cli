@@ -961,7 +961,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             "correlation-observe",
             CancellationToken.None);
         var observationArguments = Assert.IsType<JsonObject>(dispatcher.LastArguments);
-        Assert.Equal(400, observationArguments["maxNodes"]?.GetValue<int>());
+        Assert.Equal(2000, observationArguments["maxNodes"]?.GetValue<int>());
         Assert.Equal(32, observationArguments["maxDepth"]?.GetValue<int>());
         Assert.False(observationArguments["includeProperties"]?.GetValue<bool>());
         Assert.Equal("maui.get_visual_tree", observationArguments["toolId"]?.GetValue<string>());

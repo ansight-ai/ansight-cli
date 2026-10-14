@@ -132,7 +132,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 var result = ToResultJson(match, viewport, evidenceSource, selector);
                 result["tapHint"] = selectedCapture is null
                     ? null
-                    : BuildTapHint(selectedCapture.Root, match, viewport, selector, selectedCapture.Payload);
+                    : BuildTapHint(selectedCapture.Root, match, viewport, selector, selectedCapture.Payload, selectedCapture.ToolId);
                 if (semanticSelection.StrictMatches.Count > 1 && selectedCapture is not null)
                 {
                     result["nearbyText"] = LiveUiTapTarget.NearbyText(selectedCapture.Root, match, viewport);
@@ -275,7 +275,8 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         LiveUiNodeMatch match,
         LiveUiBounds? viewport,
         LiveUiSelector originalSelector,
-        JsonObject? payload = null)
+        JsonObject? payload = null,
+        string? targetSource = null)
     {
         var bounds = LiveUiNodeQuery.ReadBounds(match.Node);
         if (bounds is null || bounds.Width <= 0 || bounds.Height <= 0
@@ -287,13 +288,13 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         }
 
         var candidates = new List<JsonObject>();
+        var ancestorId = originalSelector.AncestorAutomationId ?? match.Ancestors.Reverse()
+            .Select(LiveUiNodeQuery.ReadAutomationId).FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
         if (LiveUiNodeQuery.ReadAutomationId(match.Node) is { Length: > 0 } automationId)
         {
             candidates.Add(new JsonObject { ["automationId"] = automationId });
-        }
-        if (LiveUiNodeQuery.ReadString(match.Node, "id") is { Length: > 0 } nodeId)
-        {
-            candidates.Add(new JsonObject { ["nodeId"] = nodeId });
+            if (ancestorId is not null)
+                candidates.Add(new JsonObject { ["automationId"] = automationId, ["ancestorAutomationId"] = ancestorId });
         }
         if (LiveUiNodeQuery.ReadText(match.Node) is { Length: > 0 } text)
         {
@@ -303,11 +304,22 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 ["role"] = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry),
                 ["type"] = match.TypeRegistry.Resolve(match.Node)
             });
+            if (ancestorId is not null)
+            {
+                var scopedText = candidates[^1].DeepClone().AsObject();
+                scopedText["ancestorAutomationId"] = ancestorId;
+                candidates.Add(scopedText);
+            }
         }
+        // Native IDs can change between captures while the visible control stays put.
+        // Prefer a stable selector, including a guarded index, before this last resort.
+        if (LiveUiNodeQuery.ReadString(match.Node, "id") is { Length: > 0 } nodeId)
+            candidates.Add(new JsonObject { ["nodeId"] = nodeId });
 
         JsonObject? indexedSelector = null;
         foreach (var selector in candidates)
         {
+            if (selector.ContainsKey("nodeId") && indexedSelector is not null) return TapHint(indexedSelector);
             selector["exact"] = true;
             selector["visible"] = true;
             selector["enabled"] = true;
@@ -340,6 +352,11 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
 
         JsonObject TapHint(JsonObject selector)
         {
+            if (LiveUiTreeCapture.IsTargetSource(targetSource))
+            {
+                selector["targetSource"] = targetSource;
+                selector["targetFingerprint"] = LiveUiTapTarget.Fingerprint(root, match, viewport!);
+            }
             if (ResolveViewportRelation(bounds, viewport) == "partial"
                 && LiveUiBounds.Intersection(bounds, viewport!) is { } visibleBounds)
             {

@@ -27,7 +27,15 @@ internal sealed record SessionCapabilities(
 
     public JsonObject CreateInitialObservationArguments()
     {
-        var arguments = new JsonObject { ["root"] = VisualTreeContract.RootPageRootScope };
+        // Native roots can contain off-page framework branches before persistent navigation.
+        // Capture enough source evidence to reach it; the model projection has its own 8K budget.
+        var arguments = new JsonObject
+        {
+            ["root"] = VisualTreeContract.RootPageRootScope,
+            ["maxNodes"] = 2000,
+            // JSON nests a children array and object per level; stay below the reader's 64-level limit.
+            ["maxDepth"] = 24
+        };
         // MAUI custom sheets can live outside its logical page tree. Start with the
         // published native hierarchy so those windows and their controls are included.
         var preferredToolId = VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)

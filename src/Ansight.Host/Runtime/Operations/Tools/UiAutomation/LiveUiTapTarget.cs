@@ -8,6 +8,33 @@ namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 internal static class LiveUiTapTarget
 {
     private const int MaximumNearbyLabels = 6;
+    private const int FingerprintCharacters = 20;
+
+    public static LiveUiSelector RefreshTransientNodeId(JsonObject root, VisualTreeTypeRegistry registry,
+        LiveUiBounds viewport, LiveUiSelector selector, string captureSource, JsonObject? arguments)
+    {
+        if (selector.NodeId is null || !LiveUiTreeCapture.IsTargetSource(captureSource)
+            || arguments?["targetSource"]?.GetValue<string>() != captureSource
+            || arguments?["targetFingerprint"] is not JsonValue scalar
+            || !scalar.TryGetValue<string>(out var fingerprint) || string.IsNullOrWhiteSpace(fingerprint)
+            || LiveUiNodeQuery.Find(root, selector, registry).Count != 0) return selector;
+
+        var criteria = selector.ToJson();
+        criteria.Remove("nodeId");
+        var candidates = LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(criteria), registry)
+            .Where(match => LiveUiNodeQuery.IsEffectivelyVisible(match)
+                && LiveUiNodeQuery.IsEffectivelyEnabled(match)
+                && LiveUiNodeQuery.HasUsableBoundsInViewport(match, viewport)
+                && MatchesFingerprint(root, match, viewport, fingerprint))
+            .Take(2).ToArray();
+        // Only the transient ID may change. Preserve every other selector constraint,
+        // require the same provider, and refuse changed or ambiguous visible evidence.
+        if (candidates.Length != 1 || LiveUiNodeQuery.ReadString(candidates[0].Node, "id") is not { Length: > 0 } currentId)
+            return selector;
+        criteria["nodeId"] = currentId;
+        criteria["index"] = 0;
+        return LiveUiSelector.Parse(criteria);
+    }
 
     public static JsonArray NearbyText(JsonObject root, LiveUiNodeMatch match, LiveUiBounds? viewport)
         => new(NearbyLabels(root, match, viewport)
@@ -15,6 +42,18 @@ internal static class LiveUiTapTarget
             .ToArray());
 
     public static string Fingerprint(JsonObject root, LiveUiNodeMatch match, LiveUiBounds viewport)
+        => FullFingerprint(root, match, viewport)[..FingerprintCharacters];
+
+    public static bool MatchesFingerprint(JsonObject root, LiveUiNodeMatch match, LiveUiBounds viewport, string fingerprint)
+    {
+        // Keep full hashes from older observations valid. New handles use an 80-bit
+        // prefix to reduce model transcription errors; every character must still match.
+        var full = FullFingerprint(root, match, viewport);
+        return string.Equals(fingerprint, fingerprint.Length == FingerprintCharacters
+            ? full[..FingerprintCharacters] : full, StringComparison.Ordinal);
+    }
+
+    private static string FullFingerprint(JsonObject root, LiveUiNodeMatch match, LiveUiBounds viewport)
     {
         // Exclude transient node IDs and capture timestamps. Include geometry and surrounding
         // labels so reordering identical titles or replacing the row invalidates its old hint.

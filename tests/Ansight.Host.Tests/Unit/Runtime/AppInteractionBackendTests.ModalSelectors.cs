@@ -114,6 +114,42 @@ public sealed partial class AppInteractionBackendTests
         Assert.Empty(LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry));
     }
 
+    [Theory]
+    [InlineData("ui.get_visual_tree", 1)]
+    [InlineData("device.accessibility", 0)]
+    public async Task TargetSourceKeepsTheObservedProviderEvenWhenAnotherProviderAlsoMatches(string source, int nativeCaptures)
+    {
+        var session = CreateModalTestSession();
+        var accessible = CreateFlatModalAccessibility();
+        accessible["root"]!["children"]!.AsArray().RemoveAt(0);
+        var bridge = new ModalSelectorBridge(session.SessionId, CreateModalNativeTree());
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+        using var target = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-option-copy-button" });
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
+            "ansight_tap_ui", null, selector, CancellationToken.None, targetSource: source);
+        Assert.Equal(source, result.Capture?.ToolId);
+        Assert.Equal(nativeCaptures, bridge.Captures);
+    }
+
+    [Fact]
+    public async Task TargetSourceCannotBypassAnActiveModal()
+    {
+        var session = CreateModalTestSession();
+        var bridge = new ModalSelectorBridge(session.SessionId, CreateModalNativeTree());
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(CreateFlatModalAccessibility()));
+        using var target = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "background-button" });
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
+            "ansight_tap_ui", null, selector, CancellationToken.None, targetSource: RemoteAppToolIds.UiGetVisualTree);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(LiveUiTreeCapture.DeviceAccessibilityToolId, result.Capture!.ToolId);
+        Assert.Empty(LiveUiNodeQuery.Find(result.Capture.Root, selector, result.Capture.TypeRegistry));
+        Assert.Equal(0, bridge.Captures);
+    }
+
     private static JsonObject[] GetModalCopyNodes(JsonObject payload)
     {
         Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var types, out var root));

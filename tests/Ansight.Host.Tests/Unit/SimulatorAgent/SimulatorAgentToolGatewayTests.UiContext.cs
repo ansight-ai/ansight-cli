@@ -114,6 +114,8 @@ public sealed partial class SimulatorAgentToolGatewayTests
             new SessionCapabilities(platform, providers, []), "initial", default);
         Assert.Equal("ansight_get_live_visual_tree", dispatcher.LastToolName);
         Assert.Equal("rootPage", dispatcher.LastArguments!["root"]!.GetValue<string>());
+        Assert.Equal(2000, dispatcher.LastArguments!["maxNodes"]!.GetValue<int>());
+        Assert.Equal(24, dispatcher.LastArguments!["maxDepth"]!.GetValue<int>());
         Assert.Equal(expectedToolId, dispatcher.LastArguments["toolId"]!.GetValue<string>());
         Assert.False(dispatcher.LastArguments["includeBindingContexts"]!.GetValue<bool>());
         Assert.False(dispatcher.LastArguments["includeInactivePages"]!.GetValue<bool>());

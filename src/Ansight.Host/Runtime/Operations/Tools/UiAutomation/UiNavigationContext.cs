@@ -9,13 +9,15 @@ internal static class UiNavigationContext
     {
         var role = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry);
         var type = match.TypeRegistry.Resolve(match.Node);
-        return role is "tab" or "tablist" or "dialog" or "alertdialog" or "navigation"
-               || type?.Contains("Page", StringComparison.OrdinalIgnoreCase) == true
-               || type?.Contains("TabBar", StringComparison.OrdinalIgnoreCase) == true
-               || type?.Contains("BottomNavigation", StringComparison.OrdinalIgnoreCase) == true
+        return HasNavigationSemantics(type, role)
                || LiveUiNodeQuery.ReadBoolean(match.Node, "currentPage", false, match.TypeRegistry)
                || LiveUiNodeQuery.ReadBoolean(match.Node, "activePage", false, match.TypeRegistry);
     }
+
+    internal static bool HasNavigationSemantics(string? type, string? role)
+        => role is "tab" or "tablist" or "dialog" or "alertdialog" or "navigation"
+           || new[] { "Page", "TabBar", "TabLayout", "TabView", "BottomNavigation", "NavigationBar" }
+               .Any(term => type?.Contains(term, StringComparison.OrdinalIgnoreCase) == true);
 
     public static string? Fingerprint(JsonObject source)
     {

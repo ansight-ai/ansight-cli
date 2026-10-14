@@ -8,6 +8,12 @@ internal sealed partial class LiveUiTreeCapture
 {
     public const string DeviceAccessibilityToolId = "device.accessibility";
 
+    internal static bool IsTargetSource(string? source)
+        => source is DeviceAccessibilityToolId or RemoteAppToolIds.UiGetVisualTree
+            or RemoteAppToolIds.MauiGetVisualTree or RemoteAppToolIds.ReactGetComponentTree
+            or RemoteAppToolIds.ReactGetShadowTree or RemoteAppToolIds.FlutterGetWidgetTree
+            or RemoteAppToolIds.DomGetDocument;
+
     private LiveUiTreeCapture(
         AppSessionSnapshot session,
         string toolId,
@@ -100,7 +106,8 @@ internal sealed partial class LiveUiTreeCapture
         string? correlationId,
         LiveUiSelector selector,
         CancellationToken cancellationToken,
-        bool allowCached = true)
+        bool allowCached = true,
+        string? targetSource = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
         return CaptureDeviceFirstAsync(
@@ -111,7 +118,8 @@ internal sealed partial class LiveUiTreeCapture
             correlationId,
             selector,
             cancellationToken,
-            allowCached);
+            allowCached,
+            targetSource: targetSource);
     }
 
     public static Task<LiveUiCaptureResult> CaptureAccessibilityAsync(
@@ -272,14 +280,33 @@ internal sealed partial class LiveUiTreeCapture
         LiveUiSelector? selector,
         CancellationToken cancellationToken,
         bool allowCached = true,
-        string? preferredFallbackToolId = null)
+        string? preferredFallbackToolId = null,
+        string? targetSource = null)
     {
+        if (targetSource is not null && !IsTargetSource(targetSource))
+            return LiveUiCaptureResult.Failure("Unknown targetSource. Rediscover and copy the complete target hint.");
         var deviceResult = await CaptureDeviceAccessibilityAsync(
             session,
             uiInputRouter,
             cancellationToken: cancellationToken,
             allowCached: allowCached).ConfigureAwait(false);
-        if (session.CaptureSource == WorkspaceExecutionModes.Device) return deviceResult;
+        if (session.CaptureSource == WorkspaceExecutionModes.Device)
+            return targetSource is null or DeviceAccessibilityToolId ? deviceResult
+                : LiveUiCaptureResult.Failure("The target hint requires an SDK capture provider unavailable in device mode.");
+        if (targetSource == DeviceAccessibilityToolId) return deviceResult;
+        if (targetSource is not null)
+        {
+            // Keep the existing modal arbitration: a provider hint must not target content
+            // beneath an active system or app sheet.
+            if (deviceResult.IsSuccess && HasModalDominance(deviceResult))
+                return await CaptureModalTargetAsync(deviceResult, session, appToolBridge,
+                    operationName, correlationId, selector!, cancellationToken).ConfigureAwait(false);
+            if (!deviceResult.IsSuccess)
+                return deviceResult;
+            return await CaptureWithToolAsync(session, appToolBridge, targetSource,
+                new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
+                cancellationToken).ConfigureAwait(false);
+        }
         if (deviceResult.IsSuccess
             && (selector is null || ContainsSelectorEvidence(deviceResult, selector)))
         {
@@ -409,7 +436,9 @@ internal sealed partial class LiveUiTreeCapture
             {
                 ["root"] = MauiVisualTreeRootScope.Window
             }
-            : null;
+            : toolId == RemoteAppToolIds.UiGetVisualTree
+                ? new JsonObject { ["root"] = VisualTreeContract.RootPageRootScope, ["maxNodes"] = 2000, ["maxDepth"] = 24 }
+                : null;
         if (!GetLiveVisualTreeTool.TryBuildVisualTreeArguments(
                 visualTreeArguments,
                 toolId,

@@ -146,7 +146,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 correlationId,
                 selector,
                 ToolExecutionCancellation.Current,
-                allowCached: arguments?["targetFingerprint"] is null);
+                allowCached: arguments?["targetFingerprint"] is null,
+                targetSource: arguments?["targetSource"]?.GetValue<string>());
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -206,6 +207,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         JsonObject? ocrTraceEvidence = null;
         if (selector.HasCriteria)
         {
+            selector = LiveUiTapTarget.RefreshTransientNodeId(capture.Root, capture.TypeRegistry,
+                viewport, selector, capture.ToolId, arguments);
             var matches = LiveUiNodeQuery.PrioritizeActionTargets(
                 LiveUiNodeQuery.Find(capture.Root, selector, capture.TypeRegistry),
                 capture.Payload,
@@ -307,7 +310,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             if (fingerprintValue is not JsonValue fingerprintScalar
                 || !fingerprintScalar.TryGetValue<string>(out var fingerprint)
                 || target is null
-                || !string.Equals(fingerprint, LiveUiTapTarget.Fingerprint(capture.Root, target, viewport), StringComparison.Ordinal))
+                || !LiveUiTapTarget.MatchesFingerprint(capture.Root, target, viewport, fingerprint))
             {
                 return BuildSelectorError(
                     "The discovered target or its nearby content changed. No input was delivered. "
@@ -839,6 +842,9 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
 
         if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.TypeText)
         {
+            properties["targetSource"] = ToolSchema.String(
+                "Copy the capture provider from tapHint.selector unchanged. The host resolves the target in that same provider and checks fresh evidence; never invent a source.",
+                nullable: true);
             properties["targetFingerprint"] = ToolSchema.String(
                 "Copy this opaque freshness value from tapHint.selector when supplied. The host rechecks the target and nearby text before acting; rediscover if it changed.",
                 nullable: true);

@@ -44,9 +44,11 @@ public sealed class SimulatorAgentVisualTreeObservationTests
 
         var observation = Assert.IsType<JsonObject>(VisualTreeObservation.Build(
             tree, "session", "app", "maui.get_visual_tree",
-            UiProjectionOptions.Model with { MaximumCharacters = 3500 }));
+            // Include the per-control provider/fingerprint handles in the fixture budget.
+            UiProjectionOptions.Model with { MaximumCharacters = 6500 }));
 
         Assert.Equal(13, observation["returnedNodeCount"]!.GetValue<int>());
+        Assert.InRange(observation.ToJsonString().Length, 1, 6500);
         Assert.False(observation["truncated"]!.GetValue<bool>());
         var nodes = Descendants(observation["root"]!.AsObject()).ToArray();
         Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == "Roles and Permissions");
