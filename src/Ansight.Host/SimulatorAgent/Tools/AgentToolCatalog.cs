@@ -43,7 +43,7 @@ internal sealed class AgentToolCatalog
                 loadedToolNames.Add(name);
             }
         }
-        InitialTools.Add(BuildLoaderDefinition());
+        InitialTools.Add(BuildLoaderDefinition(definitions.ContainsKey("ansight_declare_uncovered_step")));
         loadedToolNames.Add(LoadToolName);
 
         var deferredNames = bundleToolNames.Values.SelectMany(names => names).ToHashSet(StringComparer.Ordinal);
@@ -162,7 +162,7 @@ internal sealed class AgentToolCatalog
     public static string FullGuidance()
         => string.Join("\n\n", new[] { "manual-ui", "extended-ui", "gestures", "app-tools", "evidence" }.Select(ReadGuidance));
 
-    private static JsonObject BuildLoaderDefinition()
+    private static JsonObject BuildLoaderDefinition(bool hasTaskDeclaration)
         => new()
         {
             ["type"] = "function", ["name"] = LoadToolName,
@@ -176,7 +176,9 @@ internal sealed class AgentToolCatalog
                     ["bundle"] = new JsonObject
                     {
                         ["type"] = "string",
-                        ["enum"] = new JsonArray(bundleToolNames.Keys.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray())
+                        ["enum"] = new JsonArray(bundleToolNames.Keys
+                            .Where(name => !hasTaskDeclaration || name != "manual-ui")
+                            .Select(name => (JsonNode?)JsonValue.Create(name)).ToArray())
                     }
                 },
                 ["required"] = new JsonArray("bundle"), ["additionalProperties"] = false

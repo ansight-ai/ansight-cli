@@ -5,6 +5,13 @@ namespace Ansight.Host.SimulatorAgent;
 
 public sealed partial class SimulatorAgentService
 {
+    private static bool IsToolRegistrationRejection(InvalidOperationException exception, OpenAiRequest request)
+        => request.ContextGeneration > 0
+           && request.IncrementalInput?.OfType<JsonObject>().Any(item => item["type"]?.GetValue<string>() == "additional_tools") == true
+           && (exception.Message.Contains("additional_tools", StringComparison.OrdinalIgnoreCase)
+               || exception.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase)
+               && exception.Message.Contains("tool", StringComparison.OrdinalIgnoreCase));
+
     private static IEnumerable<string> ReadAssessmentExclusions(ToolCallResult result)
     {
         if (result.IsError) return [];

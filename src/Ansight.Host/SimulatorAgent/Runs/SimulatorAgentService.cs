@@ -763,6 +763,37 @@ public sealed partial class SimulatorAgentService : IDisposable
                                     openAiRequest,
                                     cancellationToken).ConfigureAwait(false);
                             }
+                            catch (InvalidOperationException exception)
+                                when (toolCatalog is not null && IsToolRegistrationRejection(exception, openAiRequest))
+                            {
+                                // Providers may reject an identical registration after a checkpoint.
+                                // Use the explicit permitted catalogue once, without replaying app actions.
+                                var rejectedTransport = openAiWebSocketSession.LastTransportDiagnostics;
+                                tools = toolCatalog.FullTools;
+                                toolCatalog = null;
+                                agentInstructions = BuildAgentInstructions(hasUsableAppGraphRoute,
+                                    appGraphExplorationName is not null, sessionCapabilities);
+                                conversation.RecoverToolRegistrations();
+                                var recoveryRequest = openAiRequest with
+                                {
+                                    Tools = tools, Instructions = agentInstructions, Input = history,
+                                    IncrementalInput = conversation.PendingInput, StartNewConversation = true,
+                                    ReplayReason = conversation.ReplayReason
+                                };
+                                if (request.CaptureTrace)
+                                    modelContextAudit = CreateAuditPayload(new JsonObject
+                                    {
+                                        ["instructions"] = agentInstructions, ["input"] = history.DeepClone(),
+                                        ["tools"] = tools.DeepClone()
+                                    }.ToJsonString(), MaximumAuditModelContextCharacters);
+                                response = await openAiWebSocketSession.CreateResponseAsync(recoveryRequest, cancellationToken)
+                                    .ConfigureAwait(false);
+                                if (rejectedTransport is not null)
+                                    response = response with { Transport = rejectedTransport with
+                                    {
+                                        Attempts = rejectedTransport.Attempts.Concat(response.Transport?.Attempts ?? []).ToArray()
+                                    } };
+                            }
                             catch (OpenAiWebSocketTransportException)
                                 when (request.OpenAiProtocol == SimulatorAgentOpenAiProtocol.Auto)
                             {
@@ -2905,6 +2936,13 @@ public sealed partial class SimulatorAgentService : IDisposable
         var knownTaskIds = repositoryTasks
             .Select(task => task.TaskId)
             .ToHashSet(StringComparer.Ordinal);
+        // The related task and its evidence are already an explicit assessment. Do not
+        // require the model to repeat that same unused ID in a second field.
+        if (relatedTaskId is not null && knownTaskIds.Contains(relatedTaskId)
+            && !attemptedRepositoryTaskIds.Contains(relatedTaskId))
+        {
+            suppliedTaskIds.Add(relatedTaskId);
+        }
         var unknownTaskIds = suppliedTaskIds
             .Where(taskId => !knownTaskIds.Contains(taskId))
             .OrderBy(taskId => taskId, StringComparer.Ordinal)
@@ -2966,7 +3004,7 @@ public sealed partial class SimulatorAgentService : IDisposable
             "scope-mismatch" or "missing-input" when relatedTaskId is null
                 || attemptedRepositoryTaskIds.Contains(relatedTaskId)
                 || !suppliedTaskIds.Contains(relatedTaskId) =>
-                "scope-mismatch and missing-input require the exact unused related task ID in consideredTaskIds and concrete evidence from its scope or required inputs.",
+                "scope-mismatch and missing-input require the exact unused relatedTaskId and concrete evidence from its scope or required inputs.",
             "missing-input" when repositoryTasks.First(task => task.TaskId == relatedTaskId)
                 .InputSchema["required"] is not JsonArray { Count: > 0 } =>
                 "missing-input requires a task with declared required input properties; use scope-mismatch for an unrequested operation.",
@@ -4036,7 +4074,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     ["relatedTaskId"] = new JsonObject
                     {
                         ["type"] = new JsonArray("string", "null"),
-                        ["description"] = "Exact related task ID; null only for no-matching-task."
+                        ["description"] = "Exact related task ID; null only for no-matching-task. A known unused related task is automatically considered."
                     },
                     ["evidence"] = new JsonObject
                     {
@@ -4047,7 +4085,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     ["consideredTaskIds"] = new JsonObject
                     {
                         ["type"] = "array",
-                        ["description"] = "All unused task IDs reassessed. Omit attempted/excluded tasks; [] when none remain.",
+                        ["description"] = "Other unused task IDs reassessed. relatedTaskId is included automatically. Omit attempted/excluded tasks; [] when none remain.",
                         ["items"] = new JsonObject
                         {
                             ["type"] = "string"

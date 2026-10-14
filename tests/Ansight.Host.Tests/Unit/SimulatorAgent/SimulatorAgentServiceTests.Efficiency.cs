@@ -4,6 +4,42 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class SimulatorAgentServiceTests
 {
+    [Fact]
+    public async Task RunAsync_ProviderRegistrationRejectionFallsBackWithoutRepeatingAppCalls()
+    {
+        var observation = CreateFunctionTurn("find", "ansight_find_ui", new JsonObject { ["automationId"] = "account" });
+        observation.Output.Insert(0, new JsonObject { ["type"] = "compaction", ["id"] = "checkpoint", ["encrypted_content"] = "opaque" });
+        var inner = new FakeOpenAiSession([LoadManualToolsTurn("load"), observation, CompleteWebSocketTurn()]);
+        var session = new RejectRestoredRegistrationSession(inner);
+        var gateway = new FakeToolGateway();
+        AddToolLoadingDefinitions(gateway, "ansight_find_ui");
+        using var service = CreateToolLoadingService(session, gateway);
+        var result = await service.RunAsync(ToolLoadingRequest("Inspect account."));
+        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        Assert.True(session.Rejected);
+        var recovery = inner.Requests[^1];
+        Assert.True(recovery.StartNewConversation);
+        Assert.Equal("tool-registration-recovery", recovery.ReplayReason);
+        Assert.Empty(AdditionalToolItems(recovery.Input));
+        Assert.Contains("ansight_find_ui", ToolNames(recovery.Tools));
+        Assert.Single(gateway.Calls);
+    }
+
+    private sealed class RejectRestoredRegistrationSession(FakeOpenAiSession inner) : IOpenAiSession
+    {
+        public bool Rejected { get; private set; }
+        public Task<OpenAiTurn> CreateResponseAsync(OpenAiRequest request, CancellationToken cancellationToken)
+        {
+            if (!Rejected && request.ContextGeneration > 0 && AdditionalToolItems(request.IncrementalInput!).Any())
+            {
+                Rejected = true;
+                throw new InvalidOperationException("Duplicate tool name in additional_tools registration.");
+            }
+            return inner.CreateResponseAsync(request, cancellationToken);
+        }
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
