@@ -49,7 +49,15 @@ public sealed class MonitoredSessionExecutionTests
         using var fixture = new Fixture();
         var gateway = new Gateway { Cancel = cancel };
         var service = fixture.Service(gateway);
-        gateway.BeforePrepare = () => Assert.Throws<InvalidOperationException>(() => service.ReserveSession(fixture.Session));
+        gateway.BeforePrepare = () =>
+        {
+            Assert.Throws<InvalidOperationException>(() => service.ReserveSession(fixture.Session));
+            fixture.State.TryGetSessionSnapshot(fixture.Session.SessionId, out var running);
+            var properties = running!.CustomProperties!["ui-test"]!;
+            Assert.Equal("Notes", properties["testName"]!.GetValue<string>());
+            Assert.Equal("running", properties["status"]!.GetValue<string>());
+            Assert.Equal("agent", properties["executionKind"]!.GetValue<string>());
+        };
         var request = new WorkspaceTestRunRequest(fixture.Workspace, "notes",
             SessionId: explicitSession ? fixture.Session.SessionId : null,
             Target: fixture.Request, EnableWorkspaceTools: false);
@@ -61,6 +69,9 @@ public sealed class MonitoredSessionExecutionTests
             Assert.Equal(fixture.Session.SessionId, result.SessionId);
         }
         Assert.Equal(1, gateway.Calls);
+        fixture.State.TryGetSessionSnapshot(fixture.Session.SessionId, out var completed);
+        Assert.Equal(cancel ? "cancelled" : "failed", completed!.CustomProperties!["ui-test"]!["status"]!.GetValue<string>());
+        Assert.NotNull(completed.CustomProperties["ui-test"]!["completedUtc"]);
         Assert.Equal(explicitSession ? 0 : 1, fixture.Launcher.Launches);
         Assert.Equal(0, fixture.Launcher.Stops);
         Assert.True(fixture.Runtime.IsSessionLive(fixture.Session.SessionId));

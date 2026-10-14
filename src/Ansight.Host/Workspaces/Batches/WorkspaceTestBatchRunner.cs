@@ -356,6 +356,8 @@ public sealed partial class WorkspaceTestBatchRunner
                         EnableWorkspaceTools: request.EnableWorkspaceTools)
                     {
                         BatchRunId = batchRunId,
+                        BatchIndex = request.Parallel ? testIndex + 1 : testIndex * batchTargets.Count + targetIndex + 1,
+                        BatchCount = totalRunCount,
                         OperationContext = new OperationExecutionContext(batchRunId, test.TestId,
                             request.Parallel || batchTargets.Count > 1,
                             message => testProgress?.Report(new WorkspaceTestRunProgress("audio-rejected", message))),

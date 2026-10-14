@@ -6,7 +6,7 @@ public sealed partial class WorkspaceTestService
 {
     private async Task<WorkspaceTestRunResult> RunTaskOnlyAsync(
         WorkspaceTestDefinition test, WorkspaceTestRunRequest request, string workspacePath,
-        AppSessionSnapshot session, WorkspaceTestTarget? target,
+        AppSessionSnapshot session, WorkspaceTestTarget? target, string runId,
         IReadOnlyList<SimulatorAgentStartupStep> startupSteps,
         IProgress<WorkspaceTestRunProgress>? progress, CancellationToken cancellationToken)
     {
@@ -18,7 +18,7 @@ public sealed partial class WorkspaceTestService
             var taskResult = await runtime.RunWorkspaceTestTaskAsync(
                 RepositoryTaskWorkspaceScope.Resolve(test.AppId, workspacePath), test.AppId,
                 session.SessionId, test.TaskId!, test.TaskInput, target?.DeviceIdentifier,
-                request.OperationContext, secrets, cancellationToken).ConfigureAwait(false);
+                request.OperationContext, secrets, cancellationToken, runId).ConfigureAwait(false);
             var status = taskResult.Status switch
             {
                 RepositoryTaskRunStatus.Passed => SimulatorAgentRunStatus.Succeeded,

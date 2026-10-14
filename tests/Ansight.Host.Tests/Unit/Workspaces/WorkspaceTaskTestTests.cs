@@ -75,7 +75,17 @@ public sealed class WorkspaceTaskTestTests
     public async Task RunsRealTaskWithoutCloudAndPersistsHistory(string body, RepositoryTaskRunStatus status)
     {
         using var fixture = new Fixture(body);
-        var result = await fixture.Service.RunAsync(fixture.Request);
+        JsonObject? runningMetadata = null;
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
+        {
+            if (value.Stage != "task.running") return;
+            Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var running));
+            runningMetadata = running!.CustomProperties?["ui-test"]?.DeepClone().AsObject();
+        });
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            BatchRunId = "batch-123", BatchIndex = 2, BatchCount = 3
+        }, progress);
         Assert.True(result.TaskResult is not null, result.Message);
         Assert.Equal(status, result.TaskResult.Status);
         Assert.Equal(status == RepositoryTaskRunStatus.Passed, result.IsSuccess);
@@ -95,6 +105,20 @@ public sealed class WorkspaceTaskTestTests
         Assert.Equal(status, saved.TaskResult!.Status);
         Assert.Equal(result.TaskResult.Assertions.Count, saved.TaskResult.Assertions.Count);
         Assert.NotNull(saved.TaskResult.SourceTrace);
+        Assert.NotNull(runningMetadata);
+        Assert.Equal("running", runningMetadata["status"]!.GetValue<string>());
+        Assert.Equal(history.RunId, runningMetadata["runId"]!.GetValue<string>());
+        Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var completed));
+        var metadata = completed!.CustomProperties!["ui-test"]!;
+        Assert.Equal("example", metadata["testId"]!.GetValue<string>());
+        Assert.Equal(result.Test!.Name, metadata["testName"]!.GetValue<string>());
+        Assert.Equal(history.RunId, metadata["runId"]!.GetValue<string>());
+        Assert.Equal(status == RepositoryTaskRunStatus.Passed ? "succeeded" : "failed", metadata["status"]!.GetValue<string>());
+        Assert.Equal("batch-123", metadata["batchRunId"]!.GetValue<string>());
+        Assert.Equal(2, metadata["batchIndex"]!.GetValue<int>());
+        Assert.Equal(3, metadata["batchCount"]!.GetValue<int>());
+        Assert.NotNull(metadata["startedUtc"]);
+        Assert.NotNull(metadata["completedUtc"]);
 
         var exportPath = Path.Combine(fixture.Workspace, "trace.zip");
         var export = await fixture.Service.TraceExports.ExportAsync(history.RunId, exportPath);
@@ -227,8 +251,33 @@ public sealed class WorkspaceTaskTestTests
         var result = await fixture.Service.RunAsync(fixture.Request, progress, cancellation.Token);
         Assert.True(result.WasCancelled, result.Message);
         Assert.False(result.IsSuccess);
+        Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var session));
+        Assert.Equal("cancelled", session!.CustomProperties!["ui-test"]!["status"]!.GetValue<string>());
         Assert.Equal(0, fixture.Gateway.Calls);
         using var claim = fixture.Service.ReserveSession(fixture.Session);
+    }
+
+    [Fact]
+    public async Task ReusedSessionShowsLatestTestAndClearsPreviousBatchAndCompletion()
+    {
+        using var fixture = new Fixture("expect(true, { id: 'passed' }).toBe(true);");
+        var first = await fixture.Service.RunAsync(fixture.Request with { BatchRunId = "previous-batch", BatchIndex = 1, BatchCount = 1 });
+        fixture.WriteTest("name: Updated test\ntaskId: example");
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
+        {
+            if (value.Stage != "task.running") return;
+            fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var current);
+            var properties = current!.CustomProperties!["ui-test"]!;
+            Assert.Equal("Updated test", properties["testName"]!.GetValue<string>());
+            Assert.Equal("running", properties["status"]!.GetValue<string>());
+            Assert.Null(properties["batchRunId"]);
+            Assert.Null(properties["batchIndex"]);
+            Assert.Null(properties["batchCount"]);
+            Assert.Null(properties["completedUtc"]);
+            Assert.NotEqual(first.RunAudit!.RunId, properties["runId"]!.GetValue<string>());
+        });
+        var second = await fixture.Service.RunAsync(fixture.Request, progress);
+        Assert.True(second.IsSuccess, second.Message);
     }
 
     private sealed class Fixture : IDisposable

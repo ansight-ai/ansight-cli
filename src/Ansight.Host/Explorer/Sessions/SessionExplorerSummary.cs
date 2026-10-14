@@ -24,4 +24,6 @@ public sealed record SessionExplorerSummary(
     IReadOnlyList<string> Tags)
 {
     public string CaptureSource { get; init; } = "sdk";
+
+    public System.Text.Json.Nodes.JsonObject? CustomProperties { get; init; }
 }

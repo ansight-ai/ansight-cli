@@ -4,6 +4,8 @@ using Ansight.Host;
 
 internal interface ISessionEditor
 {
+    void SetSessionUiTestRun(string sessionId, SessionUiTestRun run);
+
     OperationResult UpdateSessionMetadata(
         string sessionId,
         bool isPinned,

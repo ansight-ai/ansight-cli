@@ -68,7 +68,22 @@ internal sealed partial class RuntimeState
     {
         UpdateSession(sessionId, session =>
         {
-            session.CustomProperties = SessionSnapshotCloner.CloneCustomProperties(customProperties);
+            var properties = SessionSnapshotCloner.CloneCustomProperties(customProperties);
+            if (session.CustomProperties?[SessionUiTestRun.PropertyGroup] is { } testRun)
+            {
+                properties ??= new JsonObject();
+                properties[SessionUiTestRun.PropertyGroup] = testRun.DeepClone();
+            }
+            session.CustomProperties = properties;
+        }, updateTimelineEnd: false);
+    }
+
+    public void SetSessionUiTestRun(string sessionId, SessionUiTestRun run)
+    {
+        UpdateSession(sessionId, session =>
+        {
+            session.CustomProperties ??= new JsonObject();
+            session.CustomProperties[SessionUiTestRun.PropertyGroup] = JsonSerializer.SerializeToNode(run, JsonUtil.Compact);
         }, updateTimelineEnd: false);
     }
 

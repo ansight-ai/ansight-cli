@@ -159,7 +159,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         JsonObject? suppliedInput,
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? secretValues = null,
-        OperationExecutionContext? context = null)
+        OperationExecutionContext? context = null,
+        string? runId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
@@ -245,7 +246,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
                 $"ansight-task-test-{Guid.NewGuid():N}",
                 cancellationToken,
                 context: context,
-                secretValues: secretValues)
+                secretValues: secretValues,
+                requestedRunId: runId)
             .ConfigureAwait(false);
     }
 

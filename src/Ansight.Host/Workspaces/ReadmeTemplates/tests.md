@@ -77,6 +77,21 @@ in the task. `taskInput` is not accepted with `prompt`.
 
 Existing tests with both `taskId` and `prompt` retain agent execution.
 
+## Test sessions
+
+Once a test claims a session, the session header and list show its test name and
+status: Running, Passed, Failed, or Cancelled. The app name remains visible.
+Session info includes a host-managed `ui-test` custom-property group containing
+`testId`, `testName`, `runId`, `status`, `executionKind`, `startedUtc`, and
+`completedUtc`. Batch runs also include `batchRunId`, `batchIndex` (one-based),
+and `batchCount`. Stored success status is `succeeded`; execution kind is `task`
+or `agent`.
+
+The properties are retained in saved and exported captures. Reusing a session
+for another test replaces this group with the latest run; earlier runs remain
+in test history. Existing session names, notes, pins, and tags are preserved.
+Older recordings without this metadata keep their existing display.
+
 Full execution traces are captured by default for history review and export. Use
 `--no-trace` on `ansight test run` or `ansight test run-all` to retain only
 lightweight audit metadata. The existing `--trace` flag is still accepted.

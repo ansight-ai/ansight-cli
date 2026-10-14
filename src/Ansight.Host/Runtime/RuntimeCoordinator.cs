@@ -431,11 +431,11 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     internal async Task<RepositoryTaskRunResult> RunWorkspaceTestTaskAsync(
         string workspacePath, string appId, string sessionId, string taskId, JsonObject? input,
         string? targetDeviceIdentifier, Operations.OperationExecutionContext? context,
-        IReadOnlyDictionary<string, string> secretValues, CancellationToken cancellationToken)
+        IReadOnlyDictionary<string, string> secretValues, CancellationToken cancellationToken, string runId)
     {
         using var scope = operationDispatcher.BeginSimulatorAgentRun(sessionId, targetDeviceIdentifier);
         return await operationDispatcher.RunRepositoryTaskAsync(workspacePath, appId, sessionId, taskId,
-            input, cancellationToken, secretValues, context).ConfigureAwait(false);
+            input, cancellationToken, secretValues, context, runId).ConfigureAwait(false);
     }
 
     public void SetFocusedControl(RuntimeFocusedControlSnapshot snapshot)
@@ -546,6 +546,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
                 return;
             }
 
+            WorkspaceTests.RecoverInterruptedSessionRuns();
             shutdownTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, FeatureLifetime);
             var lifetime = shutdownTokenSource.Token;
             pairingTask = Task.Run(() => RunPairingAndAnalyticsAsync(lifetime), CancellationToken.None);

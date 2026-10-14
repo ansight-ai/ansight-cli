@@ -425,6 +425,9 @@ public sealed partial class WorkspaceTestService
         }
 
         using var sessionClaim = new WorkspaceTestSessionClaim(this);
+        SessionUiTestRun? sessionRun = null;
+        WorkspaceTestRunResult? sessionRunResult = null;
+        var sessionRunCancelled = false;
         try
         {
             if (deviceMode && !attachedDeviceSession && launchedTarget is not null)
@@ -494,6 +497,11 @@ public sealed partial class WorkspaceTestService
                     $"Session '{session.SessionId}' is no longer live or is already reserved by another execution.",
                     test, session.SessionId, target: launchedTarget);
 
+            sessionRun = new SessionUiTestRun(test.TestId, test.Name, Guid.NewGuid().ToString("N"),
+                "running", test.IsTaskOnly ? "task" : "agent", DateTimeOffset.UtcNow,
+                request.BatchRunId, request.BatchIndex, request.BatchCount);
+            runtime.SessionEditing.SetUiTestRun(session.SessionId, sessionRun);
+
             progress?.Report(new WorkspaceTestRunProgress(
                 "session.selected",
                 $"Using Ansight session '{session.SessionId}' for '{test.AppId}'."));
@@ -506,8 +514,9 @@ public sealed partial class WorkspaceTestService
                         $"Ready to start '{test.Name}' on session '{session.SessionId}'; waiting for the other targets."));
                     await startParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
                 }
-                return await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
-                    launchedTarget, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
+                sessionRunResult = await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
+                    launchedTarget, sessionRun.RunId, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
+                return sessionRunResult;
             }
 
             var preparation = runGateway is null
@@ -546,6 +555,9 @@ public sealed partial class WorkspaceTestService
             if (preparation.HasResolvedTeam && preparation.TeamId is { } activeBusiness)
                 runtime.Analytics.RecordBusinessActivity(activeBusiness);
 
+            sessionRun = sessionRun with { RunId = (preparation.TrackingRunId ?? Guid.Parse(sessionRun.RunId)).ToString("N") };
+            runtime.SessionEditing.SetUiTestRun(session.SessionId, sessionRun);
+
             var maximumRoundTrips = Math.Min(
                 request.MaximumRoundTrips,
                 preparation.MaximumRoundTrips ?? request.MaximumRoundTrips);
@@ -582,7 +594,7 @@ public sealed partial class WorkspaceTestService
                     MaximumRoundTrips = maximumRoundTrips,
                     ModelTransport = preparation.ModelTransport,
                     StartupSteps = launchTiming.Complete().Concat(preparation.StartupSteps).ToArray(),
-                    TrackingRunId = preparation.TrackingRunId,
+                    TrackingRunId = Guid.Parse(sessionRun.RunId),
                     TargetDeviceIdentifier = launchedTarget?.DeviceIdentifier,
                     WorkspacePath = catalog.WorkspacePath,
                     WorkspaceTestId = test.TestId,
@@ -622,6 +634,7 @@ public sealed partial class WorkspaceTestService
             }
 
             stopwatch.Stop();
+            sessionRunResult = runResult;
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
                 var audit = runResult.AgentResult?.Audit;
@@ -676,8 +689,24 @@ public sealed partial class WorkspaceTestService
 
             return runResult;
         }
+        catch (OperationCanceledException)
+        {
+            sessionRunCancelled = true;
+            throw;
+        }
         finally
         {
+            if (sessionRun is not null)
+            {
+                runtime.SessionEditing.SetUiTestRun(session!.SessionId, sessionRun with
+                {
+                    RunId = sessionRunResult?.RunAudit?.RunId ?? sessionRun.RunId,
+                    Status = sessionRunResult is not null
+                        ? ResolveCompletionStatus(sessionRunResult)
+                        : sessionRunCancelled || cancellationToken.IsCancellationRequested ? "cancelled" : "failed",
+                    CompletedUtc = DateTimeOffset.UtcNow
+                });
+            }
             if (!meteringCompleted && meteredPreparation?.UsesExternalTransport == true
                 && meteredPreparation.TrackingRunId is { } unfinishedRunId && runGateway is not null)
             {
@@ -1105,11 +1134,7 @@ public sealed partial class WorkspaceTestService
     }
 
     private static string ResolveCompletionStatus(WorkspaceTestRunResult result)
-        => result.AgentResult?.Status switch
-        {
-            SimulatorAgentRunStatus.Cancelled => "cancelled",
-            _ => result.IsSuccess ? "succeeded" : "failed"
-        };
+        => result.WasCancelled ? "cancelled" : result.IsSuccess ? "succeeded" : "failed";
 
     private async Task StopTargetAfterTestAsync(
         WorkspaceTestTarget target,

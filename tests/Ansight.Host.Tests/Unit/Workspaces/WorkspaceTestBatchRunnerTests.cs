@@ -54,6 +54,9 @@ public sealed class WorkspaceTestBatchRunnerTests
         var runner = new WorkspaceTestBatchRunner(async (request, _, _) =>
         {
             await Task.Yield();
+            Assert.NotEmpty(request.BatchRunId!);
+            Assert.Equal(parallel ? 1 : targetCount, request.BatchCount);
+            Assert.InRange(request.BatchIndex!.Value, 1, request.BatchCount!.Value);
             var rejection = AudioExecutionPolicy.RejectParallelCall("ansight_inject_audio", request.OperationContext);
             Assert.Equal(shouldReject, rejection is not null);
             Assert.Null(AudioExecutionPolicy.RejectParallelCall("ansight_get_screenshot", request.OperationContext));

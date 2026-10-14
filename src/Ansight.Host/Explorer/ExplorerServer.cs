@@ -393,7 +393,10 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
     private readonly record struct CachedReplayAsset(byte[] Content, string EntityTag);
     private sealed record SessionCatalogEvent(long Sequence, string Reason, string? SessionId, DateTimeOffset OccurredUtc);
-    private sealed record SessionCatalogFingerprint(string AppId, string? Name, string ClientName, string Status, bool IsConnected, bool IsHistorical, bool IsPinned, string? RuntimeDeviceIdentifier, string? DeviceOsName, bool IsVirtualDevice, bool IsEmulator, string AppIconKey, string TagsKey, DateTimeOffset? LastUpdatedUtc, int? LogCount, int? ImageCount, int? VisualTreeSnapshotCount, int? ArtifactSnapshotCount);
+    private sealed record SessionCatalogFingerprint(string AppId, string? Name, string ClientName, string Status, bool IsConnected, bool IsHistorical, bool IsPinned, string? RuntimeDeviceIdentifier, string? DeviceOsName, bool IsVirtualDevice, bool IsEmulator, string AppIconKey, string TagsKey, DateTimeOffset? LastUpdatedUtc, int? LogCount, int? ImageCount, int? VisualTreeSnapshotCount, int? ArtifactSnapshotCount)
+    {
+        public string? UiTestRunKey { get; init; }
+    }
     private static int FindAvailablePort()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);

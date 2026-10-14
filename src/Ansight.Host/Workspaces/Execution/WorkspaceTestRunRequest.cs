@@ -20,6 +20,10 @@ public sealed record WorkspaceTestRunRequest(
 
     public string? BatchRunId { get; init; }
 
+    public int? BatchIndex { get; init; }
+
+    public int? BatchCount { get; init; }
+
     public bool CaptureTrace { get; init; } = true;
 
     public SimulatorAgentOpenAiProtocol OpenAiProtocol { get; init; } = SimulatorAgentOpenAiProtocol.Http;

@@ -343,7 +343,8 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
             return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice, runtimeDeviceIdentifier, runtimePlatform, technology, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags)
             {
-                CaptureSource = session.CaptureSource
+                CaptureSource = session.CaptureSource,
+                CustomProperties = SessionSnapshotCloner.CloneCustomProperties(session.CustomProperties)
             };
         }).ToArray();
     }
@@ -469,7 +470,10 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     {
         var isConnected = runtime.IsSessionLive(session.SessionId);
         var appIconKey = session.AppIcon is null ? string.Empty : $"{session.AppIcon.FileName}:{session.AppIcon.Format}:{session.AppIcon.ByteCount}";
-        return new SessionCatalogFingerprint(session.AppId, session.Name, session.ClientName, session.Status, isConnected, session.IsHistorical, session.IsPinned, ResolveRuntimeDeviceIdentifier(session), session.DeviceProfile?.Device?.OsName, session.DeviceProfile?.Device?.IsVirtual == true, session.DeviceProfile?.Device?.IsEmulator == true, appIconKey, string.Join('\u001f', session.Tags), isConnected ? null : session.LastUpdatedUtc, isConnected ? null : session.TotalLogCount, isConnected ? null : session.TotalImageCount, isConnected ? null : session.VisualTreeSnapshots.Count, isConnected ? null : session.ArtifactSnapshots.Count);
+        return new SessionCatalogFingerprint(session.AppId, session.Name, session.ClientName, session.Status, isConnected, session.IsHistorical, session.IsPinned, ResolveRuntimeDeviceIdentifier(session), session.DeviceProfile?.Device?.OsName, session.DeviceProfile?.Device?.IsVirtual == true, session.DeviceProfile?.Device?.IsEmulator == true, appIconKey, string.Join('\u001f', session.Tags), isConnected ? null : session.LastUpdatedUtc, isConnected ? null : session.TotalLogCount, isConnected ? null : session.TotalImageCount, isConnected ? null : session.VisualTreeSnapshots.Count, isConnected ? null : session.ArtifactSnapshots.Count)
+        {
+            UiTestRunKey = session.CustomProperties?[SessionUiTestRun.PropertyGroup]?.ToJsonString()
+        };
     }
 
     private void PublishSessionCatalogEvent(string reason, string? sessionId)

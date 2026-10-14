@@ -128,7 +128,8 @@ internal sealed class RepositoryTaskRouter
         string? correlationId,
         CancellationToken cancellationToken,
         OperationExecutionContext? context = null,
-        IReadOnlyDictionary<string, string>? secretValues = null)
+        IReadOnlyDictionary<string, string>? secretValues = null,
+        string? requestedRunId = null)
         => analytics.ObserveUsageAsync("task", () => ExecuteCoreAsync(
             task,
             sessionId,
@@ -136,7 +137,7 @@ internal sealed class RepositoryTaskRouter
             correlationId,
             [task.TaskId],
             RepositoryTaskTraceScope.IsEnabled,
-            cancellationToken, context, secretValues), result => result.Status.ToString().ToLowerInvariant() switch
+            cancellationToken, context, secretValues, requestedRunId), result => result.Status.ToString().ToLowerInvariant() switch
             {
                 "succeeded" => "succeeded", "cancelled" => "cancelled", "rejected" => "blocked", _ => "failed"
             });
@@ -150,7 +151,8 @@ internal sealed class RepositoryTaskRouter
         bool captureTrace,
         CancellationToken cancellationToken,
         OperationExecutionContext? context,
-        IReadOnlyDictionary<string, string>? secretValues)
+        IReadOnlyDictionary<string, string>? secretValues,
+        string? requestedRunId = null)
     {
         ArgumentNullException.ThrowIfNull(task);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -172,7 +174,7 @@ internal sealed class RepositoryTaskRouter
                 StringComparer.Ordinal);
         }
 
-        var runId = Guid.NewGuid().ToString("N");
+        var runId = requestedRunId ?? Guid.NewGuid().ToString("N");
         RepositoryTaskRunResult result;
         if (!task.Enabled)
         {

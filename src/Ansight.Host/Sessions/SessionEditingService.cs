@@ -19,6 +19,9 @@ public sealed class SessionEditingService
     public void AddAnalysis(string sessionId, SessionAnalysisRecord analysis)
         => sessionIngestion.AddSessionAnalysis(sessionId, analysis);
 
+    internal void SetUiTestRun(string sessionId, SessionUiTestRun run)
+        => sessionEditor.SetSessionUiTestRun(sessionId, run);
+
     internal void SetAppToolCatalog(string sessionId, SessionAppToolCatalogSnapshot catalog)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
