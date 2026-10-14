@@ -1093,6 +1093,8 @@ internal sealed class ToolGateway : IToolGateway
 
     private JsonObject? AttachAfterActionObservation(JsonObject actionContent, string sessionId)
     {
+        // Never trust a provider-supplied hint for permission to skip task reassessment.
+        actionContent.Remove("navigationChanged");
         var snapshotId = actionContent["evidence"]?["after"]?["visualTreeSnapshotId"] is JsonValue value
                          && value.TryGetValue<string>(out var parsedSnapshotId)
             ? parsedSnapshotId
@@ -1112,6 +1114,13 @@ internal sealed class ToolGateway : IToolGateway
         {
             return null;
         }
+
+        var beforeId = actionContent["evidence"]?["before"]?["visualTreeSnapshotId"]?.GetValue<string>();
+        var before = session.VisualTreeSnapshots.LastOrDefault(candidate => candidate.SnapshotId == beforeId);
+        if (before is not null && before.Source == snapshot.Source
+            && UiNavigationContext.Fingerprint(before.Payload) is { } beforeNavigation
+            && UiNavigationContext.Fingerprint(snapshot.Payload) is { } afterNavigation)
+            actionContent["navigationChanged"] = beforeNavigation != afterNavigation;
 
         var observation = VisualTreeObservation.Build(
             snapshot.Payload,

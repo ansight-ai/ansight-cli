@@ -124,6 +124,7 @@ internal static class VisualTreeObservation
                 BuildStructureNodeList(root, typeRegistry, options));
         }
         NestNodes(observation, root, typeRegistry, selectedMatches, options);
+        UiObservationBudget.Apply(observation, options);
         return observation;
     }
 
@@ -225,6 +226,7 @@ internal static class VisualTreeObservation
                                             && LiveUiNodeQuery.HasUsableBoundsInViewport(
                                                 candidate.Match,
                                                 viewport))
+            .ThenByDescending(candidate => UiNavigationContext.IsNavigationNode(candidate.Match))
             .ThenByDescending(candidate => hasActivePageContext
                                            && LiveUiMauiContext.IsInActivePage(candidate.Match, visualTree))
             .ThenByDescending(candidate =>
@@ -238,6 +240,15 @@ internal static class VisualTreeObservation
             // NestNodes retains shared ancestry once. Do not spend each node's budget on
             // repeated ancestor paths that will be removed, or mark that removal as evidence loss.
             var result = UiNodeProjection.FromMatch(candidate.Match, options, includeAncestors: false);
+            if (viewport is not null)
+                result["onScreen"] = LiveUiNodeQuery.HasUsableBoundsInViewport(candidate.Match, viewport);
+            if (hasActivePageContext && result["type"]?.GetValue<string>()?.EndsWith("Page", StringComparison.Ordinal) == true
+                && (result["currentPage"]?.GetValue<bool>() == false || result["activePage"]?.GetValue<bool>() == false)
+                && !LiveUiMauiContext.IsInActivePage(candidate.Match, visualTree))
+            {
+                result["contextOnly"] = true;
+                result.Remove("supportedActions");
+            }
             var resultLength = result.ToJsonString().Length;
             if (results.Count > 0
                 && resultCharacters + resultLength > options.MaximumCharacters)

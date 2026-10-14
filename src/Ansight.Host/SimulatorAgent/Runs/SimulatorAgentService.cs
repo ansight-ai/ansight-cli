@@ -2728,6 +2728,9 @@ public sealed class SimulatorAgentService : IDisposable
         {
             var output = JsonNode.Parse(result.Output);
             var content = output?["result"] ?? output;
+            if (content?["navigationChanged"] is JsonValue changed
+                && changed.TryGetValue<bool>(out var navigationChanged) && !navigationChanged)
+                return false;
             if (call.Name == "ansight_tap_ui"
                 && string.Equals(content?["target"]?["role"]?.GetValue<string>(),
                     "textbox", StringComparison.OrdinalIgnoreCase))

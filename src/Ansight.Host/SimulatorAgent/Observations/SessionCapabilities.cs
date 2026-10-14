@@ -27,7 +27,7 @@ internal sealed record SessionCapabilities(
 
     public JsonObject CreateInitialObservationArguments()
     {
-        var arguments = new JsonObject { ["root"] = VisualTreeContract.CurrentPageRootScope };
+        var arguments = new JsonObject { ["root"] = VisualTreeContract.RootPageRootScope };
         // MAUI custom sheets can live outside its logical page tree. Start with the
         // published native hierarchy so those windows and their controls are included.
         var preferredToolId = VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)

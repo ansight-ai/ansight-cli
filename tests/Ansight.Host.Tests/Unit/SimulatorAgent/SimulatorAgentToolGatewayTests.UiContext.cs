@@ -113,7 +113,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         await gateway.CaptureInitialObservationAsync("session",
             new SessionCapabilities(platform, providers, []), "initial", default);
         Assert.Equal("ansight_get_live_visual_tree", dispatcher.LastToolName);
-        Assert.Equal("currentPage", dispatcher.LastArguments!["root"]!.GetValue<string>());
+        Assert.Equal("rootPage", dispatcher.LastArguments!["root"]!.GetValue<string>());
         Assert.Equal(expectedToolId, dispatcher.LastArguments["toolId"]!.GetValue<string>());
         Assert.False(dispatcher.LastArguments["includeBindingContexts"]!.GetValue<bool>());
         Assert.False(dispatcher.LastArguments["includeInactivePages"]!.GetValue<bool>());

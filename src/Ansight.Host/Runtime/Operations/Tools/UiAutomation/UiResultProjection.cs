@@ -23,6 +23,7 @@ internal static class UiResultProjection
             }
         }
         UiNodeProjection.CompactBoundsInPlace(result);
+        UiObservationBudget.Apply(result, options);
         return result;
     }
 
