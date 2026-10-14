@@ -83,7 +83,7 @@ public sealed partial class SimulatorAgentServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_CompactionRetainsToolDeclarationsAndGuidanceOnlyInTheRecoveryHistory()
+    public async Task RunAsync_CompactionRestoresToolDeclarationsOnTheActiveChainAndAllowsOneRefresh()
     {
         var checkpoint = new JsonObject
         {
@@ -112,7 +112,7 @@ public sealed partial class SimulatorAgentServiceTests
         {
             Assert.False(request.StartNewConversation);
             var declarations = AdditionalToolItems(request.Input).ToArray();
-            Assert.Equal(2, declarations.Length);
+            Assert.Equal(request == session.Requests[2] ? 2 : 3, declarations.Length);
             Assert.True(JsonNode.DeepEquals(loadedDeclaration, declarations[1]));
             var retainedGuidance = Assert.Single(request.Input.OfType<JsonObject>(),
                 item => item["role"]?.GetValue<string>() == "developer" && item["type"] is null);
@@ -120,10 +120,11 @@ public sealed partial class SimulatorAgentServiceTests
             var checkpointItem = Assert.Single(request.Input.OfType<JsonObject>(),
                 item => item["type"]?.GetValue<string>() == "compaction");
             Assert.True(JsonNode.DeepEquals(checkpoint, checkpointItem));
-            Assert.True(request.Input.IndexOf(retainedGuidance) < request.Input.IndexOf(checkpointItem));
-            Assert.Empty(AdditionalToolItems(request.IncrementalInput!));
+            Assert.True(request.Input.IndexOf(retainedGuidance) > request.Input.IndexOf(checkpointItem));
+            Assert.Equal(1, request.ContextGeneration);
+            Assert.Equal(request == session.Requests[2] ? 2 : 1, AdditionalToolItems(request.IncrementalInput!).Count());
             Assert.DoesNotContain(request.IncrementalInput!.OfType<JsonObject>(),
-                item => item["role"]?.GetValue<string>() == "developer" || item["type"]?.GetValue<string>() == "compaction");
+                item => item["type"]?.GetValue<string>() == "compaction");
         }
         Assert.Single(gateway.Calls);
     }
@@ -212,8 +213,8 @@ public sealed partial class SimulatorAgentServiceTests
             item => item["type"]?.GetValue<string>() == "compaction");
         Assert.True(JsonNode.DeepEquals(secondCheckpoint, checkpointItem));
         Assert.All(AdditionalToolItems(afterNewCheckpoint.Input),
-            declaration => Assert.True(afterNewCheckpoint.Input.IndexOf(declaration) < afterNewCheckpoint.Input.IndexOf(checkpointItem)));
-        Assert.Empty(AdditionalToolItems(afterNewCheckpoint.IncrementalInput!));
+            declaration => Assert.True(afterNewCheckpoint.Input.IndexOf(declaration) > afterNewCheckpoint.Input.IndexOf(checkpointItem)));
+        Assert.Equal(2, AdditionalToolItems(afterNewCheckpoint.IncrementalInput!).Count());
     }
 
     [Fact]

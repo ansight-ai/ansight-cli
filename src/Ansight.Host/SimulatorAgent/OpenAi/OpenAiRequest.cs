@@ -27,6 +27,10 @@ internal sealed record OpenAiRequest(
 
     public bool CompletionOnly { get; init; }
 
+    public int ContextGeneration { get; init; }
+
+    public bool CaptureWireDiagnostics { get; init; }
+
     public IModelExecutionTransport? Transport { get; init; }
 
     internal async ValueTask<string> ResolveApiKeyAsync(CancellationToken cancellationToken)

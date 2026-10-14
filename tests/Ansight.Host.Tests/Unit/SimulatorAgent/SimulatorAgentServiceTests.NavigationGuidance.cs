@@ -50,8 +50,9 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(NavigationGuidance.Read("maui"),
             Assert.Single(NavigationGuidanceInputs(session.Requests[0].IncrementalInput!)), StringComparison.Ordinal);
         Assert.Empty(NavigationGuidanceInputs(session.Requests[1].IncrementalInput!));
-        Assert.Contains(NavigationGuidance.Read("react-native"),
-            Assert.Single(NavigationGuidanceInputs(session.Requests[2].IncrementalInput!)), StringComparison.Ordinal);
+        Assert.Equal(2, NavigationGuidanceInputs(session.Requests[2].IncrementalInput!).Count());
+        Assert.Contains(NavigationGuidanceInputs(session.Requests[2].IncrementalInput!),
+            text => text.Contains(NavigationGuidance.Read("react-native"), StringComparison.Ordinal));
         Assert.Empty(NavigationGuidanceInputs(session.Requests[3].IncrementalInput!));
         foreach (var request in session.Requests.Skip(2))
         {

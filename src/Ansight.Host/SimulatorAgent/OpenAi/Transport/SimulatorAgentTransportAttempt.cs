@@ -22,4 +22,14 @@ public sealed record SimulatorAgentTransportAttempt(
     public long? ParsingDurationMilliseconds { get; init; }
 
     public string? Error { get; init; }
+
+    public int? ContextGeneration { get; init; }
+
+    public string? RequestSha256 { get; init; }
+
+    public IReadOnlyList<string>? InputItemTypes { get; init; }
+
+    public IReadOnlyList<SimulatorAgentToolRegistration>? ToolRegistrations { get; init; }
 }
+
+public sealed record SimulatorAgentToolRegistration(string Name, string SchemaSha256, string Location);

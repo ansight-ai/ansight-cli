@@ -6,4 +6,7 @@ namespace Ansight.Host.SimulatorAgent.Tools;
 internal sealed record ToolLoadResult(
     ToolCallResult Result,
     JsonArray AdditionalTools,
-    string Guidance);
+    string Guidance)
+{
+    public bool RecoveryRequested { get; init; }
+}

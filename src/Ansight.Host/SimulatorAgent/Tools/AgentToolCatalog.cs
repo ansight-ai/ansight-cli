@@ -10,17 +10,23 @@ internal sealed class AgentToolCatalog
     ["ansight_get_live_visual_tree", "ansight_list_tasks", "ansight_run_task", "complete_instruction"];
     private static readonly Dictionary<string, string[]> bundleToolNames = new(StringComparer.Ordinal)
     {
-        ["manual-ui"] = ["ansight_find_ui", "ansight_wait_for_ui", "ansight_assert_ui", "ansight_tap_ui",
-            "ansight_type_text", "ansight_type_secret", "ansight_scroll_ui", "ansight_back_ui", AgentUiBatch.ToolName],
+        ["manual-ui"] = ["ansight_find_ui", "ansight_wait_for_ui", "ansight_tap_ui",
+            "ansight_type_text", "ansight_back_ui", AgentUiBatch.ToolName],
+        ["extended-ui"] = ["ansight_assert_ui", "ansight_type_secret", "ansight_scroll_ui"],
         ["gestures"] = ["ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],
         ["evidence"] = ["ansight_take_screenshot", "ansight_get_live_navigation_structure"],
         ["lifecycle"] = ["ansight_list_host_devices", "ansight_start_device", "ansight_launch_app", "ansight_terminate_app"],
-        ["tasks"] = ["ansight_describe_module"]
+        ["tasks"] = ["ansight_describe_module"],
+        ["diagnostics"] = ["ansight_get_logs", "ansight_get_telemetry", "ansight_get_execution_capabilities", "ansight_require_capabilities"],
+        ["files"] = ["ansight_list_sandbox_file", "ansight_read_sandbox_file", "ansight_capture_sandbox_file"],
+        ["screen-text"] = ["ansight_scan_screen"]
     };
     private readonly Dictionary<string, JsonObject> definitions;
     private readonly HashSet<string> loadedToolNames = new(StringComparer.Ordinal);
     private readonly HashSet<string> loadedBundles = new(StringComparer.Ordinal);
+    private readonly HashSet<string> refreshedBundles = new(StringComparer.Ordinal);
+    private int contextGeneration;
 
     public AgentToolCatalog(JsonArray fullTools)
     {
@@ -58,8 +64,21 @@ internal sealed class AgentToolCatalog
     public JsonArray InitialTools { get; }
     public JsonArray InitialAdditionalTools { get; }
 
+    public JsonArray LoadedTools => new(FullTools.OfType<JsonObject>()
+        .Where(tool => loadedToolNames.Contains(tool["name"]!.GetValue<string>()))
+        .Select(tool => tool.DeepClone()).ToArray());
+
+    public void BeginContextGeneration(int generation)
+    {
+        if (contextGeneration == generation) return;
+        contextGeneration = generation;
+        refreshedBundles.Clear();
+    }
+
     public bool IsDeferred(string toolName)
         => definitions.ContainsKey(toolName) && !loadedToolNames.Contains(toolName);
+
+    public bool IsBundleLoaded(string bundle) => loadedBundles.Contains(bundle);
 
     public ToolLoadResult Load(JsonObject arguments)
     {
@@ -67,15 +86,16 @@ internal sealed class AgentToolCatalog
             ? name : null;
         if (bundle is null || !bundleToolNames.ContainsKey(bundle))
         {
-            const string message = "Choose one bundle: manual-ui, gestures, app-tools, evidence, lifecycle, or tasks.";
+            var message = $"Choose one bundle: {string.Join(", ", bundleToolNames.Keys)}.";
             return new(new ToolCallResult(true,
                 new JsonObject { ["isError"] = true, ["message"] = message }.ToJsonString(), message), [], string.Empty);
         }
 
         // Gestures often need discovery of their target. Load that dependency in the same turn.
-        var bundles = bundle == "gestures" ? new[] { "manual-ui", "gestures" } : [bundle];
+        var bundles = bundle is "gestures" or "extended-ui" ? new[] { "manual-ui", bundle } : [bundle];
         var additionalTools = new JsonArray();
         var guidance = new List<string>();
+        var wasLoaded = loadedBundles.Contains(bundle);
         foreach (var selectedBundle in bundles)
         {
             if (!loadedBundles.Add(selectedBundle))
@@ -97,34 +117,56 @@ internal sealed class AgentToolCatalog
         }
         var callable = bundles.SelectMany(selected => bundleToolNames[selected])
             .Where(loadedToolNames.Contains).ToArray();
+        // A reload after compaction repairs the model registration, not the host permission set.
+        var refresh = wasLoaded && contextGeneration > 0 && callable.Length > 0 && refreshedBundles.Add(bundle);
+        if (refresh)
+        {
+            foreach (var toolName in callable.Distinct(StringComparer.Ordinal))
+                if (!additionalTools.OfType<JsonObject>().Any(tool => tool["name"]?.GetValue<string>() == toolName))
+                    additionalTools.Add(definitions[toolName].DeepClone());
+            guidance.AddRange(bundles.Select(ReadGuidance));
+        }
         var messageText = additionalTools.Count > 0
-            ? $"Loaded {additionalTools.Count} tool(s). No app action was performed."
+            ? refresh ? "Refreshed tool registrations after compaction. No app action was performed."
+                : $"Loaded {additionalTools.Count} tool(s). No app action was performed."
             : callable.Length > 0 ? "These tools are already loaded." : "This capability is unavailable for the selected app and instruction.";
         var output = new JsonObject
         {
             ["isError"] = callable.Length == 0,
             ["bundle"] = bundle,
+            ["registrationChanged"] = additionalTools.Count > 0,
+            ["contextGeneration"] = contextGeneration,
             ["tools"] = new JsonArray(callable.Select(tool => (JsonNode?)JsonValue.Create(tool)).ToArray()),
             ["message"] = messageText
         }.ToJsonString();
         return new(new ToolCallResult(callable.Length == 0, output, messageText),
-            additionalTools, string.Join("\n\n", guidance));
+            additionalTools, string.Join("\n\n", guidance.Distinct(StringComparer.Ordinal)))
+        {
+            RecoveryRequested = wasLoaded && contextGeneration > 0 && !refresh && callable.Length > 0
+        };
     }
 
     public static JsonObject CreateAdditionalToolsInput(JsonArray tools)
         => new() { ["type"] = "additional_tools", ["role"] = "developer", ["tools"] = tools.DeepClone() };
 
     public static string ReadGuidance(string bundle)
-        => EmbeddedTextResource.ReadSection("SimulatorAgent/Prompts/tool-capabilities.md", bundle);
+        => bundle switch
+        {
+            "extended-ui" => "Use exact observed selectors. Scrolling changes the visible content; verify its requested postcondition. Secret entry requires an explicitly granted alias.",
+            "diagnostics" => "Read only evidence required by the instruction. Scope logs and telemetry to the run's time interval and relevant streams.",
+            "files" => "Use discovered app-sandbox paths and bounded reads. Preserve file evidence in the audit.",
+            "screen-text" => "Screen OCR is evidence for visible text only, not an automation ID or framework type. Respect the run's screen-scan policy.",
+            _ => EmbeddedTextResource.ReadSection("SimulatorAgent/Prompts/tool-capabilities.md", bundle)
+        };
 
     public static string FullGuidance()
-        => string.Join("\n\n", new[] { "manual-ui", "gestures", "app-tools", "evidence" }.Select(ReadGuidance));
+        => string.Join("\n\n", new[] { "manual-ui", "extended-ui", "gestures", "app-tools", "evidence" }.Select(ReadGuidance));
 
     private static JsonObject BuildLoaderDefinition()
         => new()
         {
             ["type"] = "function", ["name"] = LoadToolName,
-            ["description"] = "Load capabilities when current tools are insufficient. manual-ui: find, wait, assert, tap, type, scroll, back, ordered tool batches; gestures: swipe, pinch, recorded gestures; app-tools: domain tool discovery/calls; evidence: screenshots/navigation; lifecycle: app/device lifecycle; tasks: task details. Loading performs no app action.",
+            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: swipe/pinch; app-tools: domain tools; evidence: screenshots/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: task details. No app action. Accepted manual-step declarations load manual-ui automatically.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
             {

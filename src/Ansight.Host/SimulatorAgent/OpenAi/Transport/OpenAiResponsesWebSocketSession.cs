@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
 
 namespace Ansight.Host.SimulatorAgent.OpenAi.Transport;
 
@@ -212,6 +213,9 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         var requestBytes = 0;
         var inputItemCount = 0;
         string? error = null;
+        string? requestSha256 = null;
+        string[]? inputItemTypes = null;
+        List<SimulatorAgentToolRegistration>? toolRegistrations = null;
         try
         {
             bool credentialChanged;
@@ -245,6 +249,24 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
             }
 
             var messageJson = payload.ToJsonString();
+            if (request.CaptureWireDiagnostics)
+            {
+                requestSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(messageJson)));
+                inputItemTypes = payload["input"]!.AsArray().OfType<JsonObject>()
+                    .Select(item => item["type"]?.GetValue<string>() ?? item["role"]?.GetValue<string>() ?? "unknown").ToArray();
+                toolRegistrations = [];
+                void RecordTools(JsonArray? definitions, string location)
+                {
+                    foreach (var tool in definitions?.OfType<JsonObject>() ?? [])
+                        if (tool["name"] is JsonValue name && name.TryGetValue<string>(out var toolName))
+                            toolRegistrations.Add(new(toolName,
+                                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(tool.ToJsonString()))), location));
+                }
+                RecordTools(payload["tools"] as JsonArray, "request");
+                foreach (var item in payload["input"]!.AsArray().OfType<JsonObject>())
+                    if (item["type"]?.GetValue<string>() == "additional_tools")
+                        RecordTools(item["tools"] as JsonArray, "input");
+            }
             inputItemCount = payload["input"]?.AsArray().Count ?? 0;
             requestBytes = Encoding.UTF8.GetByteCount(messageJson);
             requestPrepared = stopwatch.ElapsedMilliseconds;
@@ -349,7 +371,11 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                 ConnectionSucceeded = connectionSucceeded,
                 StartedUtc = startedUtc,
                 ConnectionDurationMilliseconds = connectionDurationMilliseconds,
-                Error = error
+                Error = error,
+                ContextGeneration = request.CaptureWireDiagnostics ? request.ContextGeneration : null,
+                RequestSha256 = requestSha256,
+                InputItemTypes = inputItemTypes,
+                ToolRegistrations = toolRegistrations
             });
         }
     }

@@ -8,6 +8,28 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 public sealed class OpenAiResponsesWebSocketSessionTests
 {
     [Fact]
+    public async Task CreateResponseAsync_TraceDescribesTheExactWireRegistrationsWithoutToolArguments()
+    {
+        var connection = new FakeWebSocketConnection(CompletedEvent("resp_1"), CompletedEvent("resp_2"));
+        await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
+        await session.CreateResponseAsync(CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true), CancellationToken.None);
+        var declaration = AgentToolCatalog.CreateAdditionalToolsInput(new JsonArray(new JsonObject
+            { ["type"] = "function", ["name"] = "ansight_find_ui", ["parameters"] = new JsonObject { ["type"] = "object" } }));
+        var input = new JsonArray(declaration, new JsonObject { ["type"] = "function_call_output", ["call_id"] = "find", ["output"] = "private app evidence" });
+        var response = await session.CreateResponseAsync(CreateRequest(input, input, false) with
+        { CaptureWireDiagnostics = true, ContextGeneration = 2 }, CancellationToken.None);
+        var attempt = Assert.Single(response.Transport!.Attempts);
+        Assert.Equal(2, attempt.ContextGeneration);
+        Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(connection.SentMessages[1]))), attempt.RequestSha256);
+        Assert.Equal(new[] { "additional_tools", "function_call_output" }, attempt.InputItemTypes);
+        var registration = Assert.Single(attempt.ToolRegistrations!, item => item.Name == "ansight_find_ui");
+        Assert.Equal("input", registration.Location);
+        Assert.Equal(64, registration.SchemaSha256.Length);
+        Assert.DoesNotContain("private app evidence", System.Text.Json.JsonSerializer.Serialize(attempt));
+        Assert.Equal("resp_1", ParseObject(connection.SentMessages[1])["previous_response_id"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task CreateResponseAsync_ContinuesWithPreviousResponseAndIncrementalInput()
     {
         var connection = new FakeWebSocketConnection(

@@ -1,46 +1,22 @@
 <!-- template:manual-ui -->
-Use focused find/wait/assert queries before requesting whole trees. Discovery defaults to case-insensitive
-contains matching; set matchMode=exact for equality. If spelling is uncertain after no matches, try fuzzy once,
-inspect matchScore/matchReason, and act through the returned exact tapHint.selector. Never use fuzzy actions.
-Add role, type, action, or enabled constraints only when observed or required; custom controls may expose a
-different role than their visible label suggests. type belongs to the target itself. Scope through
-ancestorAutomationId, not a container's type. Do not retain an index after changing its selector filters.
+Use focused find/wait queries and exact observed selectors or tapHint.selector.
+Add role, type, action, or enabled constraints only when observed or required.
+Selector fields are ANDed on one node; type belongs to the target itself, not its ancestor.
+Discovery supports contains/exact/fuzzy; actions use exact hints. Keep
+index and targetFingerprint unchanged. Short node IDs expire with the next observation or UI action.
 
-Before manual UI, call ansight_declare_uncovered_step when repository coverage requires it. Use
-starting-state-not-satisfied for an uncovered prerequisite and reassess after establishing it; use scope-mismatch
-or missing-input only for the exact task's extra operation or missing property. Use partial-task-residual only
-after the covered portion passed, and task-failed for an attempted failure. Reassess after page/tab changes,
-including Back; same-page text entry, scrolling, and performed=false do not invalidate a declaration.
+An accepted uncovered-step declaration loads manual-ui automatically. Reassess after a confirmed page/tab/modal
+transition or unknown navigation state. Unchanged navigation, typing and rejected actions retain the assessment.
+Use taskDecisions to exclude several irrelevant tasks with individual evidence in one declaration.
 
-For a short sequence whose next actions are already known, prefer ansight_run_ui_batch to separate model passes.
-It executes 2–8 find/tap/type/wait/assert calls in order, through the normal guards, and records each result.
-Each step has toolName and arguments using that tool's schema. After find, a tap or type step may set
-usePreviousTarget=true and omit all selector/coordinate fields; the host copies the one exact returned target.
-A missing, truncated, or duplicate find result stops the batch for your decision; it never chooses a duplicate.
-For example: find the search field, type with usePreviousTarget=true and value="Eagle Rock", then wait for the
-known loading indicator to disappear. Inspect the results before planning which one to open. When the exact field
-is already observed, start with type directly; type focuses the field, so a separate tap is unnecessary.
-Do not batch unknown targets, guessed future selectors, tasks, tool loading, completion, or actions whose scope
-depends on an earlier result. Stop on errors; never replay a successful prefix just because a later step failed.
+Run 1–8 already-planned find/tap/type/wait calls through ansight_run_ui_batch. Use usePreviousTarget=true on
+tap/type immediately after a unique find, with only action options; the host copies its exact target.
+Never guess future targets, batch tasks/completion, or replay a successful prefix after a later failure.
+Type focuses and replaces the field by default; no separate tap is needed. Search input echo is not a result:
+wait for the exact result outside the input, an explicit empty/error state, or loading completion.
 
-ansight_type_text replaces content by default; clear with value="" and replaceExisting=true. Never restart to
-clear a field or search for the app's own name. Use ansight_type_secret only with a declared host-managed alias
-and exact target; never reveal a secret or pass it through ansight_type_text. After search/filter input, wait for
-the exact result, explicit empty/error state, or loading completion. Scope results to an observed result
-container or non-textbox selector. Input echo is not a result. Do not scroll or clear a query while it is loading,
-or select a result unless requested. Unrepresented result text requires a stable exact container or authoritative
-domain evidence; an unverified list position is insufficient.
-
-visible=true does not mean onScreen=true. Scroll an offscreen target's nearest stable scroll container toward its
-viewportRelation: ansight_scroll_ui orientation=down reveals content below, up reveals content above. Re-query
-the same selector after each bounded scroll; stop on an unchanged viewport or terminal boundary. notRepresented
-may mean virtualization: try one bounded scroll in the known result container. If a dominant scrollable region
-lacks semantics, one selector-free viewport scroll is allowed only when no competing scroll regions are visible;
-re-observe immediately and stop if semantics do not change. Do not repeatedly scroll an unrelated page.
-
-Follow returned tapHint.selector exactly, then verify the requested postcondition. Back must serve the requested
-path and be followed by destination verification. Prefer the most specific semantic wait/assertion; a delivered
-tap, scroll, or successful text entry alone does not prove navigation, search completion, or loaded content.
+Load extended-ui for scroll/assert/secret entry; gestures for swipe/pinch. Visible does not imply on-screen.
+Use observed targets and verify the requested postcondition. Back must serve the requested path.
 <!-- /template -->
 
 <!-- template:gestures -->

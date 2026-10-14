@@ -10,7 +10,7 @@ using Ansight.Infrastructure.Security;
 
 namespace Ansight.Host.SimulatorAgent;
 
-public sealed class SimulatorAgentService : IDisposable
+public sealed partial class SimulatorAgentService : IDisposable
 {
     private const string LegacyLocalModelCredentialStorageKey = "simulator-agent.openai-api-key.v1";
     private const string CompleteInstructionToolName = "complete_instruction";
@@ -36,7 +36,7 @@ public sealed class SimulatorAgentService : IDisposable
     private const int MaximumAuditOcrResultCharacters = 1_000_000;
     private const int MaximumAppGraphGuidanceCharacters = 16_000;
     private const int AuditSchemaVersion = 17;
-    private const string PromptCacheKey = "ansight-simulator-agent-v43";
+    private const string PromptCacheKey = "ansight-simulator-agent-v44";
     private static readonly HashSet<string> strongTaskMatchIgnoredWords = new(StringComparer.Ordinal)
     {
         "a", "an", "and", "for", "from", "in", "into", "it", "its", "no", "of", "on", "or",
@@ -623,7 +623,7 @@ public sealed class SimulatorAgentService : IDisposable
                     if (!initialObservation.IsError
                         && IsTruncatedUiObservation(initialObservation.ModelOutput ?? initialObservation.Output))
                     {
-                        conversation.AddUserInput(ReadFeedbackPrompt("truncated-ui-observation"));
+                        conversation.AddFeedback(ReadFeedbackPrompt("truncated-ui-observation"), "Current observation is truncated; use focused evidence for omitted targets.");
                     }
                 }
                 var history = conversation.History;
@@ -750,7 +750,9 @@ public sealed class SimulatorAgentService : IDisposable
                             ReplayReason = conversation.ReplayReason,
                             CompactThresholdTokens = webSocketActive ? webSocketOptions!.CompactThresholdTokens : null,
                             UsePromptCacheBreakpoint = webSocketActive && OpenAiResponsesClient.SupportsPromptCacheBreakpoints(model),
-                            CompletionOnly = isCompletionGracePass
+                            CompletionOnly = isCompletionGracePass,
+                            ContextGeneration = conversation.ContextGeneration,
+                            CaptureWireDiagnostics = request.CaptureTrace
                         };
                         if (webSocketActive && openAiWebSocketSession is not null)
                         {
@@ -868,6 +870,7 @@ public sealed class SimulatorAgentService : IDisposable
                         instructions.Count,
                         turn));
                     conversation.AcceptResponse(response.Output);
+                    toolCatalog?.BeginContextGeneration(conversation.ContextGeneration);
 
                     if (response.FunctionCalls.Count == 0)
                     {
@@ -945,6 +948,47 @@ public sealed class SimulatorAgentService : IDisposable
                                     "app-graph-completion-rejected"));
                                 turnHadSuccessfulToolCall = true;
                                 continue;
+                            }
+                            if (call.Arguments["captureScreenshot"] is JsonValue captureFlag
+                                && captureFlag.TryGetValue<bool>(out var captureScreenshot) && captureScreenshot)
+                            {
+                                var captureStarted = DateTimeOffset.UtcNow;
+                                var captureTimer = Stopwatch.StartNew();
+                                var captureId = RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false);
+                                var captureArguments = new JsonObject { ["format"] = "png" };
+                                ToolCallResult capture;
+                                if (totalToolCalls >= request.MaximumToolCalls)
+                                    capture = CreateAgentGuardResult("toolBudget", "No tool budget remains for the required final screenshot.");
+                                else
+                                {
+                                    totalToolCalls++;
+                                    instructionToolCalls++;
+                                    activeInstructionToolCalls = instructionToolCalls;
+                                    try
+                                    {
+                                        capture = await toolGateway.ExecuteAsync("ansight_take_screenshot", captureArguments,
+                                            sessionId, captureId, cancellationToken).ConfigureAwait(false);
+                                    }
+                                    catch (Exception exception) when (exception is not OperationCanceledException)
+                                    {
+                                        capture = CreateAgentGuardResult("completionScreenshot", exception.Message);
+                                    }
+                                    toolCallAudits.Add(new SimulatorAgentToolCallAudit(toolCallAudits.Count + 1,
+                                        instructionIndex + 1, turn, call.CallId + ":screenshot", "ansight_take_screenshot", true,
+                                        captureId, captureStarted, captureTimer.ElapsedMilliseconds,
+                                        CreateAuditPayload(captureArguments.ToJsonString(), MaximumAuditArgumentCharacters, request.CaptureTrace),
+                                        CreateAuditPayload(capture.Output, MaximumAuditResultCharacters, request.CaptureTrace),
+                                        capture.IsError, capture.Message));
+                                }
+                                if (capture.IsError)
+                                    completion = ParseCompletion(new JsonObject
+                                    {
+                                        ["outcome"] = "failed",
+                                        ["summary"] = $"Required final screenshot failed: {capture.Message}. Prior assessment: {completion.Summary}"
+                                    });
+                                var completionOutput = JsonNode.Parse(completion.Output)!.AsObject();
+                                completionOutput["screenshot"] = JsonNode.Parse(capture.Output);
+                                completion = completion with { Output = completionOutput.ToJsonString() };
                             }
                             if (appGraphExplorationName is not null)
                             {
@@ -1132,10 +1176,26 @@ public sealed class SimulatorAgentService : IDisposable
                             {
                                 toolResult = CreateAgentGuardResult("batchGuard", batchError);
                             }
+                            else if (call.Name == AgentToolCatalog.LoadToolName && readOnlyStagnationWarningIssued)
+                            {
+                                stagnationSummary = $"Instruction stopped after {consecutiveReadOnlyToolCalls} consecutive read-only tool calls without an action or completion.";
+                                toolResult = CreateAgentGuardResult("stagnationGuard", stagnationSummary);
+                            }
                             else if (toolCatalog is not null && call.Name == AgentToolCatalog.LoadToolName)
                             {
                                 loadedTools = toolCatalog.Load(call.Arguments);
                                 toolResult = loadedTools.Result;
+                                if (loadedTools.RecoveryRequested)
+                                {
+                                    // One fallback per instruction: retire the loader, keep the permission-filtered
+                                    // catalogue explicit, and replay state/results without dispatching any app action.
+                                    tools = toolCatalog.FullTools;
+                                    toolCatalog = null;
+                                    agentInstructions = BuildAgentInstructions(hasUsableAppGraphRoute,
+                                        appGraphExplorationName is not null, sessionCapabilities);
+                                    conversation.RecoverToolRegistrations();
+                                    conversation.AddUserInput("Tool registration recovery: the next request supplies all permitted tools explicitly. Continue from retained results; do not repeat completed app actions.");
+                                }
                             }
                             else if (toolCatalog?.IsDeferred(call.Name) == true)
                             {
@@ -1147,7 +1207,7 @@ public sealed class SimulatorAgentService : IDisposable
                                     DeclareUncoveredStepToolName,
                                     StringComparison.Ordinal))
                             {
-                                toolResult = CreateUncoveredStepDeclarationResult(
+                                toolResult = CreateUncoveredStepAssessmentResult(
                                     call.Arguments,
                                     eligibleRepositoryTasks,
                                     attemptedRepositoryTaskIds,
@@ -1161,6 +1221,10 @@ public sealed class SimulatorAgentService : IDisposable
                                     {
                                         excludedRepositoryTaskIds.Add(excludedTaskId);
                                     }
+                                    foreach (var excluded in ReadAssessmentExclusions(toolResult))
+                                        excludedRepositoryTaskIds.Add(excluded);
+                                    if (!taskReassessmentRequired && toolCatalog is not null && !toolCatalog.IsBundleLoaded("manual-ui"))
+                                        loadedTools = toolCatalog.Load(new JsonObject { ["bundle"] = "manual-ui" });
                                 }
                             }
                             else if (taskReassessmentRequired
@@ -1460,7 +1524,7 @@ public sealed class SimulatorAgentService : IDisposable
                                                                    && !excludedRepositoryTaskIds.Contains(task.TaskId));
                             if (toolResult.IsError)
                             {
-                                conversation.AddUserInput(ReadFeedbackPrompt("task-failed"));
+                                conversation.AddFeedback(ReadFeedbackPrompt("task-failed"), "Task failed. Preserve its result and passed assertions; do not replay failed actions to hide the failure.");
                             }
                         }
 
@@ -1487,7 +1551,7 @@ public sealed class SimulatorAgentService : IDisposable
                         {
                             // A remaining shortcut is not a remaining requirement. Put the completion
                             // guidance after task state so that reassessment does not invite extra work.
-                            conversation.AddUserInput(ReadFeedbackPrompt("task-passed"));
+                            conversation.AddFeedback(ReadFeedbackPrompt("task-passed"), "Task passed. Reuse its assertions; continue only for unproven requested work.");
                         }
 
                         if (!toolResult.IsError
@@ -1552,7 +1616,7 @@ public sealed class SimulatorAgentService : IDisposable
                             && string.Equals(call.Name, "ansight_get_live_visual_tree", StringComparison.Ordinal)
                             && IsTruncatedUiObservation(toolResult.ModelOutput ?? toolResult.Output))
                         {
-                            conversation.AddUserInput(ReadFeedbackPrompt("truncated-ui-observation"));
+                            conversation.AddFeedback(ReadFeedbackPrompt("truncated-ui-observation"), "Current observation is truncated; use focused evidence for omitted targets.");
                         }
 
                         if (!toolResult.IsError
@@ -2684,6 +2748,7 @@ public sealed class SimulatorAgentService : IDisposable
         }
 
         return call.Name is "ansight_get_live_visual_tree"
+            or AgentToolCatalog.LoadToolName
             or "ansight_get_live_navigation_structure"
             or "ansight_find_ui"
             or "ansight_scan_screen"
@@ -3381,6 +3446,8 @@ public sealed class SimulatorAgentService : IDisposable
         private readonly JsonArray history;
         private readonly JsonArray pendingInput;
         private readonly List<JsonObject> retainedToolCapabilities = [];
+        private readonly HashSet<string> suppliedFeedback = new(StringComparer.Ordinal);
+        private readonly HashSet<string> suppliedGuidance = new(StringComparer.Ordinal);
         private bool appendOnly;
         private int protectedHistoryPrefixLength = 1;
 
@@ -3402,6 +3469,8 @@ public sealed class SimulatorAgentService : IDisposable
         public bool RequiresFullReplay { get; private set; } = true;
 
         public string? ReplayReason { get; private set; }
+
+        public int ContextGeneration { get; private set; }
 
         public void AcceptResponse(JsonArray output)
         {
@@ -3427,12 +3496,14 @@ public sealed class SimulatorAgentService : IDisposable
                         {
                             history.RemoveAt(0);
                         }
-                        // A checkpoint summarizes conversation, not executable tool schemas.
-                        // Restore declarations only in the recovery snapshot; the live chain
-                        // already has them and pendingInput must remain incremental.
-                        for (var capabilityIndex = 0; capabilityIndex < retainedToolCapabilities.Count; capabilityIndex++)
+                        ContextGeneration++;
+                        suppliedFeedback.Clear();
+                        // Registrations must reach the active chain as well as its recovery snapshot.
+                        // Re-advertise once per new checkpoint without restarting or replaying actions.
+                        foreach (var capability in retainedToolCapabilities)
                         {
-                            history.Insert(capabilityIndex, retainedToolCapabilities[capabilityIndex].DeepClone());
+                            history.Add(capability.DeepClone());
+                            pendingInput.Add(capability.DeepClone());
                         }
                         break;
                     }
@@ -3453,6 +3524,20 @@ public sealed class SimulatorAgentService : IDisposable
             {
                 RequireReplayIf(TrimHistory(history, protectedHistoryPrefixLength), "history-trim");
             }
+        }
+
+        public void AddFeedback(string text, string update)
+            => AddUserInput(suppliedFeedback.Add(text) ? text : update);
+
+        public void RecoverToolRegistrations()
+        {
+            foreach (var input in new[] { history, pendingInput })
+                for (var index = input.Count - 1; index >= 0; index--)
+                    if (input[index]?["type"]?.GetValue<string>() == "additional_tools")
+                        input.RemoveAt(index);
+            retainedToolCapabilities.RemoveAll(item => ReadString(item, "type") == "additional_tools");
+            RequiresFullReplay = true;
+            ReplayReason = "tool-registration-recovery";
         }
 
         public void AddFunctionOutput(string callId, string output)
@@ -3523,7 +3608,7 @@ public sealed class SimulatorAgentService : IDisposable
 
         public void AddGuidance(string guidance)
         {
-            if (string.IsNullOrWhiteSpace(guidance))
+            if (string.IsNullOrWhiteSpace(guidance) || !suppliedGuidance.Add(guidance))
             {
                 return;
             }
@@ -3536,7 +3621,19 @@ public sealed class SimulatorAgentService : IDisposable
 
         private void AddCapability(JsonObject item)
         {
-            retainedToolCapabilities.Add(item.DeepClone().AsObject());
+            // Refreshes may repeat a schema on the wire. The recovery registry holds each
+            // definition once so successive checkpoints cannot multiply registrations.
+            var retained = item.DeepClone().AsObject();
+            if (retained["tools"] is JsonArray incoming)
+            {
+                var existingNames = retainedToolCapabilities
+                    .SelectMany(capability => capability["tools"]?.AsArray().OfType<JsonObject>() ?? [])
+                    .Select(tool => tool["name"]?.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+                for (var index = incoming.Count - 1; index >= 0; index--)
+                    if (existingNames.Contains(incoming[index]?["name"]?.GetValue<string>())) incoming.RemoveAt(index);
+                if (incoming.Count > 0) retainedToolCapabilities.Add(retained);
+            }
+            else retainedToolCapabilities.Add(retained);
             if (appendOnly)
             {
                 history.Add(item);
@@ -3944,14 +4041,16 @@ public sealed class SimulatorAgentService : IDisposable
                         {
                             ["type"] = "string"
                         }
-                    }
+                    },
+                    ["taskDecisions"] = BuildTaskDecisionsSchema()
                 },
                 ["required"] = new JsonArray(
                     "uncoveredStep",
                     "reason",
                     "relatedTaskId",
                     "evidence",
-                    "consideredTaskIds"),
+                    "consideredTaskIds",
+                    "taskDecisions"),
                 ["additionalProperties"] = false
             }
         };
@@ -3979,9 +4078,14 @@ public sealed class SimulatorAgentService : IDisposable
                     {
                         ["type"] = "string",
                         ["description"] = "Concise, evidence-grounded outcome summary."
+                    },
+                    ["captureScreenshot"] = new JsonObject
+                    {
+                        ["type"] = "boolean",
+                        ["description"] = "True only when a final screenshot artifact is requested and all visual/semantic checks are already established. The host captures it before accepting completion; capture failure fails the instruction."
                     }
                 },
-                ["required"] = new JsonArray("outcome", "summary"),
+                ["required"] = new JsonArray("outcome", "summary", "captureScreenshot"),
                 ["additionalProperties"] = false
             }
         };

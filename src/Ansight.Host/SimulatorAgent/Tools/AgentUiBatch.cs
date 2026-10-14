@@ -33,7 +33,7 @@ internal sealed class AgentUiBatch(
         return new JsonObject
         {
             ["type"] = "function", ["name"] = ToolName, ["strict"] = false,
-            ["description"] = "Run 2–8 UI tools in order without another model pass. Each step uses the named tool's argument schema and normal guards. Stops on failure or an ambiguous/empty find. Set usePreviousTarget=true on tap/type immediately after find to copy its unique exact target. Use only when the whole short plan is known; return to the model for choices between results. Every step is traced separately.",
+            ["description"] = "Run 1–8 UI tools in order without another model pass. Each step uses the named tool's argument schema and normal guards. Stops on failure or an ambiguous/empty find. Set usePreviousTarget=true on tap/type immediately after find to copy its unique exact target. Use only when the whole short plan is known; return to the model for choices between results. Every step is traced separately.",
             ["parameters"] = new JsonObject
             {
                 ["type"] = "object", ["additionalProperties"] = false,
@@ -42,7 +42,7 @@ internal sealed class AgentUiBatch(
                 {
                     ["steps"] = new JsonObject
                     {
-                        ["type"] = "array", ["minItems"] = 2, ["maxItems"] = MaximumSteps,
+                        ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaximumSteps,
                         ["items"] = new JsonObject
                         {
                             ["type"] = "object", ["additionalProperties"] = false,
@@ -159,9 +159,9 @@ internal sealed class AgentUiBatch(
     private bool TryParse(JsonObject arguments, out List<AgentUiBatchStep> steps, out string error)
     {
         steps = [];
-        error = "A UI batch must contain 2–8 steps using available UI tools. Nested batches, tasks, and completion calls are not allowed.";
+        error = "A UI batch must contain 1–8 steps using available UI tools. Nested batches, tasks, and completion calls are not allowed.";
         var available = availableTools.OfType<JsonObject>().Select(tool => ReadString(tool["name"])).ToHashSet();
-        if (!available.Contains(ToolName) || arguments["steps"] is not JsonArray { Count: >= 2 and <= MaximumSteps } items)
+        if (!available.Contains(ToolName) || arguments["steps"] is not JsonArray { Count: >= 1 and <= MaximumSteps } items)
             return false;
         foreach (var item in items)
         {

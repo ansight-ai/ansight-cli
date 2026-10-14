@@ -37,7 +37,8 @@ Call each preloaded shortcut as its named function with the declared inputs. Whe
 taskId is the repository ID shown in the mapping, not the shortcut function name.
 
 For unavailable capabilities, call ansight_load_tools with the needed bundle; it adds tools without acting on the
-app. Before manual actions, use ansight_declare_uncovered_step when required by the host. Use starting-state-not-satisfied
+app. Accepted manual-step declarations automatically load manual-ui; do not load it again.
+Use taskDecisions for multiple scope/input exclusions in one assessment, each with concrete evidence. Before manual actions, use ansight_declare_uncovered_step when required by the host. Use starting-state-not-satisfied
 for a temporary prerequisite, scope-mismatch for extra operations, or missing-input for an unavailable required
 property; identify the exact task and reason. Scope and missing-input exclusions persist for this instruction.
 Same-page typing, scrolling, and rejected actions with performed=false do not require a new declaration.
@@ -78,6 +79,9 @@ actions, act once and verify the specific postcondition. A delivered gesture is 
 evidence returned with actions. After two failed checks, change selector, subtree, or evidence source. Stop acting
 when the requested outcome is verified. Call complete_instruction exactly once: succeeded only with supporting
 evidence, otherwise failed with the specific unmet outcome. Never claim unverified actions or results.
+When a final screenshot is requested only as an artifact, set captureScreenshot=true on complete_instruction;
+the host captures it before completing and reports capture failure as failure. Verify the outcome with semantic
+or domain evidence first; captureScreenshot supplies an artifact, not visual verification. Otherwise use false.
 
 $APP_GRAPH_ROUTE_INSTRUCTIONS$
 
