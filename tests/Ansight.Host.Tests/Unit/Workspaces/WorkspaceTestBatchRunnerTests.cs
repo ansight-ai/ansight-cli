@@ -6,6 +6,41 @@ namespace Ansight.Host.Tests.Unit.Workspaces;
 public sealed class WorkspaceTestBatchRunnerTests
 {
     [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task RunAllAsync_PropagatesDefaultTraceAndExplicitOptOut(bool? captureTrace, bool expectedTrace)
+    {
+        using var environment = new TestEnvironment();
+        var workspacePath = CreateWorkspace(environment.RootPath, "trace");
+        var test = Assert.Single(WorkspaceTestCatalog.Load(workspacePath).Tests);
+        var runner = new WorkspaceTestBatchRunner((request, _, _) =>
+        {
+            Assert.Equal(expectedTrace, request.CaptureTrace);
+            return Task.FromResult(new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []));
+        }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
+        var batch = new WorkspaceTestBatchRequest(workspacePath);
+        if (captureTrace.HasValue) batch = batch with { CaptureTrace = captureTrace.Value };
+
+        var result = await runner.RunAllAsync(batch);
+
+        Assert.Single(result.Results);
+    }
+
+    [Fact]
+    public void LocalExecutionJsonDefaultsToTraceButPreservesExplicitOptOut()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var defaultRequest = JsonSerializer.Deserialize<LocalWorkspaceTestExecutionRequest>(
+            """{"workspacePath":"/workspace"}""", options);
+        var disabledRequest = JsonSerializer.Deserialize<LocalWorkspaceTestExecutionRequest>(
+            """{"workspacePath":"/workspace","captureTrace":false}""", options);
+
+        Assert.True(defaultRequest!.CaptureTrace);
+        Assert.False(disabledRequest!.CaptureTrace);
+    }
+
+    [Theory]
     [InlineData(false, 1, false)]
     [InlineData(true, 1, true)]
     [InlineData(true, 2, true)]

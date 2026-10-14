@@ -56,7 +56,7 @@ public sealed class WorkspaceTestTraceExporter
         {
             return new WorkspaceTestTraceExportResult(
                 false,
-                $"Run(s) {string.Join(", ", untracedRunIds)} did not capture a trace. Rerun with --trace before exporting.",
+                $"Run(s) {string.Join(", ", untracedRunIds)} did not capture a trace. Rerun with trace capture enabled (omit --no-trace) before exporting.",
                 normalizedRunId,
                 normalizedOutputPath,
                 0,

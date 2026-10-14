@@ -617,7 +617,7 @@ internal static class AppCommands
              --model-transport <mode>         Model connection: auto (default), websocket, or http
              --team-id <uuid>         Select an organisation when more than one permits this app
              --app-graph              Include authorized published App Graph route guidance
-             --trace                  Show task discovery decisions; capture full model, tool, and graph trace
+             --no-trace               Disable full trace capture (enabled by default; --trace is still accepted)
              --app <path>             Install and launch an .app, .ipa, or .apk artifact
              --ipa <path>             .ipa-only alias for --app
              --application-path <path> Generic alias for --app

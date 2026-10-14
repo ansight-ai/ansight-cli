@@ -666,7 +666,7 @@ internal static class AppGraphCommands
                 {
                     Reasoning = reasoning,
                     AppGraphExplorationName = cloudTarget.GraphName,
-                    CaptureTrace = arguments.HasFlag("trace"),
+                    CaptureTrace = arguments.CaptureTrace,
                     MaximumInstructionCharacters = ExploreMaximumInstructionCharacters,
                     MaximumModelOutputTokens = ExploreMaximumModelOutputTokens,
                     OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
@@ -1216,7 +1216,7 @@ internal static Task<int> SyncAsync(
                     ContinueAfterInstructionFailure: false)
                 {
                     Reasoning = reasoning,
-                    CaptureTrace = arguments.HasFlag("trace"),
+                    CaptureTrace = arguments.CaptureTrace,
                     OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
                     TargetDeviceIdentifier = arguments.GetOption("device-id") ?? arguments.GetOption("device")
                 },
@@ -1410,7 +1410,7 @@ internal static Task<int> SyncAsync(
              --reasoning <mode>              Reasoning mode: fast (default), balanced, or deep
              --model-transport <mode>         Model connection: auto (default), websocket, or http
              --device-id <identifier>         Target a specific simulator or device
-             --trace                          Capture the full exportable agent trace
+             --no-trace                       Disable full trace capture (enabled by default; --trace is still accepted)
 
            Explore options:
              --app-id <id>                    Target an app explicitly; otherwise use this workspace
@@ -1436,7 +1436,7 @@ internal static Task<int> SyncAsync(
              --reasoning <mode>              Reasoning mode: fast (default), balanced, or deep
              --model-transport <mode>         Model connection: auto (default), websocket, or http
              --device-id <identifier>         Target a specific simulator or device
-             --trace                          Capture the full exportable agent trace
+             --no-trace                       Disable full trace capture (enabled by default; --trace is still accepted)
 
            With no --graph, exploration reuses the app's Default graph or creates it as a reviewable
            draft after a successful run. The resident host selects the latest linked session for the

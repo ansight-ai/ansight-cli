@@ -125,7 +125,7 @@ internal static class TestCommands
         {
             BatchRunId = ResolveBatchRunId(arguments),
             Reasoning = ReasoningOptions.Resolve(arguments),
-            CaptureTrace = arguments.HasFlag("trace"),
+            CaptureTrace = arguments.CaptureTrace,
             OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
             SecretResolver = ResolveTestSecret
         };
@@ -231,7 +231,7 @@ internal static class TestCommands
         {
             Source = "cli",
             Reasoning = ReasoningOptions.Resolve(arguments),
-            CaptureTrace = arguments.HasFlag("trace"),
+            CaptureTrace = arguments.CaptureTrace,
             OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
             SecretResolver = ResolveTestSecret,
             Targets = targets.Count > 1 ? targets : null,
@@ -803,7 +803,7 @@ internal static Task<int> RetryMeteringAsync(
                                           Audio APIs reject parallel batches: select one device and run serially
              --stop-on-failure            Finish active tests, then do not start pending tests
              --no-workspace-tools         Do not expose trusted repository tasks to the agent
-             --trace                      Capture full model context, tool payloads, and graph trace
+             --no-trace                   Disable full trace capture (enabled by default; --trace is still accepted)
 
            Output and audit:
              --result-file <path>         Write the versioned JSON result to this path

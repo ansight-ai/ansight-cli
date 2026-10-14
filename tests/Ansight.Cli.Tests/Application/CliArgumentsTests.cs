@@ -3,6 +3,34 @@ namespace Ansight.Cli.Tests.Application;
 public sealed class CliArgumentsTests
 {
     [Fact]
+    public void Parse_CapturesTracesByDefault()
+    {
+        Assert.True(CliArguments.Parse(["test", "run", "workspace", "test-id"]).CaptureTrace);
+    }
+
+    [Theory]
+    [InlineData("--trace", true)]
+    [InlineData("--no-trace", false)]
+    public void Parse_TraceFlagsDoNotConsumeRunPositionals(string flag, bool captureTrace)
+    {
+        var arguments = CliArguments.Parse(["test", "run", flag, "workspace", "test-id"]);
+
+        Assert.Equal(captureTrace, arguments.CaptureTrace);
+        Assert.Equal(["test", "run", "workspace", "test-id"], arguments.Positionals);
+    }
+
+    [Theory]
+    [InlineData("--trace", "--no-trace")]
+    [InlineData("--no-trace", "--trace")]
+    public void Parse_NoTraceTakesPrecedenceOverLegacyTrace(string first, string second)
+    {
+        var arguments = CliArguments.Parse(["app", "execute", first, second, "session-1"]);
+
+        Assert.False(arguments.CaptureTrace);
+        Assert.Equal(["app", "execute", "session-1"], arguments.Positionals);
+    }
+
+    [Fact]
     public void Parse_DiagnosticIsBooleanOption()
     {
         var arguments = CliArguments.Parse(["example", "command", "--diagnostic", "next-position"]);

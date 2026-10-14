@@ -24,6 +24,8 @@ internal sealed class CliArguments
         "verbose",
         "diagnostic",
         "audit",
+        "trace",
+        "no-trace",
         "stdin",
         "connected",
         "exclude-native-logs",
@@ -121,6 +123,8 @@ internal sealed class CliArguments
     public bool IsSilent => HasFlag("silent");
 
     public bool IsVerbose => HasFlag("verbose");
+
+    public bool CaptureTrace => !HasFlag("no-trace");
 
     public bool ShowHelp => HasFlag("help");
 

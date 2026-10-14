@@ -18,7 +18,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Null(request.MaximumModelOutputTokens);
         Assert.Null(request.AppGraphExplorationName);
         Assert.True(request.ContinueAfterInstructionFailure);
-        Assert.False(request.CaptureTrace);
+        Assert.True(request.CaptureTrace);
         Assert.Equal(SimulatorAgentOpenAiProtocol.Http, request.OpenAiProtocol);
     }
 
@@ -1065,7 +1065,7 @@ public sealed partial class SimulatorAgentServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_DefaultAuditKeepsMetadataButOmitsHeavyTracePayloads()
+    public async Task RunAsync_DisabledTraceKeepsMetadataButOmitsHeavyTracePayloads()
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
@@ -1084,7 +1084,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest(
             "session-123",
-            ["Verify the current screen."]));
+            ["Verify the current screen."]) { CaptureTrace = false });
 
         Assert.False(result.Audit.TraceEnabled);
         Assert.Null(result.Audit.AgentPrompt);
@@ -1230,7 +1230,6 @@ public sealed partial class SimulatorAgentServiceTests
             "session-123",
             ["Open the app and verify the welcome screen."])
         {
-            CaptureTrace = true,
             MaximumInstructionCharacters = 8_000,
             MaximumModelOutputTokens = 32_000
         });

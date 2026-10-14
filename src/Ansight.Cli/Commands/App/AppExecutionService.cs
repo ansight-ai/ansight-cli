@@ -589,7 +589,7 @@ internal static class AppExecutionService
                 WorkspaceTestName = "App execution",
                 AppGraphPlans = appGraphDiscovery.Plans,
                 AppGraphEnabled = arguments.HasFlag("app-graph"),
-                CaptureTrace = arguments.HasFlag("trace"),
+                CaptureTrace = arguments.CaptureTrace,
                 OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments)
             };
 
@@ -765,7 +765,7 @@ internal static Task<Guid?> ResolveHostedGraphTeamIdAsync(
             => $"{result.Status.ToString().ToUpperInvariant()}: {result.Message}{Environment.NewLine}"
                + $"{runLabel}: {result.Audit.RunId}{Environment.NewLine}"
                + $"Instructions: {result.Instructions.Count}; turns: {result.TotalTurns}; tool calls: {result.TotalToolCalls}"
-               + $"{Environment.NewLine}Trace: {(result.Audit.TraceEnabled == true ? "captured" : "not captured; rerun with --trace")}"
+               + $"{Environment.NewLine}Trace: {(result.Audit.TraceEnabled == true ? "captured" : "not captured; rerun without --no-trace")}"
                + (string.IsNullOrWhiteSpace(result.AuditFilePath)
                    ? string.Empty
                    : $"{Environment.NewLine}Audit: {result.AuditFilePath}");

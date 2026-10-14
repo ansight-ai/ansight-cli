@@ -75,12 +75,13 @@ public sealed class WorkspaceTaskTestTests
     public async Task RunsRealTaskWithoutCloudAndPersistsHistory(string body, RepositoryTaskRunStatus status)
     {
         using var fixture = new Fixture(body);
-        var result = await fixture.Service.RunAsync(fixture.Request with { CaptureTrace = true });
+        var result = await fixture.Service.RunAsync(fixture.Request);
         Assert.True(result.TaskResult is not null, result.Message);
         Assert.Equal(status, result.TaskResult.Status);
         Assert.Equal(status == RepositoryTaskRunStatus.Passed, result.IsSuccess);
         Assert.Null(result.AgentResult);
         Assert.Equal("task", result.TaskAudit?.ExecutionKind);
+        Assert.True(result.TaskAudit!.TraceEnabled);
         Assert.Equal(0, result.TaskAudit!.ModelPassCount);
         Assert.Equal(0, result.TaskAudit.Tokens.TotalTokens);
         Assert.Empty(result.TaskAudit.Instructions);

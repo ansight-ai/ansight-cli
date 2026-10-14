@@ -76,3 +76,7 @@ schema. Keep secret aliases in `requiredSecrets` and read them via the task's
 in the task. `taskInput` is not accepted with `prompt`.
 
 Existing tests with both `taskId` and `prompt` retain agent execution.
+
+Full execution traces are captured by default for history review and export. Use
+`--no-trace` on `ansight test run` or `ansight test run-all` to retain only
+lightweight audit metadata. The existing `--trace` flag is still accepted.

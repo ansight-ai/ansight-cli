@@ -17,7 +17,7 @@ public sealed record WorkspaceTestBatchRequest(
 
     public string Source { get; init; } = "host";
 
-    public bool CaptureTrace { get; init; }
+    public bool CaptureTrace { get; init; } = true;
 
     public SimulatorAgentOpenAiProtocol OpenAiProtocol { get; init; } = SimulatorAgentOpenAiProtocol.Http;
 

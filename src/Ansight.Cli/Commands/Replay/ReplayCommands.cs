@@ -428,7 +428,7 @@ internal static class ReplayCommands
             WorkspacePath = arguments.GetOption("repository"),
             WorkspaceTestId = $"replay-{plan.SourceKind}",
             WorkspaceTestName = $"Replay {plan.SourceId}",
-            CaptureTrace = arguments.HasFlag("trace"),
+            CaptureTrace = arguments.CaptureTrace,
             OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments)
         };
     }
@@ -1002,7 +1002,7 @@ internal static class ReplayCommands
              --stop-on-failure          Stop after the first failed replay step (default)
              --secret <alias>           Expose a configured host-managed test secret (repeatable)
              --repository <path>        Expose trusted repository tasks to the replay agent
-             --trace                    Capture the full exportable agent trace
+             --no-trace                 Disable full trace capture (enabled by default; --trace is still accepted)
 
            Provider download options:
              --organization <slug>      Sentry organization slug

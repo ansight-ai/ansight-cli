@@ -203,7 +203,7 @@ internal sealed class ToolGateway : IToolGateway
             }
             else if (string.Equals(name, "ansight_list_tasks", StringComparison.Ordinal))
             {
-                // The run's --trace setting controls discovery diagnostics; keep inventories
+                // The run's trace capture setting controls discovery diagnostics; keep inventories
                 // and rejected candidates out of ordinary model tool responses.
                 RemoveParameter(parameters, "includeDiagnostics");
             }

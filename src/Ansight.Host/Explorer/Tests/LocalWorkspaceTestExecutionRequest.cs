@@ -14,7 +14,7 @@ public sealed record LocalWorkspaceTestExecutionRequest(
     int MaximumRoundTrips = 64,
     int MaximumToolCalls = 512,
     bool ContinueAfterFailure = true,
-    bool CaptureTrace = false,
+    bool CaptureTrace = true,
     bool EnableWorkspaceTools = true,
     Guid? TeamId = null)
 {
