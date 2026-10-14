@@ -10,6 +10,21 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed partial class RepositoryTaskTests
 {
+    [Fact]
+    public void GrantedSecretsAreRedactedInAppToolArgumentsAndEchoedResultsWithoutChangingExecutionValues()
+    {
+        var arguments = new JsonObject { ["action"] = "login", ["email"] = "test@example.invalid", ["password"] = "secret-test-value" };
+        var secrets = new[] { "test@example.invalid", "secret-test-value" };
+        var captured = RepositoryTaskCallTrace.CaptureArguments("ansight_call_app_tool", arguments,
+            "redpoint.authentication.force_state", secrets);
+        var result = RepositoryTaskCallTrace.CaptureResult(new JsonObject { ["nested"] = new JsonArray("echo secret-test-value") }, secretValues: secrets);
+        Assert.DoesNotContain("secret-test-value", captured.Content);
+        Assert.DoesNotContain("test@example.invalid", captured.Content);
+        Assert.DoesNotContain("secret-test-value", result.Content);
+        Assert.Contains("login", captured.Content);
+        Assert.Equal("secret-test-value", arguments["password"]!.GetValue<string>());
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

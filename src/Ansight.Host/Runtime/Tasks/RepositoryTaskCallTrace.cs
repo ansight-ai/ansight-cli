@@ -29,7 +29,8 @@ internal static class RepositoryTaskCallTrace
         } : value?.DeepClone();
     }
 
-    public static RepositoryTaskCallPayload CaptureArguments(string toolName, JsonNode? arguments, string? appToolId = null)
+    public static RepositoryTaskCallPayload CaptureArguments(string toolName, JsonNode? arguments, string? appToolId = null,
+        IEnumerable<string>? secretValues = null)
     {
         var capturedArguments = arguments?.DeepClone() ?? new JsonObject();
         if (string.Equals(toolName, "ansight_type_text", StringComparison.Ordinal)
@@ -53,10 +54,12 @@ internal static class RepositoryTaskCallTrace
             RedactText(values?["arguments"] as JsonObject ?? values);
         }
 
+        RedactSecrets(capturedArguments, secretValues);
         return Capture(capturedArguments, MaximumArgumentCharacters);
     }
 
-    public static RepositoryTaskCallPayload CaptureResult(JsonNode? result, string? appToolId = null)
+    public static RepositoryTaskCallPayload CaptureResult(JsonNode? result, string? appToolId = null,
+        IEnumerable<string>? secretValues = null)
     {
         var captured = result?.DeepClone();
         if (string.Equals(appToolId, "clipboard.get_text", StringComparison.Ordinal)
@@ -65,7 +68,39 @@ internal static class RepositoryTaskCallTrace
         {
             RedactText(payload["result"] as JsonObject);
         }
+        RedactSecrets(captured, secretValues);
         return Capture(captured, MaximumResultCharacters);
+    }
+
+    private static void RedactSecrets(JsonNode? node, IEnumerable<string>? values)
+    {
+        var secrets = values?.Where(value => !string.IsNullOrEmpty(value)).Distinct(StringComparer.Ordinal)
+            .OrderByDescending(value => value.Length).ToArray() ?? [];
+        if (secrets.Length == 0 || node is null) return;
+        if (node is JsonObject obj)
+        {
+            foreach (var property in obj.ToArray())
+            {
+                if (property.Value is JsonValue scalar && scalar.TryGetValue<string>(out var text))
+                {
+                    foreach (var secret in secrets) text = text.Replace(secret, "<redacted secret>", StringComparison.Ordinal);
+                    obj[property.Key] = text;
+                }
+                else RedactSecrets(property.Value, secrets);
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            for (var index = 0; index < array.Count; index++)
+            {
+                if (array[index] is JsonValue scalar && scalar.TryGetValue<string>(out var text))
+                {
+                    foreach (var secret in secrets) text = text.Replace(secret, "<redacted secret>", StringComparison.Ordinal);
+                    array[index] = text;
+                }
+                else RedactSecrets(array[index], secrets);
+            }
+        }
     }
 
     private static void RedactText(JsonObject? value)

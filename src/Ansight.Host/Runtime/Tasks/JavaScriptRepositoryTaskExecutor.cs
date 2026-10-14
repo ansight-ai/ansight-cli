@@ -486,7 +486,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             && arguments["toolId"] is JsonValue toolIdValue
             && toolIdValue.TryGetValue<string>(out var toolIdText) ? toolIdText : null;
         var capturedArguments = request.CaptureTrace
-            ? RepositoryTaskCallTrace.CaptureArguments(toolName, message["arguments"], traceAppToolId)
+            ? RepositoryTaskCallTrace.CaptureArguments(toolName, message["arguments"], traceAppToolId, request.SecretValues.Values)
             : null;
         IReadOnlyList<RepositoryTaskToolCall>? childCalls = null;
         IReadOnlyList<RepositoryTaskAssertion>? childAssertions = null;
@@ -616,7 +616,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 CompletedAtUtc = DateTimeOffset.UtcNow,
                 CorrelationId = callCorrelationId,
                 Arguments = capturedArguments,
-                Result = request.CaptureTrace ? RepositoryTaskCallTrace.CaptureResult(callResult, traceAppToolId) : null,
+                Result = request.CaptureTrace ? RepositoryTaskCallTrace.CaptureResult(callResult, traceAppToolId, request.SecretValues.Values) : null,
                 ChildCalls = childCalls,
                 Assertions = childAssertions,
                 SourceTrace = sourceTrace
