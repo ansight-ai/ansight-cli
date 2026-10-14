@@ -380,6 +380,8 @@ public sealed partial class SimulatorAgentToolGatewayTests
                         ["taskId"] = "open-current-area-3d-guide",
                         ["title"] = "Open the current area 3D guide",
                         ["description"] = "Starts on the exact current AreaPage and opens its ready 3D guide.",
+                        ["startingState"] = "The requested area's detail page is open.",
+                        ["successState"] = "The requested area's 3D guide is ready.",
                         ["feature"] = "3d-guide",
                         ["inputSchema"] = new JsonObject
                         {
@@ -423,6 +425,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
         var taskProperties = Assert.IsType<JsonObject>(taskTool["parameters"]?["properties"]);
         Assert.Contains("targetArea", taskProperties);
         Assert.Contains("Repository task 'open-current-area-3d-guide'", taskTool["description"]?.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("The requested area's detail page is open.", shortcut.StartingState);
+        Assert.Equal("The requested area's 3D guide is ready.", shortcut.SuccessState);
+        Assert.Contains($"Starting state (planning hint): {shortcut.StartingState}", taskTool["description"]!.GetValue<string>());
+        Assert.Contains($"State on success (planning hint): {shortcut.SuccessState}", taskTool["description"]!.GetValue<string>());
 
         var normalizedCall = gateway.NormalizeFunctionCall(new OpenAiFunctionCall(
             "call-task",

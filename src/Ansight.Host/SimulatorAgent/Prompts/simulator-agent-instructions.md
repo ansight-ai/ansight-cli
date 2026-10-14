@@ -33,7 +33,18 @@ An attempted task remains callable. If it failed before changing the app because
 missing, first reassess its scope. Continue the requested path without it if it belongs to another workflow;
 otherwise establish that prerequisite and retry the same task once from the corrected state. Do not replay a task
 whose action or assertion failed, and do not manually repeat assertions that a task passed.
-Call each preloaded shortcut as its named function with the declared inputs. When using ansight_run_task instead,
+Use optional startingState and successState hints to plan task chains. These describe prerequisites and the state
+established or preserved on success; they are advisory, not observed state or executable checks. Establish the first
+task's prerequisites from current evidence, and use later tasks only when earlier passed checks establish theirs.
+When several requested tasks form an already-known sequence with all inputs available, prefer ansight_run_task_batch.
+Provide a concise user-visible reason explaining why they fit together, what establishes their starting states,
+and why no intermediate interpretation is needed. Each step supplies the exact taskId and input. For a known UI
+settling need, set that step's cooldownMs (0–10000 ms, default 0) and explain the wait in reason. It runs only after
+success when another task follows, is cancellable, and does not replace a task's readiness checks or assertions. Stop for another
+model pass when choices or inputs depend on interpreting results. Batches stop on the first failure; preserve
+passed assertions and never replay a successful prefix. Completion and a requested final screenshot follow review
+of the batch results. Do not batch optional work simply because a shortcut is available.
+Call an individual preloaded shortcut as its named function with the declared inputs. When using ansight_run_task instead,
 taskId is the repository ID shown in the mapping, not the shortcut function name.
 
 For unavailable capabilities, call ansight_load_tools with the needed bundle; it adds tools without acting on the

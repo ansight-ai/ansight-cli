@@ -1172,6 +1172,8 @@ internal sealed class ToolGateway : IToolGateway
             task["match"] is JsonObject match ? ReadDouble(match, "score") : null,
             task["match"] is JsonObject coverageMatch ? ReadDouble(coverageMatch, "coverage") : null)
         {
+            StartingState = ReadString(task, "startingState"),
+            SuccessState = ReadString(task, "successState"),
             Keywords = task["keywords"] is JsonArray keywords
                 ? keywords.OfType<JsonValue>()
                     .Select(value => value.TryGetValue<string>(out var keyword) ? keyword : null)
@@ -1218,7 +1220,9 @@ internal sealed class ToolGateway : IToolGateway
         {
             ["type"] = "function",
             ["name"] = task.ToolName,
-            ["description"] = $"Repository task '{task.TaskId}': {task.Description}",
+            ["description"] = $"Repository task '{task.TaskId}': {task.Description}"
+                + (task.StartingState is null ? string.Empty : $" Starting state (planning hint): {task.StartingState}")
+                + (task.SuccessState is null ? string.Empty : $" State on success (planning hint): {task.SuccessState}"),
             ["parameters"] = parameters
         };
     }

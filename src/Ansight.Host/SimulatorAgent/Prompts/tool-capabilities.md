@@ -11,7 +11,7 @@ Use taskDecisions to exclude several irrelevant tasks with individual evidence i
 
 Run 1–8 already-planned find/tap/type/wait calls through ansight_run_ui_batch. Use usePreviousTarget=true on
 tap/type immediately after a unique find, with only action options; the host copies its exact target.
-Never guess future targets, batch tasks/completion, or replay a successful prefix after a later failure.
+Never guess future targets, put tasks/completion in a UI batch, or replay a successful prefix after a later failure.
 Type focuses and replaces the field by default; no separate tap is needed. Search input echo is not a result:
 wait for the exact result outside the input, an explicit empty/error state, or loading completion.
 

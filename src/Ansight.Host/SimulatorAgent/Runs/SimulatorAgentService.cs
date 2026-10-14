@@ -36,7 +36,7 @@ public sealed partial class SimulatorAgentService : IDisposable
     private const int MaximumAuditOcrResultCharacters = 1_000_000;
     private const int MaximumAppGraphGuidanceCharacters = 16_000;
     private const int AuditSchemaVersion = 17;
-    private const string PromptCacheKey = "ansight-simulator-agent-v44";
+    private const string PromptCacheKey = "ansight-simulator-agent-v46";
     private static readonly HashSet<string> strongTaskMatchIgnoredWords = new(StringComparer.Ordinal)
     {
         "a", "an", "and", "for", "from", "in", "into", "it", "its", "no", "of", "on", "or",
@@ -517,7 +517,8 @@ public sealed partial class SimulatorAgentService : IDisposable
                     tools.Add(BuildDeclareUncoveredStepToolDefinition(repositoryTasks));
                 }
                 tools.Add(BuildCompleteInstructionToolDefinition());
-                if (AgentUiBatch.BuildDefinition(tools) is { } batchDefinition) tools.Add(batchDefinition);
+                if (AgentToolBatch.BuildUiDefinition(tools) is { } batchDefinition) tools.Add(batchDefinition);
+                if (AgentTaskBatch.BuildDefinition(tools) is { } taskBatchDefinition) tools.Add(taskBatchDefinition);
                 var toolCatalog = useDeferredToolLoading ? new AgentToolCatalog(tools) : null;
                 if (toolCatalog is not null)
                 {
@@ -883,19 +884,19 @@ public sealed partial class SimulatorAgentService : IDisposable
                         : new JsonArray(toolCatalog.FullTools.OfType<JsonObject>()
                             .Where(tool => !toolCatalog.IsDeferred(tool["name"]!.GetValue<string>()))
                             .Select(tool => tool.DeepClone()).ToArray());
-                    var plannedCalls = new AgentUiBatch(response.FunctionCalls, batchTools,
+                    var plannedCalls = new AgentToolBatch(response.FunctionCalls, batchTools,
                         (callId, output) => conversation.AddFunctionOutput(callId, output),
                         completed =>
                         {
                             toolCallAudits.Add(new SimulatorAgentToolCallAudit(
                                 toolCallAudits.Count + 1, instructionIndex + 1, turn,
-                                completed.Call.CallId, AgentUiBatch.ToolName, false, null,
+                                completed.Call.CallId, completed.Call.Name, false, null,
                                 completed.StartedUtc, completed.DurationMilliseconds,
                                 CreateAuditPayload(SanitizeToolArguments(completed.Call).ToJsonString(), MaximumAuditArgumentCharacters, request.CaptureTrace),
                                 CreateAuditPayload(completed.Result.Output, MaximumAuditResultCharacters, request.CaptureTrace),
                                 completed.Result.IsError, completed.Result.Message));
                             ReportProgress(new SimulatorAgentProgress(SimulatorAgentProgressStage.ToolCompleted,
-                                completed.Result.Message, instructionIndex + 1, instructions.Count, turn, AgentUiBatch.ToolName));
+                                completed.Result.Message, instructionIndex + 1, instructions.Count, turn, completed.Call.Name));
                             conversation.AddUserInput("The ordered batch has finished. Use its recorded results to decide the next action; do not repeat completed steps. A stopped batch leaves later steps unexecuted.");
                         });
                     foreach (var receivedCall in plannedCalls.ReadCalls())
@@ -1125,9 +1126,17 @@ public sealed partial class SimulatorAgentService : IDisposable
                                 summary,
                                 turn,
                                 instructionToolCalls));
+                            plannedCalls.Stop(summary);
                             return Finish(SimulatorAgentRunStatus.Failed, summary);
                         }
 
+                        if (plannedCalls.CooldownBeforeStepMilliseconds > 0)
+                        {
+                            ReportProgress(new SimulatorAgentProgress(SimulatorAgentProgressStage.CallingTool,
+                                $"Task batch cooldown: waiting {plannedCalls.CooldownBeforeStepMilliseconds} ms after step {plannedCalls.StepIndex - 1} before step {plannedCalls.StepIndex}.",
+                                instructionIndex + 1, instructions.Count, turn, AgentTaskBatch.ToolName));
+                            await plannedCalls.WaitForCooldownAsync(cancellationToken).ConfigureAwait(false);
+                        }
                         totalToolCalls++;
                         instructionToolCalls++;
                         activeInstructionToolCalls = instructionToolCalls;
@@ -1394,6 +1403,8 @@ public sealed partial class SimulatorAgentService : IDisposable
                                 BatchStepIndex = plannedCalls.StepIndex,
                                 BatchStepCount = plannedCalls.StepCount
                             });
+                            if (plannedCalls.BatchCallId is not null)
+                                plannedCalls.RecordResult(call, CreateAgentGuardResult("executionInterrupted", exception.Message));
                             ReportProgress(new SimulatorAgentProgress(
                                 SimulatorAgentProgressStage.ToolCompleted,
                                 $"{call.Name} threw after {toolStopwatch.ElapsedMilliseconds:N0} ms: {exception.Message}",
@@ -3288,7 +3299,7 @@ public sealed partial class SimulatorAgentService : IDisposable
     private static JsonObject SanitizeToolArguments(OpenAiFunctionCall call)
     {
         var safeArguments = call.Arguments.DeepClone().AsObject();
-        if (call.Name == AgentUiBatch.ToolName && safeArguments["steps"] is JsonArray steps)
+        if (call.Name == AgentToolBatch.UiToolName && safeArguments["steps"] is JsonArray steps)
         {
             foreach (var step in steps.OfType<JsonObject>())
                 if (ReadString(step, "toolName") is { } name && step["arguments"] is JsonObject arguments)

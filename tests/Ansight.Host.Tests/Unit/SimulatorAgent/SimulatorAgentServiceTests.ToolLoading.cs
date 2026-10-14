@@ -25,7 +25,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(new[]
         {
-            "ansight_get_live_visual_tree", "ansight_list_tasks", "ansight_run_task",
+            "ansight_get_live_visual_tree", "ansight_list_tasks", "ansight_run_task", AgentTaskBatch.ToolName,
             "complete_instruction", "ansight_load_tools"
         }, ToolNames(session.Requests[0].Tools));
         Assert.All(session.Requests, request => Assert.True(JsonNode.DeepEquals(session.Requests[0].Tools, request.Tools)));
@@ -68,7 +68,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.All(session.Requests, request => Assert.True(JsonNode.DeepEquals(session.Requests[0].Tools, request.Tools)));
         var loadedInput = session.Requests[2].IncrementalInput!;
         var declaration = Assert.Single(AdditionalToolItems(loadedInput));
-        Assert.Equal(new[] { "ansight_find_ui", "ansight_tap_ui", AgentUiBatch.ToolName }, ToolNames(declaration["tools"]!.AsArray()));
+        Assert.Equal(new[] { "ansight_find_ui", "ansight_tap_ui", AgentToolBatch.UiToolName }, ToolNames(declaration["tools"]!.AsArray()));
         var declarationIndex = loadedInput.IndexOf(declaration);
         Assert.Equal("function_call_output", loadedInput[declarationIndex - 1]?["type"]?.GetValue<string>());
         Assert.Equal("developer", loadedInput[declarationIndex + 1]?["role"]?.GetValue<string>());

@@ -20,6 +20,12 @@ public sealed record RepositoryTask(
     int TimeoutSeconds,
     int MaximumActions)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StartingState { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SuccessState { get; init; }
+
     public ExecutionRequirements? Requires { get; init; }
 
     public bool Enabled { get; init; } = true;

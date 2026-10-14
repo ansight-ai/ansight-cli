@@ -7,11 +7,11 @@ internal sealed class AgentToolCatalog
 {
     public const string LoadToolName = "ansight_load_tools";
     private static readonly string[] coreToolNames =
-    ["ansight_get_live_visual_tree", "ansight_list_tasks", "ansight_run_task", "complete_instruction"];
+    ["ansight_get_live_visual_tree", "ansight_list_tasks", "ansight_run_task", AgentTaskBatch.ToolName, "complete_instruction"];
     private static readonly Dictionary<string, string[]> bundleToolNames = new(StringComparer.Ordinal)
     {
         ["manual-ui"] = ["ansight_find_ui", "ansight_wait_for_ui", "ansight_tap_ui",
-            "ansight_type_text", "ansight_back_ui", AgentUiBatch.ToolName],
+            "ansight_type_text", "ansight_back_ui", AgentToolBatch.UiToolName],
         ["extended-ui"] = ["ansight_assert_ui", "ansight_type_secret", "ansight_scroll_ui"],
         ["gestures"] = ["ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],

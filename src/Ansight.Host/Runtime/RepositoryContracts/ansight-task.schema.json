@@ -29,6 +29,20 @@
       "type": "string",
       "minLength": 1
     },
+    "startingState": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "description": "Advisory starting page, tab, selection and other prerequisites. The task must check these; metadata is not executed."
+    },
+    "successState": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "description": "Advisory state established or preserved after success, backed by task checks and assertions. Metadata alone is not evidence."
+    },
     "feature": {
       "type": "string",
       "minLength": 1

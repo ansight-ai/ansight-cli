@@ -52,6 +52,37 @@ The descriptor must remain a JSON-compatible object literal because Ansight
 reads it without executing the module. A normal return with no named `expect`
 assertion is **inconclusive**, not passed.
 
+## Describe task transitions
+
+Optional `startingState` and `successState` strings help the agent plan a path and
+chain tasks. Each accepts 1–1000 characters and works with existing task versions:
+
+```ts
+"startingState": "Map tab is open with its search field available.",
+"successState": "Map tab remains open; the area named by input.searchArea is selected in both the map and card."
+```
+
+Describe relevant pages, selected tabs, selections and state preserved by the task.
+Use input names in prose for parameter-dependent state. These are planning hints:
+the task still checks its prerequisites and proves its claimed outcomes with
+checks and named assertions. Hints alone never prove a live state or task success.
+Omitting them preserves existing task behavior; `outputSchema` still describes
+returned data, not app state.
+
+The agent can run 1–8 already-planned tasks with `ansight_run_task_batch`, supplying
+`reason` and `steps: [{ taskId, input }]`. Its user-visible reason explains why the
+tasks fit together and need no intermediate decision. The host runs them in order,
+retains each task's guards, limits, assertions and trace, and stops on the first
+failure. Later steps are reported as skipped. A step may set `cooldownMs` from 0 to
+10000 to let the UI settle before the next task. It defaults to zero, is cancellable,
+and applies only after success when another task follows. Explain chosen waits in
+`reason`; requested and elapsed wait times are retained in the batch trace. A delay
+does not replace readiness checks or assertions. Inputs must all be known upfront;
+there is no parallel execution or output-reference substitution. Review results
+before completion and do not replay a successful prefix. Use task composition for
+reusable authored workflows; use agent batching for a sequence assembled for the
+current instruction.
+
 ## Tell the test runner what completed
 
 Use named assertions with messages that explain the verified outcome. The runtime

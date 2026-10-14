@@ -100,6 +100,20 @@ export interface TaskDefinition {
   /** Description of the complete repeatable cycle and its authoritative result. */
   description: string;
 
+  /**
+   * Optional planning hint describing the page, tab, selection and other state required
+   * before execution (1–1000 characters). Describe input-dependent requirements in prose.
+   * Advisory only: the task must check its prerequisites; this field is not executed.
+   */
+  startingState?: string;
+
+  /**
+   * Optional planning hint describing state established or preserved on success
+   * (1–1000 characters). Back it with task checks and named assertions. It may help an
+   * agent choose the next task, but metadata alone is never evidence of success.
+   */
+  successState?: string;
+
   /** Optional domain used by focused discovery, such as `map` or `3d-guide`. */
   feature?: string;
 
@@ -2475,6 +2489,10 @@ export interface DiscoveredTask {
   title: string;
   /** Complete workflow and authoritative result description. */
   description: string;
+  /** Advisory starting-state requirements, when declared. Not observed live state. */
+  startingState?: string;
+  /** Advisory state established or preserved on success, when declared. */
+  successState?: string;
   /** Optional discovery domain. */
   feature?: string | null;
   /** Declared discovery keywords. */

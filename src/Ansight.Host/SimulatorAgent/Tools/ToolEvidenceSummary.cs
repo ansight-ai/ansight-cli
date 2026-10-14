@@ -15,7 +15,7 @@ internal static class ToolEvidenceSummary
         var result = output["result"] as JsonObject ?? output;
         var evidence = new JsonObject();
         var truncated = false;
-        foreach (var name in new[] { "isError", "taskId", "status", "capability", "performed", "condition", "satisfied", "passed", "matchCount", "totalMatches", "capturedAtUtc" })
+        foreach (var name in new[] { "isError", "taskId", "status", "capability", "performed", "condition", "satisfied", "passed", "matchCount", "totalMatches", "capturedAtUtc", "completed", "requestedStepCount", "executedStepCount", "skippedStepCount", "reason" })
         {
             CopyScalar(evidence, result, name);
         }
@@ -98,6 +98,7 @@ internal static class ToolEvidenceSummary
             {
                 if (step["result"] is not JsonObject stepResult || Create(stepResult, 1_200) is not { } summary) continue;
                 CopyScalar(summary, step, "toolName");
+                CopyScalar(summary, step, "taskId");
                 CopyScalar(summary, step, "step");
                 CopyScalar(summary, step, "isError");
                 if (!Append(retained, summary)) break;

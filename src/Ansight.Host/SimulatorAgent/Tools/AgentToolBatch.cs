@@ -5,13 +5,13 @@ using System.Text.Json.Nodes;
 namespace Ansight.Host.SimulatorAgent.Tools;
 
 /// <summary>Expands a model's ordered plan through the ordinary guarded tool-call loop.</summary>
-internal sealed class AgentUiBatch(
+internal sealed class AgentToolBatch(
     IReadOnlyList<OpenAiFunctionCall> calls,
     JsonArray availableTools,
     Action<string, string> publishOutput,
-    Action<AgentUiBatchCompletion> onCompleted)
+    Action<AgentBatchCompletion> onCompleted)
 {
-    public const string ToolName = "ansight_run_ui_batch";
+    public const string UiToolName = "ansight_run_ui_batch";
     private const int MaximumSteps = 8;
     private static readonly string[] allowedTools =
     ["ansight_find_ui", "ansight_tap_ui", "ansight_type_text", "ansight_wait_for_ui", "ansight_assert_ui"];
@@ -19,20 +19,25 @@ internal sealed class AgentUiBatch(
     { "value", "replaceExisting", "settleMs", "includeScreenshot" };
     private ToolCallResult? lastResult;
     private JsonArray? results;
+    private OpenAiFunctionCall? activeCall;
+    private IReadOnlyList<AgentBatchStep> activeSteps = [];
+    private DateTimeOffset started;
+    private Stopwatch? stopwatch;
 
     public string? BatchCallId { get; private set; }
     public int? StepIndex { get; private set; }
     public int? StepCount { get; private set; }
     public string? ValidationError { get; private set; }
+    public int CooldownBeforeStepMilliseconds { get; private set; }
 
-    public static JsonObject? BuildDefinition(JsonArray tools)
+    public static JsonObject? BuildUiDefinition(JsonArray tools)
     {
         var names = tools.OfType<JsonObject>().Select(tool => ReadString(tool["name"]))
             .Where(name => name is not null && allowedTools.Contains(name)).ToArray();
         if (names.Length == 0) return null;
         return new JsonObject
         {
-            ["type"] = "function", ["name"] = ToolName, ["strict"] = false,
+            ["type"] = "function", ["name"] = UiToolName, ["strict"] = false,
             ["description"] = "Run 1–8 UI tools in order without another model pass. Each step uses the named tool's argument schema and normal guards. Stops on failure or an ambiguous/empty find. Set usePreviousTarget=true on tap/type immediately after find to copy its unique exact target. Use only when the whole short plan is known; return to the model for choices between results. Every step is traced separately.",
             ["parameters"] = new JsonObject
             {
@@ -43,21 +48,57 @@ internal sealed class AgentUiBatch(
                     ["steps"] = new JsonObject
                     {
                         ["type"] = "array", ["minItems"] = 1, ["maxItems"] = MaximumSteps,
-                        ["items"] = new JsonObject
-                        {
-                            ["type"] = "object", ["additionalProperties"] = false,
-                            ["required"] = new JsonArray("toolName", "arguments"),
-                            ["properties"] = new JsonObject
-                            {
-                                ["toolName"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(names.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray()) },
-                                ["arguments"] = new JsonObject { ["type"] = "object", ["description"] = "Arguments for this tool, using its loaded schema. With usePreviousTarget, omit selector and coordinate fields; only supply action options such as value." },
-                                ["usePreviousTarget"] = new JsonObject { ["type"] = "boolean", ["description"] = "For tap/type immediately after find only. Copy the unique returned exact target; stop if it is ambiguous or unavailable. Defaults to false." }
-                            }
-                        }
+                        ["items"] = BuildStepSchema(names!, tools)
                     }
                 }
             }
         };
+    }
+
+    private static JsonObject BuildStepSchema(string?[] names, JsonArray tools)
+    {
+        var variants = new JsonArray(new JsonObject
+        {
+            ["type"] = "object", ["additionalProperties"] = false,
+            ["required"] = new JsonArray("toolName", "arguments"),
+            ["properties"] = new JsonObject
+            {
+                ["toolName"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(names.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray()) },
+                ["arguments"] = new JsonObject { ["type"] = "object", ["description"] = "Arguments using this tool's loaded schema and an observed target." },
+                ["usePreviousTarget"] = new JsonObject { ["type"] = "boolean", ["enum"] = new JsonArray(false) }
+            }
+        });
+        foreach (var name in names.Where(name => name is "ansight_tap_ui" or "ansight_type_text"))
+        {
+            var definition = tools.OfType<JsonObject>().First(tool => ReadString(tool["name"]) == name);
+            var properties = new JsonObject();
+            foreach (var option in actionOptions)
+                if (definition["parameters"]?["properties"]?[option] is { } schema)
+                    properties[option] = schema.DeepClone();
+            var required = new JsonArray();
+            if (name == "ansight_type_text")
+            {
+                properties["value"] ??= new JsonObject { ["type"] = "string" };
+                required.Add("value");
+            }
+            variants.Add(new JsonObject
+            {
+                ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = new JsonArray("toolName", "arguments", "usePreviousTarget"),
+                ["properties"] = new JsonObject
+                {
+                    ["toolName"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray(name) },
+                    ["usePreviousTarget"] = new JsonObject { ["type"] = "boolean", ["enum"] = new JsonArray(true) },
+                    ["arguments"] = new JsonObject
+                    {
+                        ["type"] = "object", ["additionalProperties"] = false,
+                        ["description"] = "Action options only. The host copies the preceding find's complete target; do not supply selectors, action, index or coordinates.",
+                        ["properties"] = properties, ["required"] = required
+                    }
+                }
+            });
+        }
+        return new JsonObject { ["anyOf"] = variants };
     }
 
     public IEnumerable<OpenAiFunctionCall> ReadCalls()
@@ -65,20 +106,25 @@ internal sealed class AgentUiBatch(
         foreach (var call in calls)
         {
             ValidationError = null;
-            if (call.Name != ToolName)
+            if (call.Name is not (UiToolName or AgentTaskBatch.ToolName))
             {
                 yield return call;
                 continue;
             }
-            if (!TryParse(call.Arguments, out var steps, out var error))
+            var valid = call.Name == AgentTaskBatch.ToolName
+                ? AgentTaskBatch.TryParse(call.Arguments, availableTools, out var steps, out var error)
+                : TryParseUi(call.Arguments, out steps, out error);
+            if (!valid)
             {
                 ValidationError = error;
                 yield return call;
                 continue;
             }
 
-            var started = DateTimeOffset.UtcNow;
-            var stopwatch = Stopwatch.StartNew();
+            activeCall = call;
+            activeSteps = steps;
+            started = DateTimeOffset.UtcNow;
+            stopwatch = Stopwatch.StartNew();
             BatchCallId = call.CallId;
             StepCount = steps.Count;
             results = new JsonArray();
@@ -91,6 +137,7 @@ internal sealed class AgentUiBatch(
                 {
                     var step = steps[index];
                     StepIndex = index + 1;
+                    CooldownBeforeStepMilliseconds = index > 0 ? steps[index - 1].CooldownMilliseconds : 0;
                     var arguments = step.Arguments.DeepClone().AsObject();
                     if (step.UsePreviousTarget)
                     {
@@ -114,26 +161,19 @@ internal sealed class AgentUiBatch(
                         break;
                     }
                 }
-                var completed = results.Count;
-                var message = stoppedReason is null
-                    ? $"Completed all {steps.Count} batch steps."
-                    : $"Batch stopped after {completed} of {steps.Count} steps: {stoppedReason}";
-                var output = new JsonObject
-                {
-                    ["isError"] = failed, ["completed"] = stoppedReason is null,
-                    ["requestedStepCount"] = steps.Count, ["executedStepCount"] = completed,
-                    ["skippedStepCount"] = steps.Count - completed,
-                    ["message"] = message, ["steps"] = results
-                }.ToJsonString();
-                publishOutput(call.CallId, output);
-                onCompleted(new AgentUiBatchCompletion(call, started, stopwatch.ElapsedMilliseconds,
-                    new ToolCallResult(failed, output, message)));
+                CompleteBatch(stoppedReason, failed);
             }
             finally
             {
+                // Disposal also occurs on cancellation, exceptions, and run limits.
+                CompleteBatch(lastResult?.IsError == true ? lastResult.Message : "Batch interrupted before all steps completed.", true);
+                activeCall = null;
+                activeSteps = [];
+                stopwatch = null;
                 BatchCallId = null;
                 StepIndex = null;
                 StepCount = null;
+                CooldownBeforeStepMilliseconds = 0;
                 results = null;
                 ValidationError = null;
             }
@@ -151,17 +191,73 @@ internal sealed class AgentUiBatch(
         results.Add(new JsonObject
         {
             ["step"] = StepIndex, ["toolName"] = call.Name, ["isError"] = result.IsError,
+            ["taskId"] = call.Name == "ansight_run_task" ? call.Arguments["taskId"]?.DeepClone() : null,
             ["message"] = result.Message, ["result"] = ReadObject(result.ModelOutput ?? result.Output)
                 ?? (JsonNode?)JsonValue.Create(result.ModelOutput ?? result.Output)
         });
     }
 
-    private bool TryParse(JsonObject arguments, out List<AgentUiBatchStep> steps, out string error)
+    public async Task WaitForCooldownAsync(CancellationToken cancellationToken)
+    {
+        if (CooldownBeforeStepMilliseconds == 0 || results?.LastOrDefault() is not JsonObject previousStep) return;
+        var cooldown = new JsonObject { ["requestedMilliseconds"] = CooldownBeforeStepMilliseconds };
+        previousStep["cooldown"] = cooldown;
+        var timer = Stopwatch.StartNew();
+        try
+        {
+            await Task.Delay(CooldownBeforeStepMilliseconds, cancellationToken).ConfigureAwait(false);
+            cooldown["status"] = "completed";
+        }
+        catch (OperationCanceledException)
+        {
+            cooldown["status"] = "cancelled";
+            throw;
+        }
+        finally
+        {
+            cooldown["elapsedMilliseconds"] = timer.ElapsedMilliseconds;
+        }
+    }
+
+    public void Stop(string reason) => CompleteBatch(reason, true);
+
+    private void CompleteBatch(string? stoppedReason, bool failed)
+    {
+        if (activeCall is not { } call || results is null) return;
+        activeCall = null;
+        var completed = results.Count;
+        var message = stoppedReason is null
+            ? $"Completed all {StepCount} batch steps."
+            : $"Batch stopped after {completed} of {StepCount} steps: {stoppedReason}";
+        if (call.Name == AgentTaskBatch.ToolName)
+            message += $" Reason: {ReadString(call.Arguments["reason"])}";
+        var payload = new JsonObject
+        {
+            ["isError"] = failed, ["completed"] = stoppedReason is null,
+            ["requestedStepCount"] = StepCount, ["executedStepCount"] = completed,
+            ["skippedStepCount"] = StepCount - completed,
+            ["message"] = message, ["steps"] = results
+        };
+        if (call.Name == AgentTaskBatch.ToolName)
+        {
+            payload["reason"] = call.Arguments["reason"]?.DeepClone();
+            payload["skippedSteps"] = new JsonArray(activeSteps.Skip(completed).Select((step, index) => (JsonNode?)new JsonObject
+            {
+                ["step"] = completed + index + 1, ["taskId"] = step.Arguments["taskId"]?.DeepClone(), ["status"] = "skipped"
+            }).ToArray());
+        }
+        var output = payload.ToJsonString();
+        publishOutput(call.CallId, output);
+        onCompleted(new AgentBatchCompletion(call, started, stopwatch!.ElapsedMilliseconds,
+            new ToolCallResult(failed, output, message)));
+    }
+
+    private bool TryParseUi(JsonObject arguments, out List<AgentBatchStep> steps, out string error)
     {
         steps = [];
         error = "A UI batch must contain 1–8 steps using available UI tools. Nested batches, tasks, and completion calls are not allowed.";
         var available = availableTools.OfType<JsonObject>().Select(tool => ReadString(tool["name"])).ToHashSet();
-        if (!available.Contains(ToolName) || arguments["steps"] is not JsonArray { Count: >= 1 and <= MaximumSteps } items)
+        if (!available.Contains(UiToolName) || arguments["steps"] is not JsonArray { Count: >= 1 and <= MaximumSteps } items)
             return false;
         foreach (var item in items)
         {
@@ -183,7 +279,7 @@ internal sealed class AgentUiBatch(
                 error = "Every type step must include a string value.";
                 return false;
             }
-            steps.Add(new AgentUiBatchStep(name, input, fromPrevious));
+            steps.Add(new AgentBatchStep(name, input, fromPrevious));
         }
         return true;
     }
@@ -217,6 +313,3 @@ internal sealed class AgentUiBatch(
     private static string? ReadString(JsonNode? value)
         => value is JsonValue scalar && scalar.TryGetValue<string>(out var text) ? text : null;
 }
-
-internal sealed record AgentUiBatchStep(string ToolName, JsonObject Arguments, bool UsePreviousTarget);
-internal sealed record AgentUiBatchCompletion(OpenAiFunctionCall Call, DateTimeOffset StartedUtc, long DurationMilliseconds, ToolCallResult Result);

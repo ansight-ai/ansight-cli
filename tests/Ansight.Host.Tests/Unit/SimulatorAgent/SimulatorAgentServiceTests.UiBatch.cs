@@ -30,7 +30,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(3, steps.Length);
         Assert.Equal(new int?[] { 1, 2, 3 }, steps.Select(call => call.BatchStepIndex));
         Assert.All(steps, call => { Assert.Equal(1, call.InstructionTurn); Assert.Equal(3, call.BatchStepCount); });
-        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentUiBatch.ToolName);
+        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentToolBatch.UiToolName);
         Assert.Contains("Completed all 3 batch steps", batch.Message);
         if (action == "ansight_type_text") Assert.DoesNotContain("Eagle Rock", batch.Arguments.Content);
         var outputs = client.Inputs[1].OfType<JsonObject>().Where(item => item["type"]?.GetValue<string>() == "function_call_output").ToArray();
@@ -53,7 +53,7 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(BatchRequest());
 
         Assert.Equal("ansight_find_ui", Assert.Single(gateway.Calls).ToolName);
-        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentUiBatch.ToolName);
+        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentToolBatch.UiToolName);
         Assert.Contains("ambiguous", batch.Message);
         var output = JsonNode.Parse(batch.Result.Content)!;
         Assert.False(output["completed"]!.GetValue<bool>());
@@ -76,7 +76,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(3, gateway.Calls.Count);
         Assert.True(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "premature").IsError);
         var declaration = Assert.Single(AdditionalToolItems(session.Requests[2].IncrementalInput!));
-        Assert.Contains(AgentUiBatch.ToolName, ToolNames(declaration["tools"]!.AsArray()));
+        Assert.Contains(AgentToolBatch.UiToolName, ToolNames(declaration["tools"]!.AsArray()));
         var outputs = session.Requests[3].IncrementalInput!.OfType<JsonObject>()
             .Where(item => item["type"]?.GetValue<string>() == "function_call_output").ToArray();
         Assert.Equal("batch", Assert.Single(outputs)["call_id"]!.GetValue<string>());
@@ -86,7 +86,7 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_BatchTypesIntoKnownFieldWithoutRedundantFindOrTap()
     {
         var gateway = BatchGateway();
-        var batch = CreateFunctionTurn("batch", AgentUiBatch.ToolName, new JsonObject
+        var batch = CreateFunctionTurn("batch", AgentToolBatch.UiToolName, new JsonObject
         {
             ["steps"] = new JsonArray(
                 new JsonObject { ["toolName"] = "ansight_type_text", ["arguments"] = new JsonObject { ["automationId"] = "search-input", ["value"] = "Eagle Rock" } },
@@ -151,7 +151,7 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(BatchRequest());
 
         Assert.Equal(2, gateway.Calls.Count);
-        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentUiBatch.ToolName);
+        var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentToolBatch.UiToolName);
         Assert.True(batch.IsError);
         Assert.Contains("Target changed", batch.Message);
         Assert.Equal(1, JsonNode.Parse(batch.Result.Content)!["skippedStepCount"]!.GetValue<int>());
@@ -227,7 +227,7 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(BatchRequest());
 
         Assert.Empty(gateway.Calls);
-        Assert.Contains(result.Audit.ToolCalls, call => call.ToolName == AgentUiBatch.ToolName && call.IsError);
+        Assert.Contains(result.Audit.ToolCalls, call => call.ToolName == AgentToolBatch.UiToolName && call.IsError);
     }
 
     private static SimulatorAgentRunRequest BatchRequest()
@@ -241,7 +241,7 @@ public sealed partial class SimulatorAgentServiceTests
     }
 
     private static OpenAiTurn BatchTurn(string action, string callId = "batch")
-        => CreateFunctionTurn(callId, AgentUiBatch.ToolName, new JsonObject
+        => CreateFunctionTurn(callId, AgentToolBatch.UiToolName, new JsonObject
         {
             ["steps"] = new JsonArray(
                 new JsonObject { ["toolName"] = "ansight_find_ui", ["arguments"] = new JsonObject { ["automationId"] = "search-input" } },

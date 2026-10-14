@@ -33,6 +33,8 @@ internal sealed record RepositoryTaskDefinition(
             (int)Timeout.TotalSeconds,
             MaximumActions)
         {
+            StartingState = StartingState,
+            SuccessState = SuccessState,
             Requires = Requires,
             Enabled = Enabled,
             Platforms = Platforms,
@@ -40,6 +42,10 @@ internal sealed record RepositoryTaskDefinition(
             Frameworks = Frameworks,
             ModulePath = ModulePath
         };
+
+    public string? StartingState { get; init; }
+
+    public string? SuccessState { get; init; }
 
     public ExecutionRequirements? Requires { get; init; }
 
@@ -66,6 +72,10 @@ internal sealed record RepositoryTaskSupportModule(
 
 internal sealed class RepositoryTaskModuleDefinition
 {
+    public string? StartingState { get; init; }
+
+    public string? SuccessState { get; init; }
+
     public ExecutionRequirements? Requires { get; init; }
 
     public int? SchemaVersion { get; init; }

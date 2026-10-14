@@ -242,12 +242,23 @@ internal static class RepositoryTaskLoader
             TimeSpan.FromSeconds(timeoutSeconds),
             maximumActions)
         {
+            StartingState = LoadStateHint(taskId, "startingState", definition.StartingState),
+            SuccessState = LoadStateHint(taskId, "successState", definition.SuccessState),
             Requires = definition.Requires,
             Enabled = definition.Enabled ?? true,
             Platforms = platforms,
             DeviceKinds = deviceKinds,
             Frameworks = frameworks
         };
+    }
+
+    private static string? LoadStateHint(string taskId, string propertyName, string? value)
+    {
+        if (value is null) return null;
+        var hint = value.Trim();
+        if (hint.Length is < 1 or > 1000)
+            throw new InvalidDataException($"Task '{taskId}' {propertyName} must contain 1–1000 characters.");
+        return hint;
     }
 
     private static IReadOnlyList<string> LoadTargetMetadata(

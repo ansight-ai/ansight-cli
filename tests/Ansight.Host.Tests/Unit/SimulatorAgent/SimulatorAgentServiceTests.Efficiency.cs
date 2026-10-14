@@ -131,7 +131,7 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_SingleStepBatchExecutesInsteadOfSpendingARepairTurn()
     {
         var gateway = BatchGateway();
-        var turn = CreateFunctionTurn("single", AgentUiBatch.ToolName, new JsonObject
+        var turn = CreateFunctionTurn("single", AgentToolBatch.UiToolName, new JsonObject
         {
             ["steps"] = new JsonArray(new JsonObject { ["toolName"] = "ansight_find_ui", ["arguments"] = new JsonObject { ["automationId"] = "search" } })
         });
