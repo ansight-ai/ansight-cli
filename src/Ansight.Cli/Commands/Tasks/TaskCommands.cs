@@ -197,6 +197,14 @@ internal static class TaskCommands
                 maestro = maestro with { Source = refinement.Source };
                 refinementModel = refinement.Model;
             }
+            else if (appium is not null)
+            {
+                var refinement = await ExternalScriptRefiner.RefineAsync(runtime, snapshot, startUtc, endUtc, title,
+                    appium.Source, "appium", arguments.GetOption("reasoning") ?? AgentReasoningModes.Fast,
+                    arguments.GetOption("model"), workspacePath, cancellationToken).ConfigureAwait(false);
+                appium = appium with { Source = refinement.Source };
+                refinementModel = refinement.Model;
+            }
             else if (test is not null)
             {
                 test = await WorkspaceTestRefiner.RefineAsync(
@@ -214,7 +222,7 @@ internal static class TaskCommands
             }
             else
             {
-                throw new CliUsageException("--ai requires --format maestro or --format test.");
+                throw new CliUsageException("--ai requires --format maestro, --format appium, or --format test.");
             }
         }
         var directoryPath = Path.GetDirectoryName(outputPath)
@@ -268,7 +276,8 @@ internal static class TaskCommands
                     startUtc,
                     endUtc,
                     outputPath,
-                    appium),
+                    appium,
+                    refinementModel),
                 () => $"Generated {appium.GeneratedActionCount:N0} Appium action(s).{Environment.NewLine}Script: {outputPath}"
                       + (appium.Diagnostics.Count == 0
                           ? string.Empty
@@ -390,7 +399,7 @@ internal static class TaskCommands
              --assertion <text>      Final-state assertion for --format test; repeatable
              --validation <text>     Final-state validation instructions for --format test
              --task-section <id>    Use a recorded annotation section for --format test; repeatable
-             --ai                    Refine a Maestro or Ansight test draft with the configured AI model
+             --ai                    Analyze replay evidence and generate a Maestro, Appium, or Ansight test
              --reasoning <mode>      fast, balanced, or deep for --ai
              --model <model>         Optional model override for --ai
              --output <path>         Explicit output file destination
@@ -431,7 +440,8 @@ internal sealed record AppiumScriptExtractionOutput(
     DateTimeOffset StartUtc,
     DateTimeOffset EndUtc,
     string FilePath,
-    AppiumScriptExtraction Extraction);
+    AppiumScriptExtraction Extraction,
+    string? Model = null);
 
 internal sealed record WorkspaceTestExtractionOutput(
     string Schema,

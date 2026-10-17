@@ -29,6 +29,14 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         DateTimeOffset EndUtc,
         string Title);
 
+    private sealed record ExternalScriptPreviewRequest(
+        string SessionId,
+        DateTimeOffset StartUtc,
+        DateTimeOffset EndUtc,
+        string Title,
+        string Reasoning = AgentReasoningModes.Fast,
+        string? GenerationNotes = null);
+
     private sealed record MaestroSaveRequest(
         string SessionId,
         DateTimeOffset StartUtc,
@@ -209,17 +217,20 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
                     return true;
                 }
             case "api/task-extractions/maestro-preview" when isExplorer:
-                {
-                    var body = await ReadJsonAsync<MaestroPreviewRequest>(request, cancellationToken).ConfigureAwait(false);
-                    var extraction = await BuildMaestroPreviewAsync(body, cancellationToken).ConfigureAwait(false);
-                    await WriteJsonAsync(response, extraction, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
-                    return true;
-                }
             case "api/task-extractions/appium-preview" when isExplorer:
                 {
-                    var body = await ReadJsonAsync<AppiumPreviewRequest>(request, cancellationToken).ConfigureAwait(false);
-                    var extraction = await BuildAppiumPreviewAsync(body, cancellationToken).ConfigureAwait(false);
-                    await WriteJsonAsync(response, extraction, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    var body = await ReadJsonAsync<ExternalScriptPreviewRequest>(request, cancellationToken).ConfigureAwait(false);
+                    var format = route.EndsWith("maestro-preview", StringComparison.Ordinal) ? "maestro" : "appium";
+                    if (request.AcceptTypes?.Any(type => string.Equals(type.Trim(), "application/x-ndjson", StringComparison.OrdinalIgnoreCase)) == true)
+                    {
+                        await StreamExtractionPreviewAsync(response,
+                            report => GenerateExternalScriptPreviewAsync(body, format, cancellationToken, report), cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        var extraction = await GenerateExternalScriptPreviewAsync(body, format, cancellationToken).ConfigureAwait(false);
+                        await WriteJsonAsync(response, extraction, HttpStatusCode.OK, false, cancellationToken).ConfigureAwait(false);
+                    }
                     return true;
                 }
             case "api/task-extractions/test-preview" when isExplorer:
@@ -527,10 +538,48 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             snapshot, request.StartUtc, request.EndUtc, request.Title, request.Assertions, request.ValidationPrompt, request.TaskSectionIds);
     }
 
-    private async Task StreamWorkspaceTestPreviewAsync(
+    private Task StreamWorkspaceTestPreviewAsync(
         HttpListenerResponse response,
         WorkspaceTestPreviewRequest request,
         CancellationToken cancellationToken)
+        => StreamExtractionPreviewAsync(response, async report =>
+        {
+            var seed = await BuildWorkspaceTestPreviewAsync(request, cancellationToken).ConfigureAwait(false);
+            report($"Replay loaded: {seed.GeneratedActionCount} recorded action(s). Loading session evidence…");
+            var snapshot = await runtime.Sessions.LoadSnapshotAsync(request.SessionId, cancellationToken: cancellationToken)
+                .ConfigureAwait(false) ?? throw new InvalidDataException($"Session '{request.SessionId}' was not found.");
+            return await WorkspaceTestRefiner.RefineAsync(
+                runtime, snapshot, request.StartUtc, request.EndUtc, request.Title, seed,
+                request.TaskSectionIds, request.Reasoning, modelOverride: null,
+                workspaceOverride: null, cancellationToken, reportProgress: report,
+                generationNotes: request.GenerationNotes, hasExplicitTitle: request.HasExplicitTitle).ConfigureAwait(false);
+        }, cancellationToken);
+
+    private async Task<object> GenerateExternalScriptPreviewAsync(
+        ExternalScriptPreviewRequest request, string format, CancellationToken cancellationToken, Action<string>? report = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SessionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
+        if (request.EndUtc <= request.StartUtc)
+            throw new InvalidDataException("Select a timeline period with a positive duration.");
+        var snapshot = await runtime.Sessions.LoadSnapshotAsync(request.SessionId, cancellationToken: cancellationToken)
+            .ConfigureAwait(false) ?? throw new InvalidDataException($"Session '{request.SessionId}' was not found.");
+        var maestro = format == "maestro" ? MaestroFlowExtractor.Extract(snapshot, request.StartUtc, request.EndUtc, request.Title) : null;
+        var appium = format == "appium" ? AppiumScriptExtractor.Extract(snapshot, request.StartUtc, request.EndUtc, request.Title) : null;
+        report?.Invoke($"Replay loaded: {maestro?.GeneratedActionCount ?? appium!.GeneratedActionCount} recorded action(s). Loading session evidence…");
+        var result = await ExternalScriptRefiner.RefineAsync(runtime, snapshot, request.StartUtc, request.EndUtc,
+            request.Title, maestro?.Source ?? appium!.Source, format, request.Reasoning, modelOverride: null,
+            workspaceOverride: null, cancellationToken, report, request.GenerationNotes).ConfigureAwait(false);
+        // Preserve evidence gaps reported by the seed alongside the AI provenance.
+        var diagnostics = new[] { $"AI-generated with {result.Model}. Review the starting state, selectors, and outcome assertions before running." }
+            .Concat(maestro?.Diagnostics ?? appium!.Diagnostics).ToArray();
+        return maestro is not null
+            ? maestro with { Source = result.Source, Diagnostics = diagnostics }
+            : appium! with { Source = result.Source, Diagnostics = diagnostics };
+    }
+
+    private async Task StreamExtractionPreviewAsync<T>(
+        HttpListenerResponse response, Func<Action<string>, Task<T>> generate, CancellationToken cancellationToken)
     {
         response.StatusCode = (int)HttpStatusCode.OK;
         response.ContentType = "application/x-ndjson";
@@ -554,17 +603,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         {
             try
             {
-                var seed = await BuildWorkspaceTestPreviewAsync(request, cancellationToken).ConfigureAwait(false);
-                Report($"Replay loaded: {seed.GeneratedActionCount} recorded action(s). Loading session evidence…");
-                var snapshot = await runtime.Sessions.LoadSnapshotAsync(request.SessionId, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false)
-                    ?? throw new InvalidDataException($"Session '{request.SessionId}' was not found.");
-                var extraction = await WorkspaceTestRefiner.RefineAsync(
-                    runtime, snapshot, request.StartUtc, request.EndUtc, request.Title, seed,
-                    request.TaskSectionIds, request.Reasoning, modelOverride: null,
-                    workspaceOverride: null, cancellationToken, reportProgress: Report,
-                    generationNotes: request.GenerationNotes,
-                    hasExplicitTitle: request.HasExplicitTitle).ConfigureAwait(false);
+                var extraction = await generate(Report).ConfigureAwait(false);
                 events.Writer.TryWrite(new { status = "success", result = extraction });
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -573,7 +612,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                events.Writer.TryWrite(new { status = "error", message = $"The AI operation was canceled while {currentStage}. The host is still running; no YAML draft was returned. Retry generation. If this repeats, check the model provider connection." });
+                events.Writer.TryWrite(new { status = "error", message = $"The AI operation was canceled while {currentStage}. The host is still running; no draft was returned. Retry generation. If this repeats, check the model provider connection." });
             }
             catch (Exception exception)
             {

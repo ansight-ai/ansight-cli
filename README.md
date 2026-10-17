@@ -60,6 +60,10 @@ Local capture, device tools, agent interaction, replay, annotations, ZIP export,
 and local tasks are free. Sign in for cloud sharing, build uploads, hosted agent
 execution, and remote runners.
 
+The replay player can also generate Maestro and Appium tests with AI from
+recorded actions, UI evidence, annotations, and screenshots. See
+[AI script extraction](docs/ai-script-extraction.md) for review steps and CLI usage.
+
 [Website](https://www.ansight.ai) · [Documentation](https://www.ansight.ai/docs) ·
 [Getting started](https://www.ansight.ai/docs/getting-started) ·
 [Capture modes](https://www.ansight.ai/docs/capture-modes)
