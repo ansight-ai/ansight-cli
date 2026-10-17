@@ -19,5 +19,5 @@
   </ItemGroup>
 
   <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Host" /><InternalsVisibleTo Include="Ansight.Cloud.Tests" /></ItemGroup>
-  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Ansight.Cloud.Cli" /><InternalsVisibleTo Include="Ansight.Host" /></ItemGroup>
 </Project>

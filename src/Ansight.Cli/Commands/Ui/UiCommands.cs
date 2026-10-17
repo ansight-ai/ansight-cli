@@ -1,3 +1,4 @@
+using Ansight.Cli.Input;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host;
@@ -72,14 +73,16 @@ internal static class UiCommands
             arguments,
             output,
             lease.Runtime.Ui.ExecuteAsync,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            (input, token) => SecretTextInput.TypeUiAsync(lease.Runtime, input, token)).ConfigureAwait(false);
     }
 
     internal static async Task<int> RunAsync(
         CliArguments arguments,
         CliOutput output,
         ExecuteUiOperation execute,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<JsonObject, CancellationToken, Task<UiAutomationResult>>? typeSecret = null)
     {
         ArgumentNullException.ThrowIfNull(execute);
         var action = arguments.RequirePositional(1, "ui action").ToLowerInvariant();
@@ -87,8 +90,10 @@ internal static class UiCommands
         var operation = ResolveOperation(action);
         ValidateOptions(operation, action, arguments);
         var operationArguments = BuildOperationArguments(operation, arguments);
-        var result = await execute(operation, operationArguments, cancellationToken)
-            .ConfigureAwait(false);
+        var result = operationArguments.ContainsKey("secretAlias")
+            ? await (typeSecret ?? throw new CliUsageException("Secret input requires access to the app secret store."))(
+                operationArguments, cancellationToken).ConfigureAwait(false)
+            : await execute(operation, operationArguments, cancellationToken).ConfigureAwait(false);
         var commandOutput = new UiCommandOutput(
             "ansight.ui-operation/v1",
             action,
@@ -152,7 +157,20 @@ internal static class UiCommands
                 break;
             case UiAutomationOperation.Type:
                 RequireSelector(result, "type");
-                result["value"] = arguments.RequireOption("value");
+                var textInput = TextInputValue.Parse(arguments);
+                if (textInput.SecretAlias is { } alias)
+                {
+                    result["secretAlias"] = alias;
+                    if (textInput.AppId is { } secretAppId)
+                    {
+                        if (result["appId"]?.GetValue<string>() is { } targetAppId
+                            && !string.Equals(targetAppId, secretAppId, StringComparison.Ordinal))
+                            throw new CliUsageException("The secret reference's app ID does not match the selected app.");
+                        result["secretAppId"] = secretAppId;
+                        if (!result.ContainsKey("sessionId")) result["appId"] = secretAppId;
+                    }
+                }
+                else result["value"] = textInput.Value;
                 result["replaceExisting"] = !arguments.HasFlag("append");
                 result["includeScreenshot"] = false;
                 break;
@@ -334,7 +352,7 @@ internal static class UiCommands
                 break;
             case UiAutomationOperation.Type:
                 flags.Add("append");
-                values.Add("value");
+                values.AddRange(["value", "secret"]);
                 break;
             case UiAutomationOperation.Swipe:
                 values.AddRange([
@@ -559,7 +577,7 @@ internal static class UiCommands
              ansight ui snapshot [--session <id>|--app <id>] [options]
              ansight ui find [selector options] [--session <id>|--app <id>] [options]
              ansight ui tap [selector options] [--session <id>|--app <id>]
-             ansight ui type [selector options] --value <text> [--append]
+             ansight ui type [selector options] (--value <text>|--secret <alias>) [--append]
              ansight ui swipe [selector options] [--direction <up|down|left|right>] [options]
              ansight ui pinch [selector options] --scale <0.1-4> [options]
              ansight ui back [--session <id>|--app <id>]
@@ -608,6 +626,14 @@ internal static class UiCommands
              --include-bounds <true|false>     Include element bounds; default: true
              --limit <1-1000>                 Maximum find results; default: 100
              --append                         Append rather than replace existing text
+             --secret <alias>                 Type a saved secret belonging to the selected app
+             --value '@secret:<app-id>/<alias>'
+                                             Select an app-scoped secret; an explicit session must match
+             --value '@secret:<alias>'        Use the selected app; @@secret: escapes the literal prefix
+
+           Secret input resolves locally against the selected session's App ID and returns
+           status only. Missing secrets or ambiguous sessions fail before input. Normal
+           session capture still applies; visible field contents may appear in recordings.
 
            Compact responses share the host's UI projection. Full detail retains the
            original operation payload. --include-properties true defaults to full detail
@@ -622,6 +648,7 @@ internal static class UiCommands
              ansight ui find --text "Europe" --role button --json
              ansight ui tap --automation-id MapTab
              ansight ui type --automation-id SearchField --value "Kalymnos"
+             ansight ui type --automation-id Password --value '@secret:com.example.app/login.password'
              ansight ui swipe --ancestor ResultsList --direction up --length 0.6
              ansight ui pinch --automation-id Map --scale 1.8
              ansight ui wait --text "Loaded" --condition visible --timeout-ms 15000

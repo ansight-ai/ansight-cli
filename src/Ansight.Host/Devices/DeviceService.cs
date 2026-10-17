@@ -1152,12 +1152,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         string deviceIdentifier,
         string value,
         CancellationToken cancellationToken = default)
-        => ExecuteAndroidInputAsync(
-            "type-text",
-            platform,
-            deviceIdentifier,
-            ["input", "text", NormalizeRequired(value, nameof(value)).Replace(" ", "%s", StringComparison.Ordinal)],
-            cancellationToken);
+        => ExecuteAsync("type-text", platform, deviceIdentifier, async (normalizedPlatform, normalizedIdentifier) =>
+        {
+            if (normalizedPlatform != DevicePlatforms.Android)
+                throw new PlatformNotSupportedException("Direct DeviceService text input supports Android only.");
+            await Ansight.Host.Devices.AndroidTextInput.SendAsync(normalizedIdentifier, value,
+                CreateAdbClient().RunWithStandardInputAsync, cancellationToken).ConfigureAwait(false);
+            return "Android input operation 'type-text' completed.";
+        });
 
     public Task<DeviceOperationResult> SendButtonAsync(
         string platform,

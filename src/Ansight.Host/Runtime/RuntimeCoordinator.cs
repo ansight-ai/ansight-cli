@@ -296,6 +296,14 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 
     public WorkspaceTrendsService Trends { get; }
 
+    internal AppSessionSnapshot ResolveLiveUiSession(System.Text.Json.Nodes.JsonObject arguments)
+    {
+        if (!new Ansight.Host.Runtime.Operations.SessionResolver(runtimeState, appToolBridge)
+                .TryResolveLiveSession(arguments, out var session, out var error))
+            throw new InvalidOperationException(error);
+        return session!;
+    }
+
     public SessionQueryService Sessions { get; }
 
     public SessionEditingService SessionEditing { get; }

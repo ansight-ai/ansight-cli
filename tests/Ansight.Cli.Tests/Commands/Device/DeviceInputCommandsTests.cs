@@ -4,6 +4,61 @@ namespace Ansight.Cli.Tests.Commands.Device;
 
 public sealed class DeviceInputCommandsTests
 {
+    [Theory]
+    [InlineData("--secret", "login.password")]
+    [InlineData("--value", "@secret:login.password")]
+    public async Task SecretTextUsesExplicitAppScopeAndHidesBackendOutput(string option, string reference)
+    {
+        const string value = "  secret-password  ";
+        var runtime = new RecordingDeviceInputCommandRuntime { TextMessage = value };
+        using var output = new StringWriter();
+        var exitCode = await DeviceInputCommands.RunAsync(CliArguments.Parse([
+            "input", "text", "android", "emulator-5554", "--app-id", "com.example.app", option, reference]),
+            new CliOutput(true, output, TextWriter.Null), runtime, CancellationToken.None,
+            (app, alias) =>
+            {
+                Assert.Equal("com.example.app", app);
+                Assert.Equal("login.password", alias);
+                return value;
+            });
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(value, runtime.LastText);
+        Assert.DoesNotContain(value, output.ToString());
+    }
+
+    [Fact]
+    public async Task QualifiedReferenceSuppliesRawInputsAppScope()
+    {
+        var runtime = new RecordingDeviceInputCommandRuntime();
+        await DeviceInputCommands.RunAsync(CliArguments.Parse([
+            "input", "text", "android", "emulator-5554", "--value", "@secret:com.example.app/password"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null), runtime, CancellationToken.None,
+            (appId, alias) => { Assert.Equal("com.example.app", appId); Assert.Equal("password", alias); return "test-password"; });
+        Assert.Equal("test-password", runtime.LastText);
+    }
+
+    [Fact]
+    public async Task ConflictingQualifiedReferenceDoesNotResolveOrType()
+    {
+        var runtime = new RecordingDeviceInputCommandRuntime();
+        await Assert.ThrowsAsync<CliUsageException>(() => DeviceInputCommands.RunAsync(CliArguments.Parse([
+            "input", "text", "android", "emulator-5554", "--app-id", "com.other.app", "--value", "@secret:com.example.app/password"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null), runtime, CancellationToken.None,
+            (_, _) => throw new InvalidOperationException("Must not read")));
+        Assert.Null(runtime.LastText);
+    }
+
+    [Fact]
+    public async Task MissingAppScopeDoesNotResolveOrTypeSecret()
+    {
+        var runtime = new RecordingDeviceInputCommandRuntime();
+        await Assert.ThrowsAsync<CliUsageException>(() => DeviceInputCommands.RunAsync(
+            CliArguments.Parse(["input", "text", "ios", "simulator", "--secret", "password"]),
+            new CliOutput(true, TextWriter.Null, TextWriter.Null), runtime, CancellationToken.None,
+            (_, _) => throw new InvalidOperationException("Must not resolve")));
+        Assert.Null(runtime.LastText);
+    }
+
     [Fact]
     public async Task RunAsync_IosTapDispatchesThroughInputRuntime()
     {
@@ -115,6 +170,8 @@ public sealed class DeviceInputCommandsTests
     private sealed class RecordingDeviceInputCommandRuntime : IDeviceInputCommandRuntime
     {
         public List<InputInvocation> Invocations { get; } = [];
+        public string? LastText { get; private set; }
+        public string TextMessage { get; init; } = "Text delivered.";
 
         public Task<DeviceOperationResult> SendTapAsync(
             string platform,
@@ -159,7 +216,10 @@ public sealed class DeviceInputCommandsTests
             string deviceIdentifier,
             string value,
             CancellationToken cancellationToken)
-            => Record("type-text", platform, deviceIdentifier, []);
+        {
+            LastText = value;
+            return Task.FromResult(DeviceOperationResult.Success("type-text", platform, deviceIdentifier, TextMessage));
+        }
 
         public Task<DeviceOperationResult> SendButtonAsync(
             string platform,

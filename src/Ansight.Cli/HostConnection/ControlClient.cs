@@ -491,6 +491,8 @@ internal static class ControlClient
         }
 
         var command = arguments.Positionals[0].ToLowerInvariant();
+        if (command == "input" && Ansight.Cli.Commands.Device.DeviceInputCommands.IsTextInput(arguments))
+            return Ansight.Cli.Input.TextInputValue.Parse(arguments).SecretAlias is not null;
         if (command is "serve"
             or "ui"
             or "keyboard"
@@ -576,6 +578,12 @@ internal static class ControlClient
 
         var command = arguments.Positionals[0].ToLowerInvariant();
         var subcommand = arguments.Positionals[1].ToLowerInvariant();
+        if ((command == "ui" && subcommand == "type")
+            || (command == "input" && subcommand is "text" or "type"))
+        {
+            var alias = Ansight.Cli.Input.TextInputValue.Parse(arguments).SecretAlias;
+            return alias is null ? [] : [alias];
+        }
         if ((command is "test" or "tests" && subcommand == "run-inline")
             || (command == "app" && subcommand == "execute")
             || ((command is "task" or "tasks") && subcommand == "run"))

@@ -85,6 +85,30 @@ public sealed class CliSecretForwardingTests
         Assert.Equal("app-value", secret.Value);
     }
 
+    [Theory]
+    [InlineData("ui", "type", "--secret", "INPUT_PASSWORD")]
+    [InlineData("ui", "type", "--value", "@secret:INPUT_PASSWORD")]
+    [InlineData("input", "text", "--secret", "INPUT_PASSWORD")]
+    [InlineData("input", "type", "--value", "@secret:INPUT_PASSWORD")]
+    [InlineData("ui", "type", "--value", "@secret:com.example.app/INPUT_PASSWORD")]
+    [InlineData("input", "text", "--value", "@secret:com.example.app/INPUT_PASSWORD")]
+    public void TextInputForwardsOnlyItsRequestedSecret(string command, string action, string option, string value)
+    {
+        var arguments = CliArguments.Parse([command, action, option, value]);
+        var forwarded = ControlClient.CollectForwardedSecretValues(arguments,
+            name => name == "INPUT_PASSWORD" ? "scoped-value" : throw new InvalidOperationException("Unrequested alias"));
+        Assert.Equal("scoped-value", Assert.Single(forwarded).Value);
+        Assert.True(ControlClient.ShouldForward(arguments));
+    }
+
+    [Fact]
+    public void LiteralDeviceInputDoesNotRequireHostOrForwardSecrets()
+    {
+        var arguments = CliArguments.Parse(["input", "text", "android", "emulator-5554", "--value", "@@secret:literal"]);
+        Assert.False(ControlClient.ShouldForward(arguments));
+        Assert.Empty(ControlClient.CollectForwardedSecretValues(arguments, _ => throw new InvalidOperationException("Not a secret")));
+    }
+
     private static void WriteTest(string testsPath, string id, string secretAlias)
     {
         File.WriteAllText(

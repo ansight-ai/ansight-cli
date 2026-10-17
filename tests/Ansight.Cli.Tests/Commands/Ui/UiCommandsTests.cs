@@ -5,6 +5,57 @@ namespace Ansight.Cli.Tests.Commands.Ui;
 
 public sealed class UiCommandsTests
 {
+    [Theory]
+    [InlineData("--secret", "login.password")]
+    [InlineData("--value", "@secret:login.password")]
+    public async Task SecretInputRoutesOnlyAliasAndSelectorToSecretHandler(string option, string value)
+    {
+        using var output = new StringWriter();
+        var exitCode = await UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "type", "--session", "session-1", "--automation-id", "Password", option, value]),
+            new CliOutput(true, output, TextWriter.Null),
+            (_, _, _) => throw new InvalidOperationException("Plain text path must not run."),
+            CancellationToken.None,
+            (input, _) =>
+            {
+                Assert.Equal("login.password", input["secretAlias"]!.GetValue<string>());
+                Assert.Equal("Password", input["automationId"]!.GetValue<string>());
+                Assert.Equal("session-1", input["sessionId"]!.GetValue<string>());
+                Assert.False(input.ContainsKey("value"));
+                return Task.FromResult(Success(UiAutomationOperation.Type));
+            });
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QualifiedReferenceSelectsItsAppOrPinsItsScopeForAnExplicitSession(bool explicitSession)
+    {
+        var target = explicitSession ? new[] { "--session", "session-1" } : Array.Empty<string>();
+        await UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "type", .. target, "--automation-id", "Password", "--value", "@secret:com.example.app/login.password"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null),
+            (_, _, _) => throw new InvalidOperationException("Must not use literal path"), CancellationToken.None,
+            (input, _) =>
+            {
+                Assert.Equal("com.example.app", input["secretAppId"]!.GetValue<string>());
+                Assert.Equal("login.password", input["secretAlias"]!.GetValue<string>());
+                if (explicitSession) Assert.False(input.ContainsKey("appId"));
+                else Assert.Equal("com.example.app", input["appId"]!.GetValue<string>());
+                return Task.FromResult(Success(UiAutomationOperation.Type));
+            });
+    }
+
+    [Fact]
+    public async Task ConflictingQualifiedAppReferenceIsRejectedBeforeDispatch()
+    {
+        await Assert.ThrowsAsync<CliUsageException>(() => UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "type", "--app", "com.other.app", "--automation-id", "Password", "--value", "@secret:com.example.app/password"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null),
+            (_, _, _) => throw new InvalidOperationException("Must not type"), CancellationToken.None));
+    }
+
     public static IEnumerable<object[]> UiRoutes()
     {
         yield return [new[] { "ui", "snapshot" }, UiAutomationOperation.Snapshot];
