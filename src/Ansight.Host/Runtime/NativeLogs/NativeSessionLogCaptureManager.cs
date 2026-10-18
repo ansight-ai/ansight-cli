@@ -167,36 +167,25 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         }
 
         var client = new AdbClient(tool.AdbPath);
-        var exactSerial = string.IsNullOrWhiteSpace(profileJson) ? null
-            : System.Text.Json.Nodes.JsonNode.Parse(profileJson)?["device"]?["nativeDeviceId"]?.GetValue<string>();
-        var devices = (await client.GetDevicesAsync(cancellationToken).ConfigureAwait(false))
-            .Where(device => device.IsConnected && (exactSerial is null || device.Serial == exactSerial))
-            .ToArray();
-        var matches = new List<AndroidTarget>();
-        foreach (var device in devices)
+        var target = await client.ResolveSessionTargetAsync(
+            ResolveNativeDeviceId(profileJson), packageIdentifier, reportedProcessId, cancellationToken)
+            .ConfigureAwait(false);
+        if (target.Device is null)
         {
-            var processIds = await client.GetProcessIdsAsync(device.Serial, packageIdentifier, cancellationToken).ConfigureAwait(false);
-            if (processIds.Count == 0
-                || (reportedProcessId.HasValue && !processIds.Contains(reportedProcessId.Value)))
+            runtimeState.EnsureSessionLogStream(sessionId, new SessionLogStream
             {
-                continue;
-            }
-
-            matches.Add(new AndroidTarget(device, processIds));
-        }
-
-        if (matches.Count != 1)
-        {
-            MarkUnavailable(
-                sessionId,
-                SessionLogStreamIds.AndroidLogcat,
-                matches.Count == 0
-                    ? "No connected ADB device matched the session package and process."
-                    : "More than one ADB device matched the session; native logs were not attached.");
+                StreamId = SessionLogStreamIds.AndroidLogcat, Kind = SessionLogStreamKinds.AndroidLogcat,
+                DisplayName = "Android Logcat", Status = SessionLogStreamStatuses.Unavailable,
+                StatusMessage = target.Message,
+                Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["bindingCode"] = target.Code, ["recovery"] = target.Recovery ?? string.Empty,
+                    ["candidates"] = string.Join(", ", target.CandidateDeviceIds)
+                }
+            });
             return;
         }
 
-        var target = matches[0];
         runtimeState.EnsureSessionLogStream(
             sessionId,
             new SessionLogStream
@@ -671,8 +660,6 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         public CancellationTokenSource Cancellation { get; }
         public Task Task { get; set; } = Task.CompletedTask;
     }
-
-    private sealed record AndroidTarget(AdbDevice Device, IReadOnlyList<int> ProcessIds);
 
     private sealed class AndroidProcessCapture : IAsyncDisposable
     {

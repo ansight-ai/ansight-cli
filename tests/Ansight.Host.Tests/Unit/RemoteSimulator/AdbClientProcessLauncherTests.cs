@@ -7,6 +7,81 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 public sealed class AdbClientProcessLauncherTests
 {
     [Fact]
+    public async Task SessionTarget_ResolvesAvdNameAndVerifiesPackageProcess()
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "List of devices attached\nemulator-5554 device\nemulator-5556 device\n",
+            "Other_AVD\nOK\n", "test_api35_x64\nOK\n", "123 456\n");
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync("test_api35_x64", "com.example.app", 456);
+        Assert.Equal("emulator-5556", result.Device?.Serial);
+        Assert.Equal(["-s", "emulator-5556", "shell", "pidof", "com.example.app"], launcher.LastRequest!.Arguments);
+    }
+
+    [Theory]
+    [InlineData("emulator-5554")]
+    [InlineData("physical-serial")]
+    public async Task SessionTarget_ExactSerialDoesNotQueryAvdNames(string serial)
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            $"List of devices attached\n{serial} device\nemulator-5556 device\n", "456\n");
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync(serial, "com.example.app", 456);
+        Assert.Equal(serial, result.Device?.Serial);
+        Assert.Equal(2, launcher.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("emulator-5554", "")]
+    [InlineData("physical-serial", "physical-serial offline\n")]
+    public async Task SessionTarget_DisconnectedSerialNeverBindsAnotherDevice(string identifier, string disconnected)
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            $"List of devices attached\n{disconnected}emulator-5556 device\n");
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync(identifier, "com.example.app", 456);
+        Assert.Null(result.Device);
+        Assert.Contains(identifier, result.Message);
+        Assert.Single(launcher.Requests);
+    }
+
+    [Theory]
+    [InlineData("456\n", false)]
+    [InlineData("999\n", true)]
+    public async Task SessionTarget_UsesProcessIdentityAndRejectsAmbiguity(string secondProcess, bool expectedMatch)
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "List of devices attached\nemulator-5554 device\nemulator-5556 device\n", "456\n", secondProcess);
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync(null, "com.example.app", 456);
+        Assert.Equal(expectedMatch, result.Device is not null);
+        if (expectedMatch) Assert.Equal("emulator-5554", result.Device!.Serial);
+        else Assert.Contains("ambiguous", result.Message);
+    }
+
+    [Fact]
+    public async Task SessionTarget_DuplicateAvdsRequireAnUnambiguousProcess()
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "List of devices attached\nemulator-5554 device\nemulator-5556 device\n",
+            "Demo\nOK\n", "Demo\nOK\n", "123\n", "456\n");
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync("Demo", "com.example.app", 456);
+        Assert.Equal("emulator-5556", result.Device?.Serial);
+    }
+
+    [Fact]
+    public async Task SessionTarget_RejectsWrongProcessOnMatchingAvd()
+    {
+        var launcher = new RecordingAdbProcessLauncher(
+            "List of devices attached\nemulator-5554 device\n", "Demo\nOK\n", "123\n");
+        var result = await new AdbClient("/fake/adb", launcher)
+            .ResolveSessionTargetAsync("Demo", "com.example.app", 456);
+        Assert.Null(result.Device);
+        Assert.Contains("456", result.Message);
+    }
+
+    [Fact]
     public async Task MotionSequence_RestoresOriginalAccelerationAfterSamples()
     {
         var launcher = new RecordingAdbProcessLauncher(

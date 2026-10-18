@@ -4,6 +4,18 @@ namespace Ansight.Host.Tests.Unit.Devices;
 
 public sealed class DeviceTargetResolverTests
 {
+    [Fact]
+    public async Task DuplicateAvdNamesCannotSelectAnArbitraryInputDevice()
+    {
+        var first = new DeviceDescriptor("emulator-5554", "Demo", "android", "15", "device", true, true, "emulator");
+        var second = first with { Identifier = "emulator-5556" };
+        var resolver = new DeviceTargetResolver(
+            _ => Task.FromResult(new DeviceInventory([], [first, second], [])),
+            _ => Task.FromResult<IReadOnlyList<AdbDevice>>([]));
+        Assert.Null(await resolver.ResolveAsync("Demo", default));
+        Assert.Equal(second, await resolver.ResolveAsync("emulator-5556", default));
+    }
+
     [Theory]
     [InlineData("pixel-serial", "Pixel 7", "device", "pixel-serial")]
     [InlineData("emulator-5554", "Pixel_9", "emulator", "Pixel_9")]

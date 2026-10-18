@@ -69,11 +69,17 @@ internal sealed class DeviceTargetResolver(
     }
 
     private static DeviceDescriptor? FindTarget(DeviceInventory inventory, string key)
-        => inventory.Devices.FirstOrDefault(device => string.Equals(
-            device.Identifier, key, StringComparison.OrdinalIgnoreCase))
-            ?? inventory.Devices.FirstOrDefault(device => device.IsBooted
+    {
+        var exact = inventory.Devices.FirstOrDefault(device => string.Equals(
+            device.Identifier, key, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null) return exact;
+
+        var matches = inventory.Devices.Where(device => device.IsBooted
                 && device.Platform == DevicePlatforms.Android && device.IsVirtual
-                && string.Equals(device.Name, key, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(device.Name, key, StringComparison.OrdinalIgnoreCase))
+            .Take(2).ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
 
     private sealed record CacheEntry(DateTimeOffset CapturedAtUtc, DeviceDescriptor Device);
 }
