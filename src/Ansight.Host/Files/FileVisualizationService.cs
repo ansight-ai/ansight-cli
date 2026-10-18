@@ -171,6 +171,8 @@ public sealed partial class FileVisualizationService
         viewerKind = forceText
             ? FileViewerKinds.Text
             : Classify(extension, mimeType);
+        if (viewerKind == FileViewerKinds.NetTrace)
+            return await InspectDownloadedNetTraceAsync(result, fileName, cancellationToken).ConfigureAwait(false);
         var text = ReadString(result, "text");
         var base64 = ReadString(result, "base64");
         string? formatLabel = null;
@@ -457,7 +459,20 @@ public sealed partial class FileVisualizationService
         var normalizedExtension = string.IsNullOrWhiteSpace(extension)
             ? string.Empty
             : extension.StartsWith('.') ? extension.ToLowerInvariant() : $".{extension.ToLowerInvariant()}";
-        var normalizedMimeType = mimeType?.Trim().ToLowerInvariant() ?? string.Empty;
+        var normalizedMimeType = mimeType?.Split(';', 2)[0].Trim().ToLowerInvariant() ?? string.Empty;
+
+        if (normalizedExtension is ".glb" or ".gltf" or ".obj" or ".stl" || normalizedMimeType is "model/gltf+json" or "model/gltf-binary" or "model/obj" or "model/stl") return FileViewerKinds.Model3D;
+        if (normalizedExtension is ".zip" or ".tar" or ".gz" or ".gzip" or ".tgz" || normalizedMimeType is "application/zip" or "application/x-zip-compressed" or "application/x-tar" or "application/gzip" or "application/x-gzip") return FileViewerKinds.Archive;
+        if (normalizedExtension == ".nettrace") return FileViewerKinds.NetTrace;
+        if (normalizedExtension is ".pftrace" or ".perfetto-trace" || normalizedMimeType == "application/vnd.perfetto.trace") return FileViewerKinds.Perfetto;
+        if (normalizedExtension == ".cpuprofile" || normalizedMimeType == "application/vnd.speedscope+json") return FileViewerKinds.Profile;
+        if (normalizedExtension == ".har" || normalizedMimeType == "application/har+json") return FileViewerKinds.Har;
+        if (normalizedExtension is ".geojson" or ".gpx" or ".kml" || normalizedMimeType is "application/geo+json" or "application/gpx+xml" or "application/vnd.google-earth.kml+xml") return FileViewerKinds.Geo;
+        if (normalizedExtension is ".jsonl" or ".ndjson" || normalizedMimeType is "application/x-ndjson" or "application/ndjson" or "application/jsonl" or "application/jsonlines" or "application/json-seq") return FileViewerKinds.JsonLines;
+        if (normalizedExtension == ".tsv" || normalizedMimeType == "text/tab-separated-values") return FileViewerKinds.Tsv;
+        if (normalizedExtension is ".yaml" or ".yml" || normalizedMimeType is "application/yaml" or "application/x-yaml" or "text/yaml" or "text/x-yaml") return FileViewerKinds.Yaml;
+        if (normalizedExtension == ".toml" || normalizedMimeType is "application/toml" or "text/toml") return FileViewerKinds.Toml;
+        if (normalizedExtension is ".html" or ".htm" || normalizedMimeType == "text/html") return FileViewerKinds.Html;
 
         if (sqliteExtensions.Contains(normalizedExtension)
             || normalizedMimeType.Contains("sqlite", StringComparison.Ordinal))
@@ -582,7 +597,7 @@ public sealed partial class FileVisualizationService
             var viewerKind = forceText
                 ? FileViewerKinds.Text
                 : Classify(extension, mimeType);
-            if (viewerKind is FileViewerKinds.Audio or FileViewerKinds.Video)
+            if (viewerKind is FileViewerKinds.Audio or FileViewerKinds.Video or FileViewerKinds.Archive or FileViewerKinds.Perfetto)
             {
                 return new FileVisualization(
                     true,
@@ -599,6 +614,8 @@ public sealed partial class FileVisualizationService
                     null,
                     null);
             }
+            if (viewerKind == FileViewerKinds.NetTrace)
+                return await InspectNetTraceAsync(filePath, displayName ?? file.Name, cancellationToken).ConfigureAwait(false);
             if (!forceText
                 && viewerKind != FileViewerKinds.Sqlite
                 && file.Length >= sqliteHeader.Length
@@ -1256,10 +1273,13 @@ public sealed partial class FileVisualizationService
             or FileViewerKinds.Json
             or FileViewerKinds.Markdown
             or FileViewerKinds.Text
-            or FileViewerKinds.Xml;
+            or FileViewerKinds.Xml
+            or FileViewerKinds.JsonLines or FileViewerKinds.Tsv or FileViewerKinds.Har
+            or FileViewerKinds.Profile or FileViewerKinds.Html or FileViewerKinds.Geo
+            or FileViewerKinds.Yaml or FileViewerKinds.Toml;
 
     private static bool IsStreamingViewer(string viewerKind)
-        => viewerKind is FileViewerKinds.Model3D or FileViewerKinds.Audio or FileViewerKinds.Video;
+        => viewerKind is FileViewerKinds.Model3D or FileViewerKinds.Audio or FileViewerKinds.Video or FileViewerKinds.Archive or FileViewerKinds.Perfetto;
 
     private static string ResolveLanguage(string viewerKind, string extension)
     {
@@ -1272,6 +1292,17 @@ public sealed partial class FileVisualizationService
         {
             return viewerKind switch
             {
+                FileViewerKinds.JsonLines => "JSON Lines",
+                FileViewerKinds.Tsv => "TSV",
+                FileViewerKinds.Archive => "Archive",
+                FileViewerKinds.Har => "HTTP Archive",
+                FileViewerKinds.Profile => "Profile",
+                FileViewerKinds.Perfetto => "Perfetto",
+                FileViewerKinds.NetTrace => ".NET trace",
+                FileViewerKinds.Html => "HTML report",
+                FileViewerKinds.Geo => "Geographic data",
+                FileViewerKinds.Yaml => "YAML",
+                FileViewerKinds.Toml => "TOML",
                 FileViewerKinds.Csv => "CSV",
                 FileViewerKinds.Json => "JSON",
                 FileViewerKinds.Markdown => "Markdown",
@@ -1328,13 +1359,26 @@ public sealed partial class FileVisualizationService
         {
             ".avif" => "image/avif",
             ".bmp" => "image/bmp",
+            ".jsonl" or ".ndjson" => "application/x-ndjson",
+            ".tsv" => "text/tab-separated-values",
+            ".yaml" or ".yml" => "application/yaml",
+            ".toml" => "application/toml",
+            ".gpx" => "application/gpx+xml",
+            ".kml" => "application/vnd.google-earth.kml+xml",
+            ".zip" => "application/zip",
+            ".tar" => "application/x-tar",
+            ".gz" or ".gzip" or ".tgz" => "application/gzip",
+            ".cpuprofile" => "application/json",
+            ".pftrace" or ".perfetto-trace" => "application/vnd.perfetto.trace",
             ".csv" => "text/csv",
             ".gif" => "image/gif",
             ".glb" => "model/gltf-binary",
             ".gltf" => "model/gltf+json",
-            ".html" => "text/html",
+            ".html" or ".htm" => "text/html",
             ".jpeg" or ".jpg" => "image/jpeg",
-            ".json" or ".geojson" or ".har" => "application/json",
+            ".json" => "application/json",
+            ".geojson" => "application/geo+json",
+            ".har" => "application/har+json",
             ".md" or ".markdown" or ".mdx" => "text/markdown",
             ".obj" => "model/obj",
             ".pdf" => "application/pdf",
