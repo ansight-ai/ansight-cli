@@ -1,6 +1,6 @@
 ---
 name: ansight-create-remote-tool-ios
-description: Use this skill when implementing a custom Ansight remote tool for a native iOS SwiftUI or UIKit app. Create a narrow AnsightTool with a stable descriptor id, explicit read/write/critical policy, structured result payloads, Debug or local-development build gating, runtime tool guard access, registration through AnsightRuntime.shared.registerTool, and verification through the Ansight CLI.
+description: Use this skill when implementing a custom Ansight remote tool for a native iOS SwiftUI or UIKit app. Create a narrow AnsightJSONTool with a stable descriptor id, explicit read/write/critical policy, structured result payloads, Debug or local-development build gating, runtime tool guard access, registration through AnsightRuntime.shared.registerTool, and verification through the Ansight CLI.
 ---
 
 # Ansight iOS Remote Tool Skill
@@ -25,11 +25,11 @@ Create the smallest useful iOS custom tool for a local development workflow, reg
 
 ## Required Constraints
 
-- implement an executable `AnsightTool` for app-specific operations
+- implement an executable `AnsightJSONTool` for app-specific operations
 - use a stable id such as `myapp.diagnostics_snapshot`; do not use display text as the id
 - prefer one small tool per operation
 - choose the narrowest policy: read, write, or critical
-- validate string arguments and fail closed on invalid input
+- declare argument/result schemas and fail closed on invalid input
 - return structured result payloads
 - compile or register custom tools only in Debug or an explicit local-development build path
 - set `ANSIGHT_ALLOW_REMOTE_TOOLS=true` only for builds that intentionally include remote tools
@@ -44,7 +44,7 @@ Create the smallest useful iOS custom tool for a local development workflow, reg
    - `#if DEBUG` for simple Debug-only tools
    - a project-specific Swift active compilation condition for internal developer builds
    - target membership limited to a developer-only target when appropriate
-4. Implement a concrete `AnsightTool` with stable descriptor metadata.
+4. Implement `AnsightJSONTool` or use `AnsightFunctionJSONTool` with stable descriptor metadata.
 5. Register the tool after Ansight initializes or during the same startup path.
 6. Configure `.withReadOnlyToolAccess()`, `.withReadWriteToolAccess()`, or `.withAllToolAccess()` to match the tool policy.
 7. Build a Debug target and, when practical, a Release target that omits the tool or disables tools.
@@ -58,7 +58,7 @@ Use a concrete executable tool for app-owned operations:
 #if DEBUG
 import Ansight
 
-struct DiagnosticsSnapshotTool: AnsightTool {
+struct DiagnosticsSnapshotTool: AnsightJSONTool {
     let diagnostics: DiagnosticsService
 
     var descriptor: AnsightToolDescriptor {
@@ -68,15 +68,29 @@ struct DiagnosticsSnapshotTool: AnsightTool {
             description: "Returns a small app-specific diagnostic summary.",
             category: "myapp",
             policy: .read,
-            keywords: "diagnostics health queues"
+            keywords: "diagnostics health queues",
+            argumentsSchema: .init(json: .object([
+                "type": .string("object"),
+                "properties": .object(["includeQueues": .object(["type": .string("boolean")])]),
+                "additionalProperties": .bool(false)
+            ])),
+            resultSchema: .init(json: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "connectionState": .object(["type": .string("string")]),
+                    "pendingQueueCount": .object(["type": .string("number")])
+                ]),
+                "required": .array([.string("connectionState")]),
+                "additionalProperties": .bool(false)
+            ]))
         )
     }
 
-    func execute(arguments: [String: String]) throws -> AnsightToolExecutionResult {
-        let includeQueues = arguments["includeQueues"] == "true"
+    func execute(arguments: [String: JSONValue]) throws -> AnsightToolExecutionResult {
+        let includeQueues = arguments["includeQueues"] == .bool(true)
         let snapshot = diagnostics.createSnapshot()
 
-        var result: [String: AnsightToolValue] = [
+        var result: [String: JSONValue] = [
             "connectionState": .string(snapshot.connectionState)
         ]
 
@@ -173,3 +187,15 @@ After the app is paired and connected:
 - the active guard allows only the required maximum policy
 - the CLI can discover and invoke the tool in a paired local development session
 - final response names the tool id, policy, build gate, files changed, and verification performed
+
+## Authoring and Execution Context
+
+Use `AnsightFunctionJSONTool(descriptor:availability:handler:)` for a small operation, or implement `AnsightJSONTool` for a larger one. Both receive `[String: JSONValue]` with runtime schema validation, and the legacy string adapter is supplied automatically. The closure helper requires an SDK release containing it.
+
+Execution and availability are synchronous on the transport context, without a main-actor guarantee. Use an app-owned dispatcher for UI or engine work; check whether you are already on the target queue before a synchronous dispatch. Never synchronously dispatch back to a queue that is waiting for your tool. The engine update thread can differ from the UI thread. Keep availability checks fast and thread-safe; do not assume a caller timeout cancels native work.
+
+## Expose a Domain Model
+
+Start with `scene.snapshot` (`read`) returning a bounded JSON projection of scene id, selected entity, and transforms. Add `scene.set_visible` (`write`) taking one entity id and a boolean. Reject unknown ids and a loading scene with stable error codes, dispatch the change to the scene owner, and return the updated visibility. Read current state at invocation time rather than capturing a stale snapshot at registration.
+
+Keep schemas, policy, and dispatch explicit even when using `AnsightFunctionJSONTool`. Verify a successful read, a successful mutation, invalid arguments, an unavailable scene, and a denied write under a read-only guard. For a large model or a durable snapshot, use [artifact publication](https://www.ansight.ai/docs/sdk/ios/artifacts) from the app instead of embedding it in a tool result.

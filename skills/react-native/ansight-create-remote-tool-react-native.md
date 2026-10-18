@@ -167,3 +167,15 @@ After the app is paired and connected:
 - the active guard allows only the required policy
 - the CLI can discover and invoke the tool in a paired local development session
 - final response names the tool id, policy, JS or native registration path, files changed, and verification performed
+
+## Authoring and Execution Context
+
+`registerTool(definition, handler)` already supplies the concise form; there is no need for a class or a native wrapper for JavaScript-owned state. Define `argumentsSchema` and `resultSchema`, and keep the policy explicit. This bridge currently delivers flattened string argument values: parse and validate booleans, numbers, and JSON fields explicitly instead of assuming native JSON types.
+
+Handlers execute in the JavaScript runtime. Await asynchronous work and return only after the state change completes. Native UI or engine operations must dispatch inside the native module to their owning queue. A bridge timeout does not guarantee cancellation of that work. JavaScript tools do not have a pre-invocation availability callback: unregister unavailable tools or return a stable failure such as `scene_not_ready`.
+
+## Expose a Domain Model
+
+Start with `scene.snapshot` (`read`) returning a bounded JSON projection of scene id, selected entity, and transforms. Add `scene.set_visible` (`write`) taking one entity id and a boolean. Reject unknown ids and a loading scene with stable error codes, dispatch the change to the scene owner, and return the updated visibility. Read current state at invocation time rather than capturing a stale snapshot at registration.
+
+Keep schemas, policy, and dispatch explicit even when using `registerTool`. Verify a successful read, a successful mutation, invalid arguments, an unavailable scene, and a denied write under a read-only guard. For a large model or a durable snapshot, use [artifact publication](https://www.ansight.ai/docs/sdk/react-native/artifacts) from the app instead of embedding it in a tool result.

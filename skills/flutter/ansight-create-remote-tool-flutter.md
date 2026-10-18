@@ -32,3 +32,15 @@ final registration = await Ansight.instance.registerTool(
 7. Test handler success, invalid arguments, expected failure, unregistration, denied guard access, and discovery/invocation through `ansight app tools` and `ansight app call`.
 
 Report the tool id, policy, exposed data or mutation, guard, registration location, and verification.
+
+## Authoring and Execution Context
+
+`registerTool(definition, handler)` already supplies the concise form. Define `argumentsSchema` and `resultSchema` on `AnsightToolDefinition`, and choose an explicit policy. The Dart bridge currently supplies string argument values: parse and validate them explicitly; do not assume typed JSON values.
+
+Handlers run on the Dart isolate receiving the native callback. Await mutations before returning; schedule widget changes at a valid point in the Flutter frame lifecycle. Native engine or UI operations must dispatch in the platform implementation. Keep expensive work off the UI isolate. A bridge timeout does not guarantee native cancellation. Dart tools have no pre-invocation availability callback: unregister unavailable tools or return a stable `scene_not_ready` failure.
+
+## Expose a Domain Model
+
+Start with `scene.snapshot` (`read`) returning a bounded JSON projection of scene id, selected entity, and transforms. Add `scene.set_visible` (`write`) taking one entity id and a boolean. Reject unknown ids and a loading scene with stable error codes, dispatch the change to the scene owner, and return the updated visibility. Read current state at invocation time rather than capturing a stale snapshot at registration.
+
+Keep schemas, policy, and dispatch explicit even when using `registerTool`. Verify a successful read, a successful mutation, invalid arguments, an unavailable scene, and a denied write under a read-only guard. For a large model or a durable snapshot, use [artifact publication](https://www.ansight.ai/docs/sdk/flutter/artifacts) from the app instead of embedding it in a tool result.

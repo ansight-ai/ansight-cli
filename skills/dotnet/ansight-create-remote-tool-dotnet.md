@@ -1,6 +1,6 @@
 ---
 name: ansight-create-remote-tool-dotnet
-description: Use this skill when implementing a custom Ansight remote tool for a .NET MAUI, .NET for Android, .NET for iOS, or .NET Mac Catalyst app. Create a narrow Ansight.Tools.ITool implementation with stable tool ids, ToolSchema arguments and results, the shared read/write/critical ToolPolicy, local-development MSBuild gating with AnsightRemoteToolsPolicy, registration through AddTool/AddTools or a WithMyAppTools extension, and verification through the Ansight CLI.
+description: Use this skill when implementing a custom Ansight remote tool for a .NET MAUI, .NET for Android, .NET for iOS, or .NET Mac Catalyst app. Create a narrow Ansight.Tools.IJsonTool implementation with stable tool ids, ToolSchema arguments and results, the shared read/write/critical ToolPolicy, local-development MSBuild gating with AnsightRemoteToolsPolicy, registration through AddTool/AddTools or a WithMyAppTools extension, and verification through the Ansight CLI.
 ---
 
 # Ansight .NET Remote Tool Skill
@@ -23,12 +23,12 @@ Create the smallest useful custom remote tool for a local development workflow, 
 
 ## Required Constraints
 
-- implement `Ansight.Tools.ITool`
+- implement `Ansight.Tools.IJsonTool`
 - prefer one small tool class per operation
 - use a stable id such as `myapp.diagnostics_snapshot`; do not use display text as the id
 - declare explicit `ToolSchema` objects for arguments and results
 - choose the narrowest `ToolPolicy`: `Read`, `Write`, or `Critical`
-- parse and validate flattened string arguments inside `Execute(...)`
+- receive structured arguments in `ExecuteAsync(ToolInvocation, CancellationToken)` and validate domain constraints; do not reimplement the inherited dictionary adapter
 - return `ToolResult.Failure(...)` with a stable `errorCode` for invalid requests or app-side failures
 - register tools only in local development builds
 - keep `AnsightRemoteToolsPolicy=AllowedWithWarnings` only when custom tools are intentionally included
@@ -44,7 +44,7 @@ Create the smallest useful custom remote tool for a local development workflow, 
 2. Identify the narrow operation the user needs. If the request is broad, split it into multiple read/write/critical tools or implement only the safest first tool.
 3. Add a project-local MSBuild flag that includes custom tool code only in local development builds.
 4. Create shared metadata for ids and schemas.
-5. Implement one `ITool` class for the operation.
+5. Implement one `IJsonTool` class for the operation.
 6. Register the tool through a project-local extension method such as `WithMyAppTools(...)`.
 7. Configure the runtime guard to allow only the needed maximum policy.
 8. Build the app and confirm protected builds fail or omit the tool when expected.
@@ -86,7 +86,7 @@ For more than one custom tool, keep the code organized like a small first-party 
 
 - `MyAppToolIds`
 - `MyAppToolSchemas`
-- one `ITool` implementation per operation
+- one `IJsonTool` implementation per operation
 - `MyAppAnsightOptionsBuilderExtensions`
 - optional wrappers for user confirmation or product-specific access checks
 
@@ -125,7 +125,7 @@ internal static class MyAppToolSchemas
 
 ## Tool Implementation
 
-Arguments arrive as flattened string values. Parse them explicitly and fail closed on invalid input.
+Prefer `IJsonTool`: arguments retain JSON types and the runtime validates argument and result schemas. Implement only `ExecuteAsync(ToolInvocation, CancellationToken)`; the inherited legacy dictionary adapter is already supplied. Direct calls to the handler bypass protocol validation, so use the tool bridge for tests.
 
 ```csharp
 #if MYAPP_ANSIGHT_TOOLS
@@ -137,7 +137,7 @@ internal sealed record DiagnosticsSnapshot(
     int PendingQueueCount);
 
 internal sealed class DiagnosticsSnapshotTool(
-    Func<DiagnosticsSnapshot> snapshotProvider) : ITool
+    Func<DiagnosticsSnapshot> snapshotProvider) : IJsonTool
 {
     public string Category => "myapp";
 
@@ -155,13 +155,10 @@ internal sealed class DiagnosticsSnapshotTool(
 
     public ToolSchema ResultSchema => MyAppToolSchemas.DiagnosticsSnapshotResult;
 
-    public Task<ToolResult> Execute(IReadOnlyDictionary<string, string> arguments)
+    public Task<ToolResult> ExecuteAsync(ToolInvocation invocation, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(arguments);
-
-        var includeQueues = arguments.TryGetValue("includeQueues", out var includeQueuesText)
-                            && bool.TryParse(includeQueuesText, out var parsedIncludeQueues)
-                            && parsedIncludeQueues;
+        cancellationToken.ThrowIfCancellationRequested();
+        var includeQueues = invocation.Arguments["includeQueues"]?.GetValue<bool>() ?? false;
 
         var snapshot = snapshotProvider();
         var payload = new JsonObject
@@ -288,10 +285,42 @@ After the app is paired and connected, use the CLI:
 
 ## Done Criteria
 
-- the tool implements `ITool` with stable metadata, schemas, and policy
+- the tool implements `IJsonTool` with stable metadata, schemas, and policy
 - custom tool code is included only in the intended local development build
 - protected builds omit the tool or fail with `AnsightRemoteToolsPolicy=Disallowed`
 - the tool is registered from the existing Ansight startup path
 - the active guard allows only the required maximum policy
 - the CLI can discover and invoke the tool in a paired local development session
 - the final response names the tool id, policy, build flag, files changed, and verification performed
+
+## Optional Factory
+
+For a small operation, `JsonTool.Create` removes the dedicated class while retaining explicit schemas and policy. Use a class when it makes dependencies or logic easier to maintain. This helper requires an SDK release containing it; `IJsonTool` works with earlier releases.
+
+```csharp
+var tool = JsonTool.Create(
+    new ToolDefinition("myapp.diagnostics_snapshot", "Diagnostics Snapshot",
+        "Read current diagnostics.", "myapp", ToolPolicy.Read, "diagnostics",
+        MyAppToolSchemas.DiagnosticsSnapshotArguments,
+        MyAppToolSchemas.DiagnosticsSnapshotResult),
+    (invocation, cancellationToken) =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = diagnostics.CreateSnapshot();
+        return Task.FromResult(ToolResult.Success(new JsonObject
+        {
+            ["connectionState"] = state.ConnectionState
+        }));
+    });
+optionsBuilder.AddTool(tool);
+```
+
+An optional `getAvailabilityAsync` callback supplies dynamic prerequisites. Both forms use the same guard, schema validation, catalog, and registration APIs.
+
+## Execution Context
+
+Execution and availability callbacks have no UI-thread guarantee. Read UI state with the MAUI dispatcher, for example `await MainThread.InvokeOnMainThreadAsync(() => page.Title)`. Do not move an entire file or network operation onto the UI thread. For a 3D engine, use its scene/update dispatcher; the MAUI main thread is not necessarily the engine thread. Availability should be fast and read a thread-safe readiness snapshot.
+
+The cancellation token is cooperative. Native .NET transports currently supply `CancellationToken.None`, so do not assume a CLI timeout stops an in-progress mutation. Validate first, await the operation, and return the actual resulting state. Never hold a scene lock while awaiting a UI or engine dispatcher.
+
+See the [domain-tool sample](https://github.com/ansight-ai/ansight-sdk/tree/main/src/dotnet/samples/Ansight.DomainTools.Sample) for read and write tools, availability, schema validation, and artifact publication. Expose one operation per domain action; avoid a generic command evaluator.

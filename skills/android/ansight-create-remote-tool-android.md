@@ -1,6 +1,6 @@
 ---
 name: ansight-create-remote-tool-android
-description: Use this skill when implementing a custom Ansight remote tool for a native Android Kotlin or Java app. Create a narrow androidSimpleTool or AndroidTool with a stable id, explicit read/write/critical ToolPolicy, structured JSON results, local-development build-variant gating, runtime ToolGuard access, registration through AnsightOptions.addTool/addTools or AnsightRuntime.registerTool, and verification through the Ansight CLI.
+description: Use this skill when implementing a custom Ansight remote tool for a native Android Kotlin or Java app. Create a narrow FunctionJsonAndroidTool or JsonAndroidTool with a stable id, explicit read/write/critical ToolPolicy, structured JSON results, local-development build-variant gating, runtime ToolGuard access, registration through AnsightOptions.addTool/addTools or AnsightRuntime.registerTool, and verification through the Ansight CLI.
 ---
 
 # Ansight Android Remote Tool Skill
@@ -29,7 +29,7 @@ Create the smallest useful Android custom tool for a local development workflow,
 - use a stable id such as `myapp.diagnostics_snapshot`; do not use display text as the id
 - prefer one small tool per operation
 - choose the narrowest `ToolPolicy`: `Read`, `Write`, or `Critical`
-- validate flattened string arguments and fail closed on invalid input
+- declare argument/result schemas, validate typed JSON arguments and fail closed on invalid input
 - return structured JSON results
 - place custom tool code in `src/debug/...` when Ansight is a `debugImplementation`
 - keep custom tool code out of Play Store, CI release, and other distributable variants
@@ -44,7 +44,7 @@ Create the smallest useful Android custom tool for a local development workflow,
    - `src/debug/kotlin` or `src/debug/java` when the Ansight dependency is `debugImplementation`
    - a local-development flavor/source set when the app uses internal variants
    - main source only when the dependency is intentionally present there and guarded
-4. Implement the tool with `androidSimpleTool(...)` or a concrete Android tool type that matches the existing codebase.
+4. Implement the tool with `FunctionJsonAndroidTool(...)` or a concrete Android tool type that matches the existing codebase.
 5. Register the tool before building `AnsightOptions`, or register it at runtime only after Ansight has initialized.
 6. Configure `withReadOnlyToolAccess()`, `withReadWriteToolAccess()`, or `withAllToolAccess()` to match the tool policy.
 7. Build a debug target and, when practical, a release target that omits the tool.
@@ -52,23 +52,31 @@ Create the smallest useful Android custom tool for a local development workflow,
 
 ## Implementation Pattern
 
-Use `androidSimpleTool(...)` for small app-owned operations:
+Use `FunctionJsonAndroidTool(...)` for small app-owned operations:
 
 ```kotlin
 import ai.ansight.runtime.AndroidToolResult
 import ai.ansight.runtime.ToolPolicy
-import ai.ansight.runtime.androidSimpleTool
+import ai.ansight.runtime.FunctionJsonAndroidTool
+import ai.ansight.runtime.ToolDefinition
+import ai.ansight.runtime.ToolSchema
 import org.json.JSONObject
 
-val diagnosticsSnapshotTool = androidSimpleTool(
-    id = "myapp.diagnostics_snapshot",
-    name = "Diagnostics Snapshot",
-    description = "Returns a small app-specific diagnostic summary.",
-    category = "myapp",
-    policy = ToolPolicy.Read,
-    keywords = "diagnostics health queues",
+val diagnosticsSnapshotTool = FunctionJsonAndroidTool(
+    definition = ToolDefinition(
+        id = "myapp.diagnostics_snapshot",
+        name = "Diagnostics Snapshot",
+        description = "Returns a small app-specific diagnostic summary.",
+        category = "myapp",
+        policy = ToolPolicy.Read,
+        keywords = "diagnostics health queues",
+        argumentsSchema = ToolSchema.obj(properties = mapOf("includeQueues" to ToolSchema.bool())),
+        resultSchema = ToolSchema.obj(properties = mapOf(
+            "connectionState" to ToolSchema.string(), "pendingQueueCount" to ToolSchema.integer(),
+        ), required = listOf("connectionState")),
+    ),
 ) { arguments, _ ->
-    val includeQueues = arguments["includeQueues"]?.toBooleanStrictOrNull() ?: false
+    val includeQueues = arguments.optBoolean("includeQueues", false)
     val snapshot = diagnostics.createSnapshot()
 
     AndroidToolResult.success(
@@ -170,3 +178,15 @@ After the app is paired and connected:
 - the active guard allows only the required maximum policy
 - the CLI can discover and invoke the tool in a paired local development session
 - final response names the tool id, policy, source set or build variant, files changed, and verification performed
+
+## Authoring and Execution Context
+
+Prefer `FunctionJsonAndroidTool(definition, availabilityHandler, handler)` when inputs contain booleans, numbers, arrays, or nested objects. It receives a `JSONObject` and uses the runtime's argument/result schema validation. `FunctionAndroidTool` and `androidSimpleTool` remain supported for flattened string arguments. Keep schemas explicit on `ToolDefinition`.
+
+Handlers and availability checks run on the transport context, without a main-thread guarantee. Dispatch Android view access to the main looper and engine operations to the engine's update thread. Keep availability fast and based on thread-safe state. Android handlers are synchronous; a caller timeout does not promise cancellation of a mutation.
+
+## Expose a Domain Model
+
+Start with `scene.snapshot` (`read`) returning a bounded JSON projection of scene id, selected entity, and transforms. Add `scene.set_visible` (`write`) taking one entity id and a boolean. Reject unknown ids and a loading scene with stable error codes, dispatch the change to the scene owner, and return the updated visibility. Read current state at invocation time rather than capturing a stale snapshot at registration.
+
+Keep schemas, policy, and dispatch explicit even when using `FunctionJsonAndroidTool`. Verify a successful read, a successful mutation, invalid arguments, an unavailable scene, and a denied write under a read-only guard. For a large model or a durable snapshot, use [artifact publication](https://www.ansight.ai/docs/sdk/android/artifacts) from the app instead of embedding it in a tool result.
