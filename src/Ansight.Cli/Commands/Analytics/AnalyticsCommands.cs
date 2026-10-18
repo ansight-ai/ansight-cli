@@ -89,6 +89,8 @@ internal static class AnalyticsCommands
                   + $"Detailed usage active: {(settings.IsDetailedTrackingActive ? "yes" : "no; requires sign-in and consent")}\n"
                   + "Engagement records daily active use, any CLI use at most once per 24 hours, and an hourly engaged event after two local actions. Command names are excluded.\n"
                   + "Detailed tracking adds normalized operations, outcomes, timings, local feature/recording counters, and acquisition milestones.\n"
+                  + "Disabling detailed tracking leaves baseline engagement and install/update events enabled, including without sign-in.\n"
+                  + "Provider: PostHog. Privacy: https://www.ansight.ai/privacy\n"
                   + "Events are queued locally; authentication and install commands attempt a bounded delivery, and the host retries while running.\n"
                   + $"Settings: {result.SettingsPath}");
         return CliExitCodes.Success;
@@ -106,15 +108,18 @@ internal static class AnalyticsCommands
            daily active user, any CLI use at most once per 24 hours without a command name,
            and an hourly engaged event after two local actions.
 
-           Detailed tracking requires sign-in and explicit opt-in for that account.
+           Detailed tracking is off by default and requires sign-in and explicit opt-in for that account.
            It includes normalized operations, outcomes, duration,
            local recording and feature counts, estimated active UI minutes, and
            acquisition milestones. Installation/account UUIDs link supported acquisition steps.
            It never sends raw arguments, paths, app/session/test identifiers, prompts,
            logs, request bodies, or captured content through these analytics events.
-           Disabling detailed tracking removes unsent detailed events and daily usage counters.
+           Disabling detailed tracking removes unsent detailed events and detailed usage counters.
            ANSIGHT_ANALYTICS_DISABLED=true also disables detailed collection.
+           Neither control disables baseline engagement or install/update events,
+           which remain enabled including without sign-in.
 
            The CLI retains events in a local outbox; the resident host delivers them.
+           Provider: PostHog. Privacy: https://www.ansight.ai/privacy
            """;
 }
