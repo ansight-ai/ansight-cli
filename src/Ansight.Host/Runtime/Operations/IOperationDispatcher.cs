@@ -64,5 +64,6 @@ internal interface IOperationDispatcher : IDisposable
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? secretValues = null,
         OperationExecutionContext? context = null,
-        string? runId = null);
+        string? runId = null,
+        string? batchRunId = null);
 }

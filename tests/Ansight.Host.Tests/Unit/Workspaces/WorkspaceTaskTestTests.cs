@@ -129,6 +129,23 @@ public sealed class WorkspaceTaskTestTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("batch-123")]
+    public async Task TaskInvocationExposesTheOptionalBatchRunId(string? batchRunId)
+    {
+        using var fixture = new Fixture("""
+            expect(Object.isFrozen(run), { id: 'readonly-run' }).toBe(true);
+            return { batchRunId: run.batchRunId, hasBatchRunId: Object.hasOwn(run, 'batchRunId') };
+            """);
+
+        var result = await fixture.Service.RunAsync(fixture.Request with { BatchRunId = batchRunId });
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(batchRunId, result.TaskResult!.Output?["batchRunId"]?.GetValue<string>());
+        Assert.Equal(batchRunId is not null, result.TaskResult.Output?["hasBatchRunId"]?.GetValue<bool>());
+    }
+
+    [Theory]
     [InlineData("taskId: missing", "not loaded")]
     [InlineData("taskId: example\ntaskInput: { count: wrong }", "count")]
     [InlineData("taskId: example\nrequiredSecrets: [missing.password]", "missing")]
@@ -223,7 +240,10 @@ public sealed class WorkspaceTaskTestTests
     [Fact]
     public async Task LaunchedTaskTestStopsAppAndBatchRetainsTaskRun()
     {
-        using var fixture = new Fixture("expect(input.count, { id: 'count' }).toBe(2);");
+        using var fixture = new Fixture("""
+            expect(input.count, { id: 'count' }).toBe(2);
+            return { batchRunId: run.batchRunId };
+            """);
         fixture.Launcher.OwnApp = true;
         var batch = await fixture.Service.Batches.RunAllAsync(new WorkspaceTestBatchRequest(
             fixture.Workspace, Target: fixture.TargetRequest));
@@ -231,6 +251,7 @@ public sealed class WorkspaceTaskTestTests
         Assert.Equal(1, fixture.Launcher.Launches);
         Assert.Equal(1, fixture.Launcher.Stops);
         Assert.Equal(0, fixture.Gateway.Calls);
+        Assert.Equal(batch.BatchRunId, batch.Results[0].TaskResult!.Output?["batchRunId"]?.GetValue<string>());
         var inspection = fixture.Service.History.Inspect(batch.BatchRunId!)!;
         var item = Assert.Single(inspection.Batch!.Audit.Tests);
         Assert.Null(item.AgentRunId);

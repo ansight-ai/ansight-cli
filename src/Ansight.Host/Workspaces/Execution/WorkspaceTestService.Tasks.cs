@@ -18,7 +18,7 @@ public sealed partial class WorkspaceTestService
             var taskResult = await runtime.RunWorkspaceTestTaskAsync(
                 RepositoryTaskWorkspaceScope.Resolve(test.AppId, workspacePath), test.AppId,
                 session.SessionId, test.TaskId!, test.TaskInput, target?.DeviceIdentifier,
-                request.OperationContext, secrets, cancellationToken, runId).ConfigureAwait(false);
+                request.OperationContext, secrets, cancellationToken, runId, request.BatchRunId).ConfigureAwait(false);
             var status = taskResult.Status switch
             {
                 RepositoryTaskRunStatus.Passed => SimulatorAgentRunStatus.Succeeded,

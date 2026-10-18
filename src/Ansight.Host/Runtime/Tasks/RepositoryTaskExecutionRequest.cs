@@ -9,6 +9,8 @@ internal sealed record RepositoryTaskExecutionRequest(
     JsonObject Input,
     string CorrelationId)
 {
+    internal string? BatchRunId { get; init; }
+
     internal JsonObject? Capabilities { get; init; }
 
     internal IReadOnlyDictionary<string, string> SecretValues { get; init; } = new Dictionary<string, string>();

@@ -129,7 +129,8 @@ internal sealed class RepositoryTaskRouter
         CancellationToken cancellationToken,
         OperationExecutionContext? context = null,
         IReadOnlyDictionary<string, string>? secretValues = null,
-        string? requestedRunId = null)
+        string? requestedRunId = null,
+        string? batchRunId = null)
         => analytics.ObserveUsageAsync("task", () => ExecuteCoreAsync(
             task,
             sessionId,
@@ -137,7 +138,7 @@ internal sealed class RepositoryTaskRouter
             correlationId,
             [task.TaskId],
             RepositoryTaskTraceScope.IsEnabled,
-            cancellationToken, context, secretValues, requestedRunId), result => result.Status.ToString().ToLowerInvariant() switch
+            cancellationToken, context, secretValues, requestedRunId, batchRunId), result => result.Status.ToString().ToLowerInvariant() switch
             {
                 "succeeded" => "succeeded", "cancelled" => "cancelled", "rejected" => "blocked", _ => "failed"
             });
@@ -152,7 +153,8 @@ internal sealed class RepositoryTaskRouter
         CancellationToken cancellationToken,
         OperationExecutionContext? context,
         IReadOnlyDictionary<string, string>? secretValues,
-        string? requestedRunId = null)
+        string? requestedRunId = null,
+        string? batchRunId = null)
     {
         ArgumentNullException.ThrowIfNull(task);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -246,6 +248,7 @@ internal sealed class RepositoryTaskRouter
                         TaskCallChain = taskCallChain.ToArray(),
                         CaptureTrace = captureTrace,
                         OperationContext = context,
+                        BatchRunId = batchRunId ?? context?.BatchRunId,
                         SecretValues = secretValues ?? new Dictionary<string, string>()
                     },
                     cancellationToken)
@@ -350,7 +353,8 @@ internal sealed class RepositoryTaskRouter
                 correlationId,
                 parentRequest.TaskCallChain.Append(taskId).ToArray(),
                 parentRequest.CaptureTrace,
-                cancellationToken, parentRequest.OperationContext, parentRequest.SecretValues)
+                cancellationToken, parentRequest.OperationContext, parentRequest.SecretValues,
+                batchRunId: parentRequest.BatchRunId)
             .ConfigureAwait(false);
         // Trace payloads are retained separately so tracing cannot grow the JavaScript
         // response past its runtime limit or change a composed task's behavior.

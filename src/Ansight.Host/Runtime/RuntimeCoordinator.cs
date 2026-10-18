@@ -439,11 +439,12 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     internal async Task<RepositoryTaskRunResult> RunWorkspaceTestTaskAsync(
         string workspacePath, string appId, string sessionId, string taskId, JsonObject? input,
         string? targetDeviceIdentifier, Operations.OperationExecutionContext? context,
-        IReadOnlyDictionary<string, string> secretValues, CancellationToken cancellationToken, string runId)
+        IReadOnlyDictionary<string, string> secretValues, CancellationToken cancellationToken, string runId,
+        string? batchRunId)
     {
         using var scope = operationDispatcher.BeginSimulatorAgentRun(sessionId, targetDeviceIdentifier);
         return await operationDispatcher.RunRepositoryTaskAsync(workspacePath, appId, sessionId, taskId,
-            input, cancellationToken, secretValues, context, runId).ConfigureAwait(false);
+            input, cancellationToken, secretValues, context, runId, batchRunId).ConfigureAwait(false);
     }
 
     public void SetFocusedControl(RuntimeFocusedControlSnapshot snapshot)

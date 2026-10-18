@@ -160,7 +160,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string>? secretValues = null,
         OperationExecutionContext? context = null,
-        string? runId = null)
+        string? runId = null,
+        string? batchRunId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
@@ -247,7 +248,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
                 cancellationToken,
                 context: context,
                 secretValues: secretValues,
-                requestedRunId: runId)
+                requestedRunId: runId,
+                batchRunId: batchRunId)
             .ConfigureAwait(false);
     }
 

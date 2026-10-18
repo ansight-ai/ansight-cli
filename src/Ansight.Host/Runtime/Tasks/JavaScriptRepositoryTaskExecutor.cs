@@ -716,7 +716,8 @@ internal sealed class JavaScriptRepositoryTaskExecutor
     }
 
     private JsonObject CreateInvocation(RepositoryTaskExecutionRequest request)
-        => new()
+    {
+        var invocation = new JsonObject
         {
             ["schema"] = "ansight.repository-task.v2",
             ["capabilities"] = request.Capabilities?.DeepClone(),
@@ -738,6 +739,14 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             ["taskSuites"] = SerializeSuites(RepositoryJavaScriptApiMethods.TaskCompositionSuites),
             ["appSuites"] = SerializeSuites(RepositoryJavaScriptApiMethods.StandardAppToolSuites)
         };
+
+        if (request.BatchRunId is not null)
+        {
+            invocation["run"]!["batchRunId"] = request.BatchRunId;
+        }
+
+        return invocation;
+    }
 
     private static void ApplySessionTarget(JsonObject arguments, string sessionId)
     {

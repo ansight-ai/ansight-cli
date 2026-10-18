@@ -168,6 +168,9 @@ export interface TaskRun {
   /** Unique task run ID. */
   runId: string;
 
+  /** Enclosing workspace test batch ID, shared by child tasks. Absent outside a batch. */
+  batchRunId?: string;
+
   /** Repository-relative task ID derived from the module path. */
   taskId: string;
 
