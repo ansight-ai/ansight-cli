@@ -38,6 +38,7 @@ internal sealed class AppInteractionBackend : IAppInteractionBackend
         this.applicationPaths = applicationPaths;
         this.appToolBridge = appToolBridge;
         this.input = input;
+        input.ConfigureRecording(runtimeState);
         this.taskDispatcher = taskDispatcher;
         this.repositoryRootPath = repositoryRootPath is null ? null : Path.GetFullPath(repositoryRootPath);
         if (!new SessionResolver(runtimeState, appToolBridge).TryResolveLiveSession(
@@ -142,7 +143,9 @@ internal sealed class AppInteractionBackend : IAppInteractionBackend
 
     private async Task<UiInputResult> ExecuteTargetedAsync(AppInteractionRequest request, CancellationToken cancellationToken)
     {
-        var capture = await tree.CaptureAsync($"interaction-{Guid.NewGuid():N}", request.Target, cancellationToken).ConfigureAwait(false);
+        var evidenceId = $"interaction-{Guid.NewGuid():N}";
+        using var inputScope = input.BeginEvidenceScope(evidenceId);
+        var capture = await tree.CaptureAsync(evidenceId, request.Target, cancellationToken).ConfigureAwait(false);
         if (capture is null) return UiInputResult.Failure("No fresh UI tree is available; no input was sent.");
         if (capture.Viewport is not { Width: > 0, Height: > 0 } viewport)
             return UiInputResult.Failure("The UI tree has no usable viewport; no input was sent.");

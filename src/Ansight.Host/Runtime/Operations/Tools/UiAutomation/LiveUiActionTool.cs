@@ -13,7 +13,9 @@ internal enum LiveUiActionKind
     Pinch,
     Back,
     KeyboardOpen,
-    KeyboardDismiss
+    KeyboardDismiss,
+    KeyboardPress,
+    KeyboardSubmit
 }
 
 internal readonly record struct LiveUiScreenPoint(double X, double Y);
@@ -66,6 +68,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         LiveUiActionKind.Back => "ansight_back_ui",
         LiveUiActionKind.KeyboardOpen => "ansight_open_keyboard",
         LiveUiActionKind.KeyboardDismiss => "ansight_dismiss_keyboard",
+        LiveUiActionKind.KeyboardPress => "ansight_press_keyboard",
+        LiveUiActionKind.KeyboardSubmit => "ansight_submit_keyboard",
         _ => throw new ArgumentOutOfRangeException()
     };
 
@@ -79,6 +83,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         LiveUiActionKind.Back => "Navigate Back In Live UI",
         LiveUiActionKind.KeyboardOpen => "Open The Software Keyboard",
         LiveUiActionKind.KeyboardDismiss => "Dismiss The Software Keyboard",
+        LiveUiActionKind.KeyboardPress => "Press Enter",
+        LiveUiActionKind.KeyboardSubmit => "Submit The Focused Input",
         _ => throw new ArgumentOutOfRangeException()
     };
 
@@ -92,6 +98,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         LiveUiActionKind.Back => "Press the platform back control through Ansight's simulator or emulator input host.",
         LiveUiActionKind.KeyboardOpen => "Focus a resolved live text-input target and verify that the system software keyboard opens.",
         LiveUiActionKind.KeyboardDismiss => "Dismiss the system software keyboard when fresh device accessibility confirms that it is open.",
+        LiveUiActionKind.KeyboardPress => "Send an Enter key press to the focused app through device input.",
+        LiveUiActionKind.KeyboardSubmit => "Invoke the focused editor action through the app input method. Requires ui.submit_keyboard.",
         _ => throw new ArgumentOutOfRangeException()
     };
 
@@ -101,6 +109,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
 
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
+        if (actionKind == LiveUiActionKind.KeyboardPress && arguments?["key"]?.GetValue<string>() != "Enter")
+            return ToolError("keyboard.press requires key: 'Enter'.");
         if (!sessionResolver.TryResolveLiveSession(arguments, out var snapshot, out var resolutionError))
         {
             return ToolError(resolutionError);
@@ -130,7 +140,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         var selector = LiveUiSelector.Parse(arguments);
-        var captureResult = actionKind is LiveUiActionKind.Back or LiveUiActionKind.KeyboardDismiss
+        var captureResult = actionKind is LiveUiActionKind.Back or LiveUiActionKind.KeyboardDismiss or LiveUiActionKind.KeyboardPress or LiveUiActionKind.KeyboardSubmit
             ? await LiveUiTreeCapture.CaptureAsync(
                 snapshot!,
                 appToolBridge,
@@ -155,7 +165,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
 
         var capture = captureResult.Capture;
         var includeScreenshot = arguments?["includeScreenshot"]?.GetValue<bool>() ?? true;
-        return actionKind is LiveUiActionKind.Back or LiveUiActionKind.KeyboardDismiss
+        return actionKind is LiveUiActionKind.Back or LiveUiActionKind.KeyboardDismiss or LiveUiActionKind.KeyboardPress or LiveUiActionKind.KeyboardSubmit
             ? await ExecuteBackAsync(capture, deviceIdentifier, includeScreenshot, correlationId)
             : await ExecuteTargetedActionAsync(
                 capture,
@@ -382,6 +392,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             actionId,
             $"Starting {Capability} through Ansight host input.",
             LogPriority.Information);
+        using var inputScope = uiInputRouter.BeginEvidenceScope(actionId);
         UiInputResult inputResult;
         switch (actionKind)
         {
@@ -661,6 +672,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             actionId,
             $"Starting {Capability} through Ansight host input.",
             LogPriority.Information);
+        using var inputScope = uiInputRouter.BeginEvidenceScope(actionId);
         var result = keyboardOpenBefore == false
             ? new UiInputResult(
                 true,
@@ -668,8 +680,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 "The system software keyboard is already dismissed.")
             : isKeyboardDismiss
                 ? await DismissKeyboardAsync(capture.Session.SessionId, correlationId)
+                : actionKind == LiveUiActionKind.KeyboardSubmit
+                    ? await uiInputRouter.RecordInputAsync(capture.Session.SessionId, "keyboard.submit",
+                        () => SubmitKeyboardAsync(capture.Session.SessionId, correlationId))
                 : await uiInputRouter.PressButtonAsync(
-                    new UiButtonRequest(capture.Session.SessionId, deviceIdentifier, "back", capture.Session.AppId),
+                    new UiButtonRequest(capture.Session.SessionId, deviceIdentifier,
+                        actionKind == LiveUiActionKind.KeyboardPress ? "enter" : "back", capture.Session.AppId),
                     ToolExecutionCancellation.Current);
         var afterCapture = await CaptureAfterEvidenceAsync(
             capture,
@@ -719,6 +735,20 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             postconditionError,
             keyboardOpen: keyboardOpenAfter,
             performed: keyboardOpenBefore != false && result.IsSuccess);
+    }
+
+    private async Task<UiInputResult> SubmitKeyboardAsync(string sessionId, string? correlationId)
+    {
+        const string toolId = "ui.submit_keyboard";
+        var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(sessionId, toolId, new JsonObject(), null,
+            ToolExecutionCancellation.Current, new AppToolBridgeRequestContext("host-ui", Name, correlationId));
+        uiInputRouter.InvalidateAccessibility(sessionId);
+        var payload = response.Envelope?.Payload;
+        return response.Success && response.Envelope?.Type == ToolProtocolMessageTypes.ResultType
+            && payload?["success"]?.GetValue<bool>() == true && payload?["result"]?["performed"]?.GetValue<bool>() == true
+            ? new UiInputResult(true, "app-input-method", "Invoked the focused input's submit action.")
+            : UiInputResult.Failure(payload?["error"]?["message"]?.GetValue<string>()
+                ?? payload?["message"]?.GetValue<string>() ?? response.Message);
     }
 
     private async Task<UiInputResult> DismissKeyboardAsync(string sessionId, string? correlationId)
@@ -841,18 +871,20 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             ["appId"] = ToolSchema.String("App id to target when exactly one live session exists for that app.", nullable: true),
             ["includeScreenshot"] = ToolSchema.Boolean("Include the final screenshot as image content. Defaults to true.", nullable: true)
         };
-        if (actionKind is LiveUiActionKind.KeyboardOpen or LiveUiActionKind.KeyboardDismiss)
+        if (actionKind is LiveUiActionKind.KeyboardOpen or LiveUiActionKind.KeyboardDismiss or LiveUiActionKind.KeyboardPress or LiveUiActionKind.KeyboardSubmit)
         {
             properties["deviceId"] = ToolSchema.String(
                 "Native device identifier used to select a matching live app session. May be combined with appId.",
                 nullable: true);
         }
 
-        if (actionKind is not LiveUiActionKind.Back and not LiveUiActionKind.KeyboardDismiss)
+        if (actionKind is not LiveUiActionKind.Back and not LiveUiActionKind.KeyboardDismiss and not LiveUiActionKind.KeyboardPress and not LiveUiActionKind.KeyboardSubmit)
         {
             LiveUiToolSchemas.SelectorProperties(properties);
         }
 
+        if (actionKind == LiveUiActionKind.KeyboardPress)
+            properties["key"] = ToolSchema.String("Key to press.", enumValues: ["Enter"]);
         if (actionKind == LiveUiActionKind.TypeText)
         {
             properties["value"] = ToolSchema.String("Text to type after focusing the target.");
@@ -949,6 +981,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         LiveUiActionKind.Back => "ui.back",
         LiveUiActionKind.KeyboardOpen => "keyboard.open",
         LiveUiActionKind.KeyboardDismiss => "keyboard.dismiss",
+        LiveUiActionKind.KeyboardPress => "keyboard.press",
+        LiveUiActionKind.KeyboardSubmit => "keyboard.submit",
         _ => throw new ArgumentOutOfRangeException()
     };
 

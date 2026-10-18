@@ -1,10 +1,74 @@
 using Ansight.Host.Tests.TestSupport;
 using Ansight.Tools;
+using Ansight.Host.Runtime.Tasks;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed class KeyboardOperationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EnterUsesDeviceInputAndSubmitUsesTheEditorWithoutAFallbackKey(bool supportsSubmit)
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var id = state.CreateSession("test.app", "Keyboard", IPAddress.Loopback, null, null);
+        state.SetSessionDeviceProfile(id, null, """{"device":{"nativeDeviceId":"simulator-001"}}""");
+        var driver = new KeyboardDriver { IsOpen = true };
+        var bridge = new ConnectedAppToolBridge(id, driver, true, false, false, supportsSubmit);
+        var router = new UiInputRouter();
+        router.Configure(driver);
+        router.ConfigureAccessibility(driver);
+        var catalog = CreateToolCatalog(state, environment, bridge, router);
+        var entered = await CallAsync(catalog, "ansight_press_keyboard", id,
+            new JsonObject { ["key"] = "Enter", ["includeScreenshot"] = false });
+        Assert.True(entered["performed"]!.GetValue<bool>());
+        Assert.Equal(1, driver.EnterCount);
+        var submitted = await CallAsync(catalog, "ansight_submit_keyboard", id,
+            new JsonObject { ["includeScreenshot"] = false }, expectedError: !supportsSubmit);
+        Assert.Equal(supportsSubmit, submitted["performed"]!.GetValue<bool>());
+        Assert.Equal(supportsSubmit ? 1 : 0, bridge.SubmitCount);
+        Assert.Equal(1, driver.EnterCount);
+        Assert.Equal(0, driver.BackCount);
+        Assert.True(state.TryGetSessionSnapshot(id, out var snapshot));
+        Assert.Contains(snapshot!.Logs, log => log.Tag == "keyboard.press");
+        var actions = snapshot!.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
+        Assert.Equal(new[] { "keyboard.press", "keyboard.submit" }, actions.Select(action => action.Kind));
+        Assert.All(actions, action => Assert.NotNull(action.EvidenceActionId));
+        Assert.Equal(supportsSubmit ? "succeeded" : "failed", actions[1].Status);
+        // Exercise the ordinary session persistence path, then extract from a newly loaded recording.
+        var store = new SessionCaptureStore(environment.ApplicationPaths);
+        store.Save(snapshot);
+        Assert.True(new SessionCaptureStore(environment.ApplicationPaths).TryLoad(id, out var retained));
+        var extracted = TimelineTaskExtractor.Extract(retained!, snapshot.CreatedUtc,
+            DateTimeOffset.UtcNow.AddSeconds(1), "Recorded keyboard actions");
+        Assert.Contains("ansight.keyboard.press", extracted.Source);
+        Assert.Equal(supportsSubmit, extracted.Source.Contains("ansight.keyboard.submit", StringComparison.Ordinal));
+        Assert.Equal(supportsSubmit ? 2 : 1, extracted.GeneratedActionCount);
+        if (supportsSubmit)
+        {
+            var tasks = Path.Combine(environment.RootPath, "ansight", "tasks");
+            Directory.CreateDirectory(tasks);
+            File.WriteAllText(Path.Combine(tasks, "recorded.ts"), extracted.Source);
+            var composition = new MefHostComposition(environment.ApplicationPaths,
+                new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
+            using var dispatcher = new OperationDispatcher(state, environment.ApplicationPaths,
+                composition.Get<IKnownAppStore>(), composition.Get<IPairingConfigService>(), composition.Get<IPairingConfigCache>(),
+                composition.Get<AppService>(), composition.Get<PairingService>(), composition.Get<DotNetProfilingService>(),
+                composition.Get<NativeProfilingService>(), bridge);
+            dispatcher.ConfigureRepositoryTaskRuntime("node");
+            dispatcher.ConfigureUiInputDriver(driver);
+            dispatcher.ConfigureUiAccessibilityDriver(driver);
+            var replayed = await dispatcher.RunRepositoryTaskAsync(environment.RootPath, "test.app", id,
+                "recorded", null, CancellationToken.None);
+            Assert.True(replayed.Status == RepositoryTaskRunStatus.Passed, replayed.Message + "\n" + replayed.StandardError);
+            Assert.Equal(2, driver.EnterCount);
+            Assert.Equal(2, bridge.SubmitCount);
+            Assert.Equal(3, replayed.Assertions.Count);
+        }
+    }
+
     [Theory]
     [InlineData(true, false, false)]
     [InlineData(true, true, false)]
@@ -127,6 +191,7 @@ public sealed class KeyboardOperationTests
         public int TapCount { get; private set; }
 
         public int BackCount { get; private set; }
+        public int EnterCount { get; private set; }
 
         public bool IsOpen { get; set; }
 
@@ -166,6 +231,11 @@ public sealed class KeyboardOperationTests
             UiButtonRequest request,
             CancellationToken cancellationToken = default)
         {
+            if (request.Button == "enter")
+            {
+                EnterCount++;
+                return Task.FromResult(Success("Enter delivered."));
+            }
             Assert.Equal("back", request.Button);
             BackCount++;
             IsOpen = false;
@@ -234,9 +304,11 @@ public sealed class KeyboardOperationTests
     }
 
     private sealed class ConnectedAppToolBridge(
-        string sessionId, KeyboardDriver driver, bool supportsDismiss, bool closesBeforeRequest, bool toolFails) : IAppToolBridge
+        string sessionId, KeyboardDriver driver, bool supportsDismiss, bool closesBeforeRequest, bool toolFails,
+        bool supportsSubmit = false) : IAppToolBridge
     {
         public int DismissCount { get; private set; }
+        public int SubmitCount { get; private set; }
         public event EventHandler? ConnectionsChanged
         {
             add { }
@@ -274,6 +346,18 @@ public sealed class KeyboardOperationTests
             CancellationToken cancellationToken,
             AppToolBridgeRequestContext? requestContext = null)
         {
+            if (toolId == "ui.get_screenshot")
+                return Task.FromResult(AppToolBridgeResponse.FromFailure("This test bridge has no screenshot provider."));
+            if (toolId == "ui.submit_keyboard")
+            {
+                if (!supportsSubmit) return Task.FromResult(AppToolBridgeResponse.FromFailure("Submit is unavailable."));
+                SubmitCount++;
+                return Task.FromResult(AppToolBridgeResponse.FromSuccess("Submitted.", new ToolProtocolEnvelope
+                {
+                    Type = ToolProtocolMessageTypes.ResultType, Id = "submit",
+                    Payload = new JsonObject { ["success"] = true, ["result"] = new JsonObject { ["performed"] = true } }
+                }));
+            }
             Assert.Equal("ui.dismiss_keyboard", toolId);
             Assert.True(supportsDismiss);
             if (closesBeforeRequest) driver.IsOpen = false;

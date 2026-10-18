@@ -410,7 +410,9 @@ export type UiActionCapability =
   | "ui.sequence"
   | "ui.back"
   | "keyboard.open"
-  | "keyboard.dismiss";
+  | "keyboard.dismiss"
+  | "keyboard.press"
+  | "keyboard.submit";
 
 /** Position of captured evidence relative to its UI action. */
 export type UiEvidencePhase = "before" | "after";
@@ -674,6 +676,11 @@ export interface KeyboardActionResult extends UiActionResult {
   capability: "keyboard.open" | "keyboard.dismiss";
   /** Keyboard visibility observed after the action. */
   isOpen: boolean;
+}
+
+/** Dispatched input action; use a named assertion to verify its effect on the app. */
+export interface KeyboardInputResult extends UiActionResult {
+  capability: "keyboard.press" | "keyboard.submit";
 }
 
 /** App tools supported by the host visual-tree capture operation. */
@@ -2956,6 +2963,10 @@ export interface TaskHostUiContext {
 }
 /** Feature component for host software-keyboard operations. */
 export interface TaskHostKeyboardContext {
+  /** Send a physical Enter key to the focused app. Multiline editors may insert a newline. */
+  press(args: { key: "Enter"; includeScreenshot?: boolean }): Promise<KeyboardInputResult>;
+  /** Invoke the focused editor action. Throws if no submit action/provider is available. Verify app state with expect. */
+  submit(args?: KeyboardDismissArguments): Promise<KeyboardInputResult>;
   /**
    * Focus a selected text input and verify from fresh device accessibility evidence that the
    * software keyboard opened.

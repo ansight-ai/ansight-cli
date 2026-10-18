@@ -244,6 +244,13 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
             return;
         }
 
+        if (string.Equals(button, "enter", StringComparison.OrdinalIgnoreCase))
+        {
+            await SendAsync(HttpMethod.Post, $"session/{Escape(session.SessionId)}/wda/keys",
+                new JsonObject { ["value"] = new JsonArray("\n") }, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var buttonName = button.Trim().ToLowerInvariant() switch
         {
             "home" => "home",

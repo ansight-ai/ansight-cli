@@ -384,7 +384,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         AddString(node, "automationId", parsed.AutomationId);
         AddString(node, "text", parsed.Text);
         AddString(node, "label", parsed.Label);
-        AddString(node, "value", parsed.Value);
+        if (parsed.Value is not null) node["value"] = parsed.Value;
         if (parsed.Actions.Count > 0)
         {
             node["supportedActions"] = new JsonArray(
@@ -468,6 +468,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var bounds = ParseAndroidBounds(Attribute(element, "bounds"));
         var actions = AndroidActions(role, clickable, scrollable, enabled);
         var text = Attribute(element, "text");
+        var inputValue = role == "textbox"
+            ? BooleanAttribute(element, "password", fallback: false) ? null
+                : BooleanAttribute(element, "showing-hint", fallback: false)
+                  || BooleanAttribute(element, "showing-hint-text", fallback: false) ? string.Empty
+                : element.Attribute("text")?.Value
+            : text;
         var label = Attribute(element, "content-desc");
         var automationId = Attribute(element, "resource-id");
         var meaningful = visible
@@ -482,7 +488,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             automationId,
             text ?? label,
             label,
-            text,
+            inputValue,
             Normalize(bounds.X, viewportWidth),
             Normalize(bounds.Y, viewportHeight),
             NormalizeSize(bounds.Width, viewportWidth),

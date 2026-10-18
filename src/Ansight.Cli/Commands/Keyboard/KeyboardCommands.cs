@@ -110,8 +110,10 @@ internal static class KeyboardCommands
             "open" => UiAutomationOperation.KeyboardOpen,
             "is-open" => UiAutomationOperation.KeyboardIsOpen,
             "dismiss" => UiAutomationOperation.KeyboardDismiss,
+            "press" => UiAutomationOperation.KeyboardPress,
+            "submit" => UiAutomationOperation.KeyboardSubmit,
             _ => throw new CliUsageException(
-                $"Unknown keyboard action '{action}'. Expected open, is-open, or dismiss.")
+                $"Unknown keyboard action '{action}'. Expected open, is-open, dismiss, press, or submit.")
         };
 
     private static JsonObject BuildOperationArguments(
@@ -127,11 +129,12 @@ internal static class KeyboardCommands
             AddSelector(result, arguments);
         }
 
-        if (operation is UiAutomationOperation.KeyboardOpen or UiAutomationOperation.KeyboardDismiss)
+        if (operation is UiAutomationOperation.KeyboardOpen or UiAutomationOperation.KeyboardDismiss or UiAutomationOperation.KeyboardPress or UiAutomationOperation.KeyboardSubmit)
         {
             result["includeScreenshot"] = false;
         }
 
+        if (operation == UiAutomationOperation.KeyboardPress) result["key"] = arguments.GetOption("key");
         return result;
     }
 
@@ -168,7 +171,10 @@ internal static class KeyboardCommands
             values.AddRange(SelectorValueOptions);
         }
 
+        if (operation == UiAutomationOperation.KeyboardPress) values.Add("key");
         arguments.EnsureOptionContract($"ansight keyboard {action}", flags, values);
+        if (operation == UiAutomationOperation.KeyboardPress && arguments.GetOption("key") != "Enter")
+            throw new CliUsageException("ansight keyboard press requires --key Enter.");
         ValidateTargetOptions(arguments);
         if (operation == UiAutomationOperation.KeyboardOpen)
         {
@@ -235,11 +241,15 @@ internal static class KeyboardCommands
              ansight keyboard open [selector options] [target options]
              ansight keyboard is-open [target options]
              ansight keyboard dismiss [target options]
+             ansight keyboard press --key Enter [target options]
+             ansight keyboard submit [target options]
 
            Commands:
              open       Focus the selected text input and verify that the keyboard opens
              is-open    Report whether the software keyboard is currently visible
              dismiss    Dismiss an open keyboard and verify that it closes
+             press      Send Enter through device input; multiline fields may insert a newline
+             submit     Invoke the focused editor action through ui.submit_keyboard; requires SDK UI tools
 
            Target options:
              --session <id>                    Exact connected Ansight session

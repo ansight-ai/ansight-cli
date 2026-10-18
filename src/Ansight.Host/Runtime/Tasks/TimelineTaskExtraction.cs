@@ -33,7 +33,7 @@ public sealed record TimelineTaskExtraction(
 /// <summary>
 /// Converts recorded touch and visual-tree evidence into a deterministic Ansight repository task draft.
 /// </summary>
-public static class TimelineTaskExtractor
+public static partial class TimelineTaskExtractor
 {
     private static readonly TimeSpan gestureGap = TimeSpan.FromMilliseconds(
         TouchReviewDefaults.DefaultGestureGapMilliseconds);
@@ -70,8 +70,12 @@ public static class TimelineTaskExtractor
         var gestures = TouchGestureSegmenter.BuildGestureSegments(touches, gestureGap);
         var diagnostics = new List<string>();
         var actions = new List<GeneratedTaskAction>();
+        var hostInputs = ReadHostInputs(snapshot, startUtc, endUtc, diagnostics);
+        AddHostInputActions(snapshot, hostInputs, actions, diagnostics, includeCoordinateFallbackTaps, startUtc, endUtc);
+        var matchedHostInputs = new HashSet<string>(StringComparer.Ordinal);
         foreach (var gesture in gestures)
         {
+            if (IsRecordedHostTap(gesture, hostInputs, matchedHostInputs)) continue;
             if (TouchReviewGeometry.NormalizeTouchAction(gesture.Touches[^1].Action) == "cancel")
             {
                 diagnostics.Add(
@@ -113,10 +117,11 @@ public static class TimelineTaskExtractor
             startUtc,
             endUtc,
             actions,
-            diagnostics);
+            diagnostics,
+            hostInputs);
         actions = CompactAndOrderActions(actions);
 
-        if (touches.Length == 0)
+        if (touches.Length == 0 && hostInputs.Count == 0)
         {
             diagnostics.Add("The selected timeline range contains no recorded touch input.");
         }
@@ -364,7 +369,8 @@ public static class TimelineTaskExtractor
         DateTimeOffset startUtc,
         DateTimeOffset endUtc,
         ICollection<GeneratedTaskAction> actions,
-        ICollection<string> diagnostics)
+        ICollection<string> diagnostics,
+        IReadOnlyList<HostInputAction> hostInputs)
     {
         var trees = snapshot.VisualTreeSnapshots
             .Where(tree => tree.CapturedAtUtc <= endUtc)
@@ -410,6 +416,12 @@ public static class TimelineTaskExtractor
                 {
                     foreach (var state in current.States.Values)
                     {
+                        // Submission effects and partial changes from failed delivery are not new typing.
+                        if (tree.EvidencePhase == "after" && tree.ActionId is not null
+                            && hostInputs.Any(input => input.EvidenceActionId == tree.ActionId
+                                && (input.Status != "succeeded"
+                                    || input.StartedAtUtc < startUtc || input.CompletedAtUtc > endUtc
+                                    || input.Kind is "keyboard.press" or "keyboard.submit"))) continue;
                         if (!previous.States.TryGetValue(state.Identity, out var earlier))
                         {
                             continue;
@@ -463,7 +475,10 @@ public static class TimelineTaskExtractor
                                 ? $"clear {state.Description}"
                                 : $"replace text in {state.Description}",
                             tree.CapturedAtUtc,
-                            ResolveInputOrderTime(
+                            hostInputs.LastOrDefault(input => input.Status == "succeeded" && input.Kind == "type"
+                                && input.EvidenceActionId is not null && input.EvidenceActionId == tree.ActionId
+                                && input.CompletedAtUtc <= tree.CapturedAtUtc)?.StartedAtUtc
+                            ?? ResolveInputOrderTime(
                                 actions,
                                 previousTree!.CapturedAtUtc,
                                 tree.CapturedAtUtc,
@@ -691,6 +706,7 @@ public static class TimelineTaskExtractor
 
     private static bool IsMaskedInputValue(string value)
     {
+        if (value.Trim().Equals("[redacted]", StringComparison.OrdinalIgnoreCase)) return true;
         var containsMaskCharacter = false;
         foreach (var character in value)
         {
@@ -750,17 +766,17 @@ public static class TimelineTaskExtractor
         DateTimeOffset currentTreeCapturedAtUtc,
         string inputTargetKey)
     {
-        var nextDifferentTap = actions
-            .Where(action => action.Kind == "tap"
-                             && action.CapturedAtUtc > previousTreeCapturedAtUtc
+        var nextInputBoundary = actions
+            .Where(action => action.CapturedAtUtc > previousTreeCapturedAtUtc
                              && action.CapturedAtUtc <= currentTreeCapturedAtUtc
-                             && action.TargetKey is not null
-                             && !string.Equals(action.TargetKey, inputTargetKey, StringComparison.Ordinal))
+                             && (action.Kind is "keyboard.press" or "keyboard.submit"
+                                 || action.Kind == "tap" && action.TargetKey is not null
+                                 && !string.Equals(action.TargetKey, inputTargetKey, StringComparison.Ordinal)))
             .OrderBy(static action => action.CapturedAtUtc)
             .FirstOrDefault();
-        return nextDifferentTap is null
+        return nextInputBoundary is null
             ? currentTreeCapturedAtUtc
-            : nextDifferentTap.CapturedAtUtc.AddTicks(-1);
+            : nextInputBoundary.CapturedAtUtc.AddTicks(-1);
     }
 
     private static bool HasCorrelatedFocusTap(
@@ -836,6 +852,12 @@ public static class TimelineTaskExtractor
             ["DESCRIPTION"] = SanitizeComment(action.Description),
             ["PERFORMED_MESSAGE"] = SerializeString(action.Description + " should be performed.")
         };
+        if (action.Kind is "keyboard.press" or "keyboard.submit")
+        {
+            var call = action.Kind == "keyboard.press" ? "ansight.keyboard.press({ key: \"Enter\" })" : "ansight.keyboard.submit()";
+            return $"  const keyboard{sequence} = await {call};\n"
+                + $"  expect(keyboard{sequence}.performed, {{ id: \"recorded-keyboard-{sequence}\" }}).toBe(true);\n";
+        }
         if (action.Kind is "tap" or "input")
         {
             var operationPath = "Runtime/Tasks/Resources/timeline-task-tap-operation.ts";
@@ -929,6 +951,8 @@ public static class TimelineTaskExtractor
 
     private static string BuildReplayInstruction(GeneratedTaskAction action)
     {
+        if (action.Kind == "keyboard.press") return "Press the Enter key in the focused input (preserve newline behavior).";
+        if (action.Kind == "keyboard.submit") return "Invoke the focused input's submit action (Search, Go, or Done).";
         if (action.Kind == "input")
         {
             var inputTarget = DescribeInputTarget(action.Selector!, action.Description);

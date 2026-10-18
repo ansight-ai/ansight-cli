@@ -62,7 +62,9 @@ internal static class RepositoryJavaScriptApiMethods
             ["keyboard"] = Suite(
                 new StandardApiMethod("open", "ansight_open_keyboard"),
                 new StandardApiMethod("isOpen", "ansight_is_keyboard_open"),
-                new StandardApiMethod("dismiss", "ansight_dismiss_keyboard")),
+                new StandardApiMethod("dismiss", "ansight_dismiss_keyboard"),
+                new StandardApiMethod("press", "ansight_press_keyboard"),
+                new StandardApiMethod("submit", "ansight_submit_keyboard")),
             ["logs"] = Suite(
                 new StandardApiMethod("get", "ansight_get_logs"),
                 new StandardApiMethod("search", "ansight_search_logs"),

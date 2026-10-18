@@ -759,10 +759,11 @@ public sealed partial class HeadlessHostDeviceDriver :
 
                 var session = await GetSimulatorHidSessionAsync(device.Identifier, token)
                     .ConfigureAwait(false);
-                if (string.Equals(request.Button, "back", StringComparison.OrdinalIgnoreCase))
+                if (request.Button.ToLowerInvariant() is "back" or "enter")
                 {
-                    session.SendKey(device.Identifier, 41, MacSimulatorKeyPhase.Down);
-                    session.SendKey(device.Identifier, 41, MacSimulatorKeyPhase.Up);
+                    var keyCode = request.Button.Equals("enter", StringComparison.OrdinalIgnoreCase) ? 40u : 41u;
+                    session.SendKey(device.Identifier, keyCode, MacSimulatorKeyPhase.Down);
+                    session.SendKey(device.Identifier, keyCode, MacSimulatorKeyPhase.Up);
                 }
                 else
                 {

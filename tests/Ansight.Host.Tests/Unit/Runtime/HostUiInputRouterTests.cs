@@ -1,9 +1,36 @@
 using Ansight.Host.Runtime.Operations;
+using Ansight.Host.Tests.TestSupport;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed class HostUiInputRouterTests
 {
+    [Fact]
+    public async Task RecordingRetainsFailedAndInterruptedDeliveryWithoutBackendMessages()
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var sessionId = state.CreateSession("test.app", "Input", IPAddress.Loopback, null, null);
+        var router = new UiInputRouter();
+        router.ConfigureRecording(state);
+        using (router.BeginEvidenceScope("outer"))
+        {
+            using (router.BeginEvidenceScope("inner"))
+                await router.RecordInputAsync(sessionId, "tap", () => Task.FromResult(
+                    UiInputResult.Failure("Private backend text")), .5, .5);
+            await Assert.ThrowsAsync<OperationCanceledException>(() => router.RecordInputAsync(sessionId,
+                "keyboard.press", () => Task.FromException<UiInputResult>(new OperationCanceledException())));
+        }
+        await router.RecordInputAsync(sessionId, "tap", () => Task.FromResult(
+            new UiInputResult(true, "test", "Delivered")), .2, .3);
+        Assert.True(state.TryGetSessionSnapshot(sessionId, out var snapshot));
+        var actions = snapshot!.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
+        Assert.Equal(new[] { "failed", "interrupted", "succeeded" }, actions.Select(action => action.Status));
+        Assert.Equal(new string?[] { "inner", "outer", null }, actions.Select(action => action.EvidenceActionId));
+        Assert.All(actions, action => Assert.True(action.CompletedAtUtc >= action.StartedAtUtc));
+        Assert.DoesNotContain(snapshot.ApplicationEvents, item => item.Details?.Contains("Private backend text") == true);
+    }
+
     [Fact]
     public void ResolveDeviceIdentifier_UsesRunTargetUntilScopeEnds()
     {

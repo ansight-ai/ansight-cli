@@ -55,6 +55,7 @@ internal sealed class OperationServices
         CloudSessionSharingService = cloudSessionSharingService;
         SessionResolver = sessionResolver;
         UiInputRouter = uiInputRouter ?? new UiInputRouter();
+        UiInputRouter.ConfigureRecording(runtimeState);
         DeviceLocationRouter = deviceLocationRouter ?? new DeviceLocationRouter();
         DeviceLifecycleRouter = deviceLifecycleRouter ?? new DeviceLifecycleRouter();
         RepositoryTaskRouter = repositoryTaskRouter

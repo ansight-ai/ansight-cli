@@ -5,6 +5,26 @@ namespace Ansight.Host.Tests.Unit.Devices;
 
 public sealed class DeviceAccessibilityTreeNormalizerTests
 {
+    [Theory]
+    [InlineData("", "false", "false", "")]
+    [InlineData("Search", "true", "false", "")]
+    [InlineData("Search", "false", "false", "Search")]
+    [InlineData("secret", "false", "true", null)]
+    public void NormalizeAndroid_DistinguishesInputValuesFromHints(
+        string text, string showingHint, string password, string? expected)
+    {
+        var source = $"""
+            <hierarchy><node class="android.widget.EditText" resource-id="search" text="{text}"
+              showing-hint="{showingHint}" password="{password}" enabled="true"
+              bounds="[0,0][100,40]" /></hierarchy>
+            """;
+        var payload = DeviceAccessibilityTreeNormalizer.NormalizeAndroid(source, 100, 100, 40, 16);
+        Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var types, out var root));
+        var match = Assert.Single(LiveUiNodeQuery.Find(root!,
+            LiveUiSelector.Parse(new JsonObject { ["automationId"] = "search" }), types!));
+        Assert.Equal(expected, LiveUiNodeQuery.ReadValue(match.Node));
+    }
+
     [Fact]
     public void NormalizeIosSimulator_CompactsResidentAxpTranslatorSnapshot()
     {

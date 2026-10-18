@@ -5,7 +5,7 @@ using Ansight.Host.Workspaces.Catalog;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
-public sealed class HostTimelineTaskExtractorTests
+public sealed partial class HostTimelineTaskExtractorTests
 {
     [Fact]
     public void WorkspaceTestExport_ProducesRunnableSchemaWithRecordedJourneyAndNewFinalLabel()
@@ -916,7 +916,8 @@ public sealed class HostTimelineTaskExtractorTests
         DateTimeOffset startedAt,
         IReadOnlyList<SessionTouchInputRecord> touches,
         IReadOnlyList<SessionVisualTreeSnapshot> visualTrees,
-        IReadOnlyList<SessionAnnotation>? annotations = null)
+        IReadOnlyList<SessionAnnotation>? annotations = null,
+        IReadOnlyList<SessionApplicationEvent>? hostEvents = null)
     {
         return new AppSessionSnapshot
         {
@@ -932,6 +933,7 @@ public sealed class HostTimelineTaskExtractorTests
             Touches = touches,
             VisualTreeSnapshots = visualTrees,
             Annotations = annotations ?? [],
+            ApplicationEvents = hostEvents ?? [],
             MetricChannels = [],
             Metrics = []
         };
@@ -997,11 +999,13 @@ public sealed class HostTimelineTaskExtractorTests
         string snapshotId,
         string value,
         string automationId = "email-field",
-        string label = "Email")
+        string label = "Email", string? actionId = null, string? phase = null)
     {
         return new SessionVisualTreeSnapshot
         {
             SnapshotId = snapshotId,
+            ActionId = actionId,
+            EvidencePhase = phase,
             CapturedAtUtc = capturedAt,
             Source = "test",
             NodeCount = 1,

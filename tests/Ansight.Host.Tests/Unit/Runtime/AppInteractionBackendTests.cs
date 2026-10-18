@@ -118,6 +118,11 @@ public sealed partial class AppInteractionBackendTests
         var events = snapshot.ApplicationEvents.Where(item => item.EventType == "ansight.interaction").ToArray();
         Assert.Equal(3, events.Length);
         Assert.DoesNotContain(events, item => item.Details.Contains("private test text", StringComparison.Ordinal));
+        var hostInputs = snapshot.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
+        Assert.Equal(new[] { "tap", "type" }, hostInputs.Select(action => action.Kind));
+        Assert.All(hostInputs, action => Assert.Equal("succeeded", action.Status));
+        Assert.DoesNotContain(snapshot.ApplicationEvents, item => item.EventType == HostInputAction.EventType
+            && item.Details.Contains("private test text", StringComparison.Ordinal));
     }
 
     [Fact]

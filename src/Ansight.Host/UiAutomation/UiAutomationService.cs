@@ -17,7 +17,9 @@ public enum UiAutomationOperation
     Assert,
     KeyboardOpen,
     KeyboardIsOpen,
-    KeyboardDismiss
+    KeyboardDismiss,
+    KeyboardPress,
+    KeyboardSubmit
 }
 
 public sealed record UiAutomationResult(
@@ -112,6 +114,8 @@ public sealed class UiAutomationService
             UiAutomationOperation.KeyboardOpen => "ansight_open_keyboard",
             UiAutomationOperation.KeyboardIsOpen => "ansight_is_keyboard_open",
             UiAutomationOperation.KeyboardDismiss => "ansight_dismiss_keyboard",
+            UiAutomationOperation.KeyboardPress => "ansight_press_keyboard",
+            UiAutomationOperation.KeyboardSubmit => "ansight_submit_keyboard",
             _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, null)
         };
 

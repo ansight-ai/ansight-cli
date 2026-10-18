@@ -10,6 +10,8 @@ public sealed class KeyboardCommandsTests
         yield return [new[] { "keyboard", "open", "--role", "textbox" }, UiAutomationOperation.KeyboardOpen];
         yield return [new[] { "keyboard", "is-open" }, UiAutomationOperation.KeyboardIsOpen];
         yield return [new[] { "keyboard", "dismiss" }, UiAutomationOperation.KeyboardDismiss];
+        yield return [new[] { "keyboard", "press", "--key", "Enter" }, UiAutomationOperation.KeyboardPress];
+        yield return [new[] { "keyboard", "submit" }, UiAutomationOperation.KeyboardSubmit];
     }
 
     [Theory]

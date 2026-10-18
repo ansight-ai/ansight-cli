@@ -9,7 +9,47 @@ internal sealed class UiInputRouter
     private readonly Lock gate = new();
     private readonly Dictionary<string, UiInputTargetBinding> targetBindingsBySession = new(StringComparer.Ordinal);
     private readonly Dictionary<UiAccessibilityCacheKey, UiAccessibilityCacheEntry> accessibilityCache = [];
+    private ISessionIngestion? recording;
+    private readonly AsyncLocal<string?> evidenceActionId = new();
     private IUiInputDriver? driver;
+
+    internal void ConfigureRecording(ISessionIngestion value) => recording = value;
+
+    internal IDisposable BeginEvidenceScope(string actionId)
+    {
+        var previous = evidenceActionId.Value;
+        evidenceActionId.Value = actionId;
+        return new EvidenceScope(() => evidenceActionId.Value = previous);
+    }
+
+    internal async Task<UiInputResult> RecordInputAsync(
+        string sessionId, string kind, Func<Task<UiInputResult>> deliver,
+        double? x = null, double? y = null)
+    {
+        var id = $"host-input-{Guid.NewGuid():N}";
+        var started = DateTimeOffset.UtcNow;
+        var evidenceId = evidenceActionId.Value;
+        UiInputResult? result = null;
+        try
+        {
+            result = await deliver().ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            // Never retain input text, secrets, or arbitrary backend messages here.
+            recording?.AddSessionApplicationEvents(sessionId,
+                [new HostInputAction(id, kind, started, DateTimeOffset.UtcNow,
+                    result is null ? "interrupted" : result.IsSuccess ? "succeeded" : "failed",
+                    evidenceId, x, y).ToEvent()]);
+        }
+    }
+
+    private sealed class EvidenceScope(Action restore) : IDisposable
+    {
+        private Action? restoreAction = restore;
+        public void Dispose() => Interlocked.Exchange(ref restoreAction, null)?.Invoke();
+    }
     private IUiAccessibilityDriver? accessibilityDriver;
 
     public void Configure(IUiInputDriver? value)
@@ -95,9 +135,9 @@ internal sealed class UiInputRouter
         UiTapRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await (GetDriver()?.TapAsync(request, cancellationToken)
+        var result = await RecordInputAsync(request.SessionId, "tap", () => GetDriver()?.TapAsync(request, cancellationToken)
                             ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
+                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")), request.NormalizedX, request.NormalizedY)
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
         return result;
@@ -144,7 +184,7 @@ internal sealed class UiInputRouter
         UiTextRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await (GetDriver()?.TypeTextAsync(request, cancellationToken)
+        var result = await RecordInputAsync(request.SessionId, "type", () => GetDriver()?.TypeTextAsync(request, cancellationToken)
                             ?? Task.FromResult(UiInputResult.Failure(
                                 "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
             .ConfigureAwait(false);
@@ -156,10 +196,12 @@ internal sealed class UiInputRouter
         UiButtonRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await (GetDriver()?.PressButtonAsync(request, cancellationToken)
+        Task<UiInputResult> Deliver() => GetDriver()?.PressButtonAsync(request, cancellationToken)
                             ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
-            .ConfigureAwait(false);
+                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session."));
+        var result = request.Button.Equals("enter", StringComparison.OrdinalIgnoreCase)
+            ? await RecordInputAsync(request.SessionId, "keyboard.press", Deliver).ConfigureAwait(false)
+            : await Deliver().ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
         return result;
     }

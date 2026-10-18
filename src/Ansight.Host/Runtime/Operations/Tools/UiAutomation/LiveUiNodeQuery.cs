@@ -135,11 +135,15 @@ internal static class LiveUiNodeQuery
 
     public static string? ReadValue(JsonObject node)
     {
-        return FirstString(
-            ReadString(node, "value"),
-            ReadNestedString(node, "visual", "value"),
-            ReadNestedString(node, "properties", "value"),
-            ReadNestedString(node, "props", "value"));
+        foreach (var candidate in new[]
+        {
+            node["value"], (node["visual"] as JsonObject)?["value"],
+            (node["properties"] as JsonObject)?["value"], (node["props"] as JsonObject)?["value"]
+        })
+        {
+            if (candidate is JsonValue scalar && scalar.TryGetValue<string>(out var value)) return value;
+        }
+        return null; // A label or placeholder never establishes an input value.
     }
 
     public static string ReadRole(JsonObject node, VisualTreeTypeRegistry typeRegistry)
