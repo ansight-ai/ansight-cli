@@ -49,13 +49,18 @@ export default async function verifyHome({ ansight, expect }: TaskInvocation) {
 ```
 
 The descriptor must remain a JSON-compatible object literal because Ansight
-reads it without executing the module. A normal return with no named `expect`
+reads it without executing the module. Use `schemaVersion: 1`, or omit it.
+Optional `requires.capabilities` and `requires.appTools` are checked before
+importing the task in both SDK and external device sessions. Individual tool
+calls still enforce provider availability.
+
+A normal return with no named `expect`
 assertion is **inconclusive**, not passed.
 
 ## Describe task transitions
 
 Optional `startingState` and `successState` strings help the agent plan a path and
-chain tasks. Each accepts 1–1000 characters and works with existing task versions:
+chain tasks. Each accepts 1–1000 characters:
 
 ```ts
 "startingState": "Map tab is open with its search field available.",

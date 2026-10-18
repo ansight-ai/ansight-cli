@@ -1,4 +1,4 @@
-// Generated from the Ansight repository task v2 contract (v1 SDK modules remain supported).
+// Generated from the Ansight repository task contract.
 
 /**
  * # Purpose and usage
@@ -80,9 +80,9 @@ export type TaskFramework =
  */
 export interface TaskDefinition {
   /** Contract version. Omitted descriptors are interpreted as version 1. */
-  schemaVersion?: 1 | 2;
+  schemaVersion?: 1;
 
-  /** Version 2 requirements are checked before importing the task module. */
+  /** Optional requirements are checked before importing the task module. */
   requires?: ExecutionRequirements;
 
   /** Whether this task may be executed. Defaults to true. */
@@ -5583,7 +5583,7 @@ export interface TaskCapacitorContext {
  * Calls execute immediately in a task and return an AppToolCallResult envelope.
  * Narrow on responseType before reading payload.result; a TypeScript method
  * can exist even when the app has not registered or authorized that tool.
- * Inspect ansight.appTools.list() or declare a required app tool in a version 2
+ * Inspect ansight.appTools.list() or declare a required app tool in the
  * task descriptor when availability is essential.
  */
 export interface TaskAppContext {

@@ -193,7 +193,7 @@ internal static class RepositoryTaskLoader
             descriptorJson,
             taskJson) ?? throw new InvalidDataException($"Task module '{modulePath}' has an empty descriptor.");
         var schemaVersion = ResolveSchemaVersion(definition.SchemaVersion, taskId);
-        definition.Requires?.Validate(schemaVersion);
+        definition.Requires?.Validate();
         var declaredAppId = NormalizeOptionalValue(definition.AppId);
         if (declaredAppId is not null
             && !string.Equals(declaredAppId, appId, StringComparison.Ordinal))
@@ -300,10 +300,10 @@ internal static class RepositoryTaskLoader
     private static int ResolveSchemaVersion(int? declaredVersion, string taskId)
     {
         var version = declaredVersion ?? 1;
-        if (version is not (1 or 2))
+        if (version != 1)
         {
             throw new InvalidDataException(
-                $"Task '{taskId}' schemaVersion must be 1 or 2.");
+                $"Task '{taskId}' schemaVersion must be 1 or omitted.");
         }
 
         return version;

@@ -152,7 +152,7 @@ internal static class RepositoryAutomationTriggerLoader
             descriptorJson,
             triggerJson) ?? throw new InvalidDataException($"Trigger module '{modulePath}' has an empty descriptor.");
         var schemaVersion = ResolveSchemaVersion(definition.SchemaVersion, triggerId);
-        definition.Requires?.Validate(schemaVersion);
+        definition.Requires?.Validate();
         var appId = ResolveAppId(definition.AppId, scopedAppId, triggerId);
         var eventKind = NormalizeRequiredValue(definition.EventKind, $"Trigger '{triggerId}' eventKind");
         var eventSchema = LoadEventSchema(triggerId, definition.EventSchema);
@@ -196,10 +196,10 @@ internal static class RepositoryAutomationTriggerLoader
     private static int ResolveSchemaVersion(int? declaredVersion, string triggerId)
     {
         var version = declaredVersion ?? 1;
-        if (version is not (1 or 2))
+        if (version != 1)
         {
             throw new InvalidDataException(
-                $"Trigger '{triggerId}' schemaVersion must be 1 or 2.");
+                $"Trigger '{triggerId}' schemaVersion must be 1 or omitted.");
         }
 
         return version;

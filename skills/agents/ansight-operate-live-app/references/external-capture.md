@@ -67,7 +67,7 @@ ansight app execute --app-id <app-id> --platform <ios|android> \
   --device-id <device-id> --execution-mode device --prompt "<goal>" --json
 ```
 
-Do not combine a session ID with `--execution-mode` or other launch options. An attached execution reserves the session and releases it on completion; the monitor remains enabled. For a final bounded verification run whose evidence is captured within `app execute`, add `--close-app-on-completion` to end the selected app process afterward. When further live checks are needed, finish those first and explicitly terminate the app during cleanup. App Graphs and app-internal tools require an SDK provider. Tasks and triggers need schema version 2 with declared capability requirements for external execution; legacy version 1 retains its SDK requirement.
+Do not combine a session ID with `--execution-mode` or other launch options. An attached execution reserves the session and releases it on completion; the monitor remains enabled. For a final bounded verification run whose evidence is captured within `app execute`, add `--close-app-on-completion` to end the selected app process afterward. When further live checks are needed, finish those first and explicitly terminate the app during cleanup. App Graphs and app-internal tools require an SDK provider. Tasks and triggers use schema version 1 (or omit it) in both capture modes. Declare required capabilities and app tools; individual operations enforce provider availability.
 
 ## Capture Settings And Cleanup
 

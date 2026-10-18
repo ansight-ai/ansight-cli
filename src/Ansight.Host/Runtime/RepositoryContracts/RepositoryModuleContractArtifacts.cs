@@ -6,9 +6,9 @@ namespace Ansight.Host.Runtime.RepositoryContracts;
 
 internal static class RepositoryModuleContractArtifacts
 {
-    public const int ContractVersion = 2;
-    public const string TaskDefinitionSchemaId = "https://ansight.dev/schemas/repository-task.v2.schema.json";
-    public const string TriggerDefinitionSchemaId = "https://ansight.dev/schemas/repository-trigger.v2.schema.json";
+    public const int ContractVersion = 1;
+    public const string TaskDefinitionSchemaId = "https://ansight.dev/schemas/repository-task.v1.schema.json";
+    public const string TriggerDefinitionSchemaId = "https://ansight.dev/schemas/repository-trigger.v1.schema.json";
 
     private static readonly Assembly assembly = typeof(RepositoryModuleContractArtifacts).Assembly;
     private static readonly Lazy<string> taskDefinitionSchema = new(() => ReadText("ansight-task.schema.json"));

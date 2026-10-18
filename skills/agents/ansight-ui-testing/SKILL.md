@@ -26,7 +26,7 @@ Authoring and validating a workspace require the Ansight CLI, but they do not re
 
 Running automation requires the matching App ID and a session or launch target with the required capabilities. SDK and external device sessions both support visible UI workflows and host evidence. Preserve the user's capture choice; when unresolved, use `https://www.ansight.ai/skills/agents/ansight-operate-live-app/SKILL.md` for mode selection and external setup. In-process app tools and App Graphs need an SDK provider. Install SDK features only when in scope: `https://www.ansight.ai/skills/ansight-install.md`. Do not require the SDK merely to edit definitions or inspect retained evidence.
 
-External tasks and triggers use descriptor `schemaVersion: 2`, declare essential `requires.capabilities` or `requires.appTools`, and inspect `ansight.capabilities.snapshot()` for optional task features. Version 1 retains its SDK requirement. Keep test and Trends schema versions independent of task/trigger versions. A missing capability refuses execution; never skip it and report success. External user touches and instrumented network evidence are unavailable; native logs, metrics, and files depend on the selected target.
+Tasks and triggers retain separate descriptor schemas, each using `schemaVersion: 1` or omitting the field. Both accept additive optional requirements. Declare essential `requires.capabilities` or `requires.appTools`, and inspect `ansight.capabilities.snapshot()` for optional task features. An SDK is required only by SDK-dependent operations or declared app-tool requirements. Keep test and Trends schema versions independent of task/trigger versions. A missing capability refuses execution; never skip it and report success. External user touches and instrumented network evidence are unavailable; native logs, metrics, and files depend on the selected target.
 
 Workspace authoring does not authorize execution. Run a test or task, connect a trigger, rebuild Trends history, export a sanitized archive, or synchronize cloud history only when the user requested that state-changing operation or verification.
 
@@ -70,7 +70,7 @@ ansight workspace add sanitizer <repository-root> <id> --json
 
 Then edit the generated definition. Existing files fail safely unless `--force` is supplied; do not replace one silently. There is no `workspace add trends` command, so create strict JSON files from the current [Trends contract](https://www.ansight.ai/docs/workspace/trends).
 
-Derive stable IDs from paths by removing the extension and replacing directory separators with dots. Preserve local naming conventions. Use YAML block text for test prompts, strict portable JSON for Trends, and the canonical declarations produced by the installed host. Tests, Trends, and sanitizers use their own version 1 contracts; tasks and triggers use version 2 when capability-aware external execution is intended. Do not invent runtime APIs or schema fields.
+Derive stable IDs from paths by removing the extension and replacing directory separators with dots. Preserve local naming conventions. Use YAML block text for test prompts, strict portable JSON for Trends, and the canonical declarations produced by the installed host. Tests, Trends, and sanitizers use their own version 1 contracts; tasks and triggers also use version 1 with optional capability requirements in either capture mode. Do not invent runtime APIs or schema fields.
 
 ## Tests: Prompts Or Deterministic Tasks
 
@@ -410,7 +410,7 @@ ansight repo automation runs <app-id> --json
 ansight repo automation disconnect <app-id> --json
 ```
 
-For external captures, use version 2 triggers with observed native-log events and supported host actions such as screenshots, file capture, or annotations. App actions need an SDK provider. Declare the action capability and verify the selected session supports it.
+For external captures, use triggers with observed native-log events and supported host actions such as screenshots, file capture, or annotations. App actions need an SDK provider. Declare the action capability and verify the selected session supports it.
 
 Connected triggers are trusted local code and persist with the linked workspace across resident-host restarts. External edits are not hot-reloaded; inspect again and reconnect after changing definitions. A missing run is not evidence of success.
 

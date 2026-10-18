@@ -218,7 +218,7 @@ public sealed partial class RepositoryTaskTests
 
         var contract = RepositoryModuleContractBuilder.BuildTask(task, includeDefinitions: true);
 
-        Assert.Equal(2, contract["contractVersion"]?.GetValue<int>());
+        Assert.Equal(1, contract["contractVersion"]?.GetValue<int>());
         Assert.Equal("task", contract["moduleType"]?.GetValue<string>());
         Assert.Equal("map.validate", contract["moduleId"]?.GetValue<string>());
         Assert.Equal("Secret Garden", contract["schemas"]?["input"]?["properties"]?["label"]?["default"]?.GetValue<string>());
@@ -249,12 +249,14 @@ public sealed partial class RepositoryTaskTests
         Assert.DoesNotContain("dotnetListProjects", typeDefinitions, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Loader_RejectsAnUnsupportedTaskSchemaVersion()
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Loader_RejectsAnUnsupportedTaskSchemaVersion(int schemaVersion)
     {
         using var repository = CreateRepository(CreatePassingModule().Replace(
             "\"schemaVersion\": 1",
-            "\"schemaVersion\": 3",
+            $"\"schemaVersion\": {schemaVersion}",
             StringComparison.Ordinal));
 
         var result = LoadRepository(repository.RootPath);

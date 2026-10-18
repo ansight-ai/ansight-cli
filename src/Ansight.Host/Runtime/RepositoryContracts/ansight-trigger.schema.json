@@ -1,16 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ansight.dev/schemas/repository-trigger.v2.schema.json",
+  "$id": "https://ansight.dev/schemas/repository-trigger.v1.schema.json",
   "title": "Ansight Repository Trigger Definition",
   "type": "object",
   "properties": {
     "schemaVersion": {
       "type": "integer",
       "default": 1,
-      "enum": [
-        1,
-        2
-      ]
+      "const": 1
     },
     "enabled": {
       "type": "boolean",
@@ -129,24 +126,5 @@
   "required": [
     "eventKind"
   ],
-  "additionalProperties": false,
-  "allOf": [
-    {
-      "if": {
-        "required": [
-          "requires"
-        ]
-      },
-      "then": {
-        "required": [
-          "schemaVersion"
-        ],
-        "properties": {
-          "schemaVersion": {
-            "const": 2
-          }
-        }
-      }
-    }
-  ]
+  "additionalProperties": false
 }

@@ -70,13 +70,14 @@ public sealed class DeviceExecutionEvidenceTests
     }
 
     [Fact]
-    public void RequirementsRejectMissingAppToolsAndLegacyDeviceTasks()
+    public void RequirementsRejectMissingAppToolsWithoutAnImplicitSdkDependency()
     {
         var capabilities = JsonNode.Parse("""{"executionMode":"device","appAvailable":false,"appTools":[],"capabilities":{"ui.semantic":{"available":true}}}""")!.AsObject();
         Assert.Null(ExecutionCapabilities.Missing(capabilities, new ExecutionRequirements { Capabilities = ["ui.semantic"] }));
         Assert.Equal("capability_unavailable", ExecutionCapabilities.Missing(capabilities,
             new ExecutionRequirements { AppTools = ["data.query"] })?["code"]?.GetValue<string>());
-        Assert.NotNull(ExecutionCapabilities.Missing(capabilities, null, legacy: true));
+        Assert.Null(ExecutionCapabilities.Missing(capabilities, null));
+        Assert.Null(ExecutionCapabilities.Missing(capabilities, new ExecutionRequirements()));
     }
 
     [Fact]

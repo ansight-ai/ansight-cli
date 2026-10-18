@@ -95,11 +95,11 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 preflight.CancelAfter(TimeSpan.FromSeconds(15));
                 var capabilities = await capabilityResolver(request.SessionId, preflight.Token).ConfigureAwait(false);
                 request = request with { Capabilities = capabilities };
-                if (ExecutionCapabilities.Missing(capabilities, request.Task.Requires, request.Task.SchemaVersion < 2) is { } missing)
+                if (ExecutionCapabilities.Missing(capabilities, request.Task.Requires) is { } missing)
                     return Finish(request, RepositoryTaskRunStatus.Rejected, startedAtUtc, stopwatch,
                         missing["message"]!.GetValue<string>(), missing, [], toolCalls, string.Empty);
             }
-            else if (request.Task.SchemaVersion >= 2)
+            else if (request.Task.Requires is { } requirements && (requirements.Capabilities.Count > 0 || requirements.AppTools.Count > 0))
             {
                 return Finish(request, RepositoryTaskRunStatus.Rejected, startedAtUtc, stopwatch,
                     "The task host cannot resolve execution capabilities.", null, [], toolCalls, string.Empty);

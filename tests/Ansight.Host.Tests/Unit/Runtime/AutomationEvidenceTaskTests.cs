@@ -148,7 +148,7 @@ public sealed class AutomationEvidenceTaskTests
             File.WriteAllText(Path.Combine(taskDirectory, "ansight-task.d.ts"), RepositoryModuleContractArtifacts.GetTaskTypeDefinitions());
             File.WriteAllText(Path.Combine(taskDirectory, "evidence.ts"), """
                 import type { TaskInvocation } from "./ansight-task.d.ts";
-                export const task = { "schemaVersion": 2, "title": "Inspect captured evidence", "description": "Inspect and annotate captured HTTP failure evidence.", "maximumActions": 20, "timeoutSeconds": 20, "requires": { "capabilities": ["evidence.read"] } };
+                export const task = { "schemaVersion": 1, "title": "Inspect captured evidence", "description": "Inspect and annotate captured HTTP failure evidence.", "maximumActions": 20, "timeoutSeconds": 20, "requires": { "capabilities": ["evidence.read"] } };
                 export default async function run({ ansight, expect, run }: TaskInvocation) {
                 """ + body + "\n}");
             var loaded = router.Load(rootPath, "com.example.app");

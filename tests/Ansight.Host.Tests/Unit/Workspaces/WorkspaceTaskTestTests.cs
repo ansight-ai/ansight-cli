@@ -310,11 +310,11 @@ public sealed class WorkspaceTaskTestTests
             Directory.CreateDirectory(tasks);
             File.WriteAllText(Path.Combine(tasks, "example.ts"), $$"""
                 export const task = {
-                  "schemaVersion": 2, "appId": "test.tasks", "title": "Example", "description": "Checks the task runner",
+                  "schemaVersion": 1, "appId": "test.tasks", "title": "Example", "description": "Checks the task runner",
                   {{descriptor}}
                   "inputSchema": { "type": "object", "properties": { "count": { "type": "integer", "default": 2 } } }
                 };
-                export default async ({ input, expect, secrets, ansight }) => { {{body}} };
+                export default async ({ input, expect, secrets, ansight, run }) => { {{body}} };
                 """);
         }
 

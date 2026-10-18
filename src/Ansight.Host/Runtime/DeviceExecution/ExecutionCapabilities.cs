@@ -8,9 +8,8 @@ public sealed class ExecutionRequirements
     public IReadOnlyList<string> Capabilities { get; init; } = [];
     public IReadOnlyList<string> AppTools { get; init; } = [];
 
-    internal void Validate(int version)
+    internal void Validate()
     {
-        if (version < 2) throw new InvalidDataException("Capability requirements require schemaVersion 2.");
         if (Capabilities is null || AppTools is null || Capabilities.Count > 64 || AppTools.Count > 64
             || Capabilities.Concat(AppTools).Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 160 || value.Any(char.IsControl)))
             throw new InvalidDataException("Requirements must contain at most 64 non-empty capability and app-tool identifiers each.");
@@ -60,10 +59,8 @@ internal static class ExecutionCapabilities
         };
     }
 
-    public static JsonObject? Missing(JsonObject snapshot, ExecutionRequirements? requirements, bool legacy = false)
+    public static JsonObject? Missing(JsonObject snapshot, ExecutionRequirements? requirements)
     {
-        if (legacy && snapshot["appAvailable"]?.GetValue<bool>() != true)
-            return Unavailable("app.tools", snapshot, "Legacy modules require SDK mode. Declare schemaVersion 2 and explicit requirements for portable execution.");
         foreach (var capability in requirements?.Capabilities ?? [])
             if (snapshot["capabilities"]?[capability]?["available"]?.GetValue<bool>() != true)
                 return Unavailable(capability, snapshot, snapshot["capabilities"]?[capability]?["reason"]?.GetValue<string>() ?? "No provider exposes this capability.");

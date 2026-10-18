@@ -7,10 +7,10 @@ public sealed partial class RepositoryTaskTests
 {
     [Theory]
     [InlineData(1)]
-    [InlineData(2)]
-    public void Loader_PublishesOptionalStateHintsThroughTaskDiscovery(int schemaVersion)
+    [InlineData(null)]
+    public void Loader_PublishesOptionalStateHintsThroughTaskDiscovery(int? schemaVersion)
     {
-        var module = CreatePassingModule().Replace("\"schemaVersion\": 1", $"\"schemaVersion\": {schemaVersion}", StringComparison.Ordinal)
+        var module = CreatePassingModule().Replace("\"schemaVersion\": 1,", schemaVersion.HasValue ? "\"schemaVersion\": 1," : "", StringComparison.Ordinal)
             .Replace("\"title\": \"Validate map\",", """
                 "title": "Validate map",
                 "startingState": "  Map tab is open with input.searchArea selected.  ",
@@ -22,7 +22,7 @@ public sealed partial class RepositoryTaskTests
 
         Assert.Empty(loaded.Warnings);
         var task = Assert.Single(loaded.Tasks);
-        Assert.Equal(schemaVersion, task.SchemaVersion);
+        Assert.Equal(1, task.SchemaVersion);
         Assert.Equal("Map tab is open with input.searchArea selected.", task.StartingState);
         Assert.Equal(task.StartingState, task.ToPublicDefinition().StartingState);
         Assert.Equal(task.SuccessState, task.ToPublicDefinition().SuccessState);

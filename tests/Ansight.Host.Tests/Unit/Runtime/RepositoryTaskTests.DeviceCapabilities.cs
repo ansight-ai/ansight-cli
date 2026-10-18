@@ -11,7 +11,7 @@ public sealed partial class RepositoryTaskTests
     public async Task DeviceTaskPreflightRejectsBeforeImportingTheModule()
     {
         using var repository = CreateRepository("""
-            export const task = { "schemaVersion": 2, "title": "SDK dependency", "description": "Requires an SDK tool", "requires": { "appTools": ["data.query"] } };
+            export const task = { "schemaVersion": 1, "title": "SDK dependency", "description": "Requires an SDK tool", "requires": { "appTools": ["data.query"] } };
             throw new Error("Module side effect executed");
             export default () => {};
             """);
@@ -24,11 +24,13 @@ public sealed partial class RepositoryTaskTests
         Assert.Empty(result.ToolCalls);
     }
 
-    [Fact]
-    public async Task DeviceTaskCanUsePortableFilesWithPinnedSession()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DeviceTaskCanUsePortableFilesWithPinnedSession(bool declareVersion)
     {
-        using var repository = CreateRepository("""
-            export const task = { "schemaVersion": 2, "title": "Capture file", "description": "Portable evidence", "requires": { "capabilities": ["files.capture"] } };
+        using var repository = CreateRepository($$"""
+            export const task = { {{(declareVersion ? "\"schemaVersion\": 1," : "")}} "title": "Capture file", "description": "Portable evidence", "requires": { "capabilities": ["files.capture"] } };
             export default async ({ ansight, expect, run, app }) => {
               const capture = await ansight.files.capture({ path: "Documents/probe.bin", sessionId: "wrong-session" });
               expect(run.executionMode, { id: "device" }).toBe("device");
@@ -52,7 +54,7 @@ public sealed partial class RepositoryTaskTests
     public async Task DeviceTaskDynamicAppCallThrowsStructuredErrorWithoutDispatch()
     {
         using var repository = CreateRepository("""
-            export const task = { "schemaVersion": 2, "title": "Check refusal", "description": "Checks dynamic calls" };
+            export const task = { "schemaVersion": 1, "title": "Check refusal", "description": "Checks dynamic calls" };
             export default async ({ app, expect }) => {
               let error;
               try { await app.callTool("custom.tool"); } catch (caught) { error = caught; }
@@ -72,7 +74,7 @@ public sealed partial class RepositoryTaskTests
     public void LoaderRejectsMisspelledRequirements()
     {
         using var repository = CreateRepository("""
-            export const task = { "schemaVersion": 2, "title": "Invalid", "description": "Misspelled requirement", "requires": { "appTool": ["data.query"] } };
+            export const task = { "schemaVersion": 1, "title": "Invalid", "description": "Misspelled requirement", "requires": { "appTool": ["data.query"] } };
             export default () => {};
             """);
         var result = LoadRepository(repository.RootPath);
@@ -81,15 +83,34 @@ public sealed partial class RepositoryTaskTests
     }
 
     [Fact]
-    public void LoaderRejectsRequirementsOnLegacyDescriptors()
+    public void LoaderAcceptsRequirementsWithDefaultSchema()
     {
         using var repository = CreateRepository("""
-            export const task = { "schemaVersion": 1, "title": "Invalid", "description": "Invalid requirements", "requires": { "capabilities": ["files.capture"] } };
+            export const task = { "title": "Capture file", "description": "Additive requirements", "requires": { "capabilities": ["files.capture"] } };
             export default () => {};
             """);
         var result = LoadRepository(repository.RootPath);
-        Assert.Empty(result.Tasks);
-        Assert.Contains("schemaVersion 2", Assert.Single(result.Warnings));
+        Assert.Empty(result.Warnings);
+        var task = Assert.Single(result.Tasks);
+        Assert.Equal(1, task.SchemaVersion);
+        Assert.Equal("files.capture", Assert.Single(task.Requires!.Capabilities));
+    }
+
+    [Fact]
+    public async Task TaskRequirementsFailClosedWithoutACapabilityResolver()
+    {
+        using var repository = CreateRepository("""
+            export const task = { "schemaVersion": 1, "title": "Capture file", "description": "Requires preflight", "requires": { "capabilities": ["files.capture"] } };
+            throw new Error("Module side effect executed");
+            export default () => {};
+            """);
+        var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
+        var executor = new JavaScriptRepositoryTaskExecutor("node", (_, _, _) => throw new InvalidOperationException("Must not dispatch."));
+        var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest("run", task, "session", new JsonObject(), "correlation"), CancellationToken.None);
+        Assert.Equal(RepositoryTaskRunStatus.Rejected, result.Status);
+        Assert.Contains("cannot resolve execution capabilities", result.Message);
+        Assert.DoesNotContain("side effect", result.StandardError);
+        Assert.Empty(result.ToolCalls);
     }
 
     private static JavaScriptRepositoryTaskExecutor DeviceExecutor(RepositoryTaskToolExecutor executor)

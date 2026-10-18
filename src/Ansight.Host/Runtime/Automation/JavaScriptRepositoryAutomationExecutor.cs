@@ -71,7 +71,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
                     new JsonObject { ["sessionId"] = sessionId }, request.Event.CorrelationId).ConfigureAwait(false);
                 capabilities = response.Payload?["structuredContent"]?.DeepClone() as JsonObject;
                 var missing = capabilities is null ? ExecutionCapabilities.Unavailable("session", null, "The event session is unavailable.")
-                    : ExecutionCapabilities.Missing(capabilities, request.Trigger.Requires, request.Trigger.SchemaVersion < 2);
+                    : ExecutionCapabilities.Missing(capabilities, request.Trigger.Requires);
                 if (missing is not null)
                     return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, startedAtUtc,
                         DateTimeOffset.UtcNow, null, missing["message"]!.GetValue<string>(), missing, string.Empty);
@@ -331,7 +331,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         RepositoryAutomationExecutionRequest request, JsonObject action, DateTimeOffset started, CancellationToken cancellationToken)
     {
         var name = action["toolName"]?.GetValue<string>();
-        if (hostTools is null || request.Trigger.SchemaVersion < 2 || request.Event.SessionId is not { } sessionId
+        if (hostTools is null || request.Event.SessionId is not { } sessionId
             || name is not ("ansight_take_screenshot" or "ansight_capture_sandbox_file" or "ansight_create_annotation")
             || action["arguments"] is not (null or JsonObject))
             return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, started, DateTimeOffset.UtcNow,

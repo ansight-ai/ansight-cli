@@ -89,8 +89,10 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         Assert.Contains("readonly artifacts", typeDefinitions, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Load_RejectsAnUnsupportedTriggerSchemaVersion()
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Load_RejectsAnUnsupportedTriggerSchemaVersion(int schemaVersion)
     {
         using var repository = CreateRepository(declareAppId: true);
         var modulePath = GetTriggerPath(repository, "capture-error.ts");
@@ -98,7 +100,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             modulePath,
             File.ReadAllText(modulePath).Replace(
                 "\"schemaVersion\": 1",
-                "\"schemaVersion\": 3",
+                $"\"schemaVersion\": {schemaVersion}",
                 StringComparison.Ordinal));
 
         var result = RepositoryAutomationTriggerLoader.Load(

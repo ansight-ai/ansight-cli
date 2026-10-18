@@ -51,8 +51,13 @@ The descriptor must be a JSON-compatible object literal. Conditions are ANDed
 and matched by the host before code runs. Keep them narrow: a broad match on a
 high-frequency event can create a large queue of short-lived handlers.
 
-A handler may return no action or one app-tool action. The host validates and
-audits that action against the session and app permissions.
+Use `schemaVersion: 1`, or omit it. Optional `requires.capabilities` and
+`requires.appTools` are checked before importing the trigger in either capture
+mode. Declare `artifacts.request` in `requires.appTools` for the example above.
+
+A handler may return no action, one app-tool action, or one host evidence action
+(screenshot, sandbox file capture, or annotation). The host validates and audits
+that action against the session, available providers, and app permissions.
 
 Check modules without executing them:
 

@@ -6,14 +6,16 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed partial class RepositoryAutomationTriggerServiceTests
 {
     [Theory]
-    [InlineData(SessionLogStreamIds.AndroidLogcat)]
-    [InlineData(SessionLogStreamIds.AppleUnifiedLog)]
-    public async Task NativeLogTriggerMatchesAndCapturesEvidenceWithoutSdk(string streamId)
+    [InlineData(SessionLogStreamIds.AndroidLogcat, true)]
+    [InlineData(SessionLogStreamIds.AndroidLogcat, false)]
+    [InlineData(SessionLogStreamIds.AppleUnifiedLog, true)]
+    [InlineData(SessionLogStreamIds.AppleUnifiedLog, false)]
+    public async Task NativeLogTriggerMatchesAndCapturesEvidenceWithoutSdk(string streamId, bool declareVersion)
     {
         using var repository = CreateAppToolRepository();
         File.WriteAllText(GetTriggerPath(repository, "capture-app-state.ts"), $$"""
             export const trigger = {
-              "schemaVersion": 2, "appId": "com.example.app", "eventKind": "session.log.received",
+              {{(declareVersion ? "\"schemaVersion\": 1," : "")}} "appId": "com.example.app", "eventKind": "session.log.received",
               "requires": { "capabilities": ["files.capture"] },
               "conditions": [
                 { "field": "payload.streamId", "operator": "equals", "value": "{{streamId}}" },
@@ -54,7 +56,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         using var repository = CreateAppToolRepository();
         File.WriteAllText(GetTriggerPath(repository, "capture-app-state.ts"), """
             export const trigger = {
-              "schemaVersion": 2, "appId": "com.example.app", "eventKind": "app.event",
+              "schemaVersion": 1, "appId": "com.example.app", "eventKind": "app.event",
               "requires": { "capabilities": ["files.capture"] }
             };
             export default ({ ansight, app, run }) => {
@@ -88,8 +90,6 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
     public async Task DeviceTriggerDynamicAppCallIsRejectedWithoutDispatch()
     {
         using var repository = CreateAppToolRepository();
-        var path = GetTriggerPath(repository, "capture-app-state.ts");
-        File.WriteAllText(path, File.ReadAllText(path).Replace("\"appId\":", "\"schemaVersion\": 2, \"appId\":"));
         var bridge = new RecordingAppToolBridge();
         var executor = new JavaScriptRepositoryAutomationExecutor("node", new AppToolRepositoryAutomationExecutor(bridge),
             hostTools: (_, _, _) => Task.FromResult(RequestResult.ToolResult(

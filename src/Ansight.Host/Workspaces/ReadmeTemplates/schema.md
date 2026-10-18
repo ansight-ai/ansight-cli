@@ -14,6 +14,10 @@ The folder includes:
 - `trends-definition.v1.schema.json`
 - `trigger-definition.v1.schema.json`
 
+Tasks and triggers have separate schemas, each accepting `schemaVersion: 1`
+or an omitted version. Optional capability and app-tool requirements work in
+either capture mode without changing the descriptor version.
+
 The `.v1.` part is the contract version, not your app version. Most teams should
 not edit these files. Validate through Ansight so referenced Trends IDs are
 checked as well as individual JSON shapes:

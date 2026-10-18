@@ -1,4 +1,4 @@
-// Generated from the Ansight repository trigger v2 contract (v1 SDK modules remain supported).
+// Generated from the Ansight repository trigger contract.
 
 /**
  * # Purpose and usage
@@ -153,8 +153,8 @@ export interface TriggerDefinition<
   TEventKind extends EventKind = EventKind,
 > {
   /** Contract version. Omitted descriptors are interpreted as version 1. */
-  schemaVersion?: 1 | 2;
-  /** Version 2 requirements checked before importing the module. */
+  schemaVersion?: 1;
+  /** Optional requirements are checked before importing the module. */
   requires?: { capabilities?: string[]; appTools?: string[] };
 
   /** Whether this trigger may match events and execute. Defaults to true. */
@@ -806,7 +806,7 @@ export interface TriggerContext<
    */
   app: AppContext;
   /**
-   * Host-owned evidence action factories for version 2 triggers. Return one action; these
+   * Host-owned evidence action factories for triggers. Return one action; these
    * methods do not execute it in the handler.
    */
   ansight: {
@@ -817,14 +817,14 @@ export interface TriggerContext<
     capabilities: { executionMode?: "sdk" | "device"; appAvailable?: boolean; capabilities?: Record<string, { available: boolean; provider: string; reason?: string | null }> };
     screenshots: {
       /**
-       * Return an action to capture the live screen at this event. Version 2 requires
+       * Return an action to capture the live screen at this event. Requires
        * ui.screenshot and a live capture provider.
        */
       capture(args?: AppToolArguments): HostEvidenceAction
     };
     files: {
       /**
-       * Return an action to retain a known root-relative sandbox file. Version 2 requires
+       * Return an action to retain a known root-relative sandbox file. Requires
        * files.capture and an available external provider.
        */
       capture(args: { root?: string; path: string; maximumBytes?: number }): HostEvidenceAction
@@ -850,7 +850,7 @@ export type TriggerFunction<
   invocation: TriggerContext<TPayload, TEventKind>,
 ) => AppToolAction | HostEvidenceAction | null | void | Promise<AppToolAction | HostEvidenceAction | null | void>;
 
-/** One bounded host evidence action, available in descriptor version 2. */
+/** One bounded host evidence action. */
 export interface HostEvidenceAction {
   type: "hostTool";
   toolName: "ansight_take_screenshot" | "ansight_capture_sandbox_file" | "ansight_create_annotation";

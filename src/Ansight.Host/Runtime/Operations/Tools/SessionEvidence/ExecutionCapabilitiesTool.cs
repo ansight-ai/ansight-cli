@@ -26,7 +26,7 @@ internal sealed class ExecutionCapabilitiesTool(OperationServices services, bool
             var requirementArguments = arguments!.DeepClone().AsObject();
             requirementArguments.Remove("sessionId");
             var requirements = JsonSerializer.Deserialize<ExecutionRequirements>(requirementArguments.ToJsonString(), JsonUtil.Compact)!;
-            requirements.Validate(2);
+            requirements.Validate();
             if (ExecutionCapabilities.Missing(snapshot, requirements) is { } error) return RequestResult.ToolResult(error, isError: true);
         }
         return RequestResult.ToolResult(snapshot, isError: false);
