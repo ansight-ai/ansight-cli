@@ -25,12 +25,15 @@ internal static class SessionCommands
             start: false,
             cancellationToken).ConfigureAwait(false);
         var runtime = lease.Runtime;
+        var sessionPosition = action is "screenshot" or "artifact"
+            || action == "telemetry" && string.Equals(arguments.Positionals.ElementAtOrDefault(2), "analyze", StringComparison.OrdinalIgnoreCase)
+                ? 3 : 2;
         // These inspection commands read the session directly instead of calling the operation dispatcher.
         using var activity = action is "show" or "logs" or "connectivity" or "network" or "requests" or "metrics"
             or "images" or "screenshots" or "touches" or "trees" or "visual-trees" or "artifacts" or "annotations" or "analyses"
             or "screenshot" or "artifact" or "telemetry"
             ? runtime.Activity.Begin("session." + action, "inspection", arguments.RequirePositional(
-                action is "screenshot" or "artifact" or "telemetry" ? 3 : 2, "session identifier")) : null;
+                sessionPosition, "session identifier")) : null;
         try
         {
             var exitCode = await RunActionAsync(runtime, action, arguments, output, cancellationToken).ConfigureAwait(false);

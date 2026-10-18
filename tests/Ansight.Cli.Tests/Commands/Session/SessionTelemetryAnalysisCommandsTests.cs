@@ -27,6 +27,9 @@ public sealed class SessionTelemetryAnalysisCommandsTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal("ansight.session-metrics/v1", payload["schema"]!.GetValue<string>());
         Assert.Equal(4, payload["samples"]!.AsArray().Count);
+        var activity = runtime.Activity.Read(session.SessionId).Records.Last();
+        Assert.Equal("session.telemetry", activity.Operation);
+        Assert.Equal("succeeded", activity.Outcome);
     }
 
     [Fact]
@@ -45,6 +48,9 @@ public sealed class SessionTelemetryAnalysisCommandsTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(string.Empty, result.StandardError);
         Assert.Equal("ansight.session-telemetry-analysis/v1", payload["schema"]!.GetValue<string>());
+        var activity = runtime.Activity.Read(session.SessionId).Records.Last();
+        Assert.Equal("session.telemetry", activity.Operation);
+        Assert.Equal("succeeded", activity.Outcome);
         Assert.Equal("all", payload["requestedKind"]!.GetValue<string>());
         Assert.Equal(2, payload["detectionCount"]!.GetValue<int>());
         Assert.Equal(15, payload["memorySpikeThresholds"]!["minimumIncreasePercent"]!.GetValue<int>());
