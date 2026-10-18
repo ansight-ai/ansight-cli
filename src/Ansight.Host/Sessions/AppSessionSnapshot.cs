@@ -59,4 +59,8 @@ public sealed record SessionAppToolCatalogSnapshot(
     string Schema,
     DateTimeOffset CapturedAtUtc,
     JsonObject ToolCatalog,
-    JsonObject? ArtifactCatalog);
+    JsonObject? ArtifactCatalog)
+{
+    public string Status { get; init; } = "ready";
+    public string? Message { get; init; }
+}

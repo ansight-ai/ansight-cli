@@ -26,4 +26,10 @@ public sealed record SessionExplorerSummary(
     public string CaptureSource { get; init; } = "sdk";
 
     public System.Text.Json.Nodes.JsonObject? CustomProperties { get; init; }
+    public string? ToolCatalogStatus { get; init; }
+    public string? ToolCatalogMessage { get; init; }
+    public int ToolCount { get; init; }
+    public IReadOnlyList<SessionConnectionDiagnostic> ConnectionDiagnostics { get; init; } = [];
 }
+
+public sealed record SessionConnectionDiagnostic(string Code, string Message, string Recovery, string? Candidates);

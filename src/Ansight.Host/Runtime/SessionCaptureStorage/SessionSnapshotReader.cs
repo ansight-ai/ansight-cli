@@ -127,9 +127,7 @@ internal static partial class SessionSnapshotReader
                 ? summary.CacheSizeBytes
                 : GetDirectorySize(layout.SessionDirectoryPath);
             var logs = includeHeavyBlobs ? LoadLogs(layout.LogsFilePath, layout.LogSegmentsDirectoryPath, progress, cancellationToken) : Array.Empty<LogEntry>();
-            var logStreams = includeHeavyBlobs
-                ? LoadLogStreams(layout.LogStreamsFilePath, logs, cancellationToken)
-                : Array.Empty<SessionLogStream>();
+            var logStreams = LoadLogStreams(layout.LogStreamsFilePath, logs, cancellationToken);
 
             IReadOnlyList<SessionMetricChannel> channels = Array.Empty<SessionMetricChannel>();
             IReadOnlyList<SessionMetricSample> metrics = Array.Empty<SessionMetricSample>();

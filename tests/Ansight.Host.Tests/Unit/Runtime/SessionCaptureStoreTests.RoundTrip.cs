@@ -327,6 +327,9 @@ public sealed partial class SessionCaptureStoreTests
         Assert.Equal("thread-001", summaryTaskLink.ProviderTaskId);
         Assert.Equal("Fix the annotated onboarding crash.", summaryTaskLink.SubmittedPrompt);
         Assert.Single(summary.Analyses);
+        Assert.NotNull(summary.AppToolCatalog);
+        Assert.Equal("ready", summary.AppToolCatalog.Status);
+        Assert.Equal("map.query_state", summary.AppToolCatalog.ToolCatalog["tools"]![0]!["id"]!.GetValue<string>());
         Assert.Empty(summary.Logs);
         Assert.Empty(summary.Metrics);
         Assert.Equal(1, summary.TotalLogCount);

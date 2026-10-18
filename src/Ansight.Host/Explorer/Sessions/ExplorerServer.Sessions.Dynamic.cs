@@ -140,6 +140,14 @@ internal sealed partial class ExplorerServer
 
     private async Task<bool> TryHandleSessionsDynamicPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken, string[] segments)
     {
+        if (segments.Length == 4 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "refresh-tools")
+        {
+            var sessionId = Uri.UnescapeDataString(segments[2]);
+            var result = await runtime.AppTools.QueryForLocalExplorerAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            await WriteJsonAsync(response, new { isSuccess = result.Success, message = result.Message },
+                result.Success ? HttpStatusCode.OK : HttpStatusCode.Conflict, false, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
         if (segments is ["api", "sessions", _, "annotation-summary"])
         {
             await WriteAnnotationSummaryAsync(request, response, Uri.UnescapeDataString(segments[2]), cancellationToken).ConfigureAwait(false);

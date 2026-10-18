@@ -344,6 +344,16 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             return new SessionExplorerSummary(session.SessionId, session.AppId, appName, sessionIconPath is null ? null : $"api/sessions/{Uri.EscapeDataString(session.SessionId)}/icon", session.Name, session.ClientName, session.Status, runtime.IsSessionLive(session.SessionId), isVirtualDevice, runtimeDeviceIdentifier, runtimePlatform, technology, session.IsHistorical, session.IsPinned, session.CreatedUtc, session.LastUpdatedUtc, session.TotalLogCount, session.TotalImageCount, session.VisualTreeSnapshots.Count, session.ArtifactSnapshots.Count, session.Tags)
             {
                 CaptureSource = session.CaptureSource,
+                ToolCatalogStatus = session.AppToolCatalog?.Status == "loading" && !runtime.IsSessionLive(session.SessionId) ? "failed" : session.AppToolCatalog?.Status,
+                ToolCatalogMessage = session.AppToolCatalog?.Status == "loading" && !runtime.IsSessionLive(session.SessionId)
+                    ? "The app disconnected before discovery completed. Reconnect it and refresh tools." : session.AppToolCatalog?.Message,
+                ToolCount = (session.AppToolCatalog?.ToolCatalog["tools"] as JsonArray)?.Count ?? 0,
+                ConnectionDiagnostics = session.LogStreams.Where(stream => stream.Status is "unavailable" or "failed")
+                    .Select(stream => new SessionConnectionDiagnostic(
+                        stream.Metadata.GetValueOrDefault("bindingCode") ?? stream.StreamId,
+                        stream.StatusMessage ?? $"{stream.DisplayName} is unavailable.",
+                        stream.Metadata.GetValueOrDefault("recovery") ?? "Run 'ansight doctor' to check device prerequisites, then reconnect the app.",
+                        stream.Metadata.GetValueOrDefault("candidates"))).ToArray(),
                 CustomProperties = SessionSnapshotCloner.CloneCustomProperties(session.CustomProperties)
             };
         }).ToArray();

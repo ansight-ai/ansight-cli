@@ -13,6 +13,7 @@ internal sealed partial class WebSocketSessionManager
     {
         try
         {
+            SetCatalogStatus(sessionId, "loading", "Discovering app tools…");
             var catalogResponse = await toolCatalog.QueryAsync(
                     sessionId,
                     filterArguments: null,
@@ -20,16 +21,26 @@ internal sealed partial class WebSocketSessionManager
                     CancellationToken.None,
                     new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"))
                 .ConfigureAwait(false);
+            for (var attempt = 0; !catalogResponse.Success && attempt < 2; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt + 1)).ConfigureAwait(false);
+                if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
+                catalogResponse = await toolCatalog.QueryAsync(sessionId, null, null, CancellationToken.None,
+                    new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog")).ConfigureAwait(false);
+            }
             if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
             if (!catalogResponse.Success
                 || catalogResponse.Envelope?.Payload is not JsonObject toolCatalogPayload)
             {
+                SetCatalogStatus(sessionId, "failed", catalogResponse.Message);
                 log.Info(
                     $"session_app_tool_catalog_capture_skipped sessionId={sessionId} message={catalogResponse.Message}");
                 return;
             }
 
             JsonObject? artifactCatalog = null;
+            runtimeState.SetSessionAppToolCatalog(sessionId, new SessionAppToolCatalogSnapshot(
+                "ansight.session-app-tool-catalog/v1", DateTimeOffset.UtcNow, toolCatalogPayload.DeepClone().AsObject(), null));
             if (HasExecutableTool(toolCatalogPayload, ArtifactQueryToolId))
             {
                 var artifactResponse = await CallToolAsync(
@@ -62,9 +73,20 @@ internal sealed partial class WebSocketSessionManager
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            if (ReferenceEquals(connectionRegistry.Get(sessionId), connection))
+                SetCatalogStatus(sessionId, "failed", exception.GetBaseException().Message);
             log.Info(
                 $"session_app_tool_catalog_capture_failed sessionId={sessionId} message={exception.GetBaseException().Message}");
         }
+    }
+
+    private void SetCatalogStatus(string sessionId, string status, string message)
+    {
+        runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot);
+        runtimeState.SetSessionAppToolCatalog(sessionId, new SessionAppToolCatalogSnapshot(
+            "ansight.session-app-tool-catalog/v1", DateTimeOffset.UtcNow,
+            snapshot?.AppToolCatalog?.ToolCatalog.DeepClone().AsObject() ?? new JsonObject(),
+            snapshot?.AppToolCatalog?.ArtifactCatalog?.DeepClone().AsObject()) { Status = status, Message = message });
     }
 
     private void CaptureQueriedAppToolCatalog(string sessionId, AppToolBridgeResponse response)

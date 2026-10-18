@@ -167,6 +167,8 @@ internal sealed partial class SessionCaptureStore
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(summary.CustomProperties),
             AppState = summary.AppState,
             AppStateChangedUtc = summary.AppStateChangedUtc,
+            AppToolCatalog = SessionSnapshotCloner.CloneAppToolCatalog(snapshot.AppToolCatalog),
+            LogStreams = snapshot.LogStreams,
             DeviceProfile = snapshot.DeviceProfile,
             DeviceProfileJson = snapshot.DeviceProfileJson,
             AppIcon = appIcon,
