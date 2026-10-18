@@ -63,6 +63,7 @@ internal sealed class ToolGateway : IToolGateway
     };
 
     private readonly IOperationDispatcher operations;
+    private readonly SessionActivityService? activity;
     private readonly Lock appToolCatalogGate = new();
     private readonly Dictionary<string, IReadOnlyDictionary<string, AppToolPermission>>
         appToolPermissionsBySession = new(StringComparer.Ordinal);
@@ -70,8 +71,9 @@ internal sealed class ToolGateway : IToolGateway
         appToolDiscoveryCache = [];
     private readonly AsyncLocal<SimulatorAgentToolRunState?> currentRun = new();
 
-    public ToolGateway(IOperationDispatcher operations)
+    public ToolGateway(IOperationDispatcher operations, SessionActivityService? activity = null)
     {
+        this.activity = activity;
         this.operations = operations ?? throw new ArgumentNullException(nameof(operations));
     }
 
@@ -781,6 +783,21 @@ internal sealed class ToolGateway : IToolGateway
                StringComparison.OrdinalIgnoreCase);
 
     public async Task<ToolCallResult> ExecuteAsync(
+        string toolName, JsonObject arguments, string sessionId, string correlationId,
+        CancellationToken cancellationToken, OperationExecutionContext? context = null)
+    {
+        using var operation = activity?.Begin(toolName, "tool", sessionId, requestId: correlationId);
+        try
+        {
+            var result = await ExecuteCoreAsync(toolName, arguments, sessionId, correlationId, cancellationToken, context).ConfigureAwait(false);
+            operation?.Complete(result.IsError ? operation.WasDispatched ? "failed" : "rejected" : "succeeded");
+            return result;
+        }
+        catch (OperationCanceledException) { operation?.Complete("cancelled"); throw; }
+        catch (Exception exception) { operation?.Complete("failed", errorType: exception.GetType().Name); throw; }
+    }
+
+    private async Task<ToolCallResult> ExecuteCoreAsync(
         string toolName,
         JsonObject arguments,
         string sessionId,

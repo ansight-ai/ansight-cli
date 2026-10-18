@@ -234,7 +234,8 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
                     javaScriptRuntime.ExecutablePath,
                     appToolExecutor,
                     javaScriptRuntime.IsAvailable ? null : javaScriptRuntime.Message, hostTools),
-                appToolExecutor),
+                appToolExecutor,
+                SessionActivityService.For(applicationPaths)),
             javaScriptRuntime.IsAvailable ? null : javaScriptRuntime.Message,
             new RepositoryAutomationRunStore(applicationPaths.ApplicationDataPath));
     }

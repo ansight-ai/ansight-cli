@@ -42,6 +42,8 @@ public sealed partial class WorkspaceTestService
                 Instructions: [], ModelPasses: [], ToolCalls: [])
             {
                 ExecutionKind = "task",
+                TraceId = taskResult.TraceId,
+                OperationId = taskResult.OperationId,
                 TaskResult = taskResult,
                 AppId = test.AppId,
                 ExecutionMode = session.CaptureSource == WorkspaceExecutionModes.Device

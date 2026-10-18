@@ -55,6 +55,7 @@ public sealed partial class SimulatorAgentService : IDisposable
     private readonly IOpenAiClient openAiClient;
     private readonly IToolGateway toolGateway;
     private readonly IAuditStore auditStore;
+    private readonly SessionActivityService? activity;
     private readonly AppGraphLiveRunStore appGraphLiveRuns;
     private readonly IOpenAiSessionFactory? openAiWebSocketSessionFactory;
     private string? defaultModelAccessTokenForTesting;
@@ -67,11 +68,12 @@ public sealed partial class SimulatorAgentService : IDisposable
         : this(
             encryptedStorage,
             new OpenAiResponsesClient(),
-            new ToolGateway(operations),
+            new ToolGateway(operations, SessionActivityService.For(applicationPaths)),
             new AuditStore(applicationPaths),
             new AppGraphExplorationDatabase(applicationPaths),
             new OpenAiResponsesWebSocketSessionFactory())
     {
+        activity = SessionActivityService.For(applicationPaths);
     }
 
     internal SimulatorAgentService(
@@ -238,6 +240,8 @@ public sealed partial class SimulatorAgentService : IDisposable
         var webSocketOptions = webSocketActive ? SimulatorAgentWebSocketOptions.Resolve(request.WebSocketOptions, Environment.GetEnvironmentVariable) : null;
 
         var runId = (request.TrackingRunId ?? Guid.NewGuid()).ToString("N");
+        using var callerScope = SessionActivityContext.ExecuteAs("agent", "ansight-agent", runId, request.BatchRunId);
+        using var activityOperation = activity?.Begin("agent.run", "agent", sessionId, appId);
         using var taskTraceScope = RepositoryTaskTraceScope.Begin(request.CaptureTrace);
         toolGateway.BeginRun(sessionId, secretAccess, request.TargetDeviceIdentifier);
         var startedUtc = DateTimeOffset.UtcNow;
@@ -388,6 +392,8 @@ public sealed partial class SimulatorAgentService : IDisposable
                 AppGraphPlans = request.CaptureTrace ? request.AppGraphPlans.ToArray() : [],
                 AppGraphEnabled = request.AppGraphEnabled || request.AppGraphPlans.Any(HasUsableAppGraphPlan),
                 TraceEnabled = request.CaptureTrace,
+                TraceId = activityOperation?.TraceId,
+                OperationId = activityOperation?.OperationId,
                 RepositoryTaskDiscovery = repositoryTaskDiscovery.ToArray(),
                 Environment = sessionContext is null
                     ? null
@@ -408,6 +414,10 @@ public sealed partial class SimulatorAgentService : IDisposable
             {
                 saveResult = new AuditSaveResult(null, exception.Message);
             }
+            activityOperation?.Complete(status switch
+            {
+                SimulatorAgentRunStatus.Succeeded => "succeeded", SimulatorAgentRunStatus.Cancelled => "cancelled", _ => "failed"
+            }, evidenceStatus: saveResult.FilePath is null ? "unavailable" : request.CaptureTrace ? "captured" : "disabled");
             toolGateway.EndRun();
 
             var completionMessage = saveResult.FilePath is null

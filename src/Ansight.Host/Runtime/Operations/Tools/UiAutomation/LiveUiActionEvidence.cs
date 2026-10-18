@@ -39,6 +39,11 @@ internal static class LiveUiActionEvidence
             tree.RawPayload,
             new ActionEvidenceMetadata(actionId, capability, phase),
             screenshot);
+        SessionActivityOperation.Current?.AddEvidence(actionId);
+        SessionActivityOperation.Current?.AddEvidence(persistedTree.Snapshot?.SnapshotId);
+        SessionActivityOperation.Current?.AddEvidence(screenshot?.Frame.FrameId);
+        SessionActivityOperation.Current?.SetEvidenceStatus(!persistedTree.IsSuccess ? "unavailable"
+            : captureScreenshot && screenshot is null ? "partial" : "captured");
         return new ActionEvidenceCapture(
             phase,
             persistedTree.Snapshot?.SnapshotId,

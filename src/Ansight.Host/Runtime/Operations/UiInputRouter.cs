@@ -29,10 +29,13 @@ internal sealed class UiInputRouter
         var id = $"host-input-{Guid.NewGuid():N}";
         var started = DateTimeOffset.UtcNow;
         var evidenceId = evidenceActionId.Value;
+        SessionActivityOperation.Current?.AddEvidence(id);
+        SessionActivityOperation.Current?.AddEvidence(evidenceId);
         UiInputResult? result = null;
         try
         {
             result = await deliver().ConfigureAwait(false);
+            SessionActivityOperation.Current?.SetDeliveryOutcome(result.IsSuccess ? "succeeded" : "failed");
             return result;
         }
         finally

@@ -10,6 +10,7 @@ internal sealed class RepositoryTaskRouter
     private readonly Lock gate = new();
     private readonly ProductAnalytics analytics;
     private readonly RepositoryTaskRunStore runStore;
+    private readonly SessionActivityService activity;
     private readonly Dictionary<string, RepositoryTaskHostToolDescriptor> hostToolsByName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, string>> hostApiSuites = new(StringComparer.Ordinal);
     private Func<string, JsonObject, string?, OperationExecutionContext?, Task<RequestResult>>? toolExecutor;
@@ -28,12 +29,14 @@ internal sealed class RepositoryTaskRouter
             ?? throw new ArgumentNullException(nameof(applicationPaths)),
             ProductAnalytics.For(applicationPaths))
     {
+        activity = SessionActivityService.For(applicationPaths);
     }
 
     private RepositoryTaskRouter(string applicationDataPath, ProductAnalytics analytics)
     {
         this.analytics = analytics;
         runStore = new RepositoryTaskRunStore(applicationDataPath);
+        activity = new SessionActivityService(new SessionActivityStore(applicationDataPath));
     }
 
     public void ConfigureToolExecutor(RepositoryTaskToolExecutor executor)
@@ -177,6 +180,8 @@ internal sealed class RepositoryTaskRouter
         }
 
         var runId = requestedRunId ?? Guid.NewGuid().ToString("N");
+        using var callerScope = SessionActivityContext.ExecuteAs("automation", "repository-task", runId, batchRunId ?? context?.BatchRunId);
+        using var operation = activity.Begin("task." + task.TaskId, "task", sessionId, task.AppId, correlationId);
         RepositoryTaskRunResult result;
         if (!task.Enabled)
         {
@@ -258,6 +263,12 @@ internal sealed class RepositoryTaskRouter
             PublishEvent?.Invoke(sessionId, "task." + outcome, "host.task." + outcome, task.TaskId);
         }
 
+        result = result with { TraceId = operation.TraceId, OperationId = operation.OperationId };
+        operation.Complete(result.Status switch
+        {
+            RepositoryTaskRunStatus.Passed => "succeeded", RepositoryTaskRunStatus.Cancelled => "cancelled",
+            RepositoryTaskRunStatus.Rejected => "rejected", RepositoryTaskRunStatus.Inconclusive => "inconclusive", _ => "failed"
+        });
         try
         {
             runStore.Append(result);

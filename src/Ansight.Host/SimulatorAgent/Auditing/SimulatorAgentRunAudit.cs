@@ -32,6 +32,8 @@ public sealed record SimulatorAgentRunAudit(
 {
     // The shared test-history envelope also carries deterministic runs, with no model activity.
     public string ExecutionKind { get; init; } = "agent";
+    public string? TraceId { get; init; }
+    public string? OperationId { get; init; }
 
     public Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult? TaskResult { get; init; }
 

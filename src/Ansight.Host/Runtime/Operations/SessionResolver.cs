@@ -157,6 +157,7 @@ internal sealed class SessionResolver
         error = string.Empty;
         if (runtimeState.TryGetSessionSnapshot(sessionId, out snapshot) && snapshot is not null)
         {
+            SessionActivityOperation.Current?.SetTarget(snapshot.SessionId, snapshot.AppId);
             return true;
         }
 

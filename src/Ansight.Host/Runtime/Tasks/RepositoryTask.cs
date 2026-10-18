@@ -117,6 +117,8 @@ public sealed record RepositoryTaskRunResult(
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RepositoryTaskSourceTrace? SourceTrace { get; init; }
+    public string? TraceId { get; init; }
+    public string? OperationId { get; init; }
 }
 
 public sealed record RepositoryTaskSourceModule(

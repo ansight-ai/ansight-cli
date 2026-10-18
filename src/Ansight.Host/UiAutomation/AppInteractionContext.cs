@@ -11,17 +11,36 @@ namespace Ansight.Host.UiAutomation;
 internal sealed class AppInteractionContext : IAppInteractionContext
 {
     private readonly IAppInteractionBackend backend;
+    private readonly SessionActivityService? activity;
     private readonly SemaphoreSlim actionGate = new(1, 1);
     private AppInteractionScreenshot? latestScreenshot;
 
-    internal AppInteractionContext(IAppInteractionBackend backend)
+    internal AppInteractionContext(IAppInteractionBackend backend, SessionActivityService? activity = null)
     {
         this.backend = backend;
+        this.activity = activity;
     }
 
     public string SessionId => backend.SessionId;
 
     public async Task<AppInteractionResult> ExecuteAsync(
+        AppInteractionRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using var operation = activity?.Begin("interaction." + request.Command, "interaction", SessionId, requestId: request.Id);
+        try
+        {
+            var result = await ExecuteCoreAsync(request, cancellationToken).ConfigureAwait(false);
+            operation?.AddEvidence(result.Screenshot?.FrameId);
+            operation?.Complete(result.InputSucceeded == true ? "succeeded" : result.Succeeded ? "succeeded" : "failed",
+                result.Screenshot is null ? "unavailable" : result.Screenshot.Settling?.Status == "timed_out" ? "unsettled" : "captured");
+            return result;
+        }
+        catch (OperationCanceledException) { operation?.Complete("cancelled"); throw; }
+        catch (Exception exception) { operation?.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+    }
+
+    private async Task<AppInteractionResult> ExecuteCoreAsync(
         AppInteractionRequest request,
         CancellationToken cancellationToken = default)
     {

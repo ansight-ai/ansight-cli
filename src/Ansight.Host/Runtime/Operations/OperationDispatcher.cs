@@ -14,6 +14,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     private readonly IRuntimeState runtimeState;
     private readonly IApplicationPaths applicationPaths;
     private readonly ProductAnalytics analytics;
+    private readonly SessionActivityService activity;
     private readonly IAppToolBridge appToolBridge;
     private readonly ToolCatalog toolCatalog;
     private readonly DotNetToolCatalog dotNetToolCatalog;
@@ -48,6 +49,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         this.appToolBridge = appToolBridge ?? throw new ArgumentNullException(nameof(appToolBridge));
         this.applicationPaths = applicationPaths ?? throw new ArgumentNullException(nameof(applicationPaths));
         analytics = ProductAnalytics.For(applicationPaths);
+        activity = SessionActivityService.For(applicationPaths);
         this.externalSessionScreenshotCaptureManager = externalSessionScreenshotCaptureManager;
         repositoryTaskRouter = new RepositoryTaskRouter(applicationPaths);
 
@@ -111,7 +113,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
 
     public IAppInteractionContext CreateAppInteractionContext(string sessionId, string? repositoryRootPath = null)
         => new AppInteractionContext(new AppInteractionBackend(
-            runtimeState, applicationPaths, appToolBridge, uiInputRouter, sessionId, this, repositoryRootPath, externalSessionScreenshotCaptureManager));
+            runtimeState, applicationPaths, appToolBridge, uiInputRouter, sessionId, this, repositoryRootPath, externalSessionScreenshotCaptureManager), activity);
 
     public void ConfigureUiAccessibilityDriver(IUiAccessibilityDriver? driver)
     {
@@ -334,6 +336,23 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         JsonObject? arguments,
         string? correlationId = null,
         OperationExecutionContext? context = null)
+    {
+        if (SessionActivityOperation.Current is { } current && current.Owns(toolName, correlationId))
+        {
+            current.MarkDispatched();
+            return CallToolObservedAsync(toolName, arguments, correlationId, context);
+        }
+        return activity.RecordAsync(toolName, "tool", ReadActivityString(arguments, "sessionId"),
+            () => CallToolObservedAsync(toolName, arguments, correlationId, context),
+            result => result.IsError || result.Payload?["isError"] is JsonValue flag && flag.TryGetValue<bool>(out var isError) && isError ? "failed" : "succeeded",
+            correlationId, ReadActivityString(arguments, "appId"));
+    }
+
+    private static string? ReadActivityString(JsonObject? arguments, string key)
+        => arguments?[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
+    private Task<RequestResult> CallToolObservedAsync(
+        string toolName, JsonObject? arguments, string? correlationId, OperationExecutionContext? context)
     {
         var feature = UsageFeature(toolName);
         return feature is null ? CallToolMeasuredCoreAsync(toolName, arguments, correlationId, context)

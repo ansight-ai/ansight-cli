@@ -79,6 +79,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         ApplicationPaths = applicationPaths ?? throw new ArgumentNullException(nameof(applicationPaths));
         BaseFolderPath = ApplicationPathsFactory.ResolveBaseFolderPath(ApplicationPaths);
         Analytics = new ProductAnalytics(BaseFolderPath);
+        Activity = SessionActivityService.For(ApplicationPaths);
         ExtensionStorage = encryptedStorage;
         ExtensionIdentity = hostIdentityStore.Current;
         Extensions = new Ansight.Infrastructure.Extensions.OptionalExtensions(this, hostRuntimeOptions.ExtensionsDirectory);
@@ -111,11 +112,11 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         Identity = CreateIdentityInfo(hostIdentityStore.Current);
         Apps = appService ?? throw new ArgumentNullException(nameof(appService));
         AppTools = new AppToolService(this.appToolBridge,
-            id => runtimeState.TryGetSessionContext(id, out var capture) && capture?.CaptureSource == WorkspaceExecutionModes.Device);
+            id => runtimeState.TryGetSessionContext(id, out var capture) && capture?.CaptureSource == WorkspaceExecutionModes.Device, Activity);
         Pairing = pairingService ?? throw new ArgumentNullException(nameof(pairingService));
         Trends = new WorkspaceTrendsService(this, ApplicationPaths);
         Sessions = new SessionQueryService(this.runtimeState);
-        SessionEditing = new SessionEditingService(this.runtimeState, this.runtimeState, Trends);
+        SessionEditing = new SessionEditingService(this.runtimeState, this.runtimeState, Trends, Activity);
         WorkspaceTests = new WorkspaceTestService(
             this,
             SimulatorAgent,
@@ -177,6 +178,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         ApplicationPaths = CreateApplicationPaths(options);
         BaseFolderPath = ApplicationPathsFactory.ResolveBaseFolderPath(ApplicationPaths);
         Analytics = new ProductAnalytics(BaseFolderPath);
+        Activity = SessionActivityService.For(ApplicationPaths);
 
         IEncryptedStorage encryptedStorage = EncryptedStorageFactory.CreateDefault(
             ApplicationPaths,
@@ -209,11 +211,11 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         Identity = CreateIdentityInfo(hostIdentity);
         Apps = composition.Get<AppService>();
         AppTools = new AppToolService(appToolBridge,
-            id => runtimeState.TryGetSessionContext(id, out var capture) && capture?.CaptureSource == WorkspaceExecutionModes.Device);
+            id => runtimeState.TryGetSessionContext(id, out var capture) && capture?.CaptureSource == WorkspaceExecutionModes.Device, Activity);
         Pairing = composition.Get<PairingService>();
         Trends = new WorkspaceTrendsService(this, ApplicationPaths);
         Sessions = new SessionQueryService(runtimeState);
-        SessionEditing = new SessionEditingService(runtimeState, runtimeState, Trends);
+        SessionEditing = new SessionEditingService(runtimeState, runtimeState, Trends, Activity);
         headlessDeviceDriver = new HeadlessHostDeviceDriver(Devices, options);
         if (externalScreenshotCaptures is ExternalSessionScreenshotCaptureManager physicalScreenshots)
             physicalScreenshots.ConfigurePhysicalIosCapture(headlessDeviceDriver.CapturePhysicalIosScreenshotAsync);
@@ -305,6 +307,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             throw new InvalidOperationException(error);
         return session!;
     }
+
+    public SessionActivityService Activity { get; }
 
     public SessionQueryService Sessions { get; }
 

@@ -1,3 +1,4 @@
+global using Ansight.Host.Activity;
 global using System.Collections.ObjectModel;
 global using System.Collections.Specialized;
 global using System.ComponentModel;
