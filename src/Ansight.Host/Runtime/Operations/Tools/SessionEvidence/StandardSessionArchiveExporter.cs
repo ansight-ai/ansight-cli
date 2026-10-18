@@ -46,6 +46,8 @@ internal static class StandardSessionArchiveExporter
             using var stream = PrivateStorageFile.Create(archiveFilePath);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
 
+            SessionActivityArchive.Write(archive, SessionActivityService.For(applicationPaths), snapshot.SessionId, sanitizationPolicy is not null);
+
             var sessionCapturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);
             var appIcon = snapshot.AppIcon;
             string? sourceAppIconPath = null;

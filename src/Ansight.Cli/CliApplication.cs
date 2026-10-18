@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Ansight.Cli.Commands.Audio;
@@ -106,6 +107,8 @@ public static class CliApplication
         TimeProvider? timeProvider = null,
         CliAccessLease? existingLease = null)
     {
+        using var callerContext = SessionActivityContext.Current is null
+            ? SessionActivityContext.Push(new SessionActivityContext(ActivityCaller.FromEnvironment())) : null;
         try
         {
             var accessClass = CliCommandAccessPolicy.Classify(arguments, CliCommandAccessPolicy.HasRunnerCredentials);
@@ -137,6 +140,9 @@ public static class CliApplication
             await using var lease = await CliAccessLease.CreateAsync(accessAuthorizer, cancellationToken, timeProvider)
                 .ConfigureAwait(false);
             using var accessContext = CliAccessContext.Push(accessAuthorizer, lease);
+            using var authenticatedCaller = lease.Decision.UserId is { } principalId
+                ? SessionActivityContext.Push((SessionActivityContext.Current!) with
+                { Caller = SessionActivityContext.Current!.Caller with { PrincipalId = principalId, PrincipalAttribution = "authenticated" } }) : null;
             try
             {
                 var result = await RunAuthorizedAsync(arguments, output, lease.Token, allowResidentHostForwarding,

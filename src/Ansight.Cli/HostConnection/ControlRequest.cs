@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 namespace Ansight.Cli.HostConnection;
 
 internal sealed record ControlRequest(
@@ -9,4 +10,5 @@ internal sealed record ControlRequest(
     string? CallerUserId = null,
     Ansight.Host.Workspaces.Execution.RunnerAiCredentials? RunnerAiCredentials = null,
     int? ExpectedProcessId = null,
-    DateTimeOffset? ExpectedProcessStartedUtc = null);
+    DateTimeOffset? ExpectedProcessStartedUtc = null,
+    ActivityCaller? Caller = null);

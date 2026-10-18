@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.Text.Json;
 using System.Threading.Channels;
 using System.Diagnostics;
@@ -13,7 +14,8 @@ internal static class InteractionServer
         Func<string, string?, IAppInteractionContext> createContext,
         ICliAccessAuthorizer accessAuthorizer,
         CancellationToken cancellationToken,
-        CliAccessLease? existingLease = null)
+        CliAccessLease? existingLease = null,
+        SessionActivityService? activity = null)
     {
         var sessionId = AppInteractionCommand.ValidateArguments(arguments);
         var timeoutMs = arguments.HasFlag("timeout-ms") ? arguments.GetRequiredIntOption("timeout-ms", 100, 60000) : 15000;
@@ -47,6 +49,7 @@ internal static class InteractionServer
             await foreach (var line in requests.Reader.ReadAllAsync(lease.Token).ConfigureAwait(false))
             {
                 AppInteractionRequest? request = null;
+                var dispatched = false;
                 try
                 {
                     request = JsonSerializer.Deserialize<AppInteractionRequest>(line, InteractionProtocol.jsonOptions)
@@ -63,8 +66,10 @@ internal static class InteractionServer
                         break;
                     }
 
+                    dispatched = true;
                     if (request.Command == "batch")
                     {
+                        using var batchActivity = activity?.Begin("interaction.batch", "interaction", sessionId, requestId: request.Id);
                         var batchTimer = Stopwatch.StartNew();
                         var results = new List<AppInteractionResult>();
                         foreach (var child in request.Commands!)
@@ -75,6 +80,7 @@ internal static class InteractionServer
                         }
                         var skipped = request.Commands.Skip(results.Count).Select(child => child.Id).ToArray();
                         var succeeded = results.All(result => result.Succeeded);
+                        batchActivity?.Complete(succeeded ? "succeeded" : "failed");
                         await InteractionProtocol.WriteAsync(writer,
                             new InteractionBatchResult(InteractionProtocol.Schema, request.Id, "batch", sessionId,
                                 succeeded, succeeded ? null : "batch_stopped",
@@ -92,6 +98,11 @@ internal static class InteractionServer
                 }
                 catch (Exception exception) when (exception is JsonException or ArgumentException)
                 {
+                    if (!dispatched)
+                    {
+                        using var rejection = activity?.Begin("interaction.invalid_request", "interaction", sessionId, requestId: request?.Id);
+                        rejection?.Complete("rejected", errorType: exception.GetType().Name);
+                    }
                     await InteractionProtocol.WriteAsync(writer,
                         InteractionProtocol.Error(request?.Id, request?.Command ?? "invalid", sessionId, "invalid_request", exception.Message),
                         lease.Token).ConfigureAwait(false);

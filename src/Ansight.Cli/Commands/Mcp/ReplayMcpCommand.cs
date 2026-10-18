@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -193,8 +194,12 @@ internal sealed class ReplayMcpCommand(string html, ReplayBackend backend)
             Handlers = new McpServerHandlers
             {
                 ListToolsHandler = (_, _) => ValueTask.FromResult(new ListToolsResult { Tools = replay.Tools().Deserialize<IList<Tool>>(jsonOptions)! }),
-                CallToolHandler = async (request, cancellation) => (await replay.InvokeAsync(request.Params!.Name,
-                    JsonSerializer.SerializeToNode(request.Params.Arguments, jsonOptions)?.AsObject() ?? [], cancellation)).Deserialize<CallToolResult>(jsonOptions)!,
+                CallToolHandler = async (request, cancellation) =>
+                {
+                    using var caller = SessionActivityContext.Push(new SessionActivityContext(ActivityCaller.FromEnvironment("mcp")));
+                    return (await replay.InvokeAsync(request.Params!.Name,
+                        JsonSerializer.SerializeToNode(request.Params.Arguments, jsonOptions)?.AsObject() ?? [], cancellation)).Deserialize<CallToolResult>(jsonOptions)!;
+                },
                 ListResourcesHandler = (_, _) => ValueTask.FromResult(new ListResourcesResult { Resources = [new Resource { Name = "ansight-replay", Uri = replay.ResourceUri, MimeType = "text/html;profile=mcp-app" }] }),
                 ReadResourceHandler = (request, _) => request.Params!.Uri == replay.ResourceUri
                     ? ValueTask.FromResult(new ReadResourceResult { Contents = [replay.Resource().Deserialize<TextResourceContents>(jsonOptions)!] })

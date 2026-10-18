@@ -76,9 +76,9 @@ public sealed class SessionArchiveService
             return Task.FromResult(OperationResult.Failure($"Session '{trimmedSessionId}' was not found."));
         }
 
-        return Task.Run(
-            () => ExportSessionArchive(snapshot, trimmedArchivePath, options, report),
-            cancellationToken);
+        return SessionActivityService.For(applicationPaths).RecordAsync("session.export", "session", trimmedSessionId,
+            () => Task.Run(() => ExportSessionArchive(snapshot, trimmedArchivePath, options, report), cancellationToken),
+            result => result.IsSuccess ? "succeeded" : "failed");
     }
 
     public Task<SessionImportResult> ImportSessionArchiveAsync(
@@ -90,7 +90,14 @@ public sealed class SessionArchiveService
         ArgumentException.ThrowIfNullOrWhiteSpace(archiveFilePath);
 
         var trimmedArchivePath = archiveFilePath.Trim();
-        return Task.Run(() => ImportSessionArchive(trimmedArchivePath, replaySource, password), cancellationToken);
+        return SessionActivityService.For(applicationPaths).RecordAsync("session.import", "session", null,
+            () => Task.Run(() =>
+            {
+                var result = ImportSessionArchive(trimmedArchivePath, replaySource, password);
+                if (result.IsSuccess && result.ImportedSession is { } imported)
+                    SessionActivityOperation.Current?.SetTarget(imported.SessionId, imported.AppId);
+                return result;
+            }, cancellationToken), result => result.IsSuccess ? "succeeded" : "failed");
     }
 
     internal AppSessionSnapshot SanitizeSessionSnapshot(
@@ -163,6 +170,9 @@ public sealed class SessionArchiveService
 
             using var stream = PrivateStorageFile.Create(archiveFilePath);
             using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+
+            SessionActivityArchive.Write(archive, SessionActivityService.For(applicationPaths), snapshot.SessionId,
+                options.Sanitize || !string.IsNullOrWhiteSpace(options.SanitizerModulePath));
 
             var sessionCapturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);
             var appIcon = snapshot.AppIcon;
@@ -548,12 +558,16 @@ public sealed class SessionArchiveService
                 artifactBytesByRelativePath[relativePath] = artifactBuffer.ToArray();
             }
 
-            return sessionLifecycle.ImportSessionSnapshot(
+            var activityRecords = SessionActivityArchive.Read(archive, archiveSession.SessionId);
+            var result = sessionLifecycle.ImportSessionSnapshot(
                 archiveSession,
                 imageBytesByFrameId,
                 appIconBytes,
                 artifactBytesByRelativePath,
                 replaySource);
+            if (result.IsSuccess && result.ImportedSession is { } imported)
+                SessionActivityArchive.Import(activityRecords, SessionActivityService.For(applicationPaths), imported.SessionId);
+            return result;
         }
         catch (ICSharpCode.SharpZipLib.Zip.ZipException) when (hasEncryptedEntries)
         {

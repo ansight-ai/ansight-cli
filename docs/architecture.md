@@ -27,3 +27,7 @@ host and ship with the CLI. Optional teaching samples live on the website.
 
 See [code organization](code-organization-conventions.md) for feature ownership,
 namespace compatibility and validation conventions.
+
+## Session activity
+
+Host operation history uses a bounded JSONL journal separate from session captures and detailed traces. See [Session activity](session-activity.md) for identity attribution, persistence, API and extension rules.

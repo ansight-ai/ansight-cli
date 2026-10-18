@@ -25,9 +25,29 @@ internal static class SessionCommands
             start: false,
             cancellationToken).ConfigureAwait(false);
         var runtime = lease.Runtime;
+        // These inspection commands read the session directly instead of calling the operation dispatcher.
+        using var activity = action is "show" or "logs" or "connectivity" or "network" or "requests" or "metrics"
+            or "images" or "screenshots" or "touches" or "trees" or "visual-trees" or "artifacts" or "annotations" or "analyses"
+            or "screenshot" or "artifact" or "telemetry"
+            ? runtime.Activity.Begin("session." + action, "inspection", arguments.RequirePositional(
+                action is "screenshot" or "artifact" or "telemetry" ? 3 : 2, "session identifier")) : null;
+        try
+        {
+            var exitCode = await RunActionAsync(runtime, action, arguments, output, cancellationToken).ConfigureAwait(false);
+            activity?.Complete(exitCode == CliExitCodes.Success ? "succeeded" : "failed");
+            return exitCode;
+        }
+        catch (OperationCanceledException) { activity?.Complete("cancelled"); throw; }
+        catch (Exception exception) { activity?.Complete(exception is CliUsageException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+    }
+
+    private static async Task<int> RunActionAsync(RuntimeCoordinator runtime, string action, CliArguments arguments,
+        CliOutput output, CancellationToken cancellationToken)
+    {
         return action switch
         {
             "list" => await ListAsync(runtime, arguments, output, cancellationToken),
+            "activity" => Activity(runtime, arguments, output),
             "show" => await ShowAsync(runtime, arguments, output, cancellationToken),
             "logs" => await LogsAsync(runtime, arguments, output, cancellationToken),
             "connectivity" => await ConnectivityAsync(runtime, arguments, output, cancellationToken),
@@ -130,8 +150,27 @@ internal static class SessionCommands
             "sanitize" or "sanitise" => await SanitizeAsync(runtime, arguments, output, cancellationToken),
             "import" => await ImportAsync(runtime, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown session action '{action}'. Expected list, show, logs, connectivity, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
+                $"Unknown session action '{action}'. Expected list, activity, show, logs, connectivity, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
         };
+    }
+
+    internal static int Activity(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output)
+    {
+        arguments.EnsurePositionalCount(3, "ansight session activity <session-id>");
+        var page = runtime.Activity.Read(arguments.RequirePositional(2, "session identifier"),
+            arguments.GetOption("cursor"), arguments.HasFlag("limit") ? arguments.GetRequiredIntOption("limit", 1, 500) : 200);
+        if (arguments.HasFlag("jsonl"))
+        {
+            foreach (var record in page.Records) output.WriteJsonLine(record);
+            if (page.PersistenceError is not null || page.SkippedRecords > 0 || page.IncompleteTail || page.ImportedHistoryIncomplete || page.CursorExpired || page.RetentionLimited)
+                output.WriteProgress("Activity history is incomplete; use --json for gap and retention details.");
+        }
+        else output.Write(page, () => string.Join("\n", page.Records.Select(item =>
+            $"{item.TimestampUtc:O} {item.Operation} {item.Outcome ?? item.Phase} [{item.Caller.Kind}: {item.Caller.Name ?? item.Caller.ClientName ?? "unknown"} / {item.Caller.ExecutorAttribution}]"))
+            + $"\nNext cursor: {page.NextCursor ?? "none"}"
+            + (page.RetentionLimited || page.CursorExpired || page.SkippedRecords > 0 || page.IncompleteTail || page.ImportedHistoryIncomplete ? "\nHistory contains a retention or recording gap." : "")
+            + (page.PersistenceError is null ? "" : "\n" + page.PersistenceError));
+        return CliExitCodes.Success;
     }
 
     internal static Task<int> ListAsync(
@@ -1447,6 +1486,7 @@ internal static Task<int> SummaryAsync(
 
            Usage:
              ansight session list [filters] [--limit <count>] [--cursor <cursor>]
+             ansight session activity <session-id> [--limit <1-500>] [--cursor <cursor>] [--jsonl]
              ansight session show <session-id>
              ansight session logs <session-id> [filters]
              ansight session connectivity <session-id> [summary|events|quality|timeline|at] [filters]

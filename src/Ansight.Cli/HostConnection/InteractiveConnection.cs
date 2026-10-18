@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -47,7 +48,8 @@ internal sealed class InteractiveConnection : IAsyncDisposable
             connection = new InteractiveConnection(pipe, sessionId);
             await InteractionProtocol.WriteAsync(connection.writer,
                 new ControlRequest(ControlProtocol.RequestSchema,
-                    ControlClient.CreateForwardedArguments(arguments, Environment.CurrentDirectory), null), cancellationToken).ConfigureAwait(false);
+                    ControlClient.CreateForwardedArguments(arguments, Environment.CurrentDirectory), null,
+                    Caller: SessionActivityContext.Current?.Caller ?? ActivityCaller.FromEnvironment()), cancellationToken).ConfigureAwait(false);
             return connection;
         }
         catch

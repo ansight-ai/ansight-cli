@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -229,6 +230,7 @@ internal sealed class ControlServer : IAsyncDisposable
             return new ControlResponse(ControlProtocol.ResponseSchema, code, stdout.ToString(), stderr.ToString());
         }
 
+        using var callerContext = SessionActivityContext.Push(new SessionActivityContext(ActivityCaller.Declared(request.Caller)));
         var active = Volatile.Read(ref generation)
             ?? throw new CliHostUnavailableException("The host runtime is recovering. Retry shortly; 'ansight host stop' remains available.");
         using var requestLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, active.Lifetime.Token);
@@ -240,7 +242,7 @@ internal sealed class ControlServer : IAsyncDisposable
             if (AppInteractionCommand.IsMatch(arguments))
             {
                 return await InteractionServer.RunAsync(arguments, reader, responseWriter,
-                    active.Runtime.CreateAppInteractionContext, active.Authorizer, cancellationToken, active.Lease).ConfigureAwait(false);
+                    active.Runtime.CreateAppInteractionContext, active.Authorizer, cancellationToken, active.Lease, active.Runtime.Activity).ConfigureAwait(false);
             }
             var executionTask = ExecuteRequestAsync(request, responseWriter, active, commandCancellation.Token);
             var disconnectTask = WaitForDisconnectAsync(reader,
@@ -347,6 +349,9 @@ internal sealed class ControlServer : IAsyncDisposable
             throw new InvalidDataException("Runner credentials require a supported scoped command.");
         using var runnerContext = request.Schema == ControlProtocol.RunnerAiRequestSchema
             ? Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Push(request.RunnerAiCredentials!) : null;
+        using var verifiedCaller = request.Schema == ControlProtocol.HostLeaseRequestSchema
+            ? SessionActivityContext.Push(SessionActivityContext.Current! with
+            { Caller = SessionActivityContext.Current!.Caller with { PrincipalId = request.CallerUserId, PrincipalAttribution = "authenticated" } }) : null;
         using var context = CliCommandContext.Push(
             runtime,
             dataDirectory,

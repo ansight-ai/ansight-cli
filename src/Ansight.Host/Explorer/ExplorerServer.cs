@@ -287,6 +287,8 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             return;
         }
 
+        using var callerContext = SessionActivityContext.Push(new SessionActivityContext(new ActivityCaller
+        { Ingress = "player", ClientName = "ansight-player" }));
         var route = absolutePath[replayPath.Length..];
         var isGet = string.Equals(request.HttpMethod, "GET", StringComparison.Ordinal);
         var isHead = string.Equals(request.HttpMethod, "HEAD", StringComparison.Ordinal);

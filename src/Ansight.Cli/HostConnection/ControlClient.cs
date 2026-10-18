@@ -1,3 +1,4 @@
+using Ansight.Host.Activity;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -88,7 +89,8 @@ internal static class ControlClient
             CallerUserId: callerUserId,
             RunnerAiCredentials: runnerAiCredentials,
             ExpectedProcessId: hostCommand ? metadata.ProcessId : null,
-            ExpectedProcessStartedUtc: hostCommand ? metadata.ProcessStartedUtc : null);
+            ExpectedProcessStartedUtc: hostCommand ? metadata.ProcessStartedUtc : null,
+            Caller: SessionActivityContext.Current?.Caller ?? ActivityCaller.FromEnvironment());
 
         using var pipe = new NamedPipeClientStream(
             ".",
