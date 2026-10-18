@@ -129,6 +129,7 @@ RID="${RID}" VERSION="${VERSION}" BUILD_NUMBER="${BUILD_NUMBER}" \
 
 cp "${REPO_ROOT}/LICENSE" "${STAGING_DIR}/LICENSE"
 cp "${REPO_ROOT}/NOTICE" "${STAGING_DIR}/NOTICE"
+cp "${REPO_ROOT}/scripts/package/archive-README.md" "${STAGING_DIR}/README.md"
 
 mkdir -p "${STAGING_DIR}/skills/ansight-app-inspection"
 cp "${APP_INSPECTION_SKILL}" \

@@ -200,6 +200,15 @@ case "${CHANNEL}" in
     ;;
 esac
 
+cat <<'NOTICE'
+Usage analytics: Ansight sends pseudonymous CLI/player activity and install/update events to PostHog.
+Baseline daily activity and hourly engagement remain enabled, including without sign-in.
+Detailed analytics is off by default and requires sign-in and explicit opt-in. Capture contents are excluded.
+Inspect: ansight analytics status | Disable detailed analytics: ansight analytics detailed disable
+Privacy: https://www.ansight.ai/privacy
+
+NOTICE
+
 finish_installer() {
   local result=$?
   if [[ -n "${TEMP_DIR:-}" ]]; then rm -rf "${TEMP_DIR}"; fi

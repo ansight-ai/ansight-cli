@@ -93,6 +93,15 @@ else {
 }
 $rid = "win-$architecture"
 
+Write-Host @'
+Usage analytics: Ansight sends pseudonymous CLI/player activity and install/update events to PostHog.
+Baseline daily activity and hourly engagement remain enabled, including without sign-in.
+Detailed analytics is off by default and requires sign-in and explicit opt-in. Capture contents are excluded.
+Inspect: ansight analytics status | Disable detailed analytics: ansight analytics detailed disable
+Privacy: https://www.ansight.ai/privacy
+
+'@
+
 function Invoke-AnsightDownload {
     param(
         [Parameter(Mandatory = $true)][string]$Uri,

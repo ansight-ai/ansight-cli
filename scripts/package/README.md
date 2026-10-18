@@ -12,7 +12,7 @@ RID=linux-x64 scripts/package/package-cli-release.sh
 Supported RIDs: `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`, `win-x64`,
 `win-arm64`. These commands build files locally and do not upload them. Release
 version/build metadata is read from `ansight.version.props`. Archives include
-PolyForm Shield 1.0.0 `LICENSE`, `NOTICE`, and the agent skills.
+PolyForm Shield 1.0.0 `LICENSE`, `NOTICE`, an installation and privacy `README.md`, and the agent skills.
 
 On Windows:
 

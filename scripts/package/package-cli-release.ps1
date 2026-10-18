@@ -244,6 +244,7 @@ try {
 
     Copy-Item -LiteralPath (Join-Path $RepoRoot "LICENSE") -Destination (Join-Path $stagingDirectory "LICENSE")
     Copy-Item -LiteralPath (Join-Path $RepoRoot "NOTICE") -Destination (Join-Path $stagingDirectory "NOTICE")
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts/package/archive-README.md") -Destination (Join-Path $stagingDirectory "README.md")
 
     $appInspectionSkillDirectory = Join-Path $stagingDirectory "skills\ansight-app-inspection"
     $cliSetupSkillDirectory = Join-Path $stagingDirectory "skills\ansight-cli-setup"
