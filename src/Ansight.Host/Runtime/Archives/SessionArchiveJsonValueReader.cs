@@ -231,6 +231,8 @@ internal static class SessionArchiveJsonValueReader
             7 => "NAVIGATION",
             8 => "SCREENVIEWED",
             9 => "LIFECYCLE",
+            10 => "MOTION",
+            11 => "SPAN",
             _ => "EVENT"
         };
     }

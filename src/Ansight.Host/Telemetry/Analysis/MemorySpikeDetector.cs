@@ -154,7 +154,7 @@ internal static class MemorySpikeDetector
         int floorBaselineIndex,
         int peakIndex,
         SessionMetricSample floorBaseline,
-        long deltaBytes)
+        double deltaBytes)
     {
         var riseStartThreshold = floorBaseline.Value + Math.Max(1, (long)Math.Ceiling(deltaBytes * MemorySpikeRiseStartRatio));
         for (var index = floorBaselineIndex + 1; index <= peakIndex; index++)
@@ -177,7 +177,7 @@ internal static class MemorySpikeDetector
         IReadOnlyList<SessionMetricSample> samples,
         int startIndex,
         int endIndex,
-        long threshold)
+        double threshold)
     {
         for (var index = startIndex; index <= endIndex; index++)
         {
@@ -206,7 +206,7 @@ internal static class MemorySpikeDetector
         IReadOnlyList<SessionMetricSample> samples,
         int peakIndex,
         SessionMetricSample baseline,
-        long deltaBytes,
+        double deltaBytes,
         DateTimeOffset eventEndUtc)
     {
         var retainedThreshold = baseline.Value + Math.Max(1, (long)Math.Ceiling(deltaBytes * MemorySpikeRetentionRatio));

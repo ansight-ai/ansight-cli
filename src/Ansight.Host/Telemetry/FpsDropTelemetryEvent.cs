@@ -7,6 +7,6 @@ public sealed record FpsDropTelemetryEvent(
     SessionMetricSample Minimum,
     DateTimeOffset StartUtc,
     DateTimeOffset EndUtc,
-    long DropFps,
+    double DropFps,
     TelemetryAnalysisSeverity Severity,
     double SeverityScore);

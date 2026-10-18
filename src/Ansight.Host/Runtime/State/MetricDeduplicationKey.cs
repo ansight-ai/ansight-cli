@@ -7,4 +7,4 @@ using Ansight.Host;
 using Ansight.Pairing.Models;
 using Ansight.Infrastructure.Logging;
 
-internal readonly record struct MetricDeduplicationKey(byte ChannelId, long Value, DateTimeOffset CapturedAtUtc);
+internal readonly record struct MetricDeduplicationKey(byte ChannelId, double Value, DateTimeOffset CapturedAtUtc);

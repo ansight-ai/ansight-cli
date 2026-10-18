@@ -136,7 +136,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
         Assert.Equal("Completed", saved!.Status);
         Assert.Equal(3, saved.MetricChannels.Count);
         Assert.Equal(3, saved.Metrics.Count);
-        Assert.Equal(new long[] { 287, 97682568, 198508544 }, saved.Metrics.Select(sample => sample.Value));
+        Assert.Equal(new double[] { 287, 97682568, 198508544 }, saved.Metrics.Select(sample => sample.Value));
         Assert.All(saved.Metrics, sample => Assert.Equal(startedUtc, sample.CapturedAtUtc));
         Assert.True(saved.CustomProperties!["instruments"]!["sampleMetricsIngested"]!.GetValue<bool>());
     }
@@ -196,7 +196,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
         Assert.Equal(1, result.RowCount);
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
         Assert.Equal(3, session!.MetricChannels.Count);
-        Assert.Equal(new long[] { 287, 97928328, 206045184 }, session.Metrics.Select(sample => sample.Value));
+        Assert.Equal(new double[] { 287, 97928328, 206045184 }, session.Metrics.Select(sample => sample.Value));
         Assert.All(session.Metrics, sample => Assert.Equal(startedUtc.AddSeconds(1), sample.CapturedAtUtc));
         Assert.Single(PhysicalIosInstrumentsMetrics.Parse(samplesPath, startedUtc, 12588));
     }

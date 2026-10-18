@@ -550,7 +550,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 {
                     t = DateTimeOffset.Parse("2026-04-03T06:00:20Z").ToUnixTimeMilliseconds(),
                     c = 1,
-                    v = 72
+                    v = 72.125
                 }));
             await WriteArchiveTextEntryAsync(
                 archive,
@@ -611,10 +611,11 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Equal("FPS", channel.Name);
         Assert.Equal("#00FF00", channel.ColorHex);
         var metric = Assert.Single(importResult.ImportedSession.Metrics);
-        Assert.Equal(72, metric.Value);
+        Assert.Equal(72.125, metric.Value);
         var log = Assert.Single(importResult.ImportedSession.Logs);
         Assert.Equal("export_warning: needs-review", log.Message);
         Assert.Equal("WARNING", log.Tag);
+        Assert.Equal("export_warning", Assert.Single(importResult.ImportedSession.ApplicationEvents).Label);
         var touch = Assert.Single(importResult.ImportedSession.Touches);
         Assert.Equal("down", touch.Action);
         Assert.Equal(7, touch.PointerId);

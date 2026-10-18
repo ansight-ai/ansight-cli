@@ -7,7 +7,7 @@ public sealed record MemorySpikeTelemetryEvent(
     SessionMetricSample Peak,
     DateTimeOffset StartUtc,
     DateTimeOffset EndUtc,
-    long DeltaBytes,
+    double DeltaBytes,
     double DeltaPercent,
     DateTimeOffset? RetainedUntilUtc,
     TelemetryAnalysisSeverity Severity,

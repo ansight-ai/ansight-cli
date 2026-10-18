@@ -170,7 +170,7 @@ internal static class ClientEventParser
         foreach (var metricElement in metricsElement.EnumerateArray())
         {
             var channelId = TryReadByte(metricElement, "channel");
-            var value = TryReadInt64(metricElement, "value");
+            var value = TryReadDouble(metricElement, "value");
             var capturedAtUtc = JsonUtil.TryGetString(metricElement, "capturedAtUtc");
             if (channelId is null || value is null)
             {
@@ -303,7 +303,7 @@ internal static class ClientEventParser
             return null;
         }
 
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var numericValue))
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var numericValue) && double.IsFinite(numericValue))
         {
             return numericValue;
         }
@@ -313,7 +313,7 @@ internal static class ClientEventParser
                 value.GetString(),
                 System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture,
-                out var stringValue))
+                out var stringValue) && double.IsFinite(stringValue))
         {
             return stringValue;
         }

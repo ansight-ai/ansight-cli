@@ -153,7 +153,7 @@ public sealed class SessionLogStreamsTests
 
         Assert.True(runtimeState.TryGetSessionLiveContentSnapshot(sessionId, out var liveSnapshot));
         Assert.NotNull(liveSnapshot);
-        Assert.Equal(new long[] { 55, 60 }, liveSnapshot!.Metrics.Select(metric => metric.Value));
+        Assert.Equal(new double[] { 55, 60 }, liveSnapshot!.Metrics.Select(metric => metric.Value));
 
         Assert.True(runtimeState.TryGetSessionReplaySnapshot(sessionId, out var replaySnapshot));
         Assert.NotNull(replaySnapshot);

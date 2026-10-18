@@ -126,7 +126,7 @@ public sealed class TelemetryAnalysisService
             : $"Channel {channelId}";
     }
 
-    private static TelemetryAnalysisSeverity ResolveFpsSeverity(long fps)
+    private static TelemetryAnalysisSeverity ResolveFpsSeverity(double fps)
     {
         if (fps < 20)
         {
@@ -138,7 +138,7 @@ public sealed class TelemetryAnalysisService
             : TelemetryAnalysisSeverity.Major;
     }
 
-    private static TelemetryAnalysisSeverity ResolveMemorySeverity(long deltaBytes)
+    private static TelemetryAnalysisSeverity ResolveMemorySeverity(double deltaBytes)
     {
         var deltaMegabytes = deltaBytes / (double)BytesPerMegabyte;
         if (deltaMegabytes >= 512d)

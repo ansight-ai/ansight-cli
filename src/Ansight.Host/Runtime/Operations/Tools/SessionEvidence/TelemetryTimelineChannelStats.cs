@@ -4,7 +4,7 @@ namespace Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 
 internal sealed class TelemetryTimelineChannelStats
 {
-    private long sum;
+    private double sum;
 
     public TelemetryTimelineChannelStats(byte channelId)
     {
@@ -15,11 +15,11 @@ internal sealed class TelemetryTimelineChannelStats
 
     public int Count { get; private set; }
 
-    public long Min { get; private set; }
+    public double Min { get; private set; }
 
-    public long Max { get; private set; }
+    public double Max { get; private set; }
 
-    public void Add(long value)
+    public void Add(double value)
     {
         if (Count == 0)
         {
@@ -47,6 +47,7 @@ internal sealed class TelemetryTimelineChannelStats
             ["source"] = channel?.Source,
             ["group"] = channel?.Group,
             ["kind"] = channel?.Kind,
+            ["unit"] = channel?.Unit,
             ["count"] = Count,
             ["min"] = Min,
             ["max"] = Max,

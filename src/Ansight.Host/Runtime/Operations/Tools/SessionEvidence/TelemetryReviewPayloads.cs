@@ -86,6 +86,7 @@ internal static class TelemetryReviewPayloads
             ["source"] = channel?.Source,
             ["group"] = channel?.Group,
             ["kind"] = channel?.Kind,
+            ["unit"] = channel?.Unit,
             ["sampleCount"] = orderedSamples.Length,
             ["firstSampleUtc"] = orderedSamples.Length == 0 ? null : orderedSamples[0].CapturedAtUtc,
             ["lastSampleUtc"] = orderedSamples.Length == 0 ? null : orderedSamples[^1].CapturedAtUtc,

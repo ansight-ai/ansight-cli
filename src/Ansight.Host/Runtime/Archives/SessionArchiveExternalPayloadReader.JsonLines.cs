@@ -123,6 +123,16 @@ internal static partial class SessionArchiveExternalPayloadReader
                 || !TryGetProperty(root, "logs", out _)))
         {
             builder.AddLog(rootLogEntry);
+            var label = FirstString(root, "label", "l");
+            var kind = FirstInt(root, "k");
+            var eventType = FirstString(root, "eventType");
+            if (!string.IsNullOrWhiteSpace(label) && (kind.HasValue || !string.IsNullOrWhiteSpace(eventType)))
+            {
+                builder.AddApplicationEvent(new SessionApplicationEvent(
+                    rootLogEntry.EventId ?? Guid.NewGuid().ToString("N"), label.Trim(),
+                    eventType ?? ResolveOfflineEventKind(kind!.Value), FirstString(root, "details", "d") ?? string.Empty,
+                    rootLogEntry.TimestampUtc, FirstByte(root, "channelId", "channel", "c") ?? byte.MaxValue));
+            }
         }
     }
 
@@ -455,8 +465,8 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         var channelId = FirstByte(element, "channelId", "channel", "c", "id");
-        var value = FirstInt64(element, "value", "v");
-        if (channelId is null || value is null)
+        var value = FirstDouble(element, "value", "v");
+        if (channelId is null || value is null || !double.IsFinite(value.Value))
         {
             return false;
         }

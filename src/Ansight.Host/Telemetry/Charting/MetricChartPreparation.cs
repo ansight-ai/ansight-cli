@@ -41,8 +41,8 @@ public static class MetricChartPreparation
         }
 
         var groupedSamples = new Dictionary<byte, List<SessionMetricSample>>();
-        long maxMemoryValue = 1;
-        long maxFpsValue = 1;
+        double maxMemoryValue = 1;
+        double maxFpsValue = 1;
         var hasMemoryMetrics = false;
         var hasFpsMetrics = false;
 

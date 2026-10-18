@@ -53,6 +53,7 @@ internal static class SessionTelemetryInspection
                     ["source"] = channel?.Source,
                     ["group"] = channel?.Group,
                     ["kind"] = channel?.Kind,
+                    ["unit"] = channel?.Unit,
                     ["sampleCount"] = group.Count(),
                     ["samples"] = PayloadJson.CreateJsonArray(group.Select(metric => (JsonNode?)new JsonObject
                     {

@@ -6,5 +6,5 @@ internal sealed record MemorySpikeAnalysisWindow(
     SessionMetricSample Peak,
     DateTimeOffset StartUtc,
     DateTimeOffset EndUtc,
-    long DeltaBytes,
+    double DeltaBytes,
     DateTimeOffset? RetainedUntilUtc);

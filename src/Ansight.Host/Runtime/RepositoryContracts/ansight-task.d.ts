@@ -1895,8 +1895,22 @@ export interface TelemetryResult extends SessionResultIdentity {
   /** Telemetry data included in the result. */
   telemetry: JsonValue[];
 }
+/** A timed operation reconstructed from the session event stream. */
+export interface TelemetrySpan {
+  spanId: string;
+  parentSpanId?: string | null;
+  name: string;
+  channelId: number;
+  channelName?: string | null;
+  startedAtUtc: string;
+  durationMs: number | null;
+  status: "ok" | "error" | "cancelled" | "incomplete";
+}
 /** Structured result returned by the telemetry timeline operation. */
 export interface TelemetryTimelineResult {
+  matchedSpanCount: number;
+  spansTruncated: boolean;
+  spans: TelemetrySpan[];
   /** Metadata for the session that produced the result. */
   session: SessionHeader;
   /** Number of telemetry samples matching the request. */
