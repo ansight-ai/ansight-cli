@@ -109,6 +109,8 @@ public sealed class AdbClientProcessLauncherTests
     [InlineData("      mInputShown=true\n", true)]
     [InlineData("      mInputShown=false\n", false)]
     [InlineData("\tmInputShown=true\n", true)]
+    [InlineData("  mShowRequested=true mShowExplicitlyRequested=false mShowForced=false mInputShown=true\n", true)]
+    [InlineData("  mShowRequested=false mInputShown=false mInFullscreenMode=false\n", false)]
     public async Task GetSoftwareKeyboardVisibilityAsync_ReadsInputMethodServiceState(
         string output,
         bool expected)
@@ -124,7 +126,7 @@ public sealed class AdbClientProcessLauncherTests
                 "-s",
                 "device-1",
                 "shell",
-                "dumpsys input_method | grep '^[[:space:]]*mInputShown='"
+                "dumpsys input_method | grep 'mInputShown='"
             ],
             launcher.LastRequest?.Arguments);
     }

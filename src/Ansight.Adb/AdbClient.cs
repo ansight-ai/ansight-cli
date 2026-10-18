@@ -49,7 +49,7 @@ public sealed partial class AdbClient
                 "-s",
                 deviceSerial,
                 "shell",
-                "dumpsys input_method | grep '^[[:space:]]*mInputShown='"
+                "dumpsys input_method | grep 'mInputShown='"
             ],
             cancellationToken).ConfigureAwait(false);
         return result.IsSuccess
@@ -63,12 +63,11 @@ public sealed partial class AdbClient
         out bool isVisible)
     {
         const string statePrefix = "mInputShown=";
-        foreach (var line in output.Split(
-                     '\n',
-                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        // Android versions can put this field beside other fields on the same line.
+        foreach (var field in WhitespacePattern().Split(output))
         {
-            if (line.StartsWith(statePrefix, StringComparison.Ordinal)
-                && bool.TryParse(line[statePrefix.Length..].Trim(), out isVisible))
+            if (field.StartsWith(statePrefix, StringComparison.Ordinal)
+                && bool.TryParse(field[statePrefix.Length..], out isVisible))
             {
                 return true;
             }

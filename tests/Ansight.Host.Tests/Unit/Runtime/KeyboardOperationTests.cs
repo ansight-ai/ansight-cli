@@ -1,11 +1,17 @@
 using Ansight.Host.Tests.TestSupport;
+using Ansight.Tools;
 
 namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed class KeyboardOperationTests
 {
-    [Fact]
-    public async Task KeyboardOperations_OpenInspectAndDismissWithoutUnsafeBackInput()
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    public async Task KeyboardOperations_OpenInspectAndDismissWithoutUnsafeBackInput(
+        bool supportsDismiss, bool closesBeforeRequest, bool toolFails)
     {
         using var environment = new TestEnvironment();
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
@@ -19,8 +25,8 @@ public sealed class KeyboardOperationTests
             sessionId,
             profile: null,
             profileJson: """{"device":{"nativeDeviceId":"simulator-001"}}""");
-        var bridge = new ConnectedAppToolBridge(sessionId);
         var driver = new KeyboardDriver();
+        var bridge = new ConnectedAppToolBridge(sessionId, driver, supportsDismiss, closesBeforeRequest, toolFails);
         var inputRouter = new UiInputRouter();
         inputRouter.Configure(driver);
         inputRouter.ConfigureAccessibility(driver);
@@ -51,12 +57,21 @@ public sealed class KeyboardOperationTests
             catalog,
             "ansight_dismiss_keyboard",
             sessionId,
-            new JsonObject { ["includeScreenshot"] = false });
+            new JsonObject { ["includeScreenshot"] = false },
+            expectedError: !supportsDismiss || toolFails);
+
+        Assert.Equal(0, driver.BackCount);
+        if (!supportsDismiss || toolFails)
+        {
+            Assert.True(driver.IsOpen);
+            Assert.False(dismissed["performed"]!.GetValue<bool>());
+            return;
+        }
 
         Assert.True(dismissed["performed"]!.GetValue<bool>());
         Assert.False(dismissed["isOpen"]!.GetValue<bool>());
         Assert.Equal("keyboard.dismiss", dismissed["capability"]!.GetValue<string>());
-        Assert.Equal(1, driver.BackCount);
+        Assert.Equal(1, bridge.DismissCount);
 
         var alreadyDismissed = await CallAsync(
             catalog,
@@ -66,7 +81,8 @@ public sealed class KeyboardOperationTests
 
         Assert.False(alreadyDismissed["performed"]!.GetValue<bool>());
         Assert.False(alreadyDismissed["isOpen"]!.GetValue<bool>());
-        Assert.Equal(1, driver.BackCount);
+        Assert.Equal(0, driver.BackCount);
+        Assert.Equal(1, bridge.DismissCount);
     }
 
     private static ToolCatalog CreateToolCatalog(
@@ -89,7 +105,8 @@ public sealed class KeyboardOperationTests
         ToolCatalog catalog,
         string toolName,
         string sessionId,
-        JsonObject? additionalArguments = null)
+        JsonObject? additionalArguments = null,
+        bool expectedError = false)
     {
         var arguments = additionalArguments?.DeepClone().AsObject() ?? new JsonObject();
         arguments["sessionId"] = sessionId;
@@ -101,7 +118,7 @@ public sealed class KeyboardOperationTests
 
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
-        Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+        Assert.Equal(expectedError, response.Payload!["isError"]!.GetValue<bool>());
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
@@ -111,7 +128,7 @@ public sealed class KeyboardOperationTests
 
         public int BackCount { get; private set; }
 
-        private bool IsOpen { get; set; }
+        public bool IsOpen { get; set; }
 
         public UiInputAvailability GetAvailability(string deviceIdentifier)
             => new(true, "test-input", "Available.");
@@ -216,8 +233,10 @@ public sealed class KeyboardOperationTests
             };
     }
 
-    private sealed class ConnectedAppToolBridge(string sessionId) : IAppToolBridge
+    private sealed class ConnectedAppToolBridge(
+        string sessionId, KeyboardDriver driver, bool supportsDismiss, bool closesBeforeRequest, bool toolFails) : IAppToolBridge
     {
+        public int DismissCount { get; private set; }
         public event EventHandler? ConnectionsChanged
         {
             add { }
@@ -236,7 +255,17 @@ public sealed class KeyboardOperationTests
             string candidateSessionId,
             CancellationToken cancellationToken,
             AppToolBridgeRequestContext? requestContext = null)
-            => Task.FromResult(AppToolBridgeResponse.FromFailure("No app tools are required."));
+            => Task.FromResult(AppToolBridgeResponse.FromSuccess("Catalog loaded.", new ToolProtocolEnvelope
+            {
+                Type = ToolProtocolMessageTypes.CatalogType,
+                Id = "keyboard-catalog",
+                Payload = new JsonObject
+                {
+                    ["tools"] = supportsDismiss
+                        ? new JsonArray(new JsonObject { ["id"] = "ui.dismiss_keyboard", ["policy"] = "write", ["executable"] = true })
+                        : new JsonArray()
+                }
+            }));
 
         public Task<AppToolBridgeResponse> CallToolAsync(
             string candidateSessionId,
@@ -244,7 +273,24 @@ public sealed class KeyboardOperationTests
             JsonObject? arguments,
             CancellationToken cancellationToken,
             AppToolBridgeRequestContext? requestContext = null)
-            => Task.FromResult(AppToolBridgeResponse.FromFailure("No app tools are required."));
+        {
+            Assert.Equal("ui.dismiss_keyboard", toolId);
+            Assert.True(supportsDismiss);
+            if (closesBeforeRequest) driver.IsOpen = false;
+            DismissCount++;
+            if (!toolFails) driver.IsOpen = false;
+            return Task.FromResult(AppToolBridgeResponse.FromSuccess("Dismiss result.", new ToolProtocolEnvelope
+            {
+                Type = ToolProtocolMessageTypes.ResultType,
+                Id = "keyboard-result",
+                Payload = new JsonObject
+                {
+                    ["success"] = !toolFails,
+                    ["message"] = toolFails ? "Input method unavailable." : "Dismissed.",
+                    ["result"] = new JsonObject { ["requested"] = !toolFails }
+                }
+            }));
+        }
     }
 
     private sealed class EmptyPairingConfigService : IPairingConfigService

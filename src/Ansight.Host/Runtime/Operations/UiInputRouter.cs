@@ -246,7 +246,7 @@ internal sealed class UiInputRouter
         }
     }
 
-    private void InvalidateAccessibility(string sessionId)
+    public void InvalidateAccessibility(string sessionId)
     {
         lock (gate)
         {

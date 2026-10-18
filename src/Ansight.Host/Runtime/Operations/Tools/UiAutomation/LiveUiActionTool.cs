@@ -666,9 +666,11 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 true,
                 "none",
                 "The system software keyboard is already dismissed.")
-            : await uiInputRouter.PressButtonAsync(
-                new UiButtonRequest(capture.Session.SessionId, deviceIdentifier, "back", capture.Session.AppId),
-                ToolExecutionCancellation.Current);
+            : isKeyboardDismiss
+                ? await DismissKeyboardAsync(capture.Session.SessionId, correlationId)
+                : await uiInputRouter.PressButtonAsync(
+                    new UiButtonRequest(capture.Session.SessionId, deviceIdentifier, "back", capture.Session.AppId),
+                    ToolExecutionCancellation.Current);
         var afterCapture = await CaptureAfterEvidenceAsync(
             capture,
             actionId,
@@ -717,6 +719,25 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             postconditionError,
             keyboardOpen: keyboardOpenAfter,
             performed: keyboardOpenBefore != false && result.IsSuccess);
+    }
+
+    private async Task<UiInputResult> DismissKeyboardAsync(string sessionId, string? correlationId)
+    {
+        var context = new AppToolBridgeRequestContext("host-ui", Name, correlationId);
+        var catalog = await appToolBridge.QueryToolsAsync(sessionId, ToolExecutionCancellation.Current, context);
+        if (!catalog.Success || !RemoteAppToolCatalog.HasTool(catalog.Envelope?.Payload, RemoteAppToolIds.UiDismissKeyboard))
+            return UiInputResult.Failure(
+                "Safe keyboard dismissal requires the app tool ui.dismiss_keyboard. Update the SDK and enable its UI tools. No Back key was sent.");
+
+        var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
+            sessionId, RemoteAppToolIds.UiDismissKeyboard, new JsonObject(), after: null,
+            ToolExecutionCancellation.Current, context);
+        uiInputRouter.InvalidateAccessibility(sessionId);
+        var payload = response.Envelope?.Payload;
+        return response.Success && response.Envelope?.Type == ToolProtocolMessageTypes.ResultType
+                                && payload?["success"]?.GetValue<bool>() == true
+            ? new UiInputResult(true, "app-input-method", "Requested keyboard dismissal through the app input method.")
+            : UiInputResult.Failure(payload?["message"]?.GetValue<string>() ?? response.Message);
     }
 
     private async Task<AfterActionCapture> CaptureAfterEvidenceAsync(
