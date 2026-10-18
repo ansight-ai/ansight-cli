@@ -4,6 +4,25 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 
 public sealed class ScrcpyToolLocatorTests
 {
+    [Fact]
+    public void ResolveServerPath_FindsWindowsArchiveLayoutBesideExecutable()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"ansight-scrcpy-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var executable = Path.Combine(directory, "scrcpy.exe");
+            var server = Path.Combine(directory, "scrcpy-server");
+            File.WriteAllText(executable, "test executable");
+            File.WriteAllText(server, "test server");
+            Assert.Equal(server, ScrcpyToolLocator.ResolveServerPath(executable, configuredServer: null));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("scrcpy 3.3.1 <https://github.com/Genymobile/scrcpy>", "3.3.1")]
     [InlineData("scrcpy 4.1\nDependencies:", "4.1")]

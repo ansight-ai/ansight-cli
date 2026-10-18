@@ -7,8 +7,8 @@ param(
     [string]$ReleaseUrl = $env:ANSIGHT_RELEASE_URL,
     [string]$DownloadBaseUrl = $env:ANSIGHT_DOWNLOAD_BASE_URL,
     [string]$PortalUrl = $env:ANSIGHT_PORTAL_URL,
-    [switch]$Yes,
-    [switch]$NoSetup,
+    [switch]$Yes = ($env:ANSIGHT_INSTALL_YES -match '^(?i:1|true|yes)$'),
+    [switch]$NoSetup = ($env:ANSIGHT_INSTALL_NO_SETUP -match '^(?i:1|true|yes)$'),
     [switch]$NoPathUpdate
 )
 
@@ -262,7 +262,7 @@ function Install-AnsightSkill {
         $script:SkillInstallNoticeShown = $true
     }
 
-    if (-not (Read-YesNo -Prompt "Install the Ansight agent skills for $Label?" -DefaultYes $DefaultYes)) {
+    if (-not (Read-YesNo -Prompt "Install the Ansight agent skills for ${Label}?" -DefaultYes $DefaultYes)) {
         return
     }
 
@@ -276,6 +276,18 @@ function Install-AnsightSkill {
         New-Item -ItemType Directory -Path $destination -Force | Out-Null
         Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
         Write-Host "Installed $Label skill: $(Join-Path $destination 'SKILL.md')"
+    }
+}
+
+function Invoke-AnsightOptionalSetup {
+    param([Parameter(Mandatory = $true)][scriptblock]$Action)
+
+    try {
+        & $Action
+    }
+    catch {
+        Write-Warning "Ansight is installed, but optional setup did not finish: $($_.Exception.Message)"
+        Write-Host 'Retry setup by rerunning the installer, or start the host with: ansight host run --open'
     }
 }
 
@@ -535,31 +547,33 @@ try {
     }
 
     if (-not $NoSetup) {
-        $codexDirectory = Join-Path $userProfile '.codex'
-        $cursorDirectory = Join-Path $userProfile '.cursor'
-        $claudeDirectory = Join-Path $userProfile '.claude'
-        Install-AnsightSkill `
-            -Label 'Codex and shared Agent Skills clients' `
-            -DestinationRoot (Join-Path $userProfile '.agents\skills') `
-            -DefaultYes (Test-AnsightCommandOrDirectory -Command 'codex' -Directory $codexDirectory)
-        Install-AnsightSkill `
-            -Label 'Cursor' `
-            -DestinationRoot (Join-Path $cursorDirectory 'skills') `
-            -DefaultYes (Test-AnsightCommandOrDirectory -Command 'cursor' -Directory $cursorDirectory)
-        Install-AnsightSkill `
-            -Label 'Claude Code' `
-            -DestinationRoot (Join-Path $claudeDirectory 'skills') `
-            -DefaultYes (Test-AnsightCommandOrDirectory -Command 'claude' -Directory $claudeDirectory)
+        Invoke-AnsightOptionalSetup {
+            $codexDirectory = Join-Path $userProfile '.codex'
+            $cursorDirectory = Join-Path $userProfile '.cursor'
+            $claudeDirectory = Join-Path $userProfile '.claude'
+            Install-AnsightSkill `
+                -Label 'Codex and shared Agent Skills clients' `
+                -DestinationRoot (Join-Path $userProfile '.agents\skills') `
+                -DefaultYes (Test-AnsightCommandOrDirectory -Command 'codex' -Directory $codexDirectory)
+            Install-AnsightSkill `
+                -Label 'Cursor' `
+                -DestinationRoot (Join-Path $cursorDirectory 'skills') `
+                -DefaultYes (Test-AnsightCommandOrDirectory -Command 'cursor' -Directory $cursorDirectory)
+            Install-AnsightSkill `
+                -Label 'Claude Code' `
+                -DestinationRoot (Join-Path $claudeDirectory 'skills') `
+                -DefaultYes (Test-AnsightCommandOrDirectory -Command 'claude' -Directory $claudeDirectory)
 
-        Write-Host 'Local developer tools are free and require no Ansight account.'
-        Write-Host 'For cloud sharing, uploads or delegated jobs, run: ansight account login'
-        if (Read-YesNo -Prompt 'Start the Ansight host automatically on this computer?' -DefaultYes $true) {
-            Enable-AnsightStartup `
-                -AnsightExecutable $ansightExecutable `
-                -AnsightWrapper $wrapperPath
-        }
-        else {
-            Write-Host 'Start the host and open the local player when needed with: ansight host run --open'
+            Write-Host 'Local developer tools are free and require no Ansight account.'
+            Write-Host 'For cloud sharing, uploads or delegated jobs, run: ansight account login'
+            if (Read-YesNo -Prompt 'Start the Ansight host automatically on this computer?' -DefaultYes $true) {
+                Enable-AnsightStartup `
+                    -AnsightExecutable $ansightExecutable `
+                    -AnsightWrapper $wrapperPath
+            }
+            else {
+                Write-Host 'Start the host and open the local player when needed with: ansight host run --open'
+            }
         }
     }
 

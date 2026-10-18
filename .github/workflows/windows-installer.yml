@@ -1,0 +1,27 @@
+name: Windows installer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/install/**'
+      - '.github/workflows/windows-installer.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/install/**'
+      - '.github/workflows/windows-installer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check installer prompts, unattended flags, and setup failure handling
+        shell: ${{ matrix.shell }}
+        run: ./scripts/install/install.tests.ps1

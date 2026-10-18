@@ -44,7 +44,7 @@ public static partial class ScrcpyToolLocator
                     continue;
                 }
 
-                var serverPath = ResolveServerPath(executablePath);
+                var serverPath = ResolveServerPath(executablePath, Environment.GetEnvironmentVariable("SCRCPY_SERVER_PATH"));
                 if (serverPath is null)
                 {
                     failures.Add($"scrcpy {versionResult.Version} at '{executablePath}' has no matching scrcpy-server file.");
@@ -125,9 +125,8 @@ public static partial class ScrcpyToolLocator
             : ScrcpyVersionResult.Success(version);
     }
 
-    private static string? ResolveServerPath(string executablePath)
+    internal static string? ResolveServerPath(string executablePath, string? configuredServer)
     {
-        var configuredServer = Environment.GetEnvironmentVariable("SCRCPY_SERVER_PATH");
         if (!string.IsNullOrWhiteSpace(configuredServer) && File.Exists(configuredServer))
         {
             return Path.GetFullPath(configuredServer);
@@ -138,6 +137,11 @@ public static partial class ScrcpyToolLocator
         var binDirectory = Path.GetDirectoryName(resolvedExecutable);
         var prefixDirectory = binDirectory is null ? null : Directory.GetParent(binDirectory)?.FullName;
         var candidates = new List<string>();
+        if (binDirectory is not null)
+        {
+            // Windows archives and winget install the server beside the real executable.
+            candidates.Add(Path.Combine(binDirectory, "scrcpy-server"));
+        }
         if (prefixDirectory is not null)
         {
             candidates.Add(Path.Combine(prefixDirectory, "share", "scrcpy", "scrcpy-server"));
