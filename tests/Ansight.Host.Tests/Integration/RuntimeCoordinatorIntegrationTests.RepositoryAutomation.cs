@@ -142,6 +142,15 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             definitionRevision: "definition-1");
 
         var initialCallRequest = await ReceiveJsonAsync(socket);
+        // Capability discovery and execution preflight may each query the index when
+        // startup capture finishes before either caller waits on the catalog lock.
+        if (initialCallRequest["type"]?.GetValue<string>() == ToolProtocolMessageTypes.QueryType)
+        {
+            Assert.Equal("index", initialCallRequest["payload"]?["detail"]?.GetValue<string>());
+            Assert.Equal("catalog-1", initialCallRequest["payload"]?["ifRevision"]?.GetValue<string>());
+            await SendVersionedIndexResponseAsync(socket, initialCallRequest, sessionId!, "catalog-1", "definition-1");
+            initialCallRequest = await ReceiveJsonAsync(socket);
+        }
         Assert.Equal(ToolProtocolMessageTypes.CallType, initialCallRequest["type"]?.GetValue<string>());
         await SendToolErrorAsync(
             socket,
