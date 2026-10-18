@@ -390,7 +390,8 @@ internal static class ClientEventParser
                 Width: TryReadInt32(root, "width") ?? 0,
                 Height: TryReadInt32(root, "height") ?? 0,
                 Quality: TryReadInt32(root, "quality") ?? 70,
-                Bytes: Convert.FromBase64String(base64));
+                Bytes: Convert.FromBase64String(base64),
+                Geometry: root.TryGetProperty("geometry", out var geometry) ? ScreenshotGeometry.Validate(JsonNode.Parse(geometry.GetRawText())) : null);
         }
         catch
         {

@@ -96,7 +96,7 @@ internal sealed partial class RuntimeState
         }, updateTimelineEnd: false);
     }
 
-    public void AddSessionImage(string sessionId, DateTimeOffset capturedAtUtc, string format, int width, int height, int quality, ReadOnlyMemory<byte> bytes)
+    public void AddSessionImage(string sessionId, DateTimeOffset capturedAtUtc, string format, int width, int height, int quality, ReadOnlyMemory<byte> bytes, JsonObject? geometry = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
@@ -117,7 +117,7 @@ internal sealed partial class RuntimeState
             appId = session.AppId;
         }
 
-        PersistSessionImageAsync(sessionId, appId, capturedAtUtc, format, width, height, quality, bytes)
+        PersistSessionImageAsync(sessionId, appId, capturedAtUtc, format, width, height, quality, bytes, geometry)
             .SafeFireAndForget();
     }
 
@@ -128,7 +128,7 @@ internal sealed partial class RuntimeState
         int width,
         int height,
         int quality,
-        ReadOnlyMemory<byte> bytes)
+        ReadOnlyMemory<byte> bytes, JsonObject? geometry = null, bool allowDuplicate = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
@@ -157,7 +157,7 @@ internal sealed partial class RuntimeState
             height,
             quality,
             bytes,
-            allowDuplicate: true);
+            allowDuplicate: allowDuplicate, geometry: geometry);
         if (frame is null)
         {
             return null;
@@ -169,6 +169,23 @@ internal sealed partial class RuntimeState
             session.MarkImagesChanged();
         }, frame.CapturedAtUtc);
         return frame;
+    }
+
+    public void SetSessionImageGeometry(string sessionId, string frameId, JsonObject? geometry)
+    {
+        UpdateSession(sessionId, session =>
+        {
+            var frame = session.Images.FirstOrDefault(image => image.FrameId == frameId);
+            if (frame is null) return;
+            var validated = ScreenshotGeometry.Validate(geometry);
+            if (JsonNode.DeepEquals(frame.Geometry, validated)) return;
+            session.Images[session.Images.IndexOf(frame)] = new SessionImageFrame
+            {
+                FrameId = frame.FrameId, CapturedAtUtc = frame.CapturedAtUtc, Format = frame.Format,
+                Width = frame.Width, Height = frame.Height, Quality = frame.Quality, ByteCount = frame.ByteCount, Geometry = validated
+            };
+            session.MarkImagesChanged();
+        }, updateTimelineEnd: false);
     }
 
     public void AddSessionAnalysis(string sessionId, SessionAnalysisRecord analysis)

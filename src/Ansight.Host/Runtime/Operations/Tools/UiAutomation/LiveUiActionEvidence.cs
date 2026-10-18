@@ -208,7 +208,7 @@ internal static class LiveUiActionEvidence
             ? parsedCapturedAtUtc.ToUniversalTime()
             : DateTimeOffset.UtcNow;
         var format = LiveUiNodeQuery.ReadString(result, "format") ?? "png";
-        return new AppScreenshot(artifactPath, bytes, capturedAtUtc, format, bitmap.Width, bitmap.Height);
+        return new AppScreenshot(artifactPath, bytes, capturedAtUtc, format, bitmap.Width, bitmap.Height, ScreenshotGeometry.Validate(result["geometry"]));
     }
 
     internal static async Task<PersistedScreenshotEvidence?> PersistAppScreenshotAsync(
@@ -222,7 +222,7 @@ internal static class LiveUiActionEvidence
             screenshot.Width,
             screenshot.Height,
             quality: 100,
-            screenshot.Bytes);
+            screenshot.Bytes, screenshot.Geometry);
         return frame is null
             ? null
             : new PersistedScreenshotEvidence(
@@ -296,7 +296,7 @@ internal static class LiveUiActionEvidence
 }
 
 internal sealed record AppScreenshot(
-    string ArtifactPath, byte[] Bytes, DateTimeOffset CapturedAtUtc, string Format, int Width, int Height);
+    string ArtifactPath, byte[] Bytes, DateTimeOffset CapturedAtUtc, string Format, int Width, int Height, JsonObject? Geometry = null);
 
 internal static class LiveUiEvidenceCapture
 {

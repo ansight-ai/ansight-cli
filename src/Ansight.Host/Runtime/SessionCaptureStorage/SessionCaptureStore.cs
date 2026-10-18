@@ -608,7 +608,8 @@ internal sealed partial class SessionCaptureStore
         int height,
         int quality,
         ReadOnlyMemory<byte> bytes,
-        bool allowDuplicate = false)
+        bool allowDuplicate = false,
+        System.Text.Json.Nodes.JsonObject? geometry = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -624,7 +625,8 @@ internal sealed partial class SessionCaptureStore
             quality,
             bytes,
             allowDuplicate,
-            taskCompletionSource);
+            taskCompletionSource,
+            ScreenshotGeometry.Validate(geometry));
         if (!pendingImageQueue.Writer.TryWrite(pendingWrite))
         {
             taskCompletionSource.TrySetResult(null);

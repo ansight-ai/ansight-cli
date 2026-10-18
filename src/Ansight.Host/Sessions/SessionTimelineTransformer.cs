@@ -293,7 +293,8 @@ internal static class SessionTimelineTransformer
                 Width = frame.Width,
                 Height = frame.Height,
                 Quality = frame.Quality,
-                ByteCount = frame.ByteCount
+                Geometry = frame.Geometry?.DeepClone().AsObject(),
+                    ByteCount = frame.ByteCount
             },
             cutoffUtc,
             offset);

@@ -13,4 +13,5 @@ internal sealed record PendingImageWrite(
     int Quality,
     ReadOnlyMemory<byte> Bytes,
     bool AllowDuplicate,
-    TaskCompletionSource<SessionImageFrame?> Completion);
+    TaskCompletionSource<SessionImageFrame?> Completion,
+    System.Text.Json.Nodes.JsonObject? Geometry);

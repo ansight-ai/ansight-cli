@@ -45,7 +45,7 @@ internal static class SessionPersistenceContentMerger
             .ToDictionary(frame => frame.FrameId, StringComparer.Ordinal);
         foreach (var frame in snapshot.Images.Where(frame => !string.IsNullOrWhiteSpace(frame.FrameId)))
         {
-            imagesById.TryAdd(frame.FrameId, frame);
+            imagesById[frame.FrameId] = frame;
         }
 
         return imagesById.Values

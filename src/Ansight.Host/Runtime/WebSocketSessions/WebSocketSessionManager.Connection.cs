@@ -73,6 +73,7 @@ internal sealed partial class WebSocketSessionManager
         var liveConnection = new LiveSessionConnection(sessionId, socket, authorization);
         RegisterConnection(sessionId, liveConnection);
         var catalogCaptureStarted = false;
+        var geometryJoin = new ScreenshotGeometryJoin((frameId, geometry) => runtimeState.SetSessionImageGeometry(sessionId, frameId, geometry));
 
         try
         {
@@ -97,6 +98,9 @@ internal sealed partial class WebSocketSessionManager
                     runtimeState.AddSessionLog(sessionId, CreateClientLogEntry("Client closed WebSocket.", "Connection"));
                     break;
                 }
+
+                if (incoming.MessageType == WebSocketMessageType.Text
+                    && geometryJoin.TryAcceptMetadata(incoming.TextPayload ?? string.Empty)) continue;
 
                 ParsedClientEvent parsedEvent;
                 if (incoming.MessageType == WebSocketMessageType.Text
@@ -280,14 +284,17 @@ internal sealed partial class WebSocketSessionManager
                 }
                 else if (string.Equals(parsedEvent.Type, WebSocketClientEventConstants.ClientJpeg, StringComparison.Ordinal) && parsedEvent.ImageFrame is not null)
                 {
-                    runtimeState.AddSessionImage(
+                    var persistedFrame = await runtimeState.AddSessionEvidenceImageAsync(
                         sessionId,
                         parsedEvent.ImageFrame.CapturedAtUtc,
                         parsedEvent.ImageFrame.Format,
                         parsedEvent.ImageFrame.Width,
                         parsedEvent.ImageFrame.Height,
                         parsedEvent.ImageFrame.Quality,
-                        parsedEvent.ImageFrame.Bytes);
+                        parsedEvent.ImageFrame.Bytes,
+                        parsedEvent.ImageFrame.Geometry ?? geometryJoin.BeforeFrame(parsedEvent.ImageFrame), allowDuplicate: false);
+                    if (persistedFrame is not null && parsedEvent.ImageFrame.Geometry is null)
+                        geometryJoin.AfterFrame(parsedEvent.ImageFrame, persistedFrame.FrameId);
                     PublishSessionTransferEvent(
                         sessionId,
                         RuntimeSessionTransferKind.Screenshot,
@@ -482,7 +489,13 @@ internal sealed partial class WebSocketSessionManager
                         ExternalSessionScreenshotCapturePolicy.SupportsHostControl(request.Payload);
                     var screenshotCaptureRequest =
                         ExternalSessionScreenshotCaptureRequest.FromPayload(request.Payload);
-                    var capturePolicy = !supportsHostCapturePolicy
+                    var needsSdkGeometry = request.Payload?["sessionJpegCapture"]?["includeSystemUiMetadata"] is JsonValue geometryOption
+                        && geometryOption.TryGetValue<bool>(out var includeGeometry) && includeGeometry;
+                    if (needsSdkGeometry && externalSessionScreenshotCaptureManager is not null)
+                        await externalSessionScreenshotCaptureManager.StopAsync(sessionId, "SDK capture supplies system-UI metadata.").ConfigureAwait(false);
+                    var capturePolicy = needsSdkGeometry
+                        ? ExternalSessionScreenshotCapturePolicy.App("The SDK captures image-bound system-UI metadata; this external provider cannot supply it.")
+                        : !supportsHostCapturePolicy
                         ? ExternalSessionScreenshotCapturePolicy.App("The SDK does not support host-managed screenshot capture.")
                         : externalSessionScreenshotCaptureManager is null
                             ? ExternalSessionScreenshotCapturePolicy.App("Host external screenshot capture is unavailable.")

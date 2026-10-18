@@ -36,7 +36,7 @@ internal interface ISessionIngestion
         int width,
         int height,
         int quality,
-        ReadOnlyMemory<byte> bytes);
+        ReadOnlyMemory<byte> bytes, JsonObject? geometry = null);
 
     Task<SessionImageFrame?> AddSessionEvidenceImageAsync(
         string sessionId,
@@ -45,7 +45,9 @@ internal interface ISessionIngestion
         int width,
         int height,
         int quality,
-        ReadOnlyMemory<byte> bytes);
+        ReadOnlyMemory<byte> bytes, JsonObject? geometry = null, bool allowDuplicate = true);
+
+    void SetSessionImageGeometry(string sessionId, string frameId, JsonObject? geometry);
 
     void AddSessionAnalysis(string sessionId, SessionAnalysisRecord analysis);
     OperationResult AddSessionVisualTreeSnapshot(string sessionId, SessionVisualTreeSnapshot snapshot);

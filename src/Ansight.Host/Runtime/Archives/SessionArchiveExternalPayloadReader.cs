@@ -508,7 +508,9 @@ internal static partial class SessionArchiveExternalPayloadReader
                 Width = Math.Max(0, FirstInt(root, "width", "w") ?? 0),
                 Height = Math.Max(0, FirstInt(root, "height", "h") ?? 0),
                 Quality = Math.Clamp(FirstInt(root, "quality", "q") ?? 80, 0, 100),
-                ByteCount = bytes.Length
+                ByteCount = bytes.Length,
+                Geometry = root.TryGetProperty("geometry", out var geometry)
+                    ? ScreenshotGeometry.Validate(System.Text.Json.Nodes.JsonNode.Parse(geometry.GetRawText())) : null
             },
             bytes);
     }

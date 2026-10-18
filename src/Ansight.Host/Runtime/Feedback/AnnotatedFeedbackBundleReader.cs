@@ -131,7 +131,9 @@ internal static class AnnotatedFeedbackBundleReader
                 Math.Max(0, ReadInt(screenshotElement, "width") ?? 0),
                 Math.Max(0, ReadInt(screenshotElement, "height") ?? 0),
                 ReadTimestamp(screenshotElement, "capturedAtUtc") ?? DateTimeOffset.UtcNow,
-                bytes);
+                bytes,
+                screenshotElement.TryGetProperty("geometry", out var geometry)
+                    ? ScreenshotGeometry.Validate(JsonNode.Parse(geometry.GetRawText())) : null);
     }
 
     private static IReadOnlyList<AnnotatedFeedbackVisualTree> ReadVisualTrees(

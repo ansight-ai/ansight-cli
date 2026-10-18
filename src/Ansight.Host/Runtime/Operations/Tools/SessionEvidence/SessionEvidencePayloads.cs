@@ -24,6 +24,8 @@ internal static class SessionEvidencePayloads
             ["byteCount"] = frame.ByteCount
         };
 
+        if (frame.Geometry is not null) payload["geometry"] = frame.Geometry.DeepClone();
+
         if (!string.IsNullOrWhiteSpace(localPath))
         {
             payload["localPath"] = localPath;

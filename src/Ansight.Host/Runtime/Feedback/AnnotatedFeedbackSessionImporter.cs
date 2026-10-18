@@ -44,7 +44,7 @@ internal static class AnnotatedFeedbackSessionImporter
                         content.Screenshot.Width,
                         content.Screenshot.Height,
                         quality: 90,
-                        content.Screenshot.Bytes);
+                        content.Screenshot.Bytes, content.Screenshot.Geometry);
                     screenshotFrameId = screenshotFrame?.FrameId;
                     if (screenshotFrame is null)
                     {

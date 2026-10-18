@@ -18,7 +18,7 @@ internal sealed partial class RuntimeState
         int width,
         int height,
         int quality,
-        ReadOnlyMemory<byte> bytes)
+        ReadOnlyMemory<byte> bytes, JsonObject? geometry = null)
     {
         var frame = await sessionCaptureStore.SaveSessionImageAsync(
             appId,
@@ -28,7 +28,7 @@ internal sealed partial class RuntimeState
             width,
             height,
             quality,
-            bytes);
+            bytes, geometry: geometry);
 
         if (frame is null)
         {

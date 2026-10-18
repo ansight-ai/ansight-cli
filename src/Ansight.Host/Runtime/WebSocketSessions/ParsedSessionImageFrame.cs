@@ -16,4 +16,5 @@ internal sealed record ParsedSessionImageFrame(
     int Width,
     int Height,
     int Quality,
-    ReadOnlyMemory<byte> Bytes);
+    ReadOnlyMemory<byte> Bytes,
+    JsonObject? Geometry = null);

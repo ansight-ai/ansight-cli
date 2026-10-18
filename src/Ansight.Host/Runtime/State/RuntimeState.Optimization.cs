@@ -45,6 +45,7 @@ internal sealed partial class RuntimeState
                     ?? throw new InvalidDataException($"Screenshot '{frame.FrameId}' could not be converted to WebP.");
                 var replacement = new SessionImageFrame
                 {
+                    Geometry = frame.Geometry?.DeepClone().AsObject(),
                     FrameId = frame.FrameId, CapturedAtUtc = frame.CapturedAtUtc,
                     Format = "webp", Width = bitmap.Width, Height = bitmap.Height,
                     Quality = 80, ByteCount = data.Size

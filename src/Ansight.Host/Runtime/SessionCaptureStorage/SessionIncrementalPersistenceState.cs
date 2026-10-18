@@ -10,6 +10,7 @@ internal sealed class SessionIncrementalPersistenceState
     public int PersistedAnalysisCount { get; set; }
     public int PersistedImageCount { get; set; }
     public int PersistedTouchInputCount { get; set; }
+    public Dictionary<string, string?> PersistedImageGeometry { get; } = new(StringComparer.Ordinal);
     public HashSet<string> PersistedImageFrameIds { get; init; } = new(StringComparer.Ordinal);
     public HashSet<string> PersistedTouchIds { get; init; } = new(StringComparer.Ordinal);
     public HashSet<string> PersistedNetworkRequestIds { get; init; } = new(StringComparer.Ordinal);

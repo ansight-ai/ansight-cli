@@ -424,7 +424,7 @@ internal sealed partial class SessionCaptureStore
                     request.Height,
                     request.Quality,
                     request.Bytes,
-                    request.AllowDuplicate);
+                    request.AllowDuplicate, request.Geometry);
                 request.Completion.TrySetResult(frame);
             }
             catch (Exception ex)

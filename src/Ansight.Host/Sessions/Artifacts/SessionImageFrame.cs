@@ -9,4 +9,6 @@ public sealed class SessionImageFrame
     public required int Height { get; init; }
     public required int Quality { get; init; }
     public required long ByteCount { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public System.Text.Json.Nodes.JsonObject? Geometry { get; init; }
 }

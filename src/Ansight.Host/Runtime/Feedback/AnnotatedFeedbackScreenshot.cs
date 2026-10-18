@@ -9,4 +9,5 @@ internal sealed record AnnotatedFeedbackScreenshot(
     int Width,
     int Height,
     DateTimeOffset CapturedAtUtc,
-    byte[] Bytes);
+    byte[] Bytes,
+    JsonObject? Geometry = null);

@@ -659,6 +659,7 @@ public sealed class SessionArchiveService
                     Width = frame.Width,
                     Height = frame.Height,
                     Quality = frame.Quality,
+                    Geometry = frame.Geometry?.DeepClone().AsObject(),
                     ByteCount = frame.ByteCount
                 })
                 .ToArray(),

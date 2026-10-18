@@ -527,7 +527,9 @@ internal sealed partial class SessionCaptureStore
         {
             var addedImages = snapshot.Images
                 .Where(frame => !string.IsNullOrWhiteSpace(frame.FrameId))
-                .Where(frame => !persistenceState.PersistedImageFrameIds.Contains(frame.FrameId))
+                .Where(frame => !persistenceState.PersistedImageFrameIds.Contains(frame.FrameId)
+                    || !persistenceState.PersistedImageGeometry.TryGetValue(frame.FrameId, out var previousGeometry)
+                    || previousGeometry != frame.Geometry?.ToJsonString())
                 .DistinctBy(frame => frame.FrameId, StringComparer.Ordinal)
                 .ToArray();
             if (addedImages.Length > 0)
@@ -539,6 +541,8 @@ internal sealed partial class SessionCaptureStore
                         SavedAtUtc = savedAtUtc,
                         Images = addedImages
                     });
+                foreach (var frame in addedImages)
+                    persistenceState.PersistedImageGeometry[frame.FrameId] = frame.Geometry?.ToJsonString();
                 persistenceState.PersistedImageFrameIds.UnionWith(
                     addedImages.Select(frame => frame.FrameId));
             }
@@ -1034,7 +1038,8 @@ internal sealed partial class SessionCaptureStore
         int height,
         int quality,
         ReadOnlyMemory<byte> bytes,
-        bool allowDuplicate)
+        bool allowDuplicate,
+        System.Text.Json.Nodes.JsonObject? geometry)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -1048,7 +1053,7 @@ internal sealed partial class SessionCaptureStore
             return null;
         }
 
-        var fingerprint = Convert.ToHexString(SHA256.HashData(bytes.Span));
+        var fingerprint = Convert.ToHexString(SHA256.HashData(bytes.Span)) + ":" + geometry?.ToJsonString();
 
         lock (artifactGate)
         {
@@ -1069,7 +1074,8 @@ internal sealed partial class SessionCaptureStore
             Width = width,
             Height = height,
             Quality = quality,
-            ByteCount = bytes.Length
+            ByteCount = bytes.Length,
+            Geometry = geometry
         };
         var filePath = SessionImageArtifactPath.ResolveCapturedImagePath(layout.CapturedImagesDirectoryPath, frame);
         WriteAllBytesAtomic(filePath, bytes.Span);

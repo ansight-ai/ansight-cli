@@ -34,7 +34,8 @@ internal sealed class AnnotatedFeedbackBundleContent
                 Width = Screenshot.Width,
                 Height = Screenshot.Height,
                 Quality = 90,
-                ByteCount = Screenshot.Bytes.LongLength
+                ByteCount = Screenshot.Bytes.LongLength,
+                Geometry = Screenshot.Geometry?.DeepClone().AsObject()
             };
     }
 
