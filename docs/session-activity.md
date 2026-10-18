@@ -8,7 +8,7 @@ ansight session activity <session-id> --limit 100 --cursor <cursor> --json
 ansight session activity <session-id> --jsonl
 ```
 
-The local player has an **Activity** tab with caller, outcome and category filters. Expand an operation to inspect identity attribution, request/trace/run/parent IDs, evidence references and completion time. **Open trace** uses the existing test history viewer. **Show evidence** selects a retained screenshot or visual tree. Activity uses wall-clock operation times, so edits performed after a recording ends remain visible without extending its replay timeline.
+In the local player, use the **Trace** icon in the session header, then select **Operations**. The same viewer opens for sessions with or without a linked test run. Filter operations by caller, outcome or category, and expand an operation to inspect identity attribution, request/trace/run/parent IDs, evidence references and completion time. **Open trace** switches to its detailed execution trace in the same viewer; sessions with a linked test run open that trace initially. **Show evidence** returns to the replay at the retained screenshot or visual tree. Operations use wall-clock times, so edits performed after a recording ends remain visible without extending its replay timeline.
 
 ## Caller attribution
 
