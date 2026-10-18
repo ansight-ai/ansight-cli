@@ -7,6 +7,21 @@ namespace Ansight.Cli.Tests.Commands.Doctor;
 public sealed class DoctorOutputTests
 {
     [Fact]
+    public void CompactOutputKeepsFailuresActionableAndHidesSuccessfulPaths()
+    {
+        var result = CreateResult([
+            CreateCheck("tool.node", true, false) with { Message = "Found at /private/developer/node", VersionAdvice = DependencyBaseline.Compare("node", "24.0.0") },
+            CreateCheck("tool.tesseract", false, false) with { Message = "OCR is unavailable." }
+        ]);
+        var compact = DoctorCommand.Render(result);
+        Assert.Contains("tool.node 24.0.0", compact);
+        Assert.DoesNotContain("/private/developer/node", compact);
+        Assert.Contains("OCR is unavailable", compact);
+        Assert.Contains("Fix:", compact);
+        Assert.Contains("/private/developer/node", DoctorCommand.Render(result, verbose: true));
+    }
+
+    [Fact]
     public void VersionNoticeDoesNotFailARequiredCheckOrChangeItsSignal()
     {
         IList<DoctorCheck> checks =

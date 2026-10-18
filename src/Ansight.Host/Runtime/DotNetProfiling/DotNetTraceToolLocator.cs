@@ -65,7 +65,7 @@ internal sealed class DotNetTraceToolLocator
         return result.IsSuccess && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
     }
 
-    private static string? FindOnPath(string commandName)
+    internal static string? FindOnPath(string commandName)
     {
         var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(path))

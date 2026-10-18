@@ -143,7 +143,7 @@ internal static class DoctorCommand
             checks,
             checks.All(static check => check.IsSuccess || !check.IsRequired),
             DateTimeOffset.UtcNow);
-        output.Write(result, () => Render(result));
+        output.Write(result, () => Render(result, arguments.HasFlag("verbose")));
         return result.IsHealthy ? CliExitCodes.Success : CliExitCodes.CapabilityUnavailable;
     }
 
@@ -621,20 +621,26 @@ internal static class DoctorCommand
         return null;
     }
 
-    internal static string Render(DoctorResult result)
+    internal static string Render(DoctorResult result, bool verbose = false)
     {
         var lines = new List<string>
         {
             $"{GetTrafficLight(result.Signal)} Ansight doctor: {result.Signal.ToUpperInvariant()} — {GetSignalSummary(result.Signal)}",
-            $"Platform: {result.OperatingSystem} ({result.Architecture})",
-            $"Data: {result.DataDirectory}"
+            $"Platform: {result.OperatingSystem} ({result.Architecture})"
         };
-        lines.AddRange(result.Checks.Select(check =>
-            $"{GetTrafficLight(check.Signal)} "
-            + $"{(check.IsSuccess ? "[ok]" : check.IsRequired ? "[error]" : "[warn]")} "
-            + $"{check.Name}: {check.Message}"));
+        if (verbose) lines.Add($"Data: {result.DataDirectory}");
+        foreach (var check in result.Checks)
+        {
+            var label = check.Status == "not-applicable" ? "n/a" : check.IsSuccess ? "ok" : check.IsRequired ? "error" : "warn";
+            lines.Add($"{GetTrafficLight(check.Signal)} [{label}] {check.Name}"
+                + (check.VersionAdvice?.DetectedVersion is { } version ? $" {version}" : string.Empty)
+                + (verbose || !check.IsSuccess ? $": {check.Message}" : string.Empty));
+            if (!check.IsSuccess && !string.IsNullOrWhiteSpace(check.InstallInstructions))
+                lines.Add($"  Fix: {check.InstallInstructions}");
+        }
         lines.AddRange(result.Checks.Where(check => check.VersionAdvice?.Notice is not null)
             .Select(check => $"[notice] {check.VersionAdvice!.Notice}"));
+        if (!verbose) lines.Add("Details: ansight doctor --verbose · Structured results: --json");
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -685,6 +691,7 @@ internal static class DoctorCommand
            including for --require. JSON includes the baseline and its SHA-256.
 
            Options:
+             --verbose                   Include successful-check details and paths
              --data-dir <path>            Inspect a non-default Ansight state directory
              --credentials-only          Check data directory and credential readiness only
              --target android-device     Require ADB and a connected, authorized external target
