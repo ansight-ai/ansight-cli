@@ -130,6 +130,9 @@ internal sealed partial class WebSocketSessionManager
                 }
 
                 if (incoming.MessageType == WebSocketMessageType.Binary &&
+                    artifactPublications.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload)) continue;
+
+                if (incoming.MessageType == WebSocketMessageType.Binary &&
                     offlineCaptureTransfers.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload)) continue;
 
                 if (incoming.MessageType == WebSocketMessageType.Binary
@@ -527,6 +530,15 @@ internal sealed partial class WebSocketSessionManager
                 case Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager.CommitAction:
                     var receipt = offlineCaptureTransfers.Commit(sessionId, request.Payload);
                     return CreateControlResponse(request, true, "Offline capture imported.", receipt);
+                case ArtifactPublishTransferManager.BeginAction:
+                    artifactPublications.Begin(sessionId, request.Payload);
+                    return CreateControlResponse(request, true, "Artifact publication accepted.");
+                case ArtifactPublishTransferManager.CommitAction:
+                    var artifactReceipt = artifactPublications.Commit(sessionId, request.Payload, CaptureCompletedBinaryToolArtifact);
+                    return CreateControlResponse(request, true, "Artifact retained in the session.", artifactReceipt);
+                case ArtifactPublishTransferManager.AbortAction:
+                    artifactPublications.Abort(sessionId, request.Payload);
+                    return CreateControlResponse(request, true, "Artifact publication aborted.");
                 case AnnotatedFeedbackTransferManager.SubmitAction:
                 {
                     var accepted = annotatedFeedbackTransfers.TryRegister(

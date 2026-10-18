@@ -538,6 +538,22 @@ internal sealed partial class RuntimeState
             session.MarkArtifactsChanged();
         }
 
+        // Publishers rely on success as a receipt. Retain the artifact index and session
+        // summary before acknowledging, rather than waiting for the normal save queue.
+        if (!TryGetSessionSnapshot(trimmedSessionId, out var retained) || retained is null)
+        {
+            return OperationResult.Failure($"Session '{trimmedSessionId}' is no longer available.");
+        }
+
+        try
+        {
+            sessionCaptureStore.Save(retained);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return OperationResult.Failure($"Could not save artifact snapshot index: {ex.Message}");
+        }
+
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_artifact_snapshot_saved sessionId={trimmedSessionId} snapshotId={normalizedSnapshot.SnapshotId} fileCount={normalizedSnapshot.FileCount} byteCount={normalizedSnapshot.ByteCount} isUpdate={wasUpdated}");
         return OperationResult.Success($"Artifact snapshot '{normalizedSnapshot.SnapshotId}' saved for session '{trimmedSessionId}'.");

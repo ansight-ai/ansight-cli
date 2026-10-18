@@ -26,6 +26,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
     private readonly SessionConnectionRegistry connectionRegistry = new();
     private readonly AppToolCatalogService toolCatalog;
     private readonly BinaryToolArtifactTransferManager binaryToolArtifactTransfers = new();
+    private readonly ArtifactPublishTransferManager artifactPublications = new();
     private readonly AnnotatedFeedbackTransferManager annotatedFeedbackTransfers = new();
     private readonly Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager offlineCaptureTransfers;
     private readonly IHostOperationTrafficLog trafficAuditLog;
