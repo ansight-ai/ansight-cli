@@ -3,7 +3,8 @@ namespace Ansight.Host.Runtime.Operations;
 internal static class DeviceExecutionTools
 {
     public static bool IsSupported(string toolName) => toolName is
-        "ansight_take_screenshot" or "ansight_get_live_visual_tree" or
+        "ansight_compare_screenshot" or "ansight_evaluate_screenshot" or
+        "ansight_take_screenshot" or "ansight_capture_screenshot" or "ansight_get_live_visual_tree" or
         "ansight_find_ui" or "ansight_scan_screen" or "ansight_wait_for_ui" or "ansight_assert_ui" or
         "ansight_tap_ui" or "ansight_type_text" or "ansight_swipe_ui" or "ansight_scroll_ui" or
         "ansight_pinch_ui" or "ansight_back_ui" or "ansight_run_ui_sequence" or

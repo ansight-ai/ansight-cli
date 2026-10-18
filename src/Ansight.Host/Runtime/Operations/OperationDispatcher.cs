@@ -100,6 +100,8 @@ internal sealed class OperationDispatcher : IOperationDispatcher
 
     public Task StopNetworkConditioningAsync() => toolCatalog.StopNetworkConditioningAsync();
 
+    public void ConfigureScreenshotEvaluator(IScreenshotEvaluator evaluator) => toolCatalog.ConfigureScreenshotEvaluator(evaluator);
+
     public void ConfigureAudioInjection(AudioInjectionEngine engine) => audioInjectionRouter.Configure(engine);
 
     public void ConfigureUiInputDriver(IUiInputDriver? driver)
@@ -240,6 +242,9 @@ internal sealed class OperationDispatcher : IOperationDispatcher
                 validationError);
         }
 
+        // Direct tasks need the same continuous capture profile as tasks run by the test suite.
+        // Keep it for the entire task, including JavaScript waits, and release on every exit path.
+        using var captureScope = externalSessionScreenshotCaptureManager?.BeginTestRun(normalizedSessionId);
         return await repositoryTaskRouter.ExecuteAsync(
                 task,
                 normalizedSessionId,

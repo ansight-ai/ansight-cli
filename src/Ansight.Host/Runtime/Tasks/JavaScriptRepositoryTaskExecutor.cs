@@ -494,6 +494,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         RequestResult result;
         using var cancellationScope = ToolExecutionCancellation.Push(cancellationToken);
         using var fixtureScope = AudioFixtureScope.Push(request.Task.RepositoryRootPath);
+        using var screenshotWorkspace = ScreenshotWorkspaceScope.Push(request.Task.RepositoryRootPath);
         try
         {
             var audioRejection = AudioExecutionPolicy.RejectParallelCall(toolName, request.OperationContext);
@@ -566,6 +567,12 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                                 ?? payload?.DeepClone()
                                 ?? new JsonObject();
         var originalStructuredContent = structuredContent;
+        // A completed comparison is data. Named expect assertions decide the task outcome.
+        // Capture, transport and baseline errors have no comparison result and still throw.
+        if (toolName == "ansight_assert_screenshot"
+            && structuredContent["capability"]?.GetValue<string>() == "screenshot.assert"
+            && structuredContent["passed"] is JsonValue comparison && comparison.TryGetValue<bool>(out _))
+            isToolError = false;
         var resultText = structuredContent.ToJsonString(JsonUtil.Compact);
         var messageText = result.ErrorMessage
                           ?? structuredContent["message"]?.GetValue<string>()

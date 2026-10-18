@@ -7,17 +7,19 @@ namespace Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 internal sealed class TakeScreenshotTool : RemoteAppOperation
 {
     private readonly DeviceSessionEvidence? deviceEvidence;
-    public TakeScreenshotTool(OperationServices services)
+    private readonly bool flatResult;
+    public TakeScreenshotTool(OperationServices services, bool flatResult = false)
         : base(services)
     {
         deviceEvidence = services.DeviceEvidence;
+        this.flatResult = flatResult;
     }
 
-    public override string Name => "ansight_take_screenshot";
+    public override string Name => flatResult ? "ansight_capture_screenshot" : "ansight_take_screenshot";
 
     protected override string Title => "Take Screenshot";
 
-    protected override string Description => "Capture a live screenshot from a connected app through its ui.get_screenshot remote tool.";
+    protected override string Description => "Capture and persist a live screenshot in the session, returning a reusable frameId.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: new Dictionary<string, ToolSchema>
@@ -36,6 +38,7 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
             ["quality"] = ToolSchema.Integer("JPEG quality. Defaults to 80.", nullable: true),
             ["maxWidth"] = ToolSchema.Integer("Maximum output width in pixels. Defaults to 1280.", nullable: true),
             ["afterScreenUpdates"] = ToolSchema.Boolean("Wait for pending screen updates before capture. Defaults to false.", nullable: true),
+            ["includeSystemUiMetadata"] = ToolSchema.Boolean("Include capture-time safe-area and system-UI metadata. Defaults to true.", nullable: true),
             ["annotateNodeIds"] = ToolSchema.Boolean("Ask the app to overlay visual node ids when supported. Defaults to false.", nullable: true)
         },
         additionalProperties: false).ToJson();
@@ -63,21 +66,15 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
             if (remoteArguments["afterScreenUpdates"]?.GetValue<bool>() == true)
                 return RequestResult.ToolResult(ExecutionCapabilities.Unavailable("ui.afterScreenUpdates",
                     new JsonObject { ["executionMode"] = "device" }, "An app render fence requires SDK app tools."), isError: true);
-            var evidence = await LiveUiActionEvidence.CaptureScreenshotAsync(
-                runtimeState, applicationPaths, appToolBridge, snapshot, Name, "current", correlationId,
-                ToolExecutionCancellation.Current, externalScreenshots: externalScreenshots).ConfigureAwait(false);
-            if (evidence is null) return ToolError("A fresh device screenshot is unavailable.");
-            evidence = await EncodeDeviceScreenshotAsync(snapshot, evidence, remoteArguments).ConfigureAwait(false);
-            var screenshot = new JsonObject
-            {
-                ["captureSource"] = "device", ["artifactPath"] = evidence.ArtifactPath,
-                ["frameId"] = evidence.Frame.FrameId, ["format"] = evidence.Frame.Format,
-                ["width"] = evidence.Frame.Width, ["height"] = evidence.Frame.Height,
-                ["capturedAtUtc"] = evidence.Frame.CapturedAtUtc
-            };
-            return RequestResult.ToolResult(new JsonObject
+            var captured = await LiveUiActionEvidence.ReadExternalScreenshotAsync(externalScreenshots, snapshot,
+                remoteArguments["maxWidth"]!.GetValue<int>(), ToolExecutionCancellation.Current).ConfigureAwait(false);
+            if (captured is null) return ToolError("A fresh device screenshot is unavailable.");
+            var evidence = await EncodeDeviceScreenshotAsync(snapshot, captured, remoteArguments).ConfigureAwait(false);
+            var screenshot = ToFrameResult(snapshot, evidence);
+            return RequestResult.ToolResult(flatResult ? screenshot : new JsonObject
             {
                 ["sessionId"] = snapshot.SessionId, ["appId"] = snapshot.AppId,
+                ["frameId"] = evidence.Frame.FrameId,
                 ["toolId"] = RemoteAppToolIds.UiGetScreenshot, ["captureSource"] = "device",
                 ["responseType"] = "tool.result",
                 ["payload"] = new JsonObject
@@ -88,7 +85,7 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
             }, isError: false);
         }
 
-        return await BuildCallAppToolResultAsync(
+        var response = await BuildCallAppToolResultAsync(
             new JsonObject
             {
                 ["sessionId"] = snapshot!.SessionId,
@@ -98,15 +95,51 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
             },
             correlationId,
             Name);
+        if (response.IsError || response.Payload?["isError"]?.GetValue<bool>() == true) return response;
+        var structured = response.Payload?["structuredContent"] as JsonObject;
+        var result = structured?["payload"]?["result"] as JsonObject;
+        var path = result?["artifactPath"]?.GetValue<string>();
+        if (path is null || !File.Exists(path)) return ToolError("The screenshot transfer did not produce a host artifact.");
+        var bytes = await File.ReadAllBytesAsync(path, ToolExecutionCancellation.Current).ConfigureAwait(false);
+        using var bitmap = SKBitmap.Decode(bytes);
+        if (bitmap is null) return ToolError("The captured screenshot could not be decoded.");
+        var capturedAt = DateTimeOffset.TryParse(result?["capturedAtUtc"]?.ToString(), out var timestamp)
+            ? timestamp.ToUniversalTime() : DateTimeOffset.UtcNow;
+        var frame = await runtimeState.AddSessionEvidenceImageAsync(snapshot.SessionId, capturedAt,
+            result?["format"]?.GetValue<string>() ?? remoteArguments["format"]!.GetValue<string>(),
+            bitmap.Width, bitmap.Height, remoteArguments["quality"]!.GetValue<int>(), bytes,
+            remoteArguments["includeSystemUiMetadata"]?.GetValue<bool>() == false ? null : ScreenshotGeometry.Validate(result?["geometry"])).ConfigureAwait(false);
+        if (frame is null) return ToolError("The captured screenshot could not be persisted in the session.");
+        var persisted = new PersistedScreenshotEvidence(frame, Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            SessionFileLocator.ResolveScreenshotPath(applicationPaths, snapshot, frame));
+        var frameResult = ToFrameResult(snapshot, persisted);
+        if (flatResult) return RequestResult.ToolResult(frameResult, false);
+        foreach (var field in frameResult) result![field.Key] = field.Value?.DeepClone();
+        structured!["frameId"] = frame.FrameId;
+        return RequestResult.ToolResult(structured.DeepClone().AsObject(), false);
+    }
+
+    private static JsonObject ToFrameResult(AppSessionSnapshot session, PersistedScreenshotEvidence evidence)
+    {
+        var result = new JsonObject
+        {
+            ["sessionId"] = session.SessionId, ["appId"] = session.AppId,
+            ["captureSource"] = session.CaptureSource ?? "sdk", ["artifactPath"] = evidence.ArtifactPath,
+            ["frameId"] = evidence.Frame.FrameId, ["format"] = evidence.Frame.Format,
+            ["width"] = evidence.Frame.Width, ["height"] = evidence.Frame.Height,
+            ["capturedAtUtc"] = evidence.Frame.CapturedAtUtc, ["sha256"] = evidence.Hash
+        };
+        if (evidence.Frame.Geometry is not null) result["geometry"] = evidence.Frame.Geometry.DeepClone();
+        return result;
     }
 
     private async Task<PersistedScreenshotEvidence> EncodeDeviceScreenshotAsync(
-        AppSessionSnapshot session, PersistedScreenshotEvidence evidence, JsonObject arguments)
+        AppSessionSnapshot session, AppScreenshot evidence, JsonObject arguments)
     {
         var format = arguments["format"]!.GetValue<string>();
         var quality = arguments["quality"]!.GetValue<int>();
         var maximumWidth = arguments["maxWidth"]!.GetValue<int>();
-        using var source = SKBitmap.Decode(await File.ReadAllBytesAsync(evidence.ArtifactPath, ToolExecutionCancellation.Current));
+        using var source = SKBitmap.Decode(evidence.Bytes);
         if (source is null) throw new IOException("The captured device screenshot could not be decoded.");
         var width = Math.Min(maximumWidth, source.Width);
         var height = Math.Max(1, (int)Math.Round(source.Height * (width / (double)source.Width)));
@@ -115,7 +148,7 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
         using var image = SKImage.FromBitmap(resized ?? throw new IOException("The device screenshot could not be resized."));
         using var encoded = image.Encode(format == "png" ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg, quality);
         var bytes = encoded.ToArray();
-        var frame = await runtimeState.AddSessionEvidenceImageAsync(session.SessionId, evidence.Frame.CapturedAtUtc,
+        var frame = await runtimeState.AddSessionEvidenceImageAsync(session.SessionId, evidence.CapturedAtUtc,
             format, width, height, quality, bytes).ConfigureAwait(false)
             ?? throw new IOException("The device screenshot could not be persisted.");
         return new PersistedScreenshotEvidence(frame, Convert.ToHexStringLower(SHA256.HashData(bytes)),
@@ -159,10 +192,12 @@ internal sealed class TakeScreenshotTool : RemoteAppOperation
                && TryApplyOptionalInteger(arguments, remoteArguments, "maxWidth", 1, int.MaxValue, out errorMessage)
                && TryApplyOptionalBoolean(arguments, remoteArguments, "afterScreenUpdates", out errorMessage)
                && TryApplyOptionalBoolean(arguments, remoteArguments, "annotateNodeIds", out errorMessage)
+               && TryApplyOptionalBoolean(arguments, remoteArguments, "includeSystemUiMetadata", out errorMessage)
                && TryApplyOptionalInteger(remoteArguments, remoteArguments, "quality", 1, 100, out errorMessage)
                && TryApplyOptionalInteger(remoteArguments, remoteArguments, "maxWidth", 1, int.MaxValue, out errorMessage)
                && TryApplyOptionalBoolean(remoteArguments, remoteArguments, "afterScreenUpdates", out errorMessage)
-               && TryApplyOptionalBoolean(remoteArguments, remoteArguments, "annotateNodeIds", out errorMessage);
+               && TryApplyOptionalBoolean(remoteArguments, remoteArguments, "annotateNodeIds", out errorMessage)
+               && TryApplyOptionalBoolean(remoteArguments, remoteArguments, "includeSystemUiMetadata", out errorMessage);
     }
 
     private static bool TryApplyOptionalBoolean(

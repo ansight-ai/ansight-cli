@@ -243,7 +243,7 @@ public sealed partial class AppInteractionBackendTests
         return new AppInteractionTree(state, new ScreenshotBridge(sessionId, string.Empty), router, session!);
     }
 
-    private sealed class ScreenshotBridge(string sessionId, string path) : IAppToolBridge
+    private sealed class ScreenshotBridge(string sessionId, string path, bool strictSettling = true) : IAppToolBridge
     {
         public int Captures { get; private set; }
         public int FullCaptures { get; private set; }
@@ -257,16 +257,21 @@ public sealed partial class AppInteractionBackendTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             CatalogQueries++;
-            return Task.FromResult(AppToolBridgeResponse.FromFailure("No SDK tree available."));
+            return strictSettling ? Task.FromResult(AppToolBridgeResponse.FromFailure("No SDK tree available."))
+                : Task.FromResult(AppToolBridgeResponse.FromSuccess("Catalog", new ToolProtocolEnvelope
+                {
+                    Type = ToolProtocolMessageTypes.CatalogType, Id = "catalog",
+                    Payload = new JsonObject { ["tools"] = new JsonArray(new JsonObject { ["id"] = RemoteAppToolIds.UiGetScreenshot, ["executable"] = true }) }
+                }));
         }
         public Task<AppToolBridgeResponse> CallToolAsync(string id, string toolId, JsonObject? arguments,
             CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
         {
             Assert.Equal(sessionId, id);
             Assert.Equal(RemoteAppToolIds.UiGetScreenshot, toolId);
-            Assert.True(arguments!["afterScreenUpdates"]!.GetValue<bool>());
+            if (strictSettling) Assert.True(arguments!["afterScreenUpdates"]!.GetValue<bool>());
             Captures++;
-            if (arguments["maxWidth"]!.GetValue<int>() == 1024) FullCaptures++;
+            if (arguments!["maxWidth"]!.GetValue<int>() == 1024 || !strictSettling) FullCaptures++;
             else
             {
                 Assert.Equal(256, arguments["maxWidth"]!.GetValue<int>());

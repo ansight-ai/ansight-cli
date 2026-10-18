@@ -83,8 +83,11 @@ internal static class RepositoryJavaScriptApiMethods
                 new StandardApiMethod("readBody", "ansight_read_network_body")),
             ["screenshots"] = Suite(
                 new StandardApiMethod("take", "ansight_take_screenshot"),
+                new StandardApiMethod("capture", "ansight_capture_screenshot"),
                 new StandardApiMethod("getFrame", "ansight_get_screenshot_frame"),
-                new StandardApiMethod("assert", "ansight_assert_screenshot")),
+                new StandardApiMethod("assert", "ansight_assert_screenshot"),
+                new StandardApiMethod("compare", "ansight_compare_screenshot"),
+                new StandardApiMethod("evaluate", "ansight_evaluate_screenshot")),
             ["session"] = Suite(
                 new StandardApiMethod("getAppState", "ansight_get_app_state"),
                 new StandardApiMethod("getProperties", "ansight_get_session_properties"),

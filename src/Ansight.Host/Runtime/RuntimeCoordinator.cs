@@ -121,6 +121,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             SimulatorAgent,
             new WorkspaceTestTargetLauncher(Devices, Pairing, FindMonitoredSession),
             new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>()));
+        operationDispatcher.ConfigureScreenshotEvaluator(new ScreenshotEvaluationRunner(WorkspaceTests.RunGateway!));
         Profiling = dotNetProfilingService
                     ?? throw new ArgumentNullException(nameof(dotNetProfilingService));
         Profiling.ConfigureDeviceService(Devices);
@@ -224,6 +225,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             SimulatorAgent,
             new WorkspaceTestTargetLauncher(Devices, Pairing, FindMonitoredSession),
             new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>()));
+        operationDispatcher.ConfigureScreenshotEvaluator(new ScreenshotEvaluationRunner(WorkspaceTests.RunGateway!));
         Profiling = composition.Get<DotNetProfilingService>();
         Profiling.ConfigureDeviceService(Devices);
         NativeProfiling = composition.Get<NativeProfilingService>();

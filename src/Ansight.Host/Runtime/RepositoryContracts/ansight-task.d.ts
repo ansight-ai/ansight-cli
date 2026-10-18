@@ -1691,8 +1691,30 @@ export type ScreenshotMimeType =
   | "image/png"
   | "image/webp";
 
+/** Capture-time geometry uses normalized coordinates of the final upright image. */
+export interface ScreenshotCaptureGeometry {
+  coordinateSpace: "image-normalized";
+  captureTarget: "display" | "appWindow" | "appContent";
+  safeAreaInsets: { top: number; right: number; bottom: number; left: number } | null;
+  systemUi: Record<ScreenshotSystemUiKind, ScreenshotSystemUiRegion>;
+}
+export type ScreenshotSystemUiKind = "statusBar" | "navigationBar" | "displayCutout";
+export type ScreenshotSystemUiRegion =
+  | { state: "present"; regions: ScreenshotIgnoreRegion[]; reason?: string }
+  | { state: "absent"; regions: []; reason?: string }
+  | { state: "unknown"; regions: []; reason: string };
+export interface ScreenshotSystemUiMaskResolution {
+  kind: ScreenshotSystemUiKind;
+  state: "present" | "absent";
+  frameId: string;
+  regions: ScreenshotIgnoreRegion[];
+  reason?: string | null;
+}
+
 /** Arguments accepted by the screenshot take operation. */
 export interface ScreenshotTakeArguments {
+  /** Include capture-time system UI metadata. Defaults to true; does not mask pixels. */
+  includeSystemUiMetadata?: boolean;
   /** Arguments forwarded to the underlying app tool. */
   arguments?: AppToolArguments;
   /** Serialization or image format. */
@@ -1708,6 +1730,12 @@ export interface ScreenshotTakeArguments {
 }
 /** Structured result returned by the screenshot capture operation. */
 export interface ScreenshotCaptureResult {
+  /** Absent on older SDKs, disabled capture, or providers without reliable geometry. */
+  geometry?: ScreenshotCaptureGeometry | null;
+  /** Stable session frame identifier returned by screenshots.take/capture. */
+  frameId?: string;
+  /** Persisted image path on the host. */
+  artifactPath?: string;
   /** Serialization or image format. */
   format?: ScreenshotCaptureFormat;
   /** Width in screen or image pixels. */
@@ -1730,6 +1758,8 @@ export interface ScreenshotFrameArguments {
 }
 /** Metadata for one screenshot frame captured on a session timeline. */
 export interface ScreenshotFrame {
+  /** Absent on older SDKs, disabled capture, or providers without reliable geometry. */
+  geometry?: ScreenshotCaptureGeometry | null;
   /** Stable identifier of a screenshot frame. */
   frameId: string;
   /** Stable identifier of the selected Ansight session. */
@@ -1766,10 +1796,25 @@ export interface ScreenshotFrameResult {
   /** Base64-encoded image content. */
   imageBase64?: string;
 }
+/** Rectangle in normalized (0–1) full actual-image coordinates. Must fit within the image. */
+export interface ScreenshotIgnoreRegion {
+  x: number;
+  y: number;
+  /** Positive width. */
+  width: number;
+  /** Positive height. */
+  height: number;
+}
 /** Arguments accepted by the screenshot assert operation. */
 export interface ScreenshotAssertArguments {
+  /** Resolve masks from ACTUAL capture metadata. Unknown/missing geometry is an error. */
+  ignoreSystemUi?: ScreenshotSystemUiKind[];
+  /** Include capture-time system UI metadata. Defaults to true; does not mask pixels. */
+  includeSystemUiMetadata?: boolean;
   /** Screenshot frame used as the comparison baseline. */
   baselineFrameId?: string;
+  /** Up to 64 rectangles excluded from scores. Overlaps count once; masking every pixel is an error. */
+  ignoreRegions?: ScreenshotIgnoreRegion[];
   /** Maximum allowed ratio of differing pixels. */
   maxDifferenceRatio?: number;
   /** Per-channel difference threshold used to classify a pixel as different. */
@@ -1781,8 +1826,12 @@ export interface ScreenshotAssertArguments {
 }
 /** Structured result returned by the screenshot assert operation. */
 export interface ScreenshotAssertResult extends SessionResultIdentity {
+  ignoreSystemUi?: ScreenshotSystemUiKind[];
+  systemUiMaskResolutions?: ScreenshotSystemUiMaskResolution[];
   /** Stable capability identifier for the operation. */
   capability: "screenshot.assert";
+  /** Current comparison image retained in the same session, including mismatches. */
+  currentFrameId: string;
   /** Whether the assertion satisfied every requested expectation. */
   passed: boolean;
   /** Screenshot frame used as the comparison baseline. */
@@ -1795,6 +1844,10 @@ export interface ScreenshotAssertResult extends SessionResultIdentity {
   differentPixelCount: number;
   /** Total number of pixels compared. */
   totalPixelCount: number;
+  /** Excluded pixels at comparison resolution. totalPixelCount counts only unmasked pixels. */
+  ignoredPixelCount: number;
+  /** Requested normalized masks, retained for review. */
+  ignoreRegions: ScreenshotIgnoreRegion[];
   /** Ratio of different pixels to total compared pixels. */
   differenceRatio: number;
   /** Mean absolute color-channel difference across compared pixels. */
@@ -1804,6 +1857,132 @@ export interface ScreenshotAssertResult extends SessionResultIdentity {
   /** Maximum allowed ratio of differing pixels. */
   maxDifferenceRatio: number;
   /** Human-readable operation result or diagnostic message. */
+  message: string;
+}
+
+/** Reference in the current session, or a PNG/JPEG relative to the caller's ansight/ workspace. */
+export type ScreenshotReference = { frameId: string; workspacePath?: never }
+  | { workspacePath: string; frameId?: never };
+/** Retained artifact, readable through ansight.artifacts.readFile({ snapshotId, path }). */
+export interface ScreenshotArtifactReference { snapshotId: string; path: string; }
+export interface ScreenshotInspectionImage {
+  /** Absent on older SDKs, disabled capture, or providers without reliable geometry. */
+  geometry?: ScreenshotCaptureGeometry | null;
+  frameId: string | null;
+  workspacePath: string | null;
+  width: number;
+  height: number;
+  /** Hash of the exact retained input bytes. */
+  sha256: string;
+  capturedAtUtc: string | null;
+  artifact: ScreenshotArtifactReference;
+}
+/** Region bounds always refer to the full actual frame, including after comparison resizing. */
+export interface ScreenshotRegion {
+  id: string;
+  label: string;
+  source: "pixel-difference" | "semantic";
+  /** Can be passed directly to ansight.annotations.create({ geometries: [...] }). */
+  geometry: AnnotationGeometryAnchor & AnnotationBoxGeometry;
+  crop: ScreenshotArtifactReference;
+  differentPixelCount?: number;
+}
+export interface ScreenshotCompareArguments {
+  /** Resolve masks from ACTUAL capture metadata. Unknown/missing geometry is an error. */
+  ignoreSystemUi?: ScreenshotSystemUiKind[];
+  /** Exact retained actual frame. No new capture is performed. */
+  image: { frameId: string };
+  reference: ScreenshotReference;
+  /** Up to 64 rectangles excluded from scores, highlights and changed regions. */
+  ignoreRegions?: ScreenshotIgnoreRegion[];
+  /** Defaults to 16; a channel difference strictly above this marks a changed pixel. */
+  pixelThreshold?: number;
+  /** Defaults to 0.01. */
+  maxDifferenceRatio?: number;
+  /** Comparison width limit, 64–4096; defaults to 1024. */
+  maxWidth?: number;
+  /** Defaults to false. Opt in to resizing actual to reference proportions when dimensions differ. */
+  resizeToReference?: boolean;
+}
+export interface ScreenshotCompareResult extends SessionResultIdentity {
+  ignoreSystemUi?: ScreenshotSystemUiKind[];
+  systemUiMaskResolutions?: ScreenshotSystemUiMaskResolution[];
+  capability: "screenshot.compare";
+  passed: boolean;
+  status: "compared" | "dimension-mismatch";
+  dimensionsMatch: boolean;
+  resizeToReference: boolean;
+  image: ScreenshotInspectionImage;
+  reference: ScreenshotInspectionImage;
+  pixelThreshold: number;
+  maxDifferenceRatio: number;
+  /** Statistics and overlay are absent on a dimension mismatch. */
+  width?: number;
+  height?: number;
+  differentPixelCount?: number;
+  totalPixelCount?: number;
+  /** Excluded pixels at comparison resolution. totalPixelCount counts only unmasked pixels. */
+  ignoredPixelCount?: number;
+  /** Requested normalized masks, retained even on a dimension mismatch. */
+  ignoreRegions: ScreenshotIgnoreRegion[];
+  differenceRatio?: number;
+  meanChannelDifference?: number;
+  overlay?: ScreenshotArtifactReference;
+  /** At most 64 largest connected changed regions; all changed pixels still contribute to the score. */
+  regions: ScreenshotRegion[];
+  regionCount?: number;
+  regionsTruncated?: boolean;
+  evidence: ScreenshotArtifactReference;
+  completedAtUtc: string;
+  message: string;
+}
+export interface ScreenshotEvaluationCriterion {
+  id: string;
+  description: string;
+  /** Optional host-checked count over model-detected objects; does not remove visual uncertainty. */
+  count?: { label: string; attributes?: Record<string, string>; equals: number };
+}
+export interface ScreenshotEvaluateArguments {
+  image: { frameId: string };
+  /** Optional expected image, supplied to the model separately from actual. */
+  reference?: ScreenshotReference;
+  /** One to sixteen criteria. */
+  criteria: ScreenshotEvaluationCriterion[];
+  /** Uses the existing configured provider and billing; defaults to fast. */
+  reasoning?: "fast" | "balanced" | "deep";
+  teamId?: string;
+}
+export type ScreenshotAssessmentVerdict = "pass" | "fail" | "inconclusive";
+export interface ScreenshotCriterionResult {
+  id: string;
+  description?: string;
+  verdict: ScreenshotAssessmentVerdict;
+  explanation: string;
+  regionIds: string[];
+  observedCount?: number;
+  expectedCount?: number;
+}
+export interface ScreenshotEvaluateResult extends SessionResultIdentity {
+  capability: "screenshot.evaluate";
+  /** True only if every criterion passes. Inconclusive never passes. */
+  passed: boolean;
+  verdict: ScreenshotAssessmentVerdict;
+  image: ScreenshotInspectionImage;
+  reference?: ScreenshotInspectionImage;
+  requestedCriteria: ScreenshotEvaluationCriterion[];
+  criteria: ScreenshotCriterionResult[];
+  objects: Array<{ id: string; label: string; attributes: Record<string, string>;
+    bounds: { x: number; y: number; width: number; height: number } }>;
+  regions: ScreenshotRegion[];
+  model: string;
+  reasoning: string;
+  configurationRevision: string;
+  responseId: string | null;
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number;
+    cachedInputTokens: number; cacheWriteInputTokens: number; reasoningOutputTokens: number };
+  modelResponse: ScreenshotArtifactReference;
+  evidence: ScreenshotArtifactReference;
+  completedAtUtc: string;
   message: string;
 }
 
@@ -3111,17 +3290,35 @@ export interface TaskHostArtifactsContext {
 }
 /** Feature component for host screenshots operations. */
 export interface TaskHostScreenshotsContext {
+  /** Capture and persist a new session frame for getFrame or screenshot comparison. */
+  capture(args?: ScreenshotTakeArguments): Promise<PersistedScreenshotCaptureResult>;
   /**
-   * Capture the current live screen for immediate evidence. Inspect the app-tool result
-   * envelope for capture failure.
+   * Capture and persist the current live screen. The existing app-tool envelope is retained;
+   * payload.result.frameId identifies the saved frame. Prefer capture() for a flat result.
    */
   take<TResult = ScreenshotCaptureResult>(
     args?: ScreenshotTakeArguments,
   ): Promise<AppToolCallResult<TResult>>;
   /** Read a previously persisted screenshot frame after the live moment has passed. */
   getFrame(args?: ScreenshotFrameArguments): Promise<ScreenshotFrameResult>;
-  /** Compare the current screen with a baseline frame and check the comparison result with a named expect. */
+  /** Compare with a saved frame. A mismatch returns passed:false; capture/transport/baseline errors throw. Use a named expect to fail the task. */
   assert(args?: ScreenshotAssertArguments): Promise<ScreenshotAssertResult>;
+  /** Compare retained images locally; save overlay, crops and annotation-ready regions. Mismatch returns passed:false. */
+  compare(args: ScreenshotCompareArguments): Promise<ScreenshotCompareResult>;
+  /** Send actual and optional reference images to the configured AI provider. Save criteria, verdicts and regions. Use a named expect to fail the task. */
+  evaluate(args: ScreenshotEvaluateArguments): Promise<ScreenshotEvaluateResult>;
+}
+export interface PersistedScreenshotCaptureResult extends SessionResultIdentity {
+  /** Capture-time layout; omitted when disabled or unavailable. */
+  geometry?: ScreenshotCaptureGeometry | null;
+  frameId: string;
+  artifactPath: string;
+  format: ScreenshotCaptureFormat;
+  width: number;
+  height: number;
+  capturedAtUtc: string;
+  sha256: string;
+  captureSource: "sdk" | "device";
 }
 /** Feature component for host database operations. */
 export interface TaskHostDatabaseContext {

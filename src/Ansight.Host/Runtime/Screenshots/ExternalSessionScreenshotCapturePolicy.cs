@@ -29,6 +29,7 @@ internal sealed record ExternalSessionScreenshotCapturePolicy(
     public JsonObject ToResponsePayload()
         => new()
         {
+            ["screenshotGeometry"] = true,
             ["sessionJpegCapture"] = new JsonObject
             {
                 ["mode"] = Mode,

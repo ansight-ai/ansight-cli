@@ -7,6 +7,49 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed partial class RepositoryTaskTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ScreenshotComparisonMismatchReturnsDataAndNamedExpectControlsFailure(bool requireMatch)
+    {
+        using var repository = CreateRepository(CreateTraceSingleCallModule());
+        var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
+        File.WriteAllText(task.ModulePath, """
+            export default async function run({ expect, ansight }) {
+              const comparison = await ansight.screenshots.assert({ baselineFrameId: 'baseline' });
+              expect(comparison.passed, { id: 'visual-check' }).toBe(EXPECTED);
+            }
+            """.Replace("EXPECTED", requireMatch ? "true" : "false"));
+        var result = await CreateExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(new JsonObject
+        {
+            ["capability"] = "screenshot.assert", ["passed"] = false, ["differenceRatio"] = 0.5
+        }, true))).ExecuteAsync(new RepositoryTaskExecutionRequest("compare", task, "session", new JsonObject(), "compare")
+        { CaptureTrace = true }, CancellationToken.None);
+
+        Assert.Equal(requireMatch ? RepositoryTaskRunStatus.Failed : RepositoryTaskRunStatus.Passed, result.Status);
+        Assert.Equal("visual-check", Assert.Single(result.Assertions).AssertionId);
+        Assert.False(Assert.Single(result.ToolCalls).IsError);
+    }
+
+    [Fact]
+    public async Task ScreenshotOperationalFailureStillThrows()
+    {
+        using var repository = CreateRepository(CreateTraceSingleCallModule());
+        var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
+        File.WriteAllText(task.ModulePath, """
+            export default async function run({ expect, ansight }) {
+              await ansight.screenshots.assert({ baselineFrameId: 'missing' });
+              expect(true, { id: 'unreachable' }).toBe(true);
+            }
+            """);
+        var result = await CreateExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(
+            new JsonObject { ["message"] = "Baseline is missing." }, true))).ExecuteAsync(
+            new RepositoryTaskExecutionRequest("compare", task, "session", new JsonObject(), "compare"), CancellationToken.None);
+        Assert.Equal(RepositoryTaskRunStatus.Failed, result.Status);
+        Assert.Empty(result.Assertions);
+        Assert.True(Assert.Single(result.ToolCalls).IsError);
+    }
+
     [Fact]
     public async Task Executor_RetainsMatchersAndComparedValuesForPassingSoftAndHardAssertions()
     {

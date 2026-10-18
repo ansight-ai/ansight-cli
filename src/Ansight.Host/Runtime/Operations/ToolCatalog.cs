@@ -58,6 +58,8 @@ internal sealed class ToolCatalog
         services.AttachHostToolRegistry(tools);
     }
 
+    internal void ConfigureScreenshotEvaluator(IScreenshotEvaluator evaluator) => services.ScreenshotEvaluator = evaluator;
+
     internal Task StopNetworkConditioningAsync() => services.NetworkConditioning.StopAsync();
 
     public JsonObject BuildToolsListResult()
@@ -187,6 +189,7 @@ internal sealed class ToolCatalog
             HostOnly(new CallAppToolsTool(services)),
             HostOnly(new ForceDisconnectSessionTool(services)),
             TaskSessionBound(new TakeScreenshotTool(services)),
+            TaskSessionBound(new TakeScreenshotTool(services, flatResult: true)),
             TaskSessionBound(new GetLiveVisualTreeTool(services)),
             TaskSessionBound(new GetLiveNavigationStructureTool(services)),
             TaskSessionBound(new FindLiveUiTool(services)),
@@ -195,6 +198,8 @@ internal sealed class ToolCatalog
             TaskSessionBound(new AssertLiveUiTool(services)),
             TaskSessionBound(new AssertLiveDatabaseTool(services)),
             TaskSessionBound(new AssertLiveScreenshotTool(services)),
+            TaskSessionBound(new ScreenshotInspectionTool(services, evaluate: false)),
+            TaskSessionBound(new ScreenshotInspectionTool(services, evaluate: true)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.Tap)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.TypeText)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.Swipe)),

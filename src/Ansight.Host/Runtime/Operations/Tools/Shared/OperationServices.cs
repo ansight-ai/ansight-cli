@@ -70,6 +70,8 @@ internal sealed class OperationServices
 
     public AudioInjectionRouter AudioInjectionRouter { get; }
 
+    internal IScreenshotEvaluator? ScreenshotEvaluator { get; set; }
+
     public IRuntimeState RuntimeState { get; }
 
     public IApplicationPaths ApplicationPaths { get; }

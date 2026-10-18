@@ -37,6 +37,8 @@ internal interface IOperationDispatcher : IDisposable
 
     Task StopNetworkConditioningAsync() => Task.CompletedTask;
 
+    void ConfigureScreenshotEvaluator(IScreenshotEvaluator evaluator) { }
+
     void ConfigureAudioInjection(Ansight.Host.Audio.AudioInjectionEngine engine);
 
     void ConfigureUiInputDriver(IUiInputDriver? driver);

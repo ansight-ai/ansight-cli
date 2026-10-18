@@ -6,9 +6,11 @@ namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
 internal sealed class AssertLiveScreenshotTool : RemoteAppOperation
 {
+    private readonly TakeScreenshotTool captureScreenshot;
     public AssertLiveScreenshotTool(OperationServices services)
         : base(services)
     {
+        captureScreenshot = new TakeScreenshotTool(services, flatResult: true);
     }
 
     public override string Name => "ansight_assert_screenshot";
@@ -26,6 +28,9 @@ internal sealed class AssertLiveScreenshotTool : RemoteAppOperation
             ["maxDifferenceRatio"] = ToolSchema.Number("Maximum changed-pixel ratio from 0 through 1. Defaults to 0.01.", nullable: true),
             ["pixelThreshold"] = ToolSchema.Integer("Per-channel difference threshold from 0 through 255. Defaults to 16.", nullable: true),
             ["maxWidth"] = ToolSchema.Integer("Capture and comparison width from 64 through 4096. Defaults to 1024.", nullable: true),
+            ["ignoreRegions"] = ScreenshotIgnoreRegions.Schema(),
+            ["ignoreSystemUi"] = ScreenshotSystemUiMasks.Schema(),
+            ["includeSystemUiMetadata"] = ToolSchema.Boolean("Include system-UI metadata with the actual capture. Defaults to true.", nullable: true),
             ["actionId"] = ToolSchema.String("Optional UI action id to correlate this screenshot assertion with.", nullable: true)
         },
         additionalProperties: false).ToJson();
@@ -55,42 +60,30 @@ internal sealed class AssertLiveScreenshotTool : RemoteAppOperation
             return ToolError($"Baseline screenshot frame '{baseline.FrameId}' is not available on disk.");
         }
 
-        var catalogResponse = await appToolBridge.QueryToolsAsync(
-            snapshot.SessionId,
-            CancellationToken.None,
-            new AppToolBridgeRequestContext("host-ui", Name, correlationId));
-        if (!catalogResponse.Success
-            || catalogResponse.Envelope?.Payload is not { } catalog
-            || !RemoteAppToolCatalog.HasTool(catalog, RemoteAppToolIds.UiGetScreenshot))
+        IReadOnlyList<ScreenshotIgnoreRegion> ignoreRegions;
+        IReadOnlyList<string> kinds;
+        bool includeSystemUiMetadata;
+        try
         {
-            return ToolError("The live app does not expose ui.get_screenshot.");
+            ignoreRegions = ScreenshotIgnoreRegions.Read(arguments?["ignoreRegions"]);
+            kinds = ScreenshotSystemUiMasks.Read(arguments?["ignoreSystemUi"]);
+            if (arguments?["includeSystemUiMetadata"] is { } option
+                && (option is not JsonValue value || !value.TryGetValue<bool>(out _)))
+                throw new ArgumentException("includeSystemUiMetadata must be a boolean.");
+            includeSystemUiMetadata = arguments?["includeSystemUiMetadata"]?.GetValue<bool>() ?? true;
+            if (!includeSystemUiMetadata && kinds.Count > 0)
+                throw new ArgumentException("ignoreSystemUi requires includeSystemUiMetadata: true on this assertion.");
         }
-
+        catch (ArgumentException exception) { return ToolError(exception.Message); }
         var maxWidth = Math.Clamp(LiveUiToolSchemas.ReadInteger(arguments, "maxWidth", 1_024), 64, 4_096);
-        var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
-            snapshot.SessionId,
-            RemoteAppToolIds.UiGetScreenshot,
-            new JsonObject
-            {
-                ["format"] = "png",
-                ["maxWidth"] = maxWidth,
-                ["afterScreenUpdates"] = false
-            },
-            after: null,
-            CancellationToken.None,
-            new AppToolBridgeRequestContext("host-ui", Name, correlationId));
-        if (!response.Success
-            || response.Envelope?.Payload is not JsonObject payload
-            || payload["result"] is not JsonObject result)
+        var captured = await captureScreenshot.ExecuteAsync(new JsonObject
         {
-            return ToolError(response.Message);
-        }
-
-        var currentPath = LiveUiNodeQuery.ReadString(result, "artifactPath");
-        if (currentPath is null || !File.Exists(currentPath))
-        {
-            return ToolError("The live screenshot transfer did not produce a host artifact.");
-        }
+            ["sessionId"] = snapshot.SessionId, ["format"] = "png", ["maxWidth"] = maxWidth,
+            ["afterScreenUpdates"] = false, ["includeSystemUiMetadata"] = includeSystemUiMetadata
+        }, correlationId).ConfigureAwait(false);
+        if (captured.IsError || captured.Payload?["isError"]?.GetValue<bool>() == true) return captured;
+        var current = captured.Payload!["structuredContent"]!;
+        var currentPath = current["artifactPath"]!.GetValue<string>();
 
         var pixelThreshold = Math.Clamp(LiveUiToolSchemas.ReadInteger(arguments, "pixelThreshold", 16), 0, 255);
         var maxDifferenceRatio = Math.Clamp(
@@ -98,9 +91,17 @@ internal sealed class AssertLiveScreenshotTool : RemoteAppOperation
             0,
             1);
         ScreenshotDifference difference;
+        ScreenshotSystemUiMaskResolution masks;
         try
         {
-            difference = ScreenshotDifferenceCalculator.Compare(baselinePath, currentPath, maxWidth, pixelThreshold);
+            masks = ScreenshotSystemUiMasks.Resolve(current["geometry"], kinds, ignoreRegions, current["frameId"]?.GetValue<string>());
+            ignoreRegions = masks.Regions;
+            difference = ScreenshotDifferenceCalculator.Compare(baselinePath, currentPath, maxWidth, pixelThreshold,
+                ignoreRegions, ToolExecutionCancellation.Current);
+        }
+        catch (ScreenshotGeometryUnavailableException exception)
+        {
+            return RequestResult.ToolResult(new JsonObject { ["errorCode"] = "screenshot_geometry_unavailable", ["message"] = exception.Message }, isError: true);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -137,10 +138,15 @@ internal sealed class AssertLiveScreenshotTool : RemoteAppOperation
                 ["baselineCapturedAtUtc"] = baseline.CapturedAtUtc,
                 ["baselinePath"] = baselinePath,
                 ["currentPath"] = currentPath,
+                ["currentFrameId"] = current["frameId"]!.DeepClone(),
                 ["width"] = difference.Width,
                 ["height"] = difference.Height,
                 ["differentPixelCount"] = difference.DifferentPixelCount,
                 ["totalPixelCount"] = difference.TotalPixelCount,
+                ["ignoredPixelCount"] = difference.IgnoredPixelCount,
+                ["ignoreRegions"] = ScreenshotIgnoreRegions.Describe(ignoreRegions),
+                ["ignoreSystemUi"] = new JsonArray(kinds.Select(kind => (JsonNode?)JsonValue.Create(kind)).ToArray()),
+                ["systemUiMaskResolutions"] = masks.Resolutions,
                 ["differenceRatio"] = difference.DifferenceRatio,
                 ["meanChannelDifference"] = difference.MeanChannelDifference,
                 ["pixelThreshold"] = pixelThreshold,
@@ -157,7 +163,9 @@ internal static class ScreenshotDifferenceCalculator
         string baselinePath,
         string currentPath,
         int maxWidth,
-        int pixelThreshold)
+        int pixelThreshold,
+        IReadOnlyList<ScreenshotIgnoreRegion>? ignoreRegions = null,
+        CancellationToken token = default)
     {
         using var baselineSource = SKBitmap.Decode(baselinePath)
             ?? throw new InvalidOperationException("The baseline image could not be decoded.");
@@ -166,6 +174,7 @@ internal static class ScreenshotDifferenceCalculator
         var targetWidth = Math.Min(maxWidth, baselineSource.Width);
         var targetHeight = Math.Max(1, (int)Math.Round(
             baselineSource.Height * (targetWidth / (double)baselineSource.Width)));
+        var mask = ScreenshotIgnoreRegions.Rasterize(ignoreRegions ?? [], targetWidth, targetHeight, token);
         using var baseline = Resize(baselineSource, targetWidth, targetHeight);
         using var current = Resize(currentSource, targetWidth, targetHeight);
         var baselinePixels = baseline.Pixels;
@@ -174,6 +183,8 @@ internal static class ScreenshotDifferenceCalculator
         var absoluteChannelDifference = 0L;
         for (var index = 0; index < baselinePixels.Length; index++)
         {
+            if (index % targetWidth == 0) token.ThrowIfCancellationRequested();
+            if (mask.Pixels.Length > 0 && mask.Pixels[index]) continue;
             var left = baselinePixels[index];
             var right = currentPixels[index];
             var red = Math.Abs(left.Red - right.Red);
@@ -187,14 +198,15 @@ internal static class ScreenshotDifferenceCalculator
             }
         }
 
-        var totalPixels = baselinePixels.LongLength;
+        var totalPixels = baselinePixels.LongLength - mask.IgnoredPixelCount;
         return new ScreenshotDifference(
             targetWidth,
             targetHeight,
             differentPixels,
             totalPixels,
             totalPixels == 0 ? 0 : differentPixels / (double)totalPixels,
-            totalPixels == 0 ? 0 : absoluteChannelDifference / (double)(totalPixels * 4));
+            totalPixels == 0 ? 0 : absoluteChannelDifference / (double)(totalPixels * 4),
+            mask.IgnoredPixelCount);
     }
 
     private static SKBitmap Resize(SKBitmap source, int width, int height)
@@ -215,4 +227,5 @@ internal sealed record ScreenshotDifference(
     long DifferentPixelCount,
     long TotalPixelCount,
     double DifferenceRatio,
-    double MeanChannelDifference);
+    double MeanChannelDifference,
+    long IgnoredPixelCount);

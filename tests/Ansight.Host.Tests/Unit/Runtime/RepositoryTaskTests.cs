@@ -932,7 +932,17 @@ public sealed partial class RepositoryTaskTests
                 {
                     ["open"] = "ansight_open_keyboard",
                     ["isOpen"] = "ansight_is_keyboard_open",
-                    ["dismiss"] = "ansight_dismiss_keyboard"
+                    ["dismiss"] = "ansight_dismiss_keyboard",
+                    ["press"] = "ansight_press_keyboard",
+                    ["submit"] = "ansight_submit_keyboard"
+                },
+                ["screenshots"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["take"] = "ansight_take_screenshot",
+                    ["capture"] = "ansight_capture_screenshot",
+                    ["assert"] = "ansight_assert_screenshot",
+                    ["compare"] = "ansight_compare_screenshot",
+                    ["evaluate"] = "ansight_evaluate_screenshot"
                 },
                 ["ui"] = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
