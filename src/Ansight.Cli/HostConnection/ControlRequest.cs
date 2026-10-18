@@ -7,4 +7,6 @@ internal sealed record ControlRequest(
     bool StreamOutput = false,
     IReadOnlyDictionary<string, string>? SecretValues = null,
     string? CallerUserId = null,
-    Ansight.Host.Workspaces.Execution.RunnerAiCredentials? RunnerAiCredentials = null);
+    Ansight.Host.Workspaces.Execution.RunnerAiCredentials? RunnerAiCredentials = null,
+    int? ExpectedProcessId = null,
+    DateTimeOffset? ExpectedProcessStartedUtc = null);

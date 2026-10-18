@@ -14,4 +14,5 @@ internal sealed record CliHostMetadata(
     string? CliVersion = null,
     long? CliBuildNumber = null,
     string? CommitSha = null,
-    string? LogFilePath = null);
+    string? LogFilePath = null,
+    bool SupportsLifecycleControl = false);

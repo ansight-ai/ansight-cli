@@ -15,6 +15,21 @@ internal static class ControlClient
         CancellationToken cancellationToken)
         => await TryRunCoreAsync(arguments, output, cancellationToken, null).ConfigureAwait(false);
 
+    internal static async Task<int?> TryRunHostCommandAsync(CliArguments arguments, CliOutput output,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            return await TryRunCoreAsync(arguments, output, timeout.Token, null, hostCommand: true).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new CliHostUnavailableException("The host did not acknowledge the lifecycle request within 10 seconds. Inspect 'ansight host status' and 'ansight host logs'.");
+        }
+    }
+
     internal static Task<int?> TryRunWithHostLeaseAsync(
         CliArguments arguments,
         CliOutput output,
@@ -26,9 +41,10 @@ internal static class ControlClient
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken,
-        string? callerUserId)
+        string? callerUserId,
+        bool hostCommand = false)
     {
-        if (!ShouldForward(arguments))
+        if (!hostCommand && !ShouldForward(arguments))
         {
             return null;
         }
@@ -39,6 +55,9 @@ internal static class ControlClient
         {
             return null;
         }
+
+        if (hostCommand && !metadata.SupportsLifecycleControl)
+            throw new CliHostUnavailableException("The running host predates graceful lifecycle control. Close it from its foreground console or tray, then start it with the updated CLI.");
 
         if (string.IsNullOrWhiteSpace(metadata.ControlPipeName))
         {
@@ -67,7 +86,9 @@ internal static class ControlClient
             StreamOutput: true,
             SecretValues: secretValues,
             CallerUserId: callerUserId,
-            RunnerAiCredentials: runnerAiCredentials);
+            RunnerAiCredentials: runnerAiCredentials,
+            ExpectedProcessId: hostCommand ? metadata.ProcessId : null,
+            ExpectedProcessStartedUtc: hostCommand ? metadata.ProcessStartedUtc : null);
 
         using var pipe = new NamedPipeClientStream(
             ".",

@@ -1,11 +1,10 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using Ansight.Host;
 
 namespace Ansight.Cli.Commands.Host;
 
-internal static class HostCommands
+internal static partial class HostCommands
 {
     private const string DesktopRestartArgumentsEnvironmentVariable = "ANSIGHT_DESKTOP_RESTART_ARGUMENTS";
 
@@ -74,7 +73,11 @@ internal static class HostCommands
             options.DataDirectory);
         try { servePath = ExplorerServer.NormalizeRequestedPath(servePath); }
         catch (InvalidOperationException exception) { throw new CliUsageException(exception.Message); }
-        using var dataLock = CliDataDirectoryLock.Acquire(options.DataDirectory);
+        if (await ControlClient.TryRunHostCommandAsync(arguments, output, cancellationToken).ConfigureAwait(false) is { } reused)
+            return reused;
+        var start = await AcquireHostLockAsync(arguments, output, options.DataDirectory, cancellationToken).ConfigureAwait(false);
+        using var dataLock = start.DataLock;
+        if (dataLock is null) return start.ExitCode;
         using var hostShutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var access = new CliLocalHostAccess();
         await using var server = noServe ? null : new CliLocalHostServer(servePort, servePath, access,
@@ -94,6 +97,9 @@ internal static class HostCommands
             output.WriteProgress, hostShutdown.Token).ConfigureAwait(false);
         var accessNotifications = new CliHostAccessNotifications(desktopHost);
         var desktopActions = RunDesktopActionsAsync(desktopHost, arguments, output, hostShutdown);
+        await using var controlServer = new ControlServer(null, options.DataDirectory, hostShutdown.Token,
+            authorizer, stopHost: hostShutdown.Cancel, startupArguments: arguments);
+        controlServer.Start();
         if (arguments.HasFlag("open") && server is not null)
         {
             var warning = CliBrowserLauncher.TryOpen(server.Url);
@@ -116,7 +122,7 @@ internal static class HostCommands
                     try
                     {
                         await RunHostGenerationAsync(arguments, output, lease.Token, options, noServe, pairAppId,
-                            requestedCompanionMode, access, server, lease, desktopHost, accessNotifications).ConfigureAwait(false);
+                            requestedCompanionMode, access, server, lease, desktopHost, accessNotifications, controlServer).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (lease.IsDenied) { }
                     failure = lease.Failure;
@@ -131,7 +137,7 @@ internal static class HostCommands
                 if (hostShutdown.IsCancellationRequested) break;
                 access.Block(failure);
                 await CliRuntime.WriteRecoveryMetadataAsync(options.DataDirectory, server?.Url,
-                    CliLogging.CurrentLogFilePath, hostShutdown.Token).ConfigureAwait(false);
+                    CliLogging.CurrentLogFilePath, hostShutdown.Token, controlServer.PipeName).ConfigureAwait(false);
                 await accessNotifications.UpdateAsync(failure, hostShutdown.Token).ConfigureAwait(false);
                 if (lastFailureReason != failure.Reason)
                     output.WriteProgress($"{failure.Message} The host remains available. Explorer: {server?.Url}");
@@ -174,7 +180,8 @@ internal static class HostCommands
     internal static async Task<int> RunHostGenerationAsync(CliArguments arguments, CliOutput output,
         CancellationToken cancellationToken, CliRuntimeOptions options, bool noServe, string? pairAppId,
         CompanionAccessMode? requestedCompanionMode, CliLocalHostAccess access, CliLocalHostServer? server,
-        CliAccessLease lease, CliDesktopHost? desktopHost, CliHostAccessNotifications accessNotifications)
+        CliAccessLease lease, CliDesktopHost? desktopHost, CliHostAccessNotifications accessNotifications,
+        ControlServer controlServer)
     {
         await using var runtime = CliRuntime.CreateHostRuntime(options);
         await using var runnerControl = arguments.HasFlag("runner")
@@ -225,14 +232,10 @@ internal static class HostCommands
             access.Allow(explorerUrl, lease);
             explorerUrl = server?.Url;
 
-            await using var controlServer = new ControlServer(
-                runtime,
-                options.DataDirectory,
-                cancellationToken,
+            controlServer.AttachRuntime(runtime,
                 CliAccessContext.Current?.Authorizer
                 ?? throw new InvalidOperationException("Host startup requires a local runtime lifetime."),
-                lease);
-            controlServer.Start();
+                lease, cancellationToken);
             if (desktopHost is not null)
             {
                 runnerStatusChanged = (_, runnerStatus) =>
@@ -310,6 +313,7 @@ internal static class HostCommands
         }
         finally
         {
+            controlServer.DetachRuntime();
             if (runnerControl is not null) await runnerControl.StopAsync(CancellationToken.None).ConfigureAwait(false);
             if (runnerStatusChanged is not null)
                 runtime.RemoteRunner.StatusChanged -= runnerStatusChanged;
@@ -731,37 +735,31 @@ internal static Task RunResidentRunnerAsync(
         CliOutput output,
         CancellationToken cancellationToken)
     {
+        arguments.EnsurePositionalCount(2, "ansight host stop");
         var options = CliRuntime.ResolveOptions(arguments);
         var metadata = CliRuntime.ReadMetadata(options.DataDirectory);
         if (metadata is null || !CliRuntime.IsHostProcessRunning(metadata))
         {
-            throw new CliHostUnavailableException("Ansight host is not running.");
+            output.Write(new HostStoppedOutput("ansight.host-stop/v1", metadata?.ProcessId ?? 0, true),
+                () => "Ansight host is already stopped.");
+            return CliExitCodes.Success;
         }
 
-        if (OperatingSystem.IsWindows())
-        {
-            throw new PlatformNotSupportedException(
-                "Graceful host stop is not implemented on Windows yet. Send Ctrl+C to the host process.");
-        }
-
-        if (NativeMethods.Kill(metadata.ProcessId, NativeMethods.SigTerm) != 0)
-        {
-            throw new InvalidOperationException(
-                $"Could not send SIGTERM to Ansight host PID {metadata.ProcessId}. errno={Marshal.GetLastPInvokeError()}.");
-        }
+        var code = await ControlClient.TryRunHostCommandAsync(arguments, output, cancellationToken).ConfigureAwait(false);
+        if (code is not null && code != CliExitCodes.Success) return code.Value;
 
         var timeoutAtUtc = DateTimeOffset.UtcNow.AddSeconds(10);
-        while (CliRuntime.IsHostProcessRunning(metadata) && DateTimeOffset.UtcNow < timeoutAtUtc)
+        while (!HasHostStopped(options.DataDirectory, metadata) && DateTimeOffset.UtcNow < timeoutAtUtc)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
         }
 
-        var stopped = !CliRuntime.IsHostProcessRunning(metadata);
+        var stopped = HasHostStopped(options.DataDirectory, metadata);
         output.Write(
             new HostStoppedOutput("ansight.host-stop/v1", metadata.ProcessId, stopped),
             () => stopped
                 ? $"Ansight host PID {metadata.ProcessId} stopped."
-                : $"SIGTERM sent to Ansight host PID {metadata.ProcessId}; it is still shutting down.");
+                : $"Ansight host PID {metadata.ProcessId} is still shutting down after 10 seconds. Inspect 'ansight host logs'.");
         return stopped ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -781,6 +779,8 @@ internal static Task RunResidentRunnerAsync(
 
            Commands:
              run       Start the long-lived SDK, explorer, and CLI control host in the foreground.
+                       Repeated host run calls reuse it; --open and --pair apply to the existing host.
+                       Conflicting startup settings require host stop before restarting.
                        Subsequent CLI commands reuse it through a current-user-only control pipe.
                        Packaged macOS and Windows hosts always show the native Ansight tray icon.
              status    Report whether the resident host is running and show its local explorer link.

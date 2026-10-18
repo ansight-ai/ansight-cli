@@ -98,6 +98,93 @@ public sealed class HostCommandsTests
         }
     }
 
+    [Theory(Timeout = 30000)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepeatedRunReusesHostAndStopCleansUpThroughControlPipe(bool noServe)
+    {
+        using var directory = CreateHostTestDirectory();
+        using var cancellation = new CancellationTokenSource();
+        using var hostOutput = new StringWriter();
+        string[] args = ["host", "run", "--data-dir", directory.Path,
+            "--discovery-port", GetAvailableUdpPort().ToString(),
+            "--websocket-port", GetAvailableTcpPort().ToString(), "--disable-repository-automations",
+            .. noServe ? new[] { "--no-serve" } : new[] { "--serve-port", "0" }];
+        var host = CliApplication.RunParsedAsync(CliArguments.Parse(args),
+            new CliOutput(false, hostOutput, hostOutput), cancellation.Token, allowResidentHostForwarding: false);
+        try
+        {
+            var metadata = await WaitForHostMetadataAsync(directory.Path, host);
+            using var output = new StringWriter();
+            var reused = await CliApplication.RunParsedAsync(CliArguments.Parse(
+                ["host", "run", "--data-dir", directory.Path, "--json"]),
+                new CliOutput(true, output, output), CancellationToken.None, allowResidentHostForwarding: true);
+            Assert.Equal(CliExitCodes.Success, reused);
+            Assert.Equal(metadata.ProcessId, JsonNode.Parse(output.ToString())!["processId"]!.GetValue<int>());
+            Assert.False(host.IsCompleted);
+
+            using var conflictOutput = new StringWriter();
+            var conflict = await CliApplication.RunParsedAsync(CliArguments.Parse(
+                ["host", "run", "--data-dir", directory.Path, "--node-path", "different-node"]),
+                new CliOutput(false, conflictOutput, conflictOutput), CancellationToken.None, allowResidentHostForwarding: true);
+            Assert.Equal(CliExitCodes.Usage, conflict);
+            Assert.Contains("--node-path conflicts", conflictOutput.ToString());
+            Assert.False(host.IsCompleted);
+
+            for (var i = 0; i < 2; i++)
+            {
+                using var stopOutput = new StringWriter();
+                var stopped = await CliApplication.RunParsedAsync(CliArguments.Parse(
+                    ["host", "stop", "--data-dir", directory.Path, "--json"]),
+                    new CliOutput(true, stopOutput, stopOutput), CancellationToken.None, allowResidentHostForwarding: true);
+                Assert.Equal(CliExitCodes.Success, stopped);
+                Assert.True(JsonNode.Parse(stopOutput.ToString())!["isStopped"]!.GetValue<bool>());
+            }
+            Assert.Equal(CliExitCodes.Success, await host.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.Null(CliRuntime.ReadMetadata(directory.Path));
+            using var releasedLock = CliDataDirectoryLock.Acquire(directory.Path);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            await host.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact(Timeout = 20000)]
+    public async Task RecoveryControlPipeRejectsStaleIdentityAndStillAcknowledgesStop()
+    {
+        using var directory = CreateHostTestDirectory();
+        using var shutdown = new CancellationTokenSource();
+        var startup = CliArguments.Parse(["host", "run", "--data-dir", directory.Path, "--no-serve"]);
+        await using var server = new ControlServer(null, directory.Path, shutdown.Token,
+            CliLocalAccessAuthorizer.Instance, stopHost: shutdown.Cancel, startupArguments: startup);
+        server.Start();
+        await CliRuntime.WriteRecoveryMetadataAsync(directory.Path, null, null, CancellationToken.None, server.PipeName);
+        var metadata = CliRuntime.ReadMetadata(directory.Path)!;
+        using (var pipe = new System.IO.Pipes.NamedPipeClientStream(".", server.PipeName,
+                   System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous))
+        {
+            await pipe.ConnectAsync(3000);
+            await using var writer = new StreamWriter(pipe, leaveOpen: true);
+            using var reader = new StreamReader(pipe, leaveOpen: true);
+            var request = new ControlRequest(ControlProtocol.RequestSchema,
+                ["host", "stop", "--data-dir", directory.Path], SecretValue: null,
+                ExpectedProcessId: Environment.ProcessId,
+                ExpectedProcessStartedUtc: metadata.ProcessStartedUtc!.Value.AddMinutes(-1));
+            await writer.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(request, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+            await writer.FlushAsync();
+            var response = JsonNode.Parse((await reader.ReadLineAsync())!)!;
+            Assert.NotEqual(CliExitCodes.Success, response["exitCode"]!.GetValue<int>());
+            Assert.False(shutdown.IsCancellationRequested);
+        }
+        using var output = new StringWriter();
+        var stop = await ControlClient.TryRunHostCommandAsync(CliArguments.Parse(
+            ["host", "stop", "--data-dir", directory.Path]), new CliOutput(false, output, output), CancellationToken.None);
+        Assert.Equal(CliExitCodes.Success, stop);
+        await WaitUntilAsync(() => shutdown.IsCancellationRequested);
+    }
+
     [Theory]
     [InlineData("stop", "Stop")]
     [InlineData("restart", "Restart")]

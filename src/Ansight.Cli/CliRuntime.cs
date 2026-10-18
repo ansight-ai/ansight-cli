@@ -108,7 +108,8 @@ internal static class CliRuntime
             identity.Version,
             identity.BuildNumber,
             identity.CommitSha,
-            logFilePath);
+            logFilePath,
+            SupportsLifecycleControl: true);
         var path = ResolveMetadataPath(dataDirectory);
         var temporaryPath = path + ".tmp";
         await File.WriteAllTextAsync(
@@ -121,12 +122,13 @@ internal static class CliRuntime
     }
 
     public static async Task WriteRecoveryMetadataAsync(string dataDirectory, Uri? explorerUrl,
-        string? logFilePath, CancellationToken cancellationToken)
+        string? logFilePath, CancellationToken cancellationToken, string? controlPipeName = null)
     {
         var identity = CliReleaseIdentity.Current;
         var metadata = new CliHostMetadata(Environment.ProcessId, GetCurrentProcessStartUtc(), true,
-            null, dataDirectory, DateTimeOffset.UtcNow, explorerUrl?.ToString(), null,
-            identity.Version, identity.BuildNumber, identity.CommitSha, logFilePath);
+            controlPipeName, dataDirectory, DateTimeOffset.UtcNow, explorerUrl?.ToString(), null,
+            identity.Version, identity.BuildNumber, identity.CommitSha, logFilePath,
+            SupportsLifecycleControl: controlPipeName is not null);
         var path = ResolveMetadataPath(dataDirectory);
         var temporaryPath = path + ".tmp";
         await File.WriteAllTextAsync(temporaryPath,

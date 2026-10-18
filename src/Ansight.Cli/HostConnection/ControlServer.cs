@@ -14,28 +14,50 @@ internal sealed class ControlServer : IAsyncDisposable
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly CancellationTokenSource shutdown;
-    private readonly RuntimeCoordinator runtime;
+    private RuntimeGeneration? generation;
     private readonly string dataDirectory;
-    private readonly ICliAccessAuthorizer accessAuthorizer;
-    private readonly CliAccessLease? accessLease;
+    private readonly Action? stopHost;
+    private readonly CliArguments? startupArguments;
+    private readonly List<CancellationTokenSource> generationLifetimes = [];
     private Task? serverTask;
 
     public ControlServer(
-        RuntimeCoordinator runtime,
+        RuntimeCoordinator? runtime,
         string dataDirectory,
         CancellationToken shutdownToken,
         ICliAccessAuthorizer accessAuthorizer,
-        CliAccessLease? accessLease = null)
+        CliAccessLease? accessLease = null,
+        Action? stopHost = null,
+        CliArguments? startupArguments = null)
     {
-        this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         this.dataDirectory = Path.GetFullPath(dataDirectory);
-        this.accessAuthorizer = accessAuthorizer ?? throw new ArgumentNullException(nameof(accessAuthorizer));
-        this.accessLease = accessLease;
+        ArgumentNullException.ThrowIfNull(accessAuthorizer);
+        if (runtime is not null) AttachGeneration(runtime, accessAuthorizer, accessLease, shutdownToken);
+        this.stopHost = stopHost;
+        this.startupArguments = startupArguments;
         PipeName = CreatePipeName(this.dataDirectory);
         shutdown = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
     }
 
     public string PipeName { get; }
+
+    public void AttachRuntime(RuntimeCoordinator runtime, ICliAccessAuthorizer authorizer,
+        CliAccessLease lease, CancellationToken cancellationToken)
+        => AttachGeneration(runtime, authorizer, lease, cancellationToken);
+
+    private void AttachGeneration(RuntimeCoordinator runtime, ICliAccessAuthorizer authorizer,
+        CliAccessLease? lease, CancellationToken cancellationToken)
+    {
+        var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // Keep cancelled token sources until server disposal so in-flight requests can link safely.
+        generationLifetimes.Add(lifetime);
+        Volatile.Write(ref generation, new(runtime, authorizer, lease, lifetime));
+    }
+
+    public void DetachRuntime() => Interlocked.Exchange(ref generation, null)?.Lifetime.Cancel();
+
+    private sealed record RuntimeGeneration(RuntimeCoordinator Runtime, ICliAccessAuthorizer Authorizer,
+        CliAccessLease? Lease, CancellationTokenSource Lifetime);
 
     public void Start()
     {
@@ -50,6 +72,7 @@ internal sealed class ControlServer : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         shutdown.Cancel();
+        DetachRuntime();
         if (serverTask is not null)
         {
             try
@@ -62,6 +85,7 @@ internal sealed class ControlServer : IAsyncDisposable
         }
 
         shutdown.Dispose();
+        foreach (var lifetime in generationLifetimes) lifetime.Dispose();
     }
 
     private async Task RunServerAsync(CancellationToken cancellationToken)
@@ -127,6 +151,11 @@ internal sealed class ControlServer : IAsyncDisposable
             catch (Exception exception) when (exception is IOException or OperationCanceledException)
             {
             }
+            finally
+            {
+                // The caller must receive the acknowledgement before cancellation closes its pipe.
+                if (response.StopHostAfterReply) stopHost?.Invoke();
+            }
         }
     }
 
@@ -158,6 +187,52 @@ internal sealed class ControlServer : IAsyncDisposable
             throw new InvalidDataException("The CLI control request has an unsupported schema or argument shape.");
         }
 
+        var parsedArguments = CliArguments.Parse(request.Arguments);
+        if (parsedArguments.Positionals.Count >= 2 && parsedArguments.Positionals[0].Equals("host", StringComparison.OrdinalIgnoreCase)
+            && parsedArguments.Positionals[1].ToLowerInvariant() is "run" or "stop" or "status")
+        {
+            if (request.Schema != ControlProtocol.RequestSchema || stopHost is null
+                || request.ExpectedProcessId != Environment.ProcessId
+                || request.ExpectedProcessStartedUtc is null
+                || (new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime())
+                    - request.ExpectedProcessStartedUtc.Value).Duration() >= TimeSpan.FromSeconds(2)
+                || !string.Equals(Path.GetFullPath(CliRuntime.ResolveOptions(parsedArguments).DataDirectory),
+                    dataDirectory, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                throw new InvalidDataException("The host identity or data directory changed. Inspect 'ansight host status' before retrying.");
+            using var stdout = new StringWriter(CultureInfo.InvariantCulture);
+            using var stderr = new StringWriter(CultureInfo.InvariantCulture);
+            var output = new CliOutput(parsedArguments.IsJson, stdout, stderr, parsedArguments.IsSilent);
+            if (parsedArguments.Positionals[1].Equals("stop", StringComparison.OrdinalIgnoreCase))
+            {
+                parsedArguments.EnsurePositionalCount(2, "ansight host stop");
+                return new ControlResponse(ControlProtocol.ResponseSchema, CliExitCodes.Success, "", "")
+                    { StopHostAfterReply = true };
+            }
+            int code;
+            try
+            {
+                code = parsedArguments.Positionals[1].Equals("status", StringComparison.OrdinalIgnoreCase)
+                    ? HostCommands.ShowStatus(parsedArguments, output)
+                    : HostCommands.ReuseHost(parsedArguments, startupArguments!,
+                        Volatile.Read(ref generation)?.Runtime, output);
+            }
+            catch (CliUsageException exception)
+            {
+                code = CliExitCodes.Usage;
+                output.WriteError("usage", exception.Message, code);
+            }
+            catch (CliHostUnavailableException exception)
+            {
+                code = CliExitCodes.HostUnavailable;
+                output.WriteError("host_unavailable", exception.Message, code);
+            }
+            return new ControlResponse(ControlProtocol.ResponseSchema, code, stdout.ToString(), stderr.ToString());
+        }
+
+        var active = Volatile.Read(ref generation)
+            ?? throw new CliHostUnavailableException("The host runtime is recovering. Retry shortly; 'ansight host stop' remains available.");
+        using var requestLifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, active.Lifetime.Token);
+        cancellationToken = requestLifetime.Token;
         try
         {
             using var commandCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -165,9 +240,9 @@ internal sealed class ControlServer : IAsyncDisposable
             if (AppInteractionCommand.IsMatch(arguments))
             {
                 return await InteractionServer.RunAsync(arguments, reader, responseWriter,
-                    runtime.CreateAppInteractionContext, accessAuthorizer, cancellationToken, accessLease).ConfigureAwait(false);
+                    active.Runtime.CreateAppInteractionContext, active.Authorizer, cancellationToken, active.Lease).ConfigureAwait(false);
             }
-            var executionTask = ExecuteRequestAsync(request, responseWriter, commandCancellation.Token);
+            var executionTask = ExecuteRequestAsync(request, responseWriter, active, commandCancellation.Token);
             var disconnectTask = WaitForDisconnectAsync(reader,
                 ControlProtocol.SupportsCooperativeCancellation(arguments), commandCancellation.Token);
             if (await Task.WhenAny(executionTask, disconnectTask).ConfigureAwait(false) == disconnectTask)
@@ -202,6 +277,7 @@ internal sealed class ControlServer : IAsyncDisposable
     private async Task<ControlResponse> ExecuteRequestAsync(
         ControlRequest request,
         TextWriter responseWriter,
+        RuntimeGeneration active,
         CancellationToken cancellationToken)
     {
         if (request.StreamOutput)
@@ -213,6 +289,7 @@ internal sealed class ControlServer : IAsyncDisposable
                 request,
                 streamedStandardOutput,
                 streamedStandardError,
+                active,
                 cancellationToken).ConfigureAwait(false);
             return new ControlResponse(
                 ResponseSchemaFor(request),
@@ -227,6 +304,7 @@ internal sealed class ControlServer : IAsyncDisposable
             request,
             standardOutput,
             standardError,
+            active,
             cancellationToken).ConfigureAwait(false);
         return new ControlResponse(
             ResponseSchemaFor(request),
@@ -239,8 +317,12 @@ internal sealed class ControlServer : IAsyncDisposable
         ControlRequest request,
         TextWriter standardOutput,
         TextWriter standardError,
+        RuntimeGeneration active,
         CancellationToken cancellationToken)
     {
+        var runtime = active.Runtime;
+        var accessAuthorizer = active.Authorizer;
+        var accessLease = active.Lease;
         var arguments = CliArguments.Parse(request.Arguments);
         var output = new CliOutput(
             arguments.IsJson,
