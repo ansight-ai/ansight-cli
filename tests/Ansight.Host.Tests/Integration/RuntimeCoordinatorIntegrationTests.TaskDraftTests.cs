@@ -23,6 +23,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await OpenClientSessionAsync(socket);
         await using var catalog = new TaskDraftCatalogResponder(socket, sessionId!);
         await TestWait.UntilAsync(() => runtime.Sessions.TryGetSnapshot(sessionId!, out var snapshot) && snapshot?.AppToolCatalog is not null);
+        await SendJsonAsync(socket, JsonSerializer.SerializeToNode(new DeviceAppProfile
+        {
+            Device = new DeviceProfile { OsName = "iOS", IsEmulator = false },
+            App = new DeviceApplicationProfile { AppId = appId, AppName = "Draft Cancellation App" }
+        }, protocolJson)!.AsObject());
+        await TestWait.UntilAsync(() => runtime.Sessions.TryGetSnapshot(sessionId!, out var snapshot)
+            && snapshot?.DeviceProfile is not null,
+            because: "The SDK profile must establish app-managed screenshot capture before running a task.");
 
         var extractionId = Guid.NewGuid().ToString("N");
         var draftRoot = Path.Combine(environment.RootPath, "task-extraction-drafts", extractionId);
@@ -56,6 +64,8 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         using var started = await client.PostAsJsonAsync(route + "/test", new { sessionId, input = new { wait = true } });
         Assert.Equal(HttpStatusCode.Accepted, started.StatusCode);
+        var startedState = await started.Content.ReadFromJsonAsync<LocalTaskExtractionSnapshot>();
+        Assert.True(startedState!.TestStatus == "running", startedState.TestMessage);
         using var busyClear = await client.PostAsJsonAsync(route + "/clear-test", new { });
         Assert.Equal(HttpStatusCode.BadRequest, busyClear.StatusCode);
         await Task.Delay(250);

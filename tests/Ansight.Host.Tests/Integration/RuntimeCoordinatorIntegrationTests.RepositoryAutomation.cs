@@ -236,11 +236,15 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             because: "The newly paired app should appear as a connected tool session.");
 
         await OpenClientSessionAsync(socket);
-        await SendRepositoryAutomationEventAsync(socket, "automation-event-denied");
-
+        // Answer startup evidence capture before testing the automation's own discovery.
         var catalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, catalogRequest["type"]?.GetValue<string>());
         await SendCatalogResponseAsync(socket, catalogRequest, sessionId!, policy: "critical");
+
+        await SendRepositoryAutomationEventAsync(socket, "automation-event-denied");
+        var automationCatalogRequest = await ReceiveJsonAsync(socket);
+        Assert.Equal(ToolProtocolMessageTypes.QueryType, automationCatalogRequest["type"]?.GetValue<string>());
+        await SendCatalogResponseAsync(socket, automationCatalogRequest, sessionId!, policy: "critical");
 
         var run = await completedRun.Task.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(AutomationRunStatus.Rejected, run.Status);
