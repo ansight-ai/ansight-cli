@@ -19,7 +19,8 @@ public enum UiAutomationOperation
     KeyboardIsOpen,
     KeyboardDismiss,
     KeyboardPress,
-    KeyboardSubmit
+    KeyboardSubmit,
+    PlayPen
 }
 
 public sealed record UiAutomationResult(
@@ -85,7 +86,7 @@ public sealed class UiAutomationService
         var structuredContent = result.Payload?["structuredContent"] as JsonObject;
         var payload = structuredContent?.DeepClone().AsObject() ?? new JsonObject();
         var message = ReadMessage(payload, toolFailed);
-        if (!fullDetail)
+        if (!fullDetail && operation != UiAutomationOperation.PlayPen)
         {
             payload = operation == UiAutomationOperation.Snapshot
                 ? VisualTreeObservation.Build(payload, projectionOptions)
@@ -107,6 +108,7 @@ public sealed class UiAutomationService
             UiAutomationOperation.Tap => "ansight_tap_ui",
             UiAutomationOperation.Type => "ansight_type_text",
             UiAutomationOperation.Swipe => "ansight_swipe_ui",
+            UiAutomationOperation.PlayPen => "ansight_stylus_ui",
             UiAutomationOperation.Pinch => "ansight_pinch_ui",
             UiAutomationOperation.Back => "ansight_back_ui",
             UiAutomationOperation.Wait => "ansight_wait_for_ui",

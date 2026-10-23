@@ -27,7 +27,7 @@ internal static class TouchReviewGeometry
             "moved" => "move",
             "released" => "up",
             "cancelled" or "canceled" => "cancel",
-            "down" or "move" or "up" or "cancel" => action.Trim().ToLowerInvariant(),
+            "down" or "move" or "up" or "cancel" or "hoverenter" or "hovermove" or "hoverexit" => action.Trim().ToLowerInvariant(),
             _ => "unknown"
         };
     }

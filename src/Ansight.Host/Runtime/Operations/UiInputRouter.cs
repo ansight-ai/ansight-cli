@@ -72,6 +72,11 @@ internal sealed class UiInputRouter
         }
     }
 
+    internal Task<UiInputResult> StylusAsync(UiStylusRequest request, CancellationToken cancellationToken)
+        => GetDriver() is IStylusInputDriver stylus
+            ? RecordInputAsync(request.SessionId, "stylus", () => stylus.StylusAsync(request, cancellationToken))
+            : Task.FromResult(UiInputResult.Failure("This input backend does not support stylus HID sequences."));
+
     public UiInputAvailability GetAvailability(string deviceIdentifier)
     {
         var current = GetDriver();

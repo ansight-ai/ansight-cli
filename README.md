@@ -64,6 +64,8 @@ The replay player can also generate Maestro and Appium tests with AI from
 recorded actions, UI evidence, annotations, and screenshots. See
 [AI script extraction](docs/ai-script-extraction.md) for review steps and CLI usage.
 
+For repeatable Apple Pencil tests on iOS Simulator, see [pen-file playback from the CLI and TypeScript tasks](https://www.ansight.ai/docs/workspace/pen-input) and the [consumer integration guides for Swift, MAUI, Flutter, React Native and Capacitor](https://www.ansight.ai/docs/sdk/pencil). SDK-assisted playback uses a separately installed Pencil package and builder opt-in; recording is configured independently.
+
 [Website](https://www.ansight.ai) · [Documentation](https://www.ansight.ai/docs) ·
 [Getting started](https://www.ansight.ai/docs/getting-started) ·
 [Capture modes](https://www.ansight.ai/docs/capture-modes)

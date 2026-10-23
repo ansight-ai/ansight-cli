@@ -494,6 +494,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         RequestResult result;
         using var cancellationScope = ToolExecutionCancellation.Push(cancellationToken);
         using var fixtureScope = AudioFixtureScope.Push(request.Task.RepositoryRootPath);
+        using var penScope = PenInputScope.Push(request.Task.RepositoryRootPath);
         using var screenshotWorkspace = ScreenshotWorkspaceScope.Push(request.Task.RepositoryRootPath);
         try
         {

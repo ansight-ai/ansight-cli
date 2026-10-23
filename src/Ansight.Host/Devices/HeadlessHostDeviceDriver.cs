@@ -13,6 +13,7 @@ public sealed partial class HeadlessHostDeviceDriver :
     IDeviceLifecycleDriver,
     IUiAccessibilityDriver,
     IUiInputDriver,
+    IStylusInputDriver,
     IUiInputPreflightDriver,
     IDisposable
 {

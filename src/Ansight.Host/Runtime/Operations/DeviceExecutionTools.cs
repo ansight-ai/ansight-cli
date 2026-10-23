@@ -7,7 +7,7 @@ internal static class DeviceExecutionTools
         "ansight_take_screenshot" or "ansight_capture_screenshot" or "ansight_get_live_visual_tree" or
         "ansight_find_ui" or "ansight_scan_screen" or "ansight_wait_for_ui" or "ansight_assert_ui" or
         "ansight_tap_ui" or "ansight_type_text" or "ansight_swipe_ui" or "ansight_scroll_ui" or
-        "ansight_pinch_ui" or "ansight_back_ui" or "ansight_run_ui_sequence" or
+        "ansight_stylus_ui" or "ansight_pinch_ui" or "ansight_back_ui" or "ansight_run_ui_sequence" or
         "ansight_press_keyboard" or "ansight_open_keyboard" or "ansight_dismiss_keyboard" or "ansight_is_keyboard_open" or
         "ansight_list_host_devices" or "ansight_start_device" or "ansight_launch_app" or
         "ansight_foreground_app" or "ansight_background_app" or "ansight_terminate_app" or

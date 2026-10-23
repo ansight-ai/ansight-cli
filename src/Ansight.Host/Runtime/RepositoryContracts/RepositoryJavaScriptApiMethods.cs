@@ -113,6 +113,7 @@ internal static class RepositoryJavaScriptApiMethods
                 new StandardApiMethod("tap", "ansight_tap_ui"),
                 new StandardApiMethod("typeText", "ansight_type_text"),
                 new StandardApiMethod("swipe", "ansight_swipe_ui"),
+                new StandardApiMethod("playPen", "ansight_stylus_ui"),
                 new StandardApiMethod("scroll", "ansight_scroll_ui"),
                 new StandardApiMethod("pinch", "ansight_pinch_ui"),
                 new StandardApiMethod("back", "ansight_back_ui"),

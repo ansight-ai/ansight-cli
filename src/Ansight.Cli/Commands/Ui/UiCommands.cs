@@ -116,12 +116,13 @@ internal static class UiCommands
             "tap" => UiAutomationOperation.Tap,
             "type" => UiAutomationOperation.Type,
             "swipe" => UiAutomationOperation.Swipe,
+            "play-pen" => UiAutomationOperation.PlayPen,
             "pinch" => UiAutomationOperation.Pinch,
             "back" => UiAutomationOperation.Back,
             "wait" => UiAutomationOperation.Wait,
             "assert" => UiAutomationOperation.Assert,
             _ => throw new CliUsageException(
-                $"Unknown ui action '{action}'. Expected snapshot, find, tap, type, swipe, pinch, back, wait, or assert.")
+                $"Unknown ui action '{action}'. Expected snapshot, find, tap, type, swipe, play-pen, pinch, back, wait, or assert.")
         };
 
     private static JsonObject BuildOperationArguments(
@@ -134,13 +135,22 @@ internal static class UiCommands
         AddOptionalString(result, "detail", arguments.GetOption("detail")?.ToLowerInvariant());
 
         if (operation != UiAutomationOperation.Snapshot
-            && operation != UiAutomationOperation.Back)
+            && operation != UiAutomationOperation.Back
+            && operation != UiAutomationOperation.PlayPen)
         {
             AddSelector(result, arguments);
         }
 
         switch (operation)
         {
+            case UiAutomationOperation.PlayPen:
+                var file = arguments.GetOption("file");
+                if (string.IsNullOrWhiteSpace(file)) throw new CliUsageException("play-pen requires --file <path.pen.json>.");
+                result["file"] = Path.GetFullPath(file);
+                AddOptionalString(result, "mode", arguments.GetOption("mode"));
+                AddOptionalString(result, "target", arguments.GetOption("target"));
+                AddOptionalString(result, "hoverRecognizer", arguments.GetOption("hover-recognizer"));
+                break;
             case UiAutomationOperation.Snapshot:
                 AddOptionalInteger(result, "maxNodes", arguments, "max-nodes", 1, 2_000);
                 AddOptionalInteger(result, "maxDepth", arguments, "max-depth", 1, 64);
@@ -334,7 +344,7 @@ internal static class UiCommands
     {
         var flags = CommonFlagOptions.ToList();
         var values = CommonValueOptions.ToList();
-        if (operation is not UiAutomationOperation.Snapshot and not UiAutomationOperation.Back)
+        if (operation is not UiAutomationOperation.Snapshot and not UiAutomationOperation.Back and not UiAutomationOperation.PlayPen)
         {
             flags.AddRange(SelectorFlagOptions);
             values.AddRange(SelectorValueOptions);
@@ -342,6 +352,9 @@ internal static class UiCommands
 
         switch (operation)
         {
+            case UiAutomationOperation.PlayPen:
+                values.AddRange(["file", "mode", "target", "hover-recognizer"]);
+                break;
             case UiAutomationOperation.Snapshot:
                 values.AddRange(["max-nodes", "max-depth", "include-properties", "include-bounds"]);
                 break;
@@ -420,7 +433,7 @@ internal static class UiCommands
         UiAutomationOperation operation,
         CliArguments arguments)
     {
-        if (operation is UiAutomationOperation.Snapshot or UiAutomationOperation.Back)
+        if (operation is UiAutomationOperation.Snapshot or UiAutomationOperation.Back or UiAutomationOperation.PlayPen)
         {
             return;
         }
@@ -579,6 +592,7 @@ internal static class UiCommands
              ansight ui tap [selector options] [--session <id>|--app <id>]
              ansight ui type [selector options] (--value <text>|--secret <alias>) [--append]
              ansight ui swipe [selector options] [--direction <up|down|left|right>] [options]
+             ansight ui play-pen --file <path.pen.json> [--mode hid|hid+sdk|sdk] [--target <id>] [--hover-recognizer <name>] [--session <id>|--app <id>]
              ansight ui pinch [selector options] --scale <0.1-4> [options]
              ansight ui back [--session <id>|--app <id>]
              ansight ui wait [selector options] [--condition <visible|hidden|stable>] [options]
@@ -605,6 +619,12 @@ internal static class UiCommands
              --expected-value <value>         Assert selected element value
              --expected-visible <true|false>  Assert selected element visibility
              --expected-enabled <true|false>  Assert selected element enabled state
+
+           Pen playback:
+             --file <path.pen.json>           Local ansight.pen-input/v1 JSON; blocks until complete
+                                             iOS Simulator: hid, hid+sdk or sdk framework mode.
+                                             Inspect captured SDK fields
+                                             to verify runtime pressure/angle/hover fidelity.
 
            Gesture options:
              --direction <direction>          Swipe direction; defaults to up

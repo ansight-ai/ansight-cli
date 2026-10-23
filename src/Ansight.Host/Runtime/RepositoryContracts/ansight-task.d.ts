@@ -2195,6 +2195,8 @@ export interface TouchRecord {
 }
 /** Platform-specific metadata captured for one touch sample. Null fields were not reported. */
 export interface TouchSampleDetails {
+  /** Present for SDK-assisted simulated input; absent for normal device capture. */
+  inputSource?: "simulator-hid+sdk" | "simulator-sdk-hover" | "simulator-sdk-framework" | null;
   /** Input tool, such as `stylus` or `finger`. */
   tool: string | null;
   /** Sample kind, such as a coalesced or predicted stylus sample. */
@@ -3080,8 +3082,58 @@ export interface TaskSessionContext {
    */
   getTimeline(args?: SessionTimelineArguments): Promise<SessionTimelineResult>;
 }
+/** One timed pen sample. Coordinates/pressure/distance are normalized to 0..1. */
+export interface PenInputSample {
+  /** Strictly increasing offset from playback start, 0..30000 ms. */
+  offsetMs: number;
+  phase: "down" | "move" | "up" | "cancel" | "hoverEnter" | "hoverMove" | "hoverExit";
+  x: number;
+  y: number;
+  pressure?: number;
+  /** UIKit altitude, 0..pi/2; default pi/2 (upright). */
+  altitudeRadians?: number;
+  azimuthRadians?: number;
+  rollRadians?: number;
+  distance?: number;
+}
+/** Portable UTF-8 JSON pen recording, at most 1 MiB, 2000 samples and 30 seconds. */
+export interface PenInputFile {
+  schema: "ansight.pen-input/v1";
+  description?: string;
+  samples: PenInputSample[];
+}
+export type PlayPenArguments = (
+  | { mode?: "hid"; target?: never; hoverRecognizer?: never }
+  | { mode: "hid+sdk"; target: string; hoverRecognizer?: string }
+  | { mode: "sdk"; target: string; hoverRecognizer?: never }
+) & (
+  | { file: string; samples?: never }
+  | { samples: PenInputSample[]; file?: never });
+export interface PlayPenResult {
+  mode: "hid" | "hid+sdk" | "sdk";
+  fidelityWarning: string;
+  sessionId: string;
+  performed: boolean;
+  sampleCount: number;
+  inputBackend: string;
+  message: string;
+}
 /** Feature component for host UI operations. */
 export interface TaskHostUiContext {
+  /**
+   * Play a complete pen file on iOS Simulator, awaiting completion. File paths are
+   * relative to the task repository root (symlinks must stay inside it). The task session is
+   * pinned. Delivery does not guarantee runtime pressure/tilt/roll/hover fidelity; verify
+   * SDK-captured touches. Use mode "hid+sdk" to simulate app-visible pressure, tilt, roll
+   * and hover via the optional Simulator Pencil package. Hybrid playback requires a unique
+   * native target accessibility identifier and an explicitly named recognizer for hover.
+   * Use mode "sdk" for an explicitly bound Flutter, React Native or Capacitor surface;
+   * it delivers framework events without HID or UIKit hooks and requires a connected SDK session.
+   * Recording is optional and is never enabled as a playback side effect.
+   * These captures identify their simulation source.
+   * Cancellation releases contact and proximity.
+   */
+  playPen(args: PlayPenArguments): Promise<PlayPenResult>;
   /**
    * Find nodes in the current visual tree. Prefer a stable automationId; inspect matchCount and
    * matches before choosing a node.

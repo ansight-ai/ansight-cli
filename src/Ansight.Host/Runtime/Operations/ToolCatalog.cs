@@ -212,6 +212,7 @@ internal sealed class ToolCatalog
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.KeyboardPress)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.KeyboardSubmit)),
             TaskSessionBound(new LiveUiSequenceTool(services)),
+            TaskSessionBound(new LiveStylusTool(services)),
             HostOnly(new PushFileToAppTool(services)),
             HostOnly(new ListFocusedControlsTool(services)),
             HostOnly(new GetFocusedControlTool(services)),

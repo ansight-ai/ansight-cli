@@ -24,6 +24,7 @@ public sealed class SessionTouchSampleDetails
 {
     public string? Tool { get; init; }
     public string? SampleKind { get; init; }
+    public string? InputSource { get; init; }
     public double? Force { get; init; }
     public double? MaximumPossibleForce { get; init; }
     public double? AltitudeRadians { get; init; }

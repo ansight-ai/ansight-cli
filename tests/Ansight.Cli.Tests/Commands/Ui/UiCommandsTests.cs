@@ -5,6 +5,41 @@ namespace Ansight.Cli.Tests.Commands.Ui;
 
 public sealed class UiCommandsTests
 {
+    [Fact]
+    public async Task FrameworkPenPlaybackPassesSurfaceWithoutNativeRecognizer()
+    {
+        var result = await UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "play-pen", "--file", "demo.pen.json", "--mode", "sdk", "--target", "canvas", "--session", "pen-session"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null), (operation, input, _) =>
+            {
+                Assert.Equal(UiAutomationOperation.PlayPen, operation);
+                Assert.Equal("sdk", input["mode"]!.GetValue<string>());
+                Assert.Equal("canvas", input["target"]!.GetValue<string>());
+                Assert.Null(input["hoverRecognizer"]);
+                return Task.FromResult(Success(operation));
+            }, CancellationToken.None);
+        Assert.Equal(CliExitCodes.Success, result);
+    }
+
+    [Fact]
+    public async Task PlayPenResolvesFileAgainstClientWorkingDirectoryAndPassesMode()
+    {
+        var result = await UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "play-pen", "--file", "fixtures/demo.pen.json", "--mode", "hid+sdk", "--target", "canvas", "--hover-recognizer", "hover", "--session", "pen-session"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null),
+            (operation, input, _) =>
+            {
+                Assert.Equal(UiAutomationOperation.PlayPen, operation);
+                Assert.Equal(Path.GetFullPath("fixtures/demo.pen.json"), input["file"]!.GetValue<string>());
+                Assert.Equal("hid+sdk", input["mode"]!.GetValue<string>());
+                Assert.Equal("canvas", input["target"]!.GetValue<string>());
+                Assert.Equal("hover", input["hoverRecognizer"]!.GetValue<string>());
+                Assert.Equal("pen-session", input["sessionId"]!.GetValue<string>());
+                return Task.FromResult(Success(operation));
+            }, CancellationToken.None);
+        Assert.Equal(CliExitCodes.Success, result);
+    }
+
     [Theory]
     [InlineData("--secret", "login.password")]
     [InlineData("--value", "@secret:login.password")]

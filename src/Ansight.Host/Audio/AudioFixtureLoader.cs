@@ -25,32 +25,8 @@ internal static class AudioFixtureLoader
 
     internal static string ResolvePath(string file, string? repositoryRoot)
     {
-        if (string.IsNullOrWhiteSpace(file) || file.Contains('\0')) throw Invalid("Provide an audio file path.");
-        if (Uri.TryCreate(file, UriKind.Absolute, out var uri) && !uri.IsFile)
-            throw Invalid("Audio must be a local file, not a URL.");
-        if (repositoryRoot is null) return Path.GetFullPath(file);
-        if (Path.IsPathRooted(file)) throw Invalid("Task audio paths must be relative to the task repository root.");
-        var root = Path.TrimEndingDirectorySeparator(ResolveLinks(Path.GetFullPath(repositoryRoot)));
-        var candidate = ResolveLinks(Path.GetFullPath(file, repositoryRoot));
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!candidate.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, comparison))
-            throw Invalid("Task audio files must remain inside the task repository, including symbolic link targets.");
-        return candidate;
-    }
-
-    private static string ResolveLinks(string path)
-    {
-        var root = Path.GetPathRoot(path)!;
-        var current = root;
-        foreach (var segment in path[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = Path.Combine(current, segment);
-            FileSystemInfo entry = Directory.Exists(current) ? new DirectoryInfo(current) : new FileInfo(current);
-            if (entry.LinkTarget is not null)
-                current = entry.ResolveLinkTarget(returnFinalTarget: true)?.FullName
-                          ?? throw Invalid("Could not resolve the audio file's symbolic link.");
-        }
-        return Path.GetFullPath(current);
+        try { return WorkspaceFixturePath.Resolve(file, repositoryRoot); }
+        catch (ArgumentException exception) { throw Invalid(exception.Message); }
     }
 
     internal static AudioFixture Parse(byte[] bytes, string snapshotPath)

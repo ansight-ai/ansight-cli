@@ -109,6 +109,7 @@ internal sealed class ReplayBackend(
             var sample = new JsonObject { ["timeMs"] = Time(Text(touch, "capturedAtUtc")) };
             foreach (var field in new[] { "id", "action", "pointerId", "pointerIndex", "x", "y", "normalizedX", "normalizedY", "surfaceWidth", "surfaceHeight", "coordinateUnit" })
                 sample[field] = Copy(touch![field]);
+            sample["details"] = Copy(touch?["details"]);
             sample["tool"] = Copy(touch?["details"]?["tool"]);
             sample["sampleKind"] = Copy(touch?["details"]?["sampleKind"]);
             samples.Add(sample);
