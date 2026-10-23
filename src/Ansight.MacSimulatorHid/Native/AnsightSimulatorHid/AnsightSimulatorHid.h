@@ -74,6 +74,17 @@ ANSIGHT_SIMULATOR_HID_EXPORT bool AnsightSimulatorHidSessionGetMainScreenMetrics
     char *errorBuffer,
     size_t errorBufferCapacity);
 
+ANSIGHT_SIMULATOR_HID_EXPORT uint64_t AnsightSimulatorHidCreateTimestamp(double *seconds);
+
+/// Experimental Pencil digitizer input. Phase: 0 down, 1 move, 2 up, 3 cancel,
+/// 4 hover enter, 5 hover move, 6 hover exit. Angles use UIKit radians;
+/// pressure and distance are normalized. Delivery does not certify UIKit support.
+ANSIGHT_SIMULATOR_HID_EXPORT bool AnsightSimulatorHidSessionSendStylus(
+    AnsightSimulatorHidSessionRef session, const char *deviceUdid, int phase,
+    double x, double y, double pressure, double altitude, double azimuth,
+    double roll, double distance, uint32_t pointerId, uint64_t eventTimestamp,
+    char *errorBuffer, size_t errorBufferCapacity);
+
 /// Returns a malloc-owned UTF-8 JSON accessibility snapshot for the frontmost
 /// simulator application. Release it with AnsightSimulatorHidFreeString.
 ANSIGHT_SIMULATOR_HID_EXPORT char *AnsightSimulatorHidSessionCopyAccessibilityTreeJson(

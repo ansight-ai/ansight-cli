@@ -226,8 +226,9 @@ static void AppendDigitizerFinger(CFTypeRef parent, CFTypeRef child, __unused ui
         @"Digitizer message must include both native events.");
 }
 
-static IndigoHIDMessage TrackpadMessage(CFTypeRef event)
+static IndigoHIDMessage TrackpadMessage(CFTypeRef event, uint32_t target)
 {
+    (void)target;
     Require(CFEqual(event, CFSTR("parent")), @"Wrap the parent digitizer event.");
     digitizerMessageCount++;
     return calloc(1, 0x120);

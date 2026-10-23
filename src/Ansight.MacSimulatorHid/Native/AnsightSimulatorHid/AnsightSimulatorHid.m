@@ -57,7 +57,7 @@ typedef void (*IOHIDEventAppendEventFunction)(
     CFTypeRef parent,
     CFTypeRef child,
     uint32_t options);
-typedef IndigoHIDMessage (*IndigoHIDMessageForTrackpadEventFunction)(CFTypeRef event);
+typedef IndigoHIDMessage (*IndigoHIDMessageForTrackpadEventFunction)(CFTypeRef event, uint32_t target);
 typedef IndigoHIDMessage (*IndigoHIDMessageForButtonFunction)(
     uint32_t keyCode,
     uint32_t operation,
@@ -1116,7 +1116,7 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     }
 
     self.appendHidEvent(parent, finger, 0);
-    IndigoHIDMessage message = self.messageForTrackpadEvent(parent);
+    IndigoHIDMessage message = self.messageForTrackpadEvent(parent, AnsightMainScreenTouchTarget);
     CFRelease(finger);
     CFRelease(parent);
     if (message == NULL)
@@ -2009,5 +2009,99 @@ void AnsightSimulatorHidSessionDestroy(AnsightSimulatorHidSessionRef session)
     if (session != NULL)
     {
         CFBridgingRelease(session);
+    }
+}
+
+uint64_t AnsightSimulatorHidCreateTimestamp(double *seconds) {
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    uint64_t ticks = mach_absolute_time();
+    // Indigo serializes integer nanoseconds; the guest converts those back to mach
+    // ticks. Align to whole nanoseconds so that round-trip cannot drop a tick.
+    ticks -= ticks % timebase.denom;
+    if (seconds) *seconds = (double)ticks * timebase.numer / timebase.denom / 1e9;
+    return ticks;
+}
+
+bool AnsightSimulatorHidSessionSendStylus(
+    AnsightSimulatorHidSessionRef session, const char *deviceUdid, int phase,
+    double x, double y, double pressure, double altitude, double azimuth,
+    double roll, double distance, uint32_t pointerId, uint64_t eventTimestamp,
+    char *errorBuffer, size_t errorBufferCapacity)
+{
+    @autoreleasepool {
+        if (!session || !deviceUdid || phase < 0 || phase > 6 || !pointerId
+            || !isfinite(x) || !isfinite(y) || x < 0 || x > 1 || y < 0 || y > 1
+            || !isfinite(pressure) || pressure < 0 || pressure > 1
+            || !isfinite(altitude) || altitude < 0 || altitude > M_PI_2
+            || !isfinite(azimuth) || !isfinite(roll)
+            || !isfinite(distance) || distance < 0 || distance > 1) {
+            CopyError(@"Invalid stylus sample: expected finite normalized coordinates, pressure, distance and UIKit angles.", errorBuffer, errorBufferCapacity);
+            return false;
+        }
+        typedef CFTypeRef (*CreateStylus)(CFAllocatorRef, uint64_t, uint32_t, uint32_t,
+            uint32_t, uint32_t, double, double, double, double, double, double,
+            double, double, uint32_t, uint32_t, uint32_t);
+        typedef void (*SetInteger)(CFTypeRef, uint32_t, int64_t);
+        CreateStylus createStylus = (CreateStylus)dlsym(RTLD_DEFAULT,
+            "IOHIDEventCreateDigitizerStylusEventWithPolarOrientation");
+        SetInteger setInteger = (SetInteger)dlsym(RTLD_DEFAULT, "IOHIDEventSetIntegerValue");
+        AnsightSimulatorHidSession *value = (__bridge AnsightSimulatorHidSession *)session;
+        if (!createStylus || !setInteger || !value.createDigitizerEvent
+            || !value.appendHidEvent || !value.messageForTrackpadEvent) {
+            CopyError(@"This Xcode installation does not expose stylus HID construction.", errorBuffer, errorBufferCapacity);
+            return false;
+        }
+        @synchronized(value) {
+            NSError *error = nil;
+            BOOL success = [value sendHidMessageToDevice:[NSString stringWithUTF8String:deviceUdid]
+                messageBuilder:^IndigoHIDMessage(NSError **messageError) {
+                    BOOL touching = phase == 0 || phase == 1;
+                    BOOL inRange = phase != 3 && phase != 6;
+                    uint32_t mask = (phase == 1 || phase == 5) ? 0x44 : 0x67;
+                    if (phase == 3) mask |= 0x80;
+                    uint64_t timestamp = eventTimestamp ?: mach_absolute_time();
+                    // Indigo requires the finger collection envelope even for a stylus child.
+                    CFTypeRef parent = value.createDigitizerEvent(NULL, timestamp, 2, 0, 0,
+                        mask, 0, x, y, 0, 0, 0, inRange, touching, 0);
+                    // WebKit's HID generator converts UIKit pressure and adjacent angles this way.
+                    // A transducer index is a hardware slot, not the monotonically increasing identity.
+                    CFTypeRef stylus = createStylus(NULL, timestamp, 1, pointerId, mask, 0,
+                        x, y, distance, touching ? pressure * 500 : 0, 0, roll,
+                        M_PI_2 - altitude, 2 * M_PI - azimuth, inRange, false,
+                        touching ? 0x00020000 : 0);
+                    if (!parent || !stylus) {
+                        if (parent) CFRelease(parent);
+                        if (stylus) CFRelease(stylus);
+                        *messageError = CreateError(25, @"IOKit did not create the stylus event.");
+                        return NULL;
+                    }
+                    setInteger(parent, 0xb0019, 1); // DigitizerIsDisplayIntegrated
+                    value.appendHidEvent(parent, stylus, 0);
+                    // This private serializer takes an explicit target as its second argument.
+                    IndigoHIDMessage message = value.messageForTrackpadEvent(parent, AnsightMainScreenTouchTarget);
+                    CFRelease(stylus);
+                    CFRelease(parent);
+                    if (!message || malloc_size(message) < 0x160) {
+                        if (message) free(message);
+                        *messageError = CreateError(26, @"SimulatorKit returned an incompatible stylus packet.");
+                        return NULL;
+                    }
+                    // SimulatorKit omits display-integration and pressure in its serializer.
+                    // Indigo digitizer payloads begin at 0x20 and 0xc0 (stride 0xa0).
+                    // The guest reads displayIntegrated at +0x50 and pressure at +0x34.
+                    // Its current decoder does not carry polar orientation/roll; UIKit on
+                    // iOS 26.4 also reports force=0. Never fabricate these in SDK capture.
+                    uint8_t *bytes = (uint8_t *)message;
+                    bytes[0x3a] = bytes[0x3b] = bytes[0xda] = bytes[0xdb] = 0;
+                    memcpy(bytes + 0x70, &(uint32_t){1}, 4);
+                    memcpy(bytes + 0x110, &(uint32_t){1}, 4);
+                    memcpy(bytes + 0x54, &(double){touching ? pressure * 500 : 0}, 8);
+                    memcpy(bytes + 0xf4, &(double){touching ? pressure * 500 : 0}, 8);
+                    return message;
+                } error:&error];
+            if (!success) CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+            return success;
+        }
     }
 }

@@ -36,6 +36,19 @@ internal static class NativeMethods
         byte[] errorBuffer,
         nuint errorBufferCapacity);
 
+    [DllImport(Library, EntryPoint = "AnsightSimulatorHidCreateTimestamp")]
+    internal static extern ulong CreateTimestamp(out double seconds);
+
+    [DllImport(Library, EntryPoint = "AnsightSimulatorHidSessionSendStylus")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SessionSendStylus(
+        SessionHandle session,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string deviceUdid,
+        MacSimulatorStylusPhase phase,
+        double x, double y, double pressure, double altitude, double azimuth,
+        double roll, double distance, uint pointerId, ulong eventTimestamp,
+        byte[] errorBuffer, nuint errorBufferCapacity);
+
     [DllImport(Library, EntryPoint = "AnsightSimulatorHidSessionGetMainScreenMetrics")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool SessionGetMainScreenMetrics(

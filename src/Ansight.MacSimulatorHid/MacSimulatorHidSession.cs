@@ -81,6 +81,27 @@ public sealed class MacSimulatorHidSession : IDisposable
         }
     }
 
+    public MacSimulatorStylusSample StampStylus(MacSimulatorStylusSample sample)
+    {
+        var ticks = NativeMethods.CreateTimestamp(out var seconds);
+        return sample with { EventTimestampTicks = ticks, EventTimestampSeconds = seconds };
+    }
+
+    public void SendStylus(string deviceUdid, MacSimulatorStylusSample sample, uint pointerId)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+        ArgumentNullException.ThrowIfNull(sample);
+        sample.Validate();
+        if (pointerId == 0) throw new ArgumentOutOfRangeException(nameof(pointerId));
+        var errorBuffer = new byte[ErrorBufferSize];
+        if (!NativeMethods.SessionSendStylus(handle, deviceUdid, sample.Phase,
+                sample.NormalizedX, sample.NormalizedY, sample.Pressure, sample.AltitudeRadians,
+                sample.AzimuthRadians, sample.RollRadians, sample.Distance, pointerId, sample.EventTimestampTicks,
+                errorBuffer, (nuint)errorBuffer.Length))
+            throw new MacSimulatorHidException(ReadError(errorBuffer, "Simulator stylus HID input failed."));
+    }
+
     public void SendButton(
         string deviceUdid,
         MacSimulatorButton button,
