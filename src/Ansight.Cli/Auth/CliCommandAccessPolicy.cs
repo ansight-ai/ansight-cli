@@ -100,7 +100,7 @@ internal static class CliCommandAccessPolicy
         if (parts.Count < 2) return false;
         var command = parts[0].ToLowerInvariant();
         var action = parts[1].ToLowerInvariant();
-        return command == "app" && action == "execute"
+        return command == "app" && action is "execute" or "learn"
             || command is "app-graph" or "app-graphs" && action is "explore" or "run"
             || command is "test" or "tests" && action is "run" or "run-all" or "run-inline" or "retry-metering"
             || command is "task" or "tasks" && action is "run" or "extract"

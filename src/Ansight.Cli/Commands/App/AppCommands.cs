@@ -13,11 +13,19 @@ internal static class AppCommands
     {
         if (CliCommandHelp.IsRequested(arguments))
         {
-            return CliCommandHelp.Write(output, arguments.Positionals.ElementAtOrDefault(1) == "watch"
-                ? AppWatchCommands.Help : BuildHelp());
+            return CliCommandHelp.Write(output, arguments.Positionals.ElementAtOrDefault(1)?.ToLowerInvariant() switch
+            {
+                "watch" => AppWatchCommands.Help,
+                "learn" => AppLearnCommand.Help,
+                _ => BuildHelp()
+            });
         }
 
         var action = arguments.RequirePositional(1, "app action").ToLowerInvariant();
+        if (action == "learn")
+        {
+            return await AppLearnCommand.RunAsync(arguments, output, cancellationToken).ConfigureAwait(false);
+        }
         if (action == "execute")
         {
             return await AppExecutionService.RunAppExecuteAsync(
@@ -46,7 +54,7 @@ internal static class AppCommands
             "batch" => await CallToolsAsync(lease.Runtime, arguments, output, cancellationToken),
             "push-file" => await PushFileAsync(lease.Runtime, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown app action '{action}'. Expected list, get, register, remove, watch, tools, call, batch, execute, or push-file.")
+                $"Unknown app action '{action}'. Expected list, get, register, remove, watch, tools, call, batch, execute, learn, or push-file.")
         };
     }
 
@@ -564,6 +572,7 @@ internal static class AppCommands
              ansight app call <session-id> <tool-id> [tool and evidence options]
              ansight app batch <session-id> --calls <JSON>|--calls-file <path>
              ansight app execute <session-id> --prompt <text>|--prompt-file <path>
+             ansight app learn <app-id> [--focus <text>] [--max-tasks <count>] [--draft-only]
              ansight app interact --session <id> [--jsonl] [--timeout-ms <ms>]
              ansight app execute --app <path-to-.app-or-.apk> --prompt <text>
              ansight app execute --device-id <id> --app-id <id> --prompt <text>
@@ -580,6 +589,7 @@ internal static class AppCommands
              call         Invoke one exact app tool using its published JSON argument schema
              batch        Execute up to 32 app tool calls in order
              execute      Interpret a prompt in a connected or launched app, act, and verify the result
+             learn        Explore safe navigation and build reusable tasks; see `app learn --help`
              push-file    Upload a local file through the connected app's file tools
 
            Tool catalog options:

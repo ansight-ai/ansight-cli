@@ -348,6 +348,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
     }
 
+    internal Task WaitForAuthoringAsync(string extractionId, CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            var extraction = extractions.GetValueOrDefault(extractionId)
+                ?? throw new InvalidDataException("The task extraction is unavailable.");
+            return (extraction.WorkTask ?? Task.CompletedTask).WaitAsync(cancellationToken);
+        }
+    }
+
     public LocalTaskExtractionSnapshot Start(LocalTaskExtractionStartRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

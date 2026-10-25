@@ -74,7 +74,8 @@ internal sealed class AppExecutionScope(
     internal static WorkspaceTestTarget ResolveSessionTarget(
         AppSessionSnapshot snapshot,
         string? requestedDeviceIdentifier,
-        DeviceInventory inventory)
+        DeviceInventory inventory,
+        string optionName = "--close-app-on-completion")
     {
         var nativeIdentifier = DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot);
         var requestedIdentifier = string.IsNullOrWhiteSpace(requestedDeviceIdentifier)
@@ -85,7 +86,7 @@ internal sealed class AppExecutionScope(
         if (device is null)
         {
             throw new CliUsageException(
-                "--close-app-on-completion requires a known host device for this session. "
+                $"{optionName} requires a known host device for this session. "
                 + "Pass --device-id <id> for the device running the app.");
         }
 
@@ -96,7 +97,7 @@ internal sealed class AppExecutionScope(
                 ResolveDevice(nativeIdentifier)?.Identifier,
                 StringComparison.OrdinalIgnoreCase))
         {
-            throw new CliUsageException("--device-id does not match the session's device; refusing to close another app instance.");
+            throw new CliUsageException("--device-id does not match the session's device; refusing to operate on another app instance.");
         }
 
         return new WorkspaceTestTarget(

@@ -501,6 +501,7 @@ public static class CliApplication
              artifact list|diff              Find captured artifacts and compare qualified references
              app list|get|register|remove     Manage linked application metadata
              app tools|call|batch|execute     Inspect, invoke, or agentically operate a connected app
+             app learn                       Explore an app and build verified reusable navigation tasks
              app push-file                    Transfer files through a connected app
              session list|show|logs|network|metrics
              session telemetry analyze|images|touches|trees|artifacts

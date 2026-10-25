@@ -526,12 +526,23 @@ internal static class AppGraphCommands
         return succeeded ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
-    internal static async Task<int> ExploreAsync(
+    internal static Task<int> ExploreAsync(
         RuntimeCoordinator runtime,
         string requestedAppId,
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken)
+        => ExploreAsync(runtime, requestedAppId, arguments, output, cancellationToken, null, null, false);
+
+    internal static async Task<int> ExploreAsync(
+        RuntimeCoordinator runtime,
+        string requestedAppId,
+        CliArguments arguments,
+        CliOutput output,
+        CancellationToken cancellationToken,
+        Action<AppGraphExploreOutput>? onCompleted,
+        string? additionalInstructions,
+        bool reserveSession)
     {
         var sessions = runtime.Sessions.GetSummaries();
         AppGraphExploreLiveTarget liveTarget;
@@ -578,6 +589,12 @@ internal static class AppGraphCommands
                     StringComparison.OrdinalIgnoreCase));
         }
         var snapshot = liveTarget.Session;
+        using var sessionClaim = reserveSession ? runtime.WorkspaceTests.ReserveSession(snapshot) : null;
+        if (reserveSession && arguments.GetOption("device-id") is { } requestedDeviceId)
+        {
+            var inventory = await runtime.Devices.ListAsync(cancellationToken).ConfigureAwait(false);
+            _ = AppExecutionScope.ResolveSessionTarget(snapshot, requestedDeviceId, inventory, "--device-id");
+        }
         var storeMode = AppGraphStoreOptions.Resolve(arguments);
         var cloudTarget = storeMode == AppGraphStoreMode.Local
             ? ResolveLocalExploreTarget(
@@ -602,6 +619,7 @@ internal static class AppGraphCommands
             cloudTarget.GraphName,
             maximumActions,
             arguments.GetOption("focus"));
+        if (!string.IsNullOrWhiteSpace(additionalInstructions)) instruction += "\n\n" + additionalInstructions;
         var reasoning = ReasoningOptions.Resolve(arguments);
         var model = ReasoningOptions.ResolveModelOverride(arguments);
         var workspacePath = Path.Combine(runtime.BaseFolderPath, "app-graph-executions");
@@ -842,10 +860,17 @@ internal static class AppGraphCommands
                 cancellationToken).ConfigureAwait(false);
         }
 
-        output.Write(
-            result,
-            () => $"Exploration {agentResult.Audit.RunId}: observed {candidate.DestinationCount} destinations and {candidate.ElementActionCount} element actions.\n"
-                  + candidate.Summary + Environment.NewLine + saveMessage);
+        if (onCompleted is not null)
+        {
+            onCompleted(result);
+        }
+        else
+        {
+            output.Write(
+                result,
+                () => $"Exploration {agentResult.Audit.RunId}: observed {candidate.DestinationCount} destinations and {candidate.ElementActionCount} element actions.\n"
+                      + candidate.Summary + Environment.NewLine + saveMessage);
+        }
         return saveSucceeded ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 

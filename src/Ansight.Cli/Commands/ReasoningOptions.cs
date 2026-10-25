@@ -8,7 +8,7 @@ internal static class ReasoningOptions
         var command = arguments.Positionals.ElementAtOrDefault(0)?.ToLowerInvariant();
         var action = arguments.Positionals.ElementAtOrDefault(1)?.ToLowerInvariant();
         if (command == "replay"
-            || command == "app" && action == "execute"
+            || command == "app" && action is "execute" or "learn"
             || command is "test" or "tests" && action is "run" or "run-all" or "run-inline"
             || command == "app-graph" && action is "run" or "explore")
         {
