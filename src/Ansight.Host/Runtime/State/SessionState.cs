@@ -49,6 +49,7 @@ internal sealed class SessionState
     public List<SessionTouchInputRecord> Touches { get; } = [];
     public List<SessionNetworkRequest> NetworkRequests { get; } = [];
     public List<SessionVisualTreeSnapshot> VisualTreeSnapshots { get; } = [];
+    public List<SessionVideoRecording> VideoRecordings { get; } = [];
     public List<SessionArtifactSnapshot> ArtifactSnapshots { get; } = [];
     public List<SessionApplicationEvent> ApplicationEvents { get; } = [];
     public List<LogEntry> Logs { get; } = [];

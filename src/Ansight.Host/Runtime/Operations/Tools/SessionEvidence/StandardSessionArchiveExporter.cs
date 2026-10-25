@@ -75,9 +75,10 @@ internal static class StandardSessionArchiveExporter
             {
                 sanitizer = new SessionSanitizationProcessor(sanitizationPolicy);
                 sanitizedCapture = sanitizer.Sanitize(exportSnapshot);
-                exportSnapshot = sanitizedCapture.Snapshot;
+                exportSnapshot = SessionSnapshotCloner.WithoutVideoRecordings(sanitizedCapture.Snapshot);
             }
 
+            SessionVideoArchive.Write(archive, sessionCapturesRootPath, snapshot, exportSnapshot.VideoRecordings);
             var exportLogStreams = SessionLogStreams.Normalize(exportSnapshot.LogStreams, exportSnapshot.Logs);
             var sessionDocumentSnapshot = CreateExportSessionDocumentSnapshot(exportSnapshot);
             var savedAtUtc = DateTimeOffset.UtcNow;
@@ -396,6 +397,7 @@ internal static class StandardSessionArchiveExporter
             Author = author ?? snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Name = snapshot.Name,
             Tags = snapshot.Tags.ToArray(),
@@ -497,6 +499,7 @@ internal static class StandardSessionArchiveExporter
             Author = snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = snapshot.SdkVersion,
             Name = snapshot.Name,
             Tags = snapshot.Tags,

@@ -13,7 +13,8 @@ internal sealed partial class RuntimeState
         IReadOnlyDictionary<string, byte[]> imageBytesByFrameId,
         byte[]? appIconBytes = null,
         IReadOnlyDictionary<string, byte[]>? artifactBytesByRelativePath = null,
-        SessionReplaySource? replaySource = null)
+        SessionReplaySource? replaySource = null,
+        IReadOnlyDictionary<string, string>? videoFilesById = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(imageBytesByFrameId);
@@ -38,7 +39,7 @@ internal sealed partial class RuntimeState
                 importedSnapshot,
                 imageBytesByFrameId,
                 appIconBytes,
-                artifactBytesByRelativePath);
+                artifactBytesByRelativePath, videoFilesById);
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -585,6 +586,8 @@ internal sealed partial class RuntimeState
                 return SessionExtractionResult.Failure("Live sessions cannot be extracted while they are still active.");
             }
 
+            if (SessionTimelineTransformer.SplitsVideoRecording(session.VideoRecordings, rangeStartUtc, rangeEndUtc))
+                return SessionExtractionResult.Failure("This range cuts through a video recording. Select the whole recording; partial video extraction is not supported yet.");
             sourceSnapshot = SessionStateMapper.CreateSnapshot(session);
             var extractedSessionId = ResolveImportedSessionId(
                 $"{sourceSnapshot.SessionId}-extract",
@@ -849,6 +852,8 @@ internal sealed partial class RuntimeState
                 return OperationResult.Failure("Live sessions cannot be trimmed while they are still active.");
             }
 
+            if (SessionTimelineTransformer.SplitsVideoRecording(session.VideoRecordings, rangeStartUtc, rangeEndUtc))
+                return OperationResult.Failure("This range cuts through a video recording. Select the whole recording; partial video trimming is not supported yet.");
             if (!SessionTimelineTransformer.ApplyTimelineTrim(session, rangeStartUtc, rangeEndUtc, mode, report))
             {
                 return OperationResult.Success("Session timeline is unchanged.");

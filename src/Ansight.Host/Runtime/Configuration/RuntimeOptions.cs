@@ -8,6 +8,8 @@ public sealed class RuntimeOptions
     public CancellationToken FeatureLifetime { get; init; }
 
     public ISessionVideoEncoder? SessionVideoEncoder { get; init; }
+    public ISessionVideoTranscoder? SessionVideoTranscoder { get; init; }
+    public ISessionVideoFrameExtractor? SessionVideoFrameExtractor { get; init; }
 
     public string HostIdentityStorageKey { get; init; } = "host-identity";
 

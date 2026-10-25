@@ -42,6 +42,9 @@ public sealed class SessionEditingService
         return sessionIngestion.AddSessionVisualTreeSnapshot(sessionId.Trim(), snapshot);
     }
 
+    public OperationResult AddVideoRecording(string sessionId, SessionVideoRecording recording, string sourceFilePath)
+        => sessionIngestion.AddSessionVideoRecording(sessionId, recording, sourceFilePath);
+
     private OperationResult AddArtifactSnapshotCore(
         string sessionId,
         SessionArtifactSnapshot snapshot,

@@ -22,6 +22,7 @@ internal sealed class SessionCaptureSummary
     public SessionCaptureAuthorMetadata? Author { get; init; }
     public SessionReplaySource? ReplaySource { get; init; }
     public string CaptureSource { get; init; } = WorkspaceExecutionModes.Sdk;
+    public IReadOnlyList<SessionVideoRecording> VideoRecordings { get; init; } = Array.Empty<SessionVideoRecording>();
     public string? SdkVersion { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
     public string? Notes { get; init; }

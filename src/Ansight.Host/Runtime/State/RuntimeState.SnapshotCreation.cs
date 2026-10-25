@@ -268,6 +268,7 @@ internal sealed partial class RuntimeState
             Author = snapshot.Author,
             ReplaySource = replaySource ?? snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Name = NormalizeSessionName(snapshot.Name),
             Tags = NormalizeTags(snapshot.Tags),

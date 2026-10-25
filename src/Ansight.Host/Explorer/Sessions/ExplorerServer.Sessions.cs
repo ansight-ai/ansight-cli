@@ -618,6 +618,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         AddStorageBreakdownFile(entries, knownPaths, "Trends results", Path.Combine(sessionDirectoryPath, "trends-results.json"));
         AddStorageBreakdownFile(entries, knownPaths, "Metric channels", Path.Combine(sessionDirectoryPath, "metric-channels.json"));
         AddStorageBreakdownDirectory(entries, knownPaths, "Telemetry", Path.Combine(sessionDirectoryPath, "telemetry"));
+        AddStorageBreakdownDirectory(entries, knownPaths, "Video", Path.Combine(sessionDirectoryPath, "session-video"));
         AddStorageBreakdownDirectory(entries, knownPaths, "Screenshots", Path.Combine(sessionDirectoryPath, "images"));
         AddStorageBreakdownDirectory(entries, knownPaths, "Visual trees", Path.Combine(sessionDirectoryPath, "visual-trees"));
         AddStorageBreakdownDirectory(entries, knownPaths, "Artifacts", Path.Combine(sessionDirectoryPath, "artifacts"));

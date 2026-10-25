@@ -29,7 +29,16 @@ ANSIGHT_SESSION_VIDEO_EXPORT int32_t AnsightSessionVideoMac_Finish(
     char *errorBuffer,
     int32_t errorBufferCapacity);
 
+ANSIGHT_SESSION_VIDEO_EXPORT int32_t AnsightSessionVideoMac_Transcode(
+    const char *sourceFilePath, const char *outputFilePath,
+    int32_t maxDimension, int32_t framesPerSecond, int32_t bitRate, int64_t durationUs,
+    char *errorBuffer, int32_t errorBufferCapacity);
+
 ANSIGHT_SESSION_VIDEO_EXPORT void AnsightSessionVideoMac_Destroy(void *encoderHandle);
+
+ANSIGHT_SESSION_VIDEO_EXPORT int32_t AnsightSessionVideoMac_ExtractFrame(
+    const char *videoPath, const char *imagePath, int64_t positionUs, int32_t maxDimension,
+    char *errorBuffer, int32_t errorBufferCapacity);
 
 #if defined(__cplusplus)
 }

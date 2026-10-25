@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Update="Fixtures/test-recording*.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target

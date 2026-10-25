@@ -20,4 +20,8 @@
     <ProjectReference Include="..\..\src\Ansight.Infrastructure\Ansight.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../Ansight.Host.Tests/Fixtures/test-recording.mp4" Link="Fixtures/test-recording.mp4" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

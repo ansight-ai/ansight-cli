@@ -2,14 +2,14 @@ using System.Buffers.Binary;
 
 namespace Ansight.Host.Sessions.Video;
 
-internal static class SessionVideoMp4TimingInspector
+internal static partial class SessionVideoMp4TimingInspector
 {
     private const int MicrosecondsPerSecond = 1_000_000;
 
     public static IReadOnlyList<long> ReadPresentationTimesUs(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
-        var bytes = File.ReadAllBytes(filePath);
+        var bytes = ReadMovieBox(filePath, out _);
         var rootBoxes = ReadBoxes(bytes, 0, bytes.Length);
         var movieBox = FindBox(rootBoxes, "moov");
         foreach (var trackBox in ReadBoxes(bytes, movieBox.PayloadOffset, movieBox.EndOffset)
@@ -48,6 +48,40 @@ internal static class SessionVideoMp4TimingInspector
         }
 
         throw new InvalidDataException("The encoded MP4 does not contain a video track.");
+    }
+
+    // Continuous test recordings can be large. Read only the index, never the media payload.
+    private static byte[] ReadMovieBox(string filePath, out long movieOffset)
+    {
+        using var stream = File.OpenRead(filePath);
+        Span<byte> header = stackalloc byte[16];
+        while (stream.Position < stream.Length)
+        {
+            var offset = stream.Position;
+            stream.ReadExactly(header[..8]);
+            long size = BinaryPrimitives.ReadUInt32BigEndian(header);
+            var headerSize = 8;
+            if (size == 1)
+            {
+                stream.ReadExactly(header[8..]);
+                size = checked((long)BinaryPrimitives.ReadUInt64BigEndian(header[8..]));
+                headerSize = 16;
+            }
+            else if (size == 0) size = stream.Length - offset;
+            if (size < headerSize || size > stream.Length - offset)
+                throw new InvalidDataException("The MP4 contains an invalid or incomplete box.");
+            if (header.Slice(4, 4).SequenceEqual("moov"u8))
+            {
+                movieOffset = offset;
+                if (size > 64 * 1024 * 1024) throw new InvalidDataException("The MP4 index exceeds the supported size.");
+                var bytes = new byte[(int)size];
+                header[..headerSize].CopyTo(bytes);
+                stream.ReadExactly(bytes.AsSpan(headerSize));
+                return bytes;
+            }
+            stream.Position = offset + size;
+        }
+        throw new InvalidDataException("The MP4 recording has no finalized movie index.");
     }
 
     private static bool IsVideoHandler(byte[] bytes, Mp4Box handlerBox)

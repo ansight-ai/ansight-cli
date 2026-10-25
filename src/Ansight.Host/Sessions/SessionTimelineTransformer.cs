@@ -47,6 +47,7 @@ internal static class SessionTimelineTransformer
             AppToolCatalog = SessionSnapshotCloner.CloneAppToolCatalog(sourceSnapshot.AppToolCatalog),
             Analyses = Array.Empty<SessionAnalysisRecord>(),
             Annotations = sourceSnapshot.Annotations.ToArray(),
+            VideoRecordings = sourceSnapshot.VideoRecordings,
             Images = sourceSnapshot.Images.ToArray(),
             Touches = sourceSnapshot.Touches.ToArray(),
             NetworkRequests = sourceSnapshot.NetworkRequests
@@ -149,6 +150,10 @@ internal static class SessionTimelineTransformer
         return rangeEndUtc > rangeStartUtc;
     }
 
+    internal static bool SplitsVideoRecording(IEnumerable<SessionVideoRecording> recordings, DateTimeOffset start, DateTimeOffset end)
+        => recordings.Any(video => video.StartedUtc < end && video.EndedUtc > start
+            && (video.StartedUtc < start || video.EndedUtc > end));
+
     internal static bool ApplyTimelineTrim(
         SessionState session,
         DateTimeOffset rangeStartUtc,
@@ -163,7 +168,9 @@ internal static class SessionTimelineTransformer
             recordingEndUtc = recordingStartUtc;
         }
 
-        var changed = false;
+        var changed = session.VideoRecordings.RemoveAll(video => mode == SessionTimelineTrimMode.CutSelection
+            ? video.StartedUtc >= rangeStartUtc && video.EndedUtc <= rangeEndUtc
+            : video.StartedUtc < rangeStartUtc || video.EndedUtc > rangeEndUtc) > 0;
         changed |= TrimTimestampedItems(session.Logs, log => log.TimestampUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering logs…", report);
         changed |= TrimTimestampedItems(session.Images, frame => frame.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering screenshots…", report);
         changed |= TrimTimestampedItems(session.Touches, touch => touch.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering touches…", report);

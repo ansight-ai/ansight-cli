@@ -31,6 +31,7 @@ public sealed record SessionLiveUpdate(
     int TotalAnnotationCount,
     int TotalAnalysisCount)
 {
+    public IReadOnlyList<SessionVideoRecording> VideoRecordings { get; init; } = [];
     public IReadOnlyList<SessionApplicationEvent> LifecycleEvents { get; init; } = [];
     public System.Text.Json.Nodes.JsonObject? CustomProperties { get; init; }
 }

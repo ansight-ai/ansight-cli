@@ -55,6 +55,8 @@ internal interface ISessionIngestion
         string sessionId,
         SessionVisualTreeSnapshot snapshot);
 
+    OperationResult AddSessionVideoRecording(string sessionId, SessionVideoRecording recording, string sourceFilePath);
+
     OperationResult AddSessionArtifactSnapshot(
         string sessionId,
         SessionArtifactSnapshot snapshot,

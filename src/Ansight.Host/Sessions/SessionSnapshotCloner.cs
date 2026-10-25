@@ -7,7 +7,8 @@ public static class SessionSnapshotCloner
     public static AppSessionSnapshot WithLogs(
         AppSessionSnapshot snapshot,
         IReadOnlyList<SessionLogStream> logStreams,
-        IReadOnlyList<LogEntry> logs)
+        IReadOnlyList<LogEntry> logs,
+        IReadOnlyList<SessionVideoRecording>? videoRecordings = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(logStreams);
@@ -30,6 +31,7 @@ public static class SessionSnapshotCloner
             Author = snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = videoRecordings ?? snapshot.VideoRecordings,
             SdkVersion = snapshot.SdkVersion,
             Tags = snapshot.Tags,
             Notes = snapshot.Notes,
@@ -55,10 +57,17 @@ public static class SessionSnapshotCloner
             RetainedLogStartIndex = 0,
             MetricChannels = snapshot.MetricChannels,
             Metrics = snapshot.Metrics,
+            TotalAnnotationCount = snapshot.TotalAnnotationCount,
+            TotalImageCount = snapshot.TotalImageCount,
+            TotalMetricChannelCount = snapshot.TotalMetricChannelCount,
+            TotalMetricSampleCount = snapshot.TotalMetricSampleCount,
             TotalApplicationEventCount = snapshot.TotalApplicationEventCount,
             TotalNetworkRequestCount = snapshot.TotalNetworkRequestCount
         };
     }
+
+    internal static AppSessionSnapshot WithoutVideoRecordings(AppSessionSnapshot snapshot)
+        => WithLogs(snapshot, snapshot.LogStreams, snapshot.Logs, Array.Empty<SessionVideoRecording>());
 
     public static JsonObject? CloneCustomProperties(JsonObject? customProperties)
     {

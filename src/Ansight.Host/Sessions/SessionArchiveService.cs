@@ -128,7 +128,7 @@ public sealed class SessionArchiveService
                 operationContext: sanitizationContext,
                 report: report);
         report?.Invoke(new SessionOptimizationProgress("Sanitizing upload metadata…"));
-        return sanitizer.Sanitize(sanitizationSnapshot).Snapshot;
+        return SessionSnapshotCloner.WithoutVideoRecordings(sanitizer.Sanitize(sanitizationSnapshot).Snapshot);
     }
 
     internal static AppSessionSnapshot PrepareSessionSnapshotForExport(
@@ -212,14 +212,14 @@ public sealed class SessionArchiveService
                     report: report);
                 report?.Invoke(new SessionOptimizationProgress("Sanitizing session evidence…"));
                 sanitizedCapture = sanitizer.Sanitize(exportSnapshot);
-                exportSnapshot = sanitizedCapture.Snapshot;
+                exportSnapshot = SessionSnapshotCloner.WithoutVideoRecordings(sanitizedCapture.Snapshot);
             }
             else if (options.Sanitize)
             {
                 sanitizer = new SessionSanitizationProcessor(SessionSanitizationPolicy.PiiSafeDefault, report);
                 report?.Invoke(new SessionOptimizationProgress("Applying the built-in privacy policy…"));
                 sanitizedCapture = sanitizer.Sanitize(exportSnapshot);
-                exportSnapshot = sanitizedCapture.Snapshot;
+                exportSnapshot = SessionSnapshotCloner.WithoutVideoRecordings(sanitizedCapture.Snapshot);
             }
 
             var artifactsDirectoryPath = Path.Combine(
@@ -242,6 +242,7 @@ public sealed class SessionArchiveService
             }
 
             report?.Invoke(new SessionOptimizationProgress("Writing session data…"));
+            SessionVideoArchive.Write(archive, sessionCapturesRootPath, snapshot, exportSnapshot.VideoRecordings);
             var exportLogStreams = SessionLogStreams.Normalize(exportSnapshot.LogStreams, exportSnapshot.Logs);
             var sessionDocumentSnapshot = CreateExportSessionDocumentSnapshot(exportSnapshot);
             var savedAtUtc = DateTimeOffset.UtcNow;
@@ -431,6 +432,7 @@ public sealed class SessionArchiveService
         string? password)
     {
         var hasEncryptedEntries = false;
+        var videoImportDirectory = Path.Combine(Path.GetTempPath(), "ansight-video-import-" + Guid.NewGuid().ToString("N"));
         try
         {
             if (!File.Exists(archiveFilePath))
@@ -558,13 +560,26 @@ public sealed class SessionArchiveService
                 artifactBytesByRelativePath[relativePath] = artifactBuffer.ToArray();
             }
 
+            var videoFilesById = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var recording in archiveSession.VideoRecordings)
+            {
+                recording.Validate();
+                var entry = archive.GetEntry(recording.EntryPath)
+                    ?? throw new InvalidDataException($"The archive is missing video '{recording.RecordingId}'.");
+                Directory.CreateDirectory(videoImportDirectory);
+                var path = Path.Combine(videoImportDirectory, recording.RecordingId + ".mp4");
+                using (var input = entry.Open())
+                using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    input.CopyTo(output);
+                videoFilesById.Add(recording.RecordingId, path);
+            }
             var activityRecords = SessionActivityArchive.Read(archive, archiveSession.SessionId);
             var result = sessionLifecycle.ImportSessionSnapshot(
                 archiveSession,
                 imageBytesByFrameId,
                 appIconBytes,
                 artifactBytesByRelativePath,
-                replaySource);
+                replaySource, videoFilesById);
             if (result.IsSuccess && result.ImportedSession is { } imported)
                 SessionActivityArchive.Import(activityRecords, SessionActivityService.For(applicationPaths), imported.SessionId);
             return result;
@@ -582,6 +597,10 @@ public sealed class SessionArchiveService
                 ex is IOException or UnauthorizedAccessException
                     ? SessionImportFailureReason.IoError
                     : SessionImportFailureReason.InvalidArchive);
+        }
+        finally
+        {
+            if (Directory.Exists(videoImportDirectory)) Directory.Delete(videoImportDirectory, recursive: true);
         }
     }
 
@@ -615,6 +634,7 @@ public sealed class SessionArchiveService
             Author = author ?? snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Name = snapshot.Name,
             Tags = snapshot.Tags.ToArray(),
@@ -720,6 +740,7 @@ public sealed class SessionArchiveService
             Author = snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = snapshot.SdkVersion,
             Name = snapshot.Name,
             Tags = snapshot.Tags,

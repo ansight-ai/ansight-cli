@@ -85,6 +85,7 @@ internal static class SessionCaptureArchiveCodec
             Author = summary.Author,
             ReplaySource = summary.ReplaySource,
             CaptureSource = summary.CaptureSource,
+            VideoRecordings = summary.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(summary.SdkVersion, deviceProfile, profileJson),
             Tags = summary.Tags?.ToArray() ?? [],
             Notes = summary.Notes,

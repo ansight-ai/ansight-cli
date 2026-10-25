@@ -65,6 +65,7 @@ internal static partial class SessionStateMapper
         }
 
         state.VisualTreeSnapshots.AddRange(NormalizeVisualTreeSnapshots(snapshot.VisualTreeSnapshots));
+        state.VideoRecordings.AddRange(snapshot.VideoRecordings);
         state.ArtifactSnapshots.AddRange(NormalizeArtifactSnapshots(snapshot.ArtifactSnapshots));
         var normalizedLogStreams = SessionLogStreams.Normalize(snapshot.LogStreams, snapshot.Logs);
         foreach (var stream in normalizedLogStreams)
@@ -196,6 +197,9 @@ internal static partial class SessionStateMapper
             AddCapturedTimestamp(snapshotRecord.ScreenshotCapturedAtUtc, createdUtc, ref latestUtc);
         }
 
+        foreach (var recording in snapshot.VideoRecordings)
+            AddCapturedTimestamp(recording.EndedUtc, createdUtc, ref latestUtc);
+
         foreach (var snapshotRecord in snapshot.ArtifactSnapshots)
         {
             AddCapturedTimestamp(snapshotRecord.CapturedAtUtc, createdUtc, ref latestUtc);
@@ -315,6 +319,7 @@ internal static partial class SessionStateMapper
             Analyses = state.GetSnapshotAnalyses(),
             Annotations = state.GetSnapshotAnnotations(),
             AgentTaskLinks = state.GetSnapshotAgentTaskLinks(),
+            VideoRecordings = state.VideoRecordings.ToArray(),
             Images = state.GetSnapshotImages(),
             Touches = includeSessionContent ? state.GetSnapshotTouches() : Array.Empty<SessionTouchInputRecord>(),
             NetworkRequests = includeSessionContent ? state.GetSnapshotNetworkRequests() : Array.Empty<SessionNetworkRequest>(),

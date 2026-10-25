@@ -319,7 +319,8 @@ internal sealed partial class SessionCaptureStore
         AppSessionSnapshot snapshot,
         IReadOnlyDictionary<string, byte[]> imageBytesByFrameId,
         byte[]? appIconBytes = null,
-        IReadOnlyDictionary<string, byte[]>? artifactBytesByRelativePath = null)
+        IReadOnlyDictionary<string, byte[]>? artifactBytesByRelativePath = null,
+        IReadOnlyDictionary<string, string>? videoFilesById = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(imageBytesByFrameId);
@@ -366,6 +367,12 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 WriteImportedArtifactFiles(layout, artifactBytesByRelativePath);
+                foreach (var recording in snapshotCopy.VideoRecordings)
+                {
+                    if (videoFilesById is null || !videoFilesById.TryGetValue(recording.RecordingId, out var videoPath))
+                        throw new InvalidDataException($"The archive is missing video '{recording.RecordingId}'.");
+                    CopyVideoFile(layout.SessionDirectoryPath, recording, videoPath);
+                }
 
                 SaveSnapshot(snapshotCopy);
                 // An offline device may delete its only copy after import returns.
@@ -419,6 +426,8 @@ internal sealed partial class SessionCaptureStore
                 CopyExtractedAppIcon(sourceLayout, targetLayout, sourceSnapshot.AppIcon, snapshotCopy.AppIcon);
                 CopyExtractedCapturedImages(sourceLayout, targetLayout, snapshotCopy.Images);
                 CopyExtractedArtifactPayloadDirectories(sourceLayout, targetLayout, snapshotCopy.ArtifactSnapshots);
+                foreach (var recording in snapshotCopy.VideoRecordings)
+                    CopyVideoFile(targetLayout.SessionDirectoryPath, recording, Path.Combine(sourceLayout.SessionDirectoryPath, recording.EntryPath));
 
                 SaveSnapshot(snapshotCopy);
             }

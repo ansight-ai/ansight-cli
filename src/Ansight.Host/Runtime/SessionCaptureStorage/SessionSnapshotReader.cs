@@ -158,6 +158,7 @@ internal static partial class SessionSnapshotReader
                 Author = summary.Author,
                 ReplaySource = summary.ReplaySource,
                 CaptureSource = summary.CaptureSource,
+                VideoRecordings = summary.VideoRecordings,
                 SdkVersion = SessionSdkVersion.Resolve(summary.SdkVersion, deviceProfileResult.Profile, deviceProfileResult.ProfileJson),
                 Tags = summary.Tags ?? Array.Empty<string>(),
                 Notes = summary.Notes,

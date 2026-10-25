@@ -363,3 +363,164 @@ void AnsightSessionVideoMac_Destroy(void *encoderHandle)
         }
     }
 }
+
+// The composition reader normalizes variable/duplicate Simulator timestamps while
+// retaining elapsed time (including a held final frame). No screenshot sampling.
+int32_t AnsightSessionVideoMac_Transcode(
+    const char *sourceFilePath, const char *outputFilePath,
+    int32_t maxDimension, int32_t framesPerSecond, int32_t bitRate, int64_t durationUs,
+    char *errorBuffer, int32_t errorBufferCapacity)
+{
+    @autoreleasepool
+    {
+        AVAssetReader *reader = nil;
+        AVAssetWriter *writer = nil;
+        @try
+        {
+            if (!sourceFilePath || !outputFilePath || maxDimension < 2 || framesPerSecond < 1 || bitRate < 1 || durationUs <= 0)
+                @throw [NSException exceptionWithName:@"Video" reason:@"Invalid compression arguments." userInfo:nil];
+            AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:sourceFilePath]] options:nil];
+            AVAssetTrack *track = [[asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+            if (!track || !CMTIME_IS_NUMERIC(asset.duration) || CMTimeGetSeconds(asset.duration) <= 0)
+                @throw [NSException exceptionWithName:@"Video" reason:@"The recording has no video track." userInfo:nil];
+            CMTime duration = CMTimeMake(durationUs, AnsightSessionVideoTimescale);
+            CGRect bounds = CGRectApplyAffineTransform((CGRect){CGPointZero, track.naturalSize}, track.preferredTransform);
+            CGFloat scale = MIN(1.0, maxDimension / MAX(bounds.size.width, bounds.size.height));
+            int width = MAX(2, ((int)(bounds.size.width * scale)) & ~1);
+            int height = MAX(2, ((int)(bounds.size.height * scale)) & ~1);
+            AVMutableVideoComposition *composition = [AVMutableVideoComposition videoComposition];
+            composition.renderSize = CGSizeMake(width, height);
+            composition.frameDuration = CMTimeMake(1, framesPerSecond);
+            AVMutableVideoCompositionInstruction *instruction = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
+            instruction.timeRange = CMTimeRangeMake(kCMTimeZero, duration);
+            AVMutableVideoCompositionLayerInstruction *layer = [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:track];
+            CGAffineTransform transform = CGAffineTransformConcat(track.preferredTransform,
+                CGAffineTransformMakeTranslation(-bounds.origin.x, -bounds.origin.y));
+            transform = CGAffineTransformConcat(transform, CGAffineTransformMakeScale(width / bounds.size.width, height / bounds.size.height));
+            [layer setTransform:transform atTime:kCMTimeZero];
+            instruction.layerInstructions = @[layer];
+            composition.instructions = @[instruction];
+            NSError *error = nil;
+            reader = [[AVAssetReader alloc] initWithAsset:asset error:&error];
+            AVAssetReaderVideoCompositionOutput *output = [AVAssetReaderVideoCompositionOutput
+                assetReaderVideoCompositionOutputWithVideoTracks:@[track]
+                videoSettings:@{(__bridge NSString *)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)}];
+            output.videoComposition = composition;
+            output.alwaysCopiesSampleData = NO;
+            reader.timeRange = CMTimeRangeMake(kCMTimeZero, duration);
+            [reader addOutput:output];
+            writer = [[AVAssetWriter alloc] initWithURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:outputFilePath]]
+                fileType:AVFileTypeMPEG4 error:&error];
+            NSDictionary *settings = @{
+                AVVideoCodecKey: AVVideoCodecTypeH264, AVVideoWidthKey: @(width), AVVideoHeightKey: @(height),
+                AVVideoCompressionPropertiesKey: @{
+                    AVVideoAverageBitRateKey: @(bitRate), AVVideoExpectedSourceFrameRateKey: @(framesPerSecond),
+                    AVVideoMaxKeyFrameIntervalDurationKey: @2, AVVideoAllowFrameReorderingKey: @NO,
+                    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+                }
+            };
+            AVAssetWriterInput *input = [AVAssetWriterInput assetWriterInputWithMediaType:AVMediaTypeVideo outputSettings:settings];
+            input.expectsMediaDataInRealTime = NO;
+            input.mediaTimeScale = AnsightSessionVideoTimescale;
+            [writer addInput:input];
+            writer.shouldOptimizeForNetworkUse = YES;
+            if (!reader || !writer || ![reader startReading] || ![writer startWriting])
+                @throw [NSException exceptionWithName:@"Video" reason:(reader.error ?: writer.error ?: error).localizedDescription userInfo:nil];
+            [writer startSessionAtSourceTime:kCMTimeZero];
+            int count = 0;
+            CMSampleBufferRef lastSample = nullptr;
+            CMSampleBufferRef sample;
+            while ((sample = [output copyNextSampleBuffer]))
+            {
+                @autoreleasepool
+                {
+                    int attempt = 0;
+                    while (!input.readyForMoreMediaData && writer.status == AVAssetWriterStatusWriting && attempt++ < 15000)
+                        usleep(2000);
+                    BOOL appended = input.readyForMoreMediaData && [input appendSampleBuffer:sample];
+                    if (lastSample) CFRelease(lastSample);
+                    lastSample = (CMSampleBufferRef)CFRetain(sample);
+                    CFRelease(sample);
+                    if (!appended)
+                        @throw [NSException exceptionWithName:@"Video" reason:AnsightSessionVideoWriterError(writer, @"Timed out encoding recording.") userInfo:nil];
+                    count++;
+                }
+            }
+            if (reader.status != AVAssetReaderStatusCompleted || count == 0)
+            {
+                if (lastSample) CFRelease(lastSample);
+                @throw [NSException exceptionWithName:@"Video" reason:reader.error.localizedDescription ?: @"No frames decoded." userInfo:nil];
+            }
+            // Display recorders may emit nothing during the final idle period. The
+            // writer does not extend its last sample merely from endSessionAtSourceTime.
+            CMTime finalTime = CMTimeSubtract(duration, composition.frameDuration);
+            if (CMTimeCompare(finalTime, CMSampleBufferGetPresentationTimeStamp(lastSample)) > 0)
+            {
+                CMSampleTimingInfo timing = {CMTimeSubtract(duration, finalTime), finalTime, kCMTimeInvalid};
+                CMSampleBufferRef heldSample = nullptr;
+                OSStatus copyStatus = CMSampleBufferCreateCopyWithNewTiming(kCFAllocatorDefault, lastSample, 1, &timing, &heldSample);
+                int attempt = 0;
+                while (!input.readyForMoreMediaData && writer.status == AVAssetWriterStatusWriting && attempt++ < 15000)
+                    usleep(2000);
+                BOOL appended = copyStatus == noErr && heldSample && input.readyForMoreMediaData && [input appendSampleBuffer:heldSample];
+                if (heldSample) CFRelease(heldSample);
+                if (!appended)
+                {
+                    CFRelease(lastSample);
+                    @throw [NSException exceptionWithName:@"Video" reason:@"Could not retain the final idle frame." userInfo:nil];
+                }
+            }
+            CFRelease(lastSample);
+            [input markAsFinished];
+            [writer endSessionAtSourceTime:duration];
+            dispatch_semaphore_t done = dispatch_semaphore_create(0);
+            [writer finishWritingWithCompletionHandler:^{ dispatch_semaphore_signal(done); }];
+            if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC)) != 0 || writer.status != AVAssetWriterStatusCompleted)
+                @throw [NSException exceptionWithName:@"Video" reason:AnsightSessionVideoWriterError(writer, @"Timed out finalizing compressed video.") userInfo:nil];
+            return 1;
+        }
+        @catch (NSException *exception)
+        {
+            [reader cancelReading];
+            [writer cancelWriting];
+            AnsightSessionVideoWriteError(exception.reason, errorBuffer, errorBufferCapacity);
+            return 0;
+        }
+    }
+}
+
+int32_t AnsightSessionVideoMac_ExtractFrame(
+    const char *videoPath, const char *imagePath, int64_t positionUs, int32_t maxDimension,
+    char *errorBuffer, int32_t errorBufferCapacity)
+{
+    @autoreleasepool
+    {
+        AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:videoPath]] options:nil];
+        AVAssetImageGenerator *generator = [AVAssetImageGenerator assetImageGeneratorWithAsset:asset];
+        generator.appliesPreferredTrackTransform = YES;
+        generator.maximumSize = CGSizeMake(maxDimension, maxDimension);
+        generator.requestedTimeToleranceBefore = kCMTimeZero;
+        generator.requestedTimeToleranceAfter = kCMTimeZero;
+        NSError *error = nil;
+        CGImageRef frame = [generator copyCGImageAtTime:CMTimeMake(positionUs, AnsightSessionVideoTimescale)
+                                            actualTime:nullptr error:&error];
+        if (frame == nullptr)
+        {
+            AnsightSessionVideoWriteError(error.localizedDescription ?: @"Unable to decode video frame.", errorBuffer, errorBufferCapacity);
+            return 0;
+        }
+        NSURL *output = [NSURL fileURLWithPath:[NSString stringWithUTF8String:imagePath]];
+        CGImageDestinationRef destination = CGImageDestinationCreateWithURL((__bridge CFURLRef)output, CFSTR("public.jpeg"), 1, nullptr);
+        BOOL success = NO;
+        if (destination != nullptr)
+        {
+            NSDictionary *options = @{(__bridge NSString *)kCGImageDestinationLossyCompressionQuality: @0.78};
+            CGImageDestinationAddImage(destination, frame, (__bridge CFDictionaryRef)options);
+            success = CGImageDestinationFinalize(destination);
+            CFRelease(destination);
+        }
+        CGImageRelease(frame);
+        if (!success) AnsightSessionVideoWriteError(@"Unable to write the extracted video frame.", errorBuffer, errorBufferCapacity);
+        return success ? 1 : 0;
+    }
+}

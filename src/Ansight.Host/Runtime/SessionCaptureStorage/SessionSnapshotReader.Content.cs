@@ -550,6 +550,7 @@ internal static partial class SessionSnapshotReader
             Author = snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Tags = snapshot.Tags.ToArray(),
             Notes = snapshot.Notes,

@@ -75,6 +75,7 @@ internal static class SessionLiveUpdateBuilder
             session.Annotations.Count,
             session.Analyses.Count)
         {
+            VideoRecordings = session.VideoRecordings.ToArray(),
             CustomProperties = session.CustomProperties?.DeepClone().AsObject(),
             LifecycleEvents = session.ApplicationEvents.Where(appEvent =>
                 appEvent.Label is "lifecycle.foreground" or "lifecycle.background").ToArray()

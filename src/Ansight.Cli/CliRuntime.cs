@@ -69,7 +69,9 @@ internal static class CliRuntime
             EnableRepositoryAutomations = options.EnableRepositoryAutomations,
             AutomationRepositoryPaths = options.AutomationRepositoryPaths,
             JavaScriptExecutablePath = options.JavaScriptExecutablePath,
-            SessionVideoEncoder = CliSessionVideoEncoderFactory.Create()
+            SessionVideoEncoder = CliSessionVideoEncoderFactory.Create(),
+            SessionVideoTranscoder = OperatingSystem.IsMacOS() ? new MacSessionVideoTranscoder() : null,
+            SessionVideoFrameExtractor = CliSessionVideoEncoderFactory.CreateFrameExtractor()
         };
     }
 

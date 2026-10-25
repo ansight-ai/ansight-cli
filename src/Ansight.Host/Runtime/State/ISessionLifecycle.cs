@@ -29,5 +29,6 @@ internal interface ISessionLifecycle
         IReadOnlyDictionary<string, byte[]> imageBytesByFrameId,
         byte[]? appIconBytes = null,
         IReadOnlyDictionary<string, byte[]>? artifactBytesByRelativePath = null,
-        SessionReplaySource? replaySource = null);
+        SessionReplaySource? replaySource = null,
+        IReadOnlyDictionary<string, string>? videoFilesById = null);
 }

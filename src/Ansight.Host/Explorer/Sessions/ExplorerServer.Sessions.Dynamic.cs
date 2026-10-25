@@ -22,6 +22,11 @@ internal sealed partial class ExplorerServer
 {
     private async Task<bool> TryHandleSessionsDynamicGetAsync(string route, HttpListenerRequest request, HttpListenerResponse response, bool isHead, CancellationToken cancellationToken, string[] segments)
     {
+        if (segments.Length == 5 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "video")
+        {
+            await WriteSessionVideoAsync(request, response, Uri.UnescapeDataString(segments[2]), Uri.UnescapeDataString(segments[4]), isHead, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
         if (segments.Length == 4 && segments[0] == "api" && segments[1] == "sessions" && segments[3] == "activity")
         {
             await WriteSessionActivityAsync(Uri.UnescapeDataString(segments[2]), request, response, isHead, cancellationToken).ConfigureAwait(false);

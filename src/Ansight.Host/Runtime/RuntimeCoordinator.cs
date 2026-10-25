@@ -74,6 +74,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         ArgumentNullException.ThrowIfNull(hostRuntimeOptions);
         FeatureLifetime = hostRuntimeOptions.FeatureLifetime;
         SessionVideoEncoder = hostRuntimeOptions.SessionVideoEncoder;
+        SessionVideoTranscoder = hostRuntimeOptions.SessionVideoTranscoder;
+        SessionVideoFrameExtractor = hostRuntimeOptions.SessionVideoFrameExtractor;
         protocolDefaultsOverride = CreateProtocolDefaultsOverride(hostRuntimeOptions);
 
         ApplicationPaths = applicationPaths ?? throw new ArgumentNullException(nameof(applicationPaths));
@@ -172,6 +174,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         options ??= new RuntimeOptions();
         FeatureLifetime = options.FeatureLifetime;
         SessionVideoEncoder = options.SessionVideoEncoder;
+        SessionVideoTranscoder = options.SessionVideoTranscoder;
+        SessionVideoFrameExtractor = options.SessionVideoFrameExtractor;
         javaScriptExecutablePath = options.JavaScriptExecutablePath;
         protocolDefaultsOverride = CreateProtocolDefaultsOverride(options);
 
@@ -315,6 +319,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public SessionEditingService SessionEditing { get; }
 
     internal ISessionVideoEncoder? SessionVideoEncoder { get; }
+    internal ISessionVideoTranscoder? SessionVideoTranscoder { get; }
+    internal ISessionVideoFrameExtractor? SessionVideoFrameExtractor { get; }
 
     public AppService Apps { get; }
 

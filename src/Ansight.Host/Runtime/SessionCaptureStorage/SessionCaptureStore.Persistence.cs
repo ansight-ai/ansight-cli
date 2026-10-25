@@ -87,6 +87,7 @@ internal sealed partial class SessionCaptureStore
             Author = snapshot.Author,
             ReplaySource = snapshot.ReplaySource,
             CaptureSource = snapshot.CaptureSource,
+            VideoRecordings = snapshot.VideoRecordings,
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Tags = snapshot.Tags.ToArray(),
             Notes = snapshot.Notes,
@@ -161,6 +162,7 @@ internal sealed partial class SessionCaptureStore
             Author = summary.Author,
             ReplaySource = summary.ReplaySource,
             CaptureSource = summary.CaptureSource,
+            VideoRecordings = summary.VideoRecordings,
             SdkVersion = summary.SdkVersion,
             Tags = summary.Tags.ToArray(),
             Notes = summary.Notes,
@@ -813,6 +815,7 @@ internal sealed partial class SessionCaptureStore
 
     private static void PruneDetachedSessionContent(SessionPathLayout layout, AppSessionSnapshot snapshot)
     {
+        PruneDetachedVideoFiles(layout, snapshot);
         PruneDetachedCapturedImages(layout, snapshot.Images);
         PruneDetachedArtifactPayloadDirectories(layout, snapshot.ArtifactSnapshots);
         ReconcileNetworkRequestDocuments(layout.NetworkRequestsDirectoryPath, snapshot.NetworkRequests);
