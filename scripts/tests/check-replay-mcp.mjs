@@ -61,6 +61,19 @@ try {
   assert.ok(resourceUri.includes(result.structuredContent.viewerBuild));
   const full = new URL(result._meta.replay.fullReplayUrl);
   assert.equal(full.searchParams.get('sessionId'), sessionId);
+  // Scrubbing requests more screenshots after show_replay. Exercise overlapping
+  // requests and distant positions while the resident host owns the data directory.
+  const frames = result._meta.replay.frames;
+  const positions = [...new Set([0, Math.floor(frames.length / 2), Math.max(0, frames.length - 4)])];
+  const batches = await Promise.all(positions.map(async position => {
+    const frameIds = frames.slice(position, position + 4).map(frame => frame.frameId);
+    const batch = await call('get_replay_frames', { sessionId, frameIds });
+    assert.deepEqual(batch._meta.frames.map(frame => frame.frameId), frameIds);
+    assert.ok(batch._meta.frames.every(frame => /^data:image\/(webp|png|jpeg);base64,/.test(frame.dataUrl)));
+    return frameIds.length;
+  }));
+  const refreshed = await call('refresh_replay_annotations', { sessionId });
+  assert.equal(refreshed.structuredContent.annotationCount, refreshed._meta.annotations.length);
   const marker = result.structuredContent.markers.at(-1);
   if (marker) {
     const read = await call('read_replay_annotation', { sessionId, annotationId: marker.id });
@@ -68,7 +81,7 @@ try {
     assert.ok(read.content.some(item => item.type === 'image' && item.data.length > 0));
   }
   console.log(JSON.stringify({ verified: true, server: hello.serverInfo, sessionId,
-    frames: result.structuredContent.frameCount, touches: result.structuredContent.touchCount,
+    frames: result.structuredContent.frameCount, scrubbedFrames: batches.reduce((sum, count) => sum + count, 0), touches: result.structuredContent.touchCount,
     annotations: result.structuredContent.markers.length, resourceUri }, null, 2));
 } finally {
   child.stdin.end();

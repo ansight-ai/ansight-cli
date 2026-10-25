@@ -163,6 +163,27 @@ internal sealed class ReplayMcpCommand(string html, ReplayBackend backend)
         }
     }
 
+    internal static async Task<JsonObject> RunCommandAsync(string[] command, string dataDirectory, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        const string hostUnavailable = "The local Ansight host is unavailable or restarting. Start it with 'ansight host run' if needed, then retry the replay.";
+        var arguments = CliArguments.Parse([.. command, "--data-dir", dataDirectory, "--json"]);
+        using var text = new StringWriter();
+        var output = new CliOutput(true, text, Console.Error);
+        // Replay is a client of the resident host. The general CLI dispatcher can
+        // fall back to a standalone runtime when host discovery is unavailable,
+        // competing for the host's data lock (and with concurrent evidence reads).
+        var isHostStatus = command is ["host", "status"];
+        var exit = isHostStatus
+            ? HostCommands.ShowStatus(arguments, output)
+            : await ControlClient.TryRunAsync(arguments, output, token)
+                ?? throw new CliHostUnavailableException(hostUnavailable);
+        var result = JsonNode.Parse(text.ToString())?.AsObject() ?? throw new InvalidOperationException("Ansight command returned no evidence.");
+        if (isHostStatus && exit != CliExitCodes.Success) throw new CliHostUnavailableException(hostUnavailable);
+        if (exit != 0) throw new InvalidOperationException(Text(result, "message"));
+        return result;
+    }
+
     internal static async Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken token)
     {
         if (CliCommandHelp.IsRequested(arguments) || arguments.Positionals.Count == 1)
@@ -175,17 +196,8 @@ internal sealed class ReplayMcpCommand(string html, ReplayBackend backend)
         using var reader = new StreamReader(resource);
         var html = await reader.ReadToEndAsync(token);
         var dataDirectory = CliRuntime.ResolveDataDirectory(arguments.GetOption("data-dir"));
-        async Task<JsonObject> Run(string[] command, CancellationToken cancellation)
-        {
-            using var text = new StringWriter();
-            var exit = await CliApplication.RunParsedAsync(CliArguments.Parse([.. command, "--data-dir", dataDirectory, "--json"]),
-                new CliOutput(true, text, Console.Error), cancellation, allowResidentHostForwarding: true);
-            var result = JsonNode.Parse(text.ToString())?.AsObject() ?? throw new InvalidOperationException("Ansight command returned no evidence.");
-            if (exit != 0) throw new InvalidOperationException(Text(result, "message"));
-            return result;
-        }
         using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) };
-        var replay = new ReplayMcpCommand(html, new ReplayBackend(Run, http));
+        var replay = new ReplayMcpCommand(html, new ReplayBackend((command, cancellation) => RunCommandAsync(command, dataDirectory, cancellation), http));
         var options = new McpServerOptions
         {
             ServerInfo = new Implementation { Name = "ansight", Version = typeof(CliApplication).Assembly.GetName().Version + "+replay." + replay.ViewerBuild },

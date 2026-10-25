@@ -39,7 +39,8 @@ public sealed class LocalAccessBoundaryTests
         {
             var arguments = CliArguments.Parse([command, action, "capture", "--local"]);
             Assert.Equal(CliAccessClass.Runner, CliCommandAccessPolicy.Classify(arguments, true));
-            Assert.Equal(CliAccessClass.Cloud, CliCommandAccessPolicy.Classify(arguments));
+            Assert.Equal(CliAccessClass.Bootstrap, CliCommandAccessPolicy.Classify(arguments));
+            Assert.True(CliCommandAccessPolicy.UsesAiGateway(arguments));
         }
     }
 
@@ -58,7 +59,6 @@ public sealed class LocalAccessBoundaryTests
     [InlineData("session", "summary")]
     [InlineData("session", "summarize")]
     [InlineData("session", "summarise")]
-    [InlineData("session", "summary-local")]
     [InlineData("session", "url")]
     [InlineData("session", "share-url")]
     [InlineData("session", "replay-url")]

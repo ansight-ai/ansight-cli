@@ -66,6 +66,11 @@ internal static class CliCommandAccessPolicy
             }
         }
 
+        // Local summaries use the host's retained evidence and its AI gateway, just
+        // like app/test execution. Opening a second runtime would contend for the
+        // resident host's storage lock. Scoped runner keys were handled above.
+        if (IsLocalSessionSummary(arguments)) return CliAccessClass.Bootstrap;
+
         // Cloud operations require identity; local tools and unknown commands never
         // require a subscription. Unknown commands reach the normal usage validation.
         if (command == "cloud" && action is "team" or "teams" or "app" or "apps"
@@ -99,8 +104,15 @@ internal static class CliCommandAccessPolicy
             || command is "app-graph" or "app-graphs" && action is "explore" or "run"
             || command is "test" or "tests" && action is "run" or "run-all" or "run-inline" or "retry-metering"
             || command is "task" or "tasks" && action is "run" or "extract"
-            || command == "replay";
+            || command == "replay"
+            || IsLocalSessionSummary(arguments);
     }
+
+    private static bool IsLocalSessionSummary(CliArguments arguments)
+        => arguments.Positionals.Count >= 2
+           && arguments.Positionals[0].ToLowerInvariant() is "session" or "sessions"
+           && (arguments.Positionals[1].ToLowerInvariant() is "summary-local" or "summarize-local" or "summarise-local"
+               || arguments.HasFlag("local") && arguments.Positionals[1].ToLowerInvariant() is "summary" or "summarize" or "summarise");
 
     internal static bool UsesRequestScopedRunnerCredentials(CliArguments arguments)
     {
