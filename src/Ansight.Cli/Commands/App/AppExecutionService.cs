@@ -405,6 +405,19 @@ internal static class AppExecutionService
             arguments.HasFlag("close-app-on-completion"),
             lease.Runtime.Devices.TerminateApplicationAsync,
             output);
+        var reasoning = ReasoningOptions.Resolve(arguments);
+        var model = ReasoningOptions.ResolveModelOverride(arguments);
+        var requestedMaximumRoundTrips = arguments.GetIntOption("max-round-trips", 64, 1, 4_096);
+        var requestedTeamId = WorkspaceTestTeamOptions.Resolve(arguments);
+        await using var preparationScope = new WorkspaceRunPreparationScope(
+            lease.Runtime.WorkspaceTests.RunGateway, cancellationToken,
+            message => output.WriteProgress($"[metering.warning] {message}"));
+        Task<WorkspaceTestRunPreparation> PrepareRunAsync(string appId) => preparationScope.PrepareAsync(token =>
+            PrepareAppExecutionRunAsync(lease.Runtime.WorkspaceTests.RunGateway, appId, model,
+                Path.Combine(lease.Runtime.BaseFolderPath, "app-executions"), requestedTeamId,
+                instructions.Count, token, reasoning));
+        if (target.RequiresLaunch) _ = PrepareRunAsync(applicationIdentifier!);
+
         AppSessionSnapshot snapshot;
         WorkspaceTestTarget? launchedTarget = null;
         if (target.RequiresLaunch)
@@ -493,19 +506,7 @@ internal static class AppExecutionService
                 output.WriteProgress(SimulatorAgentProgressFormatter.Format(value));
             }
         });
-        var reasoning = ReasoningOptions.Resolve(arguments);
-        var model = ReasoningOptions.ResolveModelOverride(arguments);
-        var requestedMaximumRoundTrips = arguments.GetIntOption("max-round-trips", 64, 1, 4_096);
-        var preparation = await PrepareAppExecutionRunAsync(
-                lease.Runtime.WorkspaceTests.RunGateway,
-                snapshot.AppId,
-                model,
-                Path.Combine(lease.Runtime.BaseFolderPath, "app-executions"),
-                WorkspaceTestTeamOptions.Resolve(arguments),
-                instructions.Count,
-                cancellationToken,
-                reasoning)
-            .ConfigureAwait(false);
+        var preparation = await PrepareRunAsync(snapshot.AppId).ConfigureAwait(false);
         if (preparation.HasResolvedTeam)
         {
             output.WriteProgress(
@@ -621,6 +622,7 @@ internal static class AppExecutionService
         finally
         {
             runStopwatch.Stop();
+            preparationScope.MarkCompletionHandled();
             var meteringOutcome = await CompleteAppExecutionRunAsync(
                     lease.Runtime.WorkspaceTests.RunGateway,
                     preparation,

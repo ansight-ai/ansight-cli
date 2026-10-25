@@ -399,37 +399,46 @@ public sealed partial class WorkspaceTestService
         WorkspaceTestTarget? launchedTarget = null;
         IDisposable? deviceClaim = null;
         DeviceRunSession? deviceSession = null;
-        WorkspaceTestRunPreparation? meteredPreparation = null;
-        var meteringCompleted = false;
+        await using var preparationScope = new WorkspaceRunPreparationScope(runGateway, cancellationToken,
+            message => progress?.Report(new WorkspaceTestRunProgress("metering.failed", message)));
+        Task<WorkspaceTestRunPreparation> PrepareRunAsync() => preparationScope.PrepareAsync(token =>
+            runGateway is null
+                ? Task.FromResult(WorkspaceTestRunPreparation.Failure(
+                    "Workspace tests require the Ansight cloud gateway. Sign in with 'ansight account login'."))
+                : runGateway.PrepareAsync(new WorkspaceTestRunPreparationRequest(
+                    request.TeamId, request.WorkspacePath, test.TestId, test.Name, test.AppId,
+                    request.Model, test.Validation.Assertions.Count, InstructionCount: 1)
+                    { Reasoning = request.Reasoning }, token));
         string? enrollmentInviteId = null;
         DateTimeOffset? targetLaunchStartedUtc = null;
-        if (!attachedDeviceSession && ((session is null && string.IsNullOrWhiteSpace(request.SessionId))
-            || HasExplicitTarget(request.Target)))
-        {
-            targetLaunchStartedUtc = DateTimeOffset.UtcNow;
-            var launchResult = await targetLauncher.LaunchAsync(
-                test.AppId,
-                request.Target,
-                progress,
-                cancellationToken).ConfigureAwait(false);
-            if (!launchResult.IsSuccess)
-            {
-                return WorkspaceTestRunResult.Failure(launchResult.Message, test, target: launchResult.Target);
-            }
-
-            launchedTarget = launchResult.Target;
-            enrollmentInviteId = launchResult.EnrollmentInviteId;
-            deviceClaim = launchResult.DeviceClaim;
-            session = launchResult.ExistingSession;
-            attachedDeviceSession = session is not null;
-        }
-
         using var sessionClaim = new WorkspaceTestSessionClaim(this);
         SessionUiTestRun? sessionRun = null;
         WorkspaceTestRunResult? sessionRunResult = null;
         var sessionRunCancelled = false;
         try
         {
+            if (!attachedDeviceSession && ((session is null && string.IsNullOrWhiteSpace(request.SessionId))
+                || HasExplicitTarget(request.Target)))
+            {
+                // Brokering only needs the validated definition, not a connected session.
+                if (!test.IsTaskOnly && runGateway is not null) _ = PrepareRunAsync();
+                targetLaunchStartedUtc = DateTimeOffset.UtcNow;
+                var launchResult = await targetLauncher.LaunchAsync(
+                    test.AppId,
+                    request.Target,
+                    progress,
+                    cancellationToken).ConfigureAwait(false);
+                launchedTarget = launchResult.Target;
+                enrollmentInviteId = launchResult.EnrollmentInviteId;
+                deviceClaim = launchResult.DeviceClaim;
+                if (!launchResult.IsSuccess)
+                {
+                    return WorkspaceTestRunResult.Failure(launchResult.Message, test, target: launchedTarget);
+                }
+                session = launchResult.ExistingSession;
+                attachedDeviceSession = session is not null;
+            }
+
             if (deviceMode && !attachedDeviceSession && launchedTarget is not null)
             {
                 try
@@ -519,24 +528,7 @@ public sealed partial class WorkspaceTestService
                 return sessionRunResult;
             }
 
-            var preparation = runGateway is null
-                ? WorkspaceTestRunPreparation.Failure(
-                    "Workspace tests require the Ansight cloud gateway. Sign in with 'ansight account login'.")
-                : await runGateway.PrepareAsync(
-                    new WorkspaceTestRunPreparationRequest(
-                        request.TeamId,
-                        request.WorkspacePath,
-                        test.TestId,
-                        test.Name,
-                        test.AppId,
-                        request.Model,
-                        test.Validation.Assertions.Count,
-                        InstructionCount: 1)
-                    {
-                        Reasoning = request.Reasoning
-                    },
-                    cancellationToken).ConfigureAwait(false);
-            meteredPreparation = preparation;
+            var preparation = await PrepareRunAsync().ConfigureAwait(false);
             if (preparation.HasResolvedTeam)
             {
                 progress?.Report(new WorkspaceTestRunProgress(
@@ -638,7 +630,7 @@ public sealed partial class WorkspaceTestService
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
                 var audit = runResult.AgentResult?.Audit;
-                meteringCompleted = true;
+                preparationScope.MarkCompletionHandled();
                 var completion = await runGateway!.CompleteAsync(
                     new WorkspaceTestRunMeterCompletion(
                         trackingRunId,
@@ -707,21 +699,7 @@ public sealed partial class WorkspaceTestService
                     CompletedUtc = DateTimeOffset.UtcNow
                 });
             }
-            if (!meteringCompleted && meteredPreparation?.UsesExternalTransport == true
-                && meteredPreparation.TrackingRunId is { } unfinishedRunId && runGateway is not null)
-            {
-                try
-                {
-                    await runGateway.CompleteAsync(new WorkspaceTestRunMeterCompletion(
-                        unfinishedRunId, cancellationToken.IsCancellationRequested ? "cancelled" : "failed",
-                        0, 0, 0, 0, 0), CancellationToken.None).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Preserve cancellation or the original failure; server cleanup reconciles abandoned runs.
-                    progress?.Report(new WorkspaceTestRunProgress("metering.failed", "Organisation metering completion failed."));
-                }
-            }
+            runtime.Pairing.RevokeUnconsumedEnrollment(enrollmentInviteId, test.AppId);
             try
             {
                 if (launchedTarget?.ApplicationLaunched == true)
