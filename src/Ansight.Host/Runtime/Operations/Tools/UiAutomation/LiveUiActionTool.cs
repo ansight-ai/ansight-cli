@@ -7,6 +7,7 @@ namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 internal enum LiveUiActionKind
 {
     Tap,
+    LongPress,
     TypeText,
     Swipe,
     Scroll,
@@ -61,6 +62,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     public override string Name => actionKind switch
     {
         LiveUiActionKind.Tap => "ansight_tap_ui",
+        LiveUiActionKind.LongPress => "ansight_long_press_ui",
         LiveUiActionKind.TypeText => "ansight_type_text",
         LiveUiActionKind.Swipe => "ansight_swipe_ui",
         LiveUiActionKind.Scroll => "ansight_scroll_ui",
@@ -76,6 +78,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     protected override string Title => actionKind switch
     {
         LiveUiActionKind.Tap => "Tap Live UI",
+        LiveUiActionKind.LongPress => "Long Press Live UI",
         LiveUiActionKind.TypeText => "Type Text Into Live UI",
         LiveUiActionKind.Swipe => "Swipe Live UI",
         LiveUiActionKind.Scroll => "Scroll Live UI",
@@ -91,6 +94,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     protected override string Description => actionKind switch
     {
         LiveUiActionKind.Tap => "Tap a resolved live semantic target, one unique exact screenshot-text match, or an exact recorded viewport-normalized point through simulator or emulator input.",
+        LiveUiActionKind.LongPress => "Press and hold a resolved live target or viewport-normalized point, then release it. Retains before-and-after evidence. Hold duration defaults to 800 ms (500–10000 ms).",
         LiveUiActionKind.TypeText => "Resolve and focus a live visual-tree target, then type text through simulator or emulator input.",
         LiveUiActionKind.Swipe => "Perform an exact recorded path or directional finger swipe through Ansight's simulator or emulator input host.",
         LiveUiActionKind.Scroll => "Scroll toward content above, below, left, or right using a synthesized mobile swipe. Down reveals content below with an upward finger swipe; up reveals content above with a downward finger swipe.",
@@ -111,6 +115,9 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     {
         if (actionKind == LiveUiActionKind.KeyboardPress && arguments?["key"]?.GetValue<string>() != "Enter")
             return ToolError("keyboard.press requires key: 'Enter'.");
+        if (actionKind == LiveUiActionKind.LongPress
+            && !UiLongPressRequest.TryReadDuration(arguments, out _, out var durationError))
+            return ToolError(durationError);
         if (!sessionResolver.TryResolveLiveSession(arguments, out var snapshot, out var resolutionError))
         {
             return ToolError(resolutionError);
@@ -184,15 +191,15 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         bool includeScreenshot,
         string? correlationId)
     {
-        var hasRecordedTapPoint = actionKind == LiveUiActionKind.Tap
-                                  && (arguments?.ContainsKey("normalizedX") == true
-                                      || arguments?.ContainsKey("normalizedY") == true);
+        var hasRecordedTapPoint = (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
+                                  && (arguments?["normalizedX"] is not null
+                                      || arguments?["normalizedY"] is not null);
         var requiresTarget = actionKind is LiveUiActionKind.TypeText or LiveUiActionKind.KeyboardOpen
-                             || (actionKind == LiveUiActionKind.Tap && !hasRecordedTapPoint);
+                             || ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && !hasRecordedTapPoint);
         if (requiresTarget && !selector.HasCriteria)
         {
             return ToolError(
-                actionKind == LiveUiActionKind.Tap
+                (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
                     ? "A stable UI selector or a recorded normalizedX/normalizedY viewport point is required for this action."
                     : "A stable UI selector is required for this action.");
         }
@@ -227,7 +234,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 var canUseOcr = arguments?["targetFingerprint"] is null && selector.CanUseOcr
                                 && RunRequestContext.AllowsScreenshotOcr(correlationId);
-                if (actionKind == LiveUiActionKind.Tap && canUseOcr)
+                if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && canUseOcr)
                 {
                     var ocrResult = await LiveUiOcrSearch.FindAsync(
                         runtimeState,
@@ -352,10 +359,11 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             return ToolError("The selected UI node does not expose usable screen-space bounds within the current viewport.");
         }
 
-        if (actionKind == LiveUiActionKind.Tap
+        if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
             && target is not null
             && !HasExplicitTapPoint(arguments)
-            && IsUnsafeImplicitTapTarget(target, targetBounds, viewport))
+            && IsUnsafeImplicitTapTarget(target, targetBounds, viewport,
+                actionKind == LiveUiActionKind.LongPress ? "longPress" : "tap"))
         {
             return ToolError(
                 "The selector resolved to a non-actionable semantic container covering nearly the whole viewport. "
@@ -363,13 +371,13 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         var inputPoint = new LiveUiScreenPoint(targetBounds.CenterX, targetBounds.CenterY);
-        if (actionKind == LiveUiActionKind.Tap && ocrNormalizedPoint is { } normalizedOcrPoint)
+        if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && ocrNormalizedPoint is { } normalizedOcrPoint)
         {
             inputPoint = new LiveUiScreenPoint(
                 viewport.X + (normalizedOcrPoint.X * viewport.Width),
                 viewport.Y + (normalizedOcrPoint.Y * viewport.Height));
         }
-        else if (actionKind == LiveUiActionKind.Tap
+        else if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
             && !TryResolveTapPoint(arguments, targetBounds, viewport, out inputPoint, out var tapPointError))
         {
             return ToolError(tapPointError);
@@ -406,6 +414,13 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         NormalizeY(inputPoint.Y, viewport),
                         capture.Session.AppId),
                     ToolExecutionCancellation.Current);
+                break;
+            case LiveUiActionKind.LongPress:
+                UiLongPressRequest.TryReadDuration(arguments, out var holdDuration, out _);
+                inputResult = await uiInputRouter.LongPressAsync(
+                    new UiLongPressRequest(capture.Session.SessionId, deviceIdentifier,
+                        NormalizeX(inputPoint.X, viewport), NormalizeY(inputPoint.Y, viewport),
+                        holdDuration, capture.Session.AppId), ToolExecutionCancellation.Current);
                 break;
             case LiveUiActionKind.TypeText:
                 var focusResult = await uiInputRouter.TapAsync(
@@ -536,7 +551,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     internal static bool IsUnsafeImplicitTapTarget(
         LiveUiNodeMatch target,
         LiveUiBounds targetBounds,
-        LiveUiBounds viewport)
+        LiveUiBounds viewport,
+        string action = "tap")
     {
         var intersection = LiveUiBounds.Intersection(targetBounds, viewport);
         if (intersection is null || viewport.Width <= 0 || viewport.Height <= 0)
@@ -548,17 +564,17 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var targetArea = intersection.Width * intersection.Height;
         var supportedActions = LiveUiNodeQuery.ReadSupportedActions(target.Node, target.TypeRegistry);
         return targetArea / viewportArea >= 0.9
-               && !supportedActions.Contains("tap", StringComparer.OrdinalIgnoreCase)
+               && !supportedActions.Contains(action, StringComparer.OrdinalIgnoreCase)
                && LiveUiNodeQuery.ReadRole(target.Node, target.TypeRegistry) is "view" or "application";
     }
 
     private static bool HasExplicitTapPoint(JsonObject? arguments)
-        => arguments?.ContainsKey("normalizedX") == true
-           || arguments?.ContainsKey("normalizedY") == true
-           || arguments?.ContainsKey("screenX") == true
-           || arguments?.ContainsKey("screenY") == true
-           || arguments?.ContainsKey("targetX") == true
-           || arguments?.ContainsKey("targetY") == true;
+        => arguments?["normalizedX"] is not null
+           || arguments?["normalizedY"] is not null
+           || arguments?["screenX"] is not null
+           || arguments?["screenY"] is not null
+           || arguments?["targetX"] is not null
+           || arguments?["targetY"] is not null;
 
     private async Task<UiInputResult> ExecuteSwipeAsync(
         LiveUiTreeCapture capture,
@@ -893,7 +909,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 nullable: true);
         }
 
-        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.TypeText)
+        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress or LiveUiActionKind.TypeText)
         {
             properties["targetSource"] = ToolSchema.String(
                 "Copy the capture provider from tapHint.selector unchanged. The host resolves the target in that same provider and checks fresh evidence; never invent a source.",
@@ -902,7 +918,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 "Copy this opaque freshness value from tapHint.selector when supplied. The host rechecks the target and nearby text before acting; rediscover if it changed.",
                 nullable: true);
         }
-        if (actionKind == LiveUiActionKind.Tap)
+        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
         {
             properties["normalizedX"] = ToolSchema.Number(
                 "Optional recorded viewport-normalized X coordinate from 0 through 1. Must be supplied with normalizedY. A selector is not required for this recorded-coordinate form.",
@@ -923,6 +939,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 "Optional target-local Y coordinate returned by an inspection tool for the selected native surface. Must be supplied with targetX and is translated through the selected target's live bounds.",
                 nullable: true);
         }
+
+        if (actionKind == LiveUiActionKind.LongPress)
+            properties["durationMs"] = ToolSchema.Integer(
+                "Hold duration from 500 through 10000 milliseconds. Defaults to 800.", nullable: true);
 
         if (actionKind is LiveUiActionKind.Swipe or LiveUiActionKind.Scroll)
         {
@@ -974,6 +994,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     private string Capability => actionKind switch
     {
         LiveUiActionKind.Tap => "ui.tap",
+        LiveUiActionKind.LongPress => "ui.long_press",
         LiveUiActionKind.TypeText => "ui.type_text",
         LiveUiActionKind.Swipe => "ui.swipe",
         LiveUiActionKind.Scroll => "ui.scroll",

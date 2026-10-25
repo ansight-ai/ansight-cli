@@ -201,6 +201,7 @@ internal sealed class ToolCatalog
             TaskSessionBound(new ScreenshotInspectionTool(services, evaluate: false)),
             TaskSessionBound(new ScreenshotInspectionTool(services, evaluate: true)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.Tap)),
+            TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.LongPress)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.TypeText)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.Swipe)),
             TaskSessionBound(new LiveUiActionTool(services, LiveUiActionKind.Scroll)),

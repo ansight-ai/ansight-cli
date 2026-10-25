@@ -15,11 +15,16 @@ Never guess future targets, put tasks/completion in a UI batch, or replay a succ
 Type focuses and replaces the field by default; no separate tap is needed. Search input echo is not a result:
 wait for the exact result outside the input, an explicit empty/error state, or loading completion.
 
-Load extended-ui for scroll/assert/secret entry; gestures for swipe/pinch. Visible does not imply on-screen.
+Load extended-ui for scroll/assert/secret entry; gestures for long-press/swipe/pinch. Visible does not imply on-screen.
 Use observed targets and verify the requested postcondition. Back must serve the requested path.
 <!-- /template -->
 
 <!-- template:gestures -->
+Use ansight_long_press_ui for press-and-hold interactions such as context menus. Load the gestures bundle,
+copy the complete selector from a fresh tapHint (including its provider and fingerprint), or use an observed
+normalizedX/normalizedY point. durationMs defaults to 800 and accepts 500–10000 milliseconds. Verify the
+resulting UI after release. UI sequences also accept kind: "longPress" with normalized coordinates and durationMs.
+
 ansight_swipe_ui describes finger travel: up moves the finger upward. ansight_scroll_ui describes the content
 direction to reveal. Use only observed targets or host-provided tapHint/swipeHint coordinates; preserve selector
 and coordinate space. targetX/targetY are surface-local; screenX/screenY are viewport coordinates. Refresh hints

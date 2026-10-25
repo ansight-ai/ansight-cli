@@ -20,7 +20,8 @@ public enum UiAutomationOperation
     KeyboardDismiss,
     KeyboardPress,
     KeyboardSubmit,
-    PlayPen
+    PlayPen,
+    LongPress
 }
 
 public sealed record UiAutomationResult(
@@ -106,6 +107,7 @@ public sealed class UiAutomationService
             UiAutomationOperation.Snapshot => "ansight_get_live_visual_tree",
             UiAutomationOperation.Find => "ansight_find_ui",
             UiAutomationOperation.Tap => "ansight_tap_ui",
+            UiAutomationOperation.LongPress => "ansight_long_press_ui",
             UiAutomationOperation.Type => "ansight_type_text",
             UiAutomationOperation.Swipe => "ansight_swipe_ui",
             UiAutomationOperation.PlayPen => "ansight_stylus_ui",

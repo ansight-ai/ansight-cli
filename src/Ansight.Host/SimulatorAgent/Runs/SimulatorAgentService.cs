@@ -2702,7 +2702,7 @@ public sealed partial class SimulatorAgentService : IDisposable
             [' ', '\t', '\r', '\n', '.', ',', ':', ';', '!', '?', '"', '\''],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return words.Any(static word => word.ToLowerInvariant() is
-            "select" or "tap" or "press" or "choose" or "open" or "start" or "launch" or "search"
+            "select" or "tap" or "press" or "hold" or "long-press" or "longpress" or "choose" or "open" or "start" or "launch" or "search"
             or "navigate" or "swipe" or "scroll" or "change" or "enter" or "type" or "dismiss" or "close");
     }
 
@@ -2815,6 +2815,7 @@ public sealed partial class SimulatorAgentService : IDisposable
 
     private static bool IsManualUiMutationTool(string toolName)
         => toolName is "ansight_tap_ui"
+            or "ansight_long_press_ui"
             or "ansight_type_text"
             or "ansight_type_secret"
             or "ansight_swipe_ui"
@@ -3319,6 +3320,7 @@ public sealed partial class SimulatorAgentService : IDisposable
 
     private static bool IsAppGraphNavigationAction(string toolName)
         => toolName is "ansight_tap_ui"
+            or "ansight_long_press_ui"
             or "ansight_type_text"
             or "ansight_swipe_ui"
             or "ansight_pinch_ui"

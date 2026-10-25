@@ -586,7 +586,7 @@ public sealed partial class HostTimelineTaskExtractorTests
     }
 
     [Fact]
-    public void Extract_GeneratesDirectionalSwipeAndReportsUnsupportedGesture()
+    public void Extract_GeneratesDirectionalSwipeAndReportsLongPressWithoutSelector()
     {
         var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
         var snapshot = CreateSnapshot(

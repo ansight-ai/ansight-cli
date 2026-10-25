@@ -114,6 +114,7 @@ internal static class UiCommands
             "snapshot" => UiAutomationOperation.Snapshot,
             "find" => UiAutomationOperation.Find,
             "tap" => UiAutomationOperation.Tap,
+            "long-press" => UiAutomationOperation.LongPress,
             "type" => UiAutomationOperation.Type,
             "swipe" => UiAutomationOperation.Swipe,
             "play-pen" => UiAutomationOperation.PlayPen,
@@ -122,7 +123,7 @@ internal static class UiCommands
             "wait" => UiAutomationOperation.Wait,
             "assert" => UiAutomationOperation.Assert,
             _ => throw new CliUsageException(
-                $"Unknown ui action '{action}'. Expected snapshot, find, tap, type, swipe, play-pen, pinch, back, wait, or assert.")
+                $"Unknown ui action '{action}'. Expected snapshot, find, tap, long-press, type, swipe, play-pen, pinch, back, wait, or assert.")
         };
 
     private static JsonObject BuildOperationArguments(
@@ -163,6 +164,12 @@ internal static class UiCommands
                 break;
             case UiAutomationOperation.Tap:
                 RequireSelector(result, "tap");
+                result["includeScreenshot"] = false;
+                break;
+            case UiAutomationOperation.LongPress:
+                RequireSelector(result, "long-press");
+                AddOptionalInteger(result, "durationMs", arguments, "duration-ms",
+                    UiLongPressRequest.MinimumDurationMilliseconds, UiLongPressRequest.MaximumDurationMilliseconds);
                 result["includeScreenshot"] = false;
                 break;
             case UiAutomationOperation.Type:
@@ -362,6 +369,9 @@ internal static class UiCommands
                 values.Add("limit");
                 break;
             case UiAutomationOperation.Tap:
+                break;
+            case UiAutomationOperation.LongPress:
+                values.Add("duration-ms");
                 break;
             case UiAutomationOperation.Type:
                 flags.Add("append");
@@ -590,6 +600,7 @@ internal static class UiCommands
              ansight ui snapshot [--session <id>|--app <id>] [options]
              ansight ui find [selector options] [--session <id>|--app <id>] [options]
              ansight ui tap [selector options] [--session <id>|--app <id>]
+             ansight ui long-press [selector options] [--duration-ms <500-10000>] [--session <id>|--app <id>]
              ansight ui type [selector options] (--value <text>|--secret <alias>) [--append]
              ansight ui swipe [selector options] [--direction <up|down|left|right>] [options]
              ansight ui play-pen --file <path.pen.json> [--mode hid|hid+sdk|sdk] [--target <id>] [--hover-recognizer <name>] [--session <id>|--app <id>]
@@ -667,6 +678,7 @@ internal static class UiCommands
              ansight ui snapshot --session session-001 --json
              ansight ui find --text "Europe" --role button --json
              ansight ui tap --automation-id MapTab
+             ansight ui long-press --automation-id RouteCard --duration-ms 800
              ansight ui type --automation-id SearchField --value "Kalymnos"
              ansight ui type --automation-id Password --value '@secret:com.example.app/login.password'
              ansight ui swipe --ancestor ResultsList --direction up --length 0.6

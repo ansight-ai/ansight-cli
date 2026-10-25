@@ -30,12 +30,12 @@ public static partial class TimelineTaskExtractor
             if (input.Status != "succeeded" || input.Kind == "type"
                 || input.StartedAtUtc < startUtc || input.CompletedAtUtc > endUtc) continue;
             SelectorCandidate? selected = null;
-            if (input.Kind == "tap")
+            if (input.Kind is "tap" or "longPress")
             {
                 if (input.NormalizedX is not { } x || input.NormalizedY is not { } y
                     || !double.IsFinite(x) || !double.IsFinite(y) || x < 0 || x > 1 || y < 0 || y > 1)
                 {
-                    diagnostics.Add($"Host tap {input.ActionId} has no valid viewport point; it was not generated.");
+                    diagnostics.Add($"Host {input.Kind} {input.ActionId} has no valid viewport point; it was not generated.");
                     continue;
                 }
                 var linkedTrees = snapshot.VisualTreeSnapshots
@@ -52,14 +52,20 @@ public static partial class TimelineTaskExtractor
                     .FirstOrDefault();
                 if (selected is null)
                 {
-                    diagnostics.Add($"Host tap {input.ActionId} has no stable recorded UI selector; "
+                    diagnostics.Add($"Host {input.Kind} {input.ActionId} has no stable recorded UI selector; "
                         + (coordinateFallback ? "replay uses its recorded viewport point." : "it was not generated."));
                     if (!coordinateFallback) continue;
                 }
             }
+            var duration = input.DurationMilliseconds ?? (long)(input.CompletedAtUtc - input.StartedAtUtc).TotalMilliseconds;
+            if (input.Kind == "longPress" && duration is < UiLongPressRequest.MinimumDurationMilliseconds or > UiLongPressRequest.MaximumDurationMilliseconds)
+            {
+                diagnostics.Add($"Host long press {input.ActionId} has an unsupported hold duration; it was not generated.");
+                continue;
+            }
             actions.Add(new GeneratedTaskAction(input.Kind, selected?.Selector,
-                (long)(input.CompletedAtUtc - input.StartedAtUtc).TotalMilliseconds, null, null,
-                selected?.Description ?? (input.Kind == "tap" ? "recorded viewport point"
+                duration, null, null,
+                selected?.Description ?? (input.Kind is "tap" or "longPress" ? "recorded viewport point"
                     : input.Kind == "keyboard.press" ? "press Enter in the focused input" : "submit the focused input"),
                 input.StartedAtUtc, input.StartedAtUtc, selected?.Key, null, selected?.VisualTreeSnapshotId,
                 input.NormalizedX, input.NormalizedY, null, null));
@@ -69,13 +75,15 @@ public static partial class TimelineTaskExtractor
     private static bool IsRecordedHostTap(TouchGestureSegment gesture, IReadOnlyList<HostInputAction> inputs,
         ISet<string> matchedInputs)
     {
-        if (gesture.Kind is not ("tap" or "incomplete") || gesture.PointerIds.Count != 1
+        if (gesture.Kind is not ("tap" or "longPress" or "incomplete") || gesture.PointerIds.Count != 1
             || TouchReviewGeometry.NormalizeTouchAction(gesture.Touches[^1].Action) == "cancel") return false;
         var point = TouchReviewGeometry.ResolveGesturePoint(gesture);
         if (!point.HasValue) return false;
         // Match at most one SDK gesture to each delivery attempt. Failed attempts remain review items. Time alone is not enough:
         // preserve other taps, drags and cancelled gestures even inside the same interval.
-        var match = inputs.Where(input => input.Kind == "tap" && !matchedInputs.Contains(input.ActionId)
+        var match = inputs.Where(input => input.Kind is "tap" or "longPress" && (gesture.Kind == input.Kind || gesture.Kind == "incomplete"
+                    || input.Kind == "longPress" && gesture.Kind == "tap")
+                && !matchedInputs.Contains(input.ActionId)
                 && input.NormalizedX.HasValue && input.NormalizedY.HasValue
                 && gesture.StartUtc >= input.StartedAtUtc.AddMilliseconds(-50)
                 && gesture.EndUtc <= input.CompletedAtUtc.AddMilliseconds(50)

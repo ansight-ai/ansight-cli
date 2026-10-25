@@ -11,7 +11,8 @@ internal sealed record HostInputAction(
     string Status,
     string? EvidenceActionId = null,
     double? NormalizedX = null,
-    double? NormalizedY = null)
+    double? NormalizedY = null,
+    int? DurationMilliseconds = null)
 {
     internal const string EventType = "ansight.host-input";
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
@@ -25,7 +26,7 @@ internal sealed record HostInputAction(
         try
         {
             var action = JsonSerializer.Deserialize<HostInputAction>(item.Details ?? "", jsonOptions);
-            return action is { ActionId.Length: > 0, Kind: "tap" or "type" or "keyboard.press" or "keyboard.submit" }
+            return action is { ActionId.Length: > 0, Kind: "tap" or "longPress" or "type" or "keyboard.press" or "keyboard.submit" }
                    && action.CompletedAtUtc >= action.StartedAtUtc
                    && action.Status is "succeeded" or "failed" or "interrupted"
                 ? action : null;

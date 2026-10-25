@@ -8,6 +8,11 @@ public interface IUiInputDriver
         UiTapRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<UiInputResult> LongPressAsync(
+        UiLongPressRequest request,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(UiInputResult.Failure("This input backend does not support long presses."));
+
     Task<UiInputResult> SwipeAsync(
         UiSwipeRequest request,
         CancellationToken cancellationToken = default);

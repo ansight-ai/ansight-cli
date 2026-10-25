@@ -6,6 +6,22 @@ namespace Ansight.Cli.Tests.Commands.Ui;
 public sealed class UiCommandsTests
 {
     [Fact]
+    public async Task LongPressPassesSelectorAndExactHoldDuration()
+    {
+        var result = await UiCommands.RunAsync(CliArguments.Parse([
+            "ui", "long-press", "--automation-id", "card", "--duration-ms", "3500", "--session", "hold-session"]),
+            new CliOutput(false, TextWriter.Null, TextWriter.Null), (operation, input, _) =>
+            {
+                Assert.Equal(UiAutomationOperation.LongPress, operation);
+                Assert.Equal("card", input["automationId"]!.GetValue<string>());
+                Assert.Equal(3500, input["durationMs"]!.GetValue<int>());
+                Assert.Equal("hold-session", input["sessionId"]!.GetValue<string>());
+                return Task.FromResult(Success(operation));
+            }, CancellationToken.None);
+        Assert.Equal(CliExitCodes.Success, result);
+    }
+
+    [Fact]
     public async Task FrameworkPenPlaybackPassesSurfaceWithoutNativeRecognizer()
     {
         var result = await UiCommands.RunAsync(CliArguments.Parse([

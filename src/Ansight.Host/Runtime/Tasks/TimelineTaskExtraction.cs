@@ -87,6 +87,7 @@ public static partial class TimelineTaskExtractor
             switch (gesture.Kind)
             {
                 case "tap":
+                case "longPress":
                     AddTapAction(
                         snapshot,
                         gesture,
@@ -96,10 +97,6 @@ public static partial class TimelineTaskExtractor
                     break;
                 case "drag":
                     AddSwipeAction(gesture, actions, diagnostics);
-                    break;
-                case "longPress":
-                    diagnostics.Add(
-                        $"Gesture {gesture.GestureId} is a long press; repository tasks do not yet expose a long-press action.");
                     break;
                 case "multiTouch":
                     diagnostics.Add(
@@ -141,7 +138,7 @@ public static partial class TimelineTaskExtractor
             endUtc,
             normalizedTitle,
             actions
-                .Where(static action => action.Kind != "tap" || action.Selector is not null)
+                .Where(static action => action.Kind is not ("tap" or "longPress") || action.Selector is not null)
                 .ToArray(),
             diagnostics);
         return new TimelineTaskExtraction(
@@ -175,10 +172,16 @@ public static partial class TimelineTaskExtractor
         ICollection<string> diagnostics,
         bool includeCoordinateFallback)
     {
+        if (gesture.Kind == "longPress" && gesture.DurationMilliseconds is < UiLongPressRequest.MinimumDurationMilliseconds or > UiLongPressRequest.MaximumDurationMilliseconds)
+        {
+            diagnostics.Add($"Long press {gesture.GestureId} has an unsupported hold duration; it was not generated.");
+            return;
+        }
+        var gestureLabel = gesture.Kind == "longPress" ? "Long press" : "Tap";
         var point = TouchReviewGeometry.ResolveGesturePoint(gesture);
         if (!point.HasValue)
         {
-            diagnostics.Add($"Tap {gesture.GestureId} has no usable normalized position.");
+            diagnostics.Add($"{gestureLabel} {gesture.GestureId} has no usable normalized position.");
             return;
         }
 
@@ -200,12 +203,12 @@ public static partial class TimelineTaskExtractor
             if (!includeCoordinateFallback)
             {
                 diagnostics.Add(
-                    $"Tap {gesture.GestureId} at ({point.Value.X:0.###}, {point.Value.Y:0.###}) has no stable UI selector.");
+                    $"{gestureLabel} {gesture.GestureId} at ({point.Value.X:0.###}, {point.Value.Y:0.###}) has no stable UI selector.");
                 return;
             }
 
             actions.Add(new GeneratedTaskAction(
-                "tap",
+                gesture.Kind,
                 Selector: null,
                 gesture.DurationMilliseconds,
                 Length: null,
@@ -221,14 +224,14 @@ public static partial class TimelineTaskExtractor
                 EndNormalizedX: null,
                 EndNormalizedY: null));
             diagnostics.Add(
-                $"Tap {gesture.GestureId} at ({point.Value.X:0.###}, {point.Value.Y:0.###}) has no stable UI selector; "
+                $"{gestureLabel} {gesture.GestureId} at ({point.Value.X:0.###}, {point.Value.Y:0.###}) has no stable UI selector; "
                 + "replay will use its recorded normalized viewport point.");
             return;
         }
 
         var selected = candidates[0];
         actions.Add(new GeneratedTaskAction(
-            "tap",
+            gesture.Kind,
             selected.Selector,
             gesture.DurationMilliseconds,
             Length: null,
@@ -246,7 +249,7 @@ public static partial class TimelineTaskExtractor
         if (candidates.Length > 1 && candidates[1].Score == selected.Score)
         {
             diagnostics.Add(
-                $"Tap {gesture.GestureId} matched multiple equally ranked targets; review selector {selected.Description}.");
+                $"{gestureLabel} {gesture.GestureId} matched multiple equally ranked targets; review selector {selected.Description}.");
         }
     }
 
@@ -858,6 +861,12 @@ public static partial class TimelineTaskExtractor
             return $"  const keyboard{sequence} = await {call};\n"
                 + $"  expect(keyboard{sequence}.performed, {{ id: \"recorded-keyboard-{sequence}\" }}).toBe(true);\n";
         }
+        if (action.Kind == "longPress")
+        {
+            var arguments = LongPressArguments(action);
+            return $"  const hold{sequence} = await ansight.ui.longPress({arguments.ToJsonString()});\n"
+                + $"  expect(hold{sequence}.performed, {{ id: \"recorded-long-press-{sequence}\" }}).toBe(true);\n";
+        }
         if (action.Kind is "tap" or "input")
         {
             var operationPath = "Runtime/Tasks/Resources/timeline-task-tap-operation.ts";
@@ -892,6 +901,17 @@ public static partial class TimelineTaskExtractor
         return EmbeddedTextResource.Render(
             "Runtime/Tasks/Resources/timeline-task-swipe-action.ts",
             values).TrimEnd();
+    }
+
+    private static JsonObject LongPressArguments(GeneratedTaskAction action)
+    {
+        var arguments = action.Selector?.DeepClone().AsObject() ?? new JsonObject
+        {
+            ["normalizedX"] = action.StartNormalizedX,
+            ["normalizedY"] = action.StartNormalizedY
+        };
+        arguments["durationMs"] = action.DurationMilliseconds;
+        return arguments;
     }
 
     private static string BuildJsonProperties(JsonObject value)
@@ -953,6 +973,8 @@ public static partial class TimelineTaskExtractor
     {
         if (action.Kind == "keyboard.press") return "Press the Enter key in the focused input (preserve newline behavior).";
         if (action.Kind == "keyboard.submit") return "Invoke the focused input's submit action (Search, Go, or Done).";
+        if (action.Kind == "longPress")
+            return $"Long press the recorded target exactly once with ansight_long_press_ui using {LongPressArguments(action).ToJsonString()}. Verify the resulting UI after release.";
         if (action.Kind == "input")
         {
             var inputTarget = DescribeInputTarget(action.Selector!, action.Description);

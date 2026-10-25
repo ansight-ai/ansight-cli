@@ -18,9 +18,14 @@ internal static class TouchGestureSegmenter
 
             foreach (var touch in pointerTouches)
             {
+                // A stationary hold need not emit moves. Keep an explicit down paired with
+                // its release even when the quiet period exceeds the gesture grouping gap.
+                var pointerIsDown = currentTouches.Count > 0
+                                    && TouchReviewGeometry.IsTouchDown(currentTouches[0].Action);
                 var shouldStartNewSegment = currentTouches.Count == 0
                                             || TouchReviewGeometry.IsTouchDown(touch.Action)
-                                            || (lastTouchUtc.HasValue && touch.CapturedAtUtc - lastTouchUtc.Value > gestureGap);
+                                            || (!pointerIsDown && lastTouchUtc.HasValue
+                                                && touch.CapturedAtUtc - lastTouchUtc.Value > gestureGap);
                 if (shouldStartNewSegment && currentTouches.Count > 0)
                 {
                     segments.Add(CreateGestureSegment(currentTouches));

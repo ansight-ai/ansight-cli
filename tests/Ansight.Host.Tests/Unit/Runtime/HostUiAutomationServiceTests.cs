@@ -9,6 +9,7 @@ public sealed class HostUiAutomationServiceTests
     [InlineData(UiAutomationOperation.Snapshot, "ansight_get_live_visual_tree")]
     [InlineData(UiAutomationOperation.Find, "ansight_find_ui")]
     [InlineData(UiAutomationOperation.Tap, "ansight_tap_ui")]
+    [InlineData(UiAutomationOperation.LongPress, "ansight_long_press_ui")]
     [InlineData(UiAutomationOperation.Type, "ansight_type_text")]
     [InlineData(UiAutomationOperation.Swipe, "ansight_swipe_ui")]
     [InlineData(UiAutomationOperation.Pinch, "ansight_pinch_ui")]

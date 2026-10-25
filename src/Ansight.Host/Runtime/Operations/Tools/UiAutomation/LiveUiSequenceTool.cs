@@ -7,6 +7,7 @@ namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 internal enum LiveUiSequenceActionKind
 {
     Tap,
+    LongPress,
     Swipe,
     Pinch,
     Back
@@ -17,7 +18,8 @@ internal sealed record LiveUiSequenceAction(
     LiveUiScreenPoint? TapPoint,
     LiveUiSwipePath? SwipePath,
     LiveUiPinchPath? PinchPath,
-    int PauseAfterMilliseconds);
+    int PauseAfterMilliseconds,
+    int? HoldDurationMilliseconds = null);
 
 internal sealed class LiveUiSequenceTool : RemoteAppOperation
 {
@@ -33,7 +35,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
     protected override string Title => "Run Live UI Sequence";
 
     protected override string Description =>
-        "Run up to 32 recorded tap, swipe, pinch, or back actions in one host round trip, with one persisted evidence checkpoint before and after the sequence and an inline final screenshot.";
+        "Run up to 32 recorded tap, longPress, swipe, pinch, or back actions in one host round trip, with one persisted evidence checkpoint before and after the sequence and an inline final screenshot.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: new Dictionary<string, ToolSchema>
@@ -44,9 +46,9 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 ToolSchema.Object(
                     properties: new Dictionary<string, ToolSchema>
                     {
-                        ["kind"] = ToolSchema.String("Action kind.", enumValues: ["tap", "swipe", "pinch", "back"]),
-                        ["normalizedX"] = ToolSchema.Number("Tap X as a viewport-normalized coordinate from 0 through 1.", nullable: true),
-                        ["normalizedY"] = ToolSchema.Number("Tap Y as a viewport-normalized coordinate from 0 through 1.", nullable: true),
+                        ["kind"] = ToolSchema.String("Action kind.", enumValues: ["tap", "longPress", "swipe", "pinch", "back"]),
+                        ["normalizedX"] = ToolSchema.Number("Tap or long-press X as a viewport-normalized coordinate from 0 through 1.", nullable: true),
+                        ["normalizedY"] = ToolSchema.Number("Tap or long-press Y as a viewport-normalized coordinate from 0 through 1.", nullable: true),
                         ["startNormalizedX"] = ToolSchema.Number("Swipe start X from 0 through 1.", nullable: true),
                         ["startNormalizedY"] = ToolSchema.Number("Swipe start Y from 0 through 1.", nullable: true),
                         ["endNormalizedX"] = ToolSchema.Number("Swipe end X from 0 through 1.", nullable: true),
@@ -60,7 +62,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                         ["centerNormalizedY"] = ToolSchema.Number("Pinch center Y from 0 through 1.", nullable: true),
                         ["startDistance"] = ToolSchema.Number("Starting pinch contact separation.", nullable: true),
                         ["angleDegrees"] = ToolSchema.Number("Clockwise pinch-axis angle in degrees.", nullable: true),
-                        ["durationMs"] = ToolSchema.Integer("Swipe or pinch duration from 50 through 2000 milliseconds.", nullable: true),
+                        ["durationMs"] = ToolSchema.Integer("Long-press hold: 500–10000 ms (default 800). Swipe or pinch: 50–2000 ms.", nullable: true),
                         ["pauseAfterMs"] = ToolSchema.Integer("Pause after this action from 0 through 5000 milliseconds. Defaults to 0.", nullable: true)
                     },
                     required: ["kind"],
@@ -98,7 +100,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
 
         var preflightResult = await uiInputRouter.PrepareForInputAsync(
             new UiInputPreflightRequest(snapshot.SessionId, deviceIdentifier, snapshot.AppId),
-            CancellationToken.None);
+            ToolExecutionCancellation.Current);
         if (!preflightResult.IsSuccess)
         {
             return ToolError(preflightResult.Message);
@@ -110,7 +112,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             uiInputRouter,
             Name,
             correlationId,
-            CancellationToken.None);
+            ToolExecutionCancellation.Current);
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -139,7 +141,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             "ui.sequence",
             "before",
             correlationId,
-            CancellationToken.None,
+            ToolExecutionCancellation.Current,
             captureScreenshot: includeScreenshot, externalScreenshots: externalScreenshots);
         var continueOnError = arguments?["continueOnError"]?.GetValue<bool>() ?? false;
         var settleMilliseconds = Math.Clamp(
@@ -157,6 +159,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             $"Starting {actions.Count} UI actions in one sequence.",
             LogPriority.Information);
 
+        using var inputScope = uiInputRouter.BeginEvidenceScope(sequenceId);
         for (var index = 0; index < actions.Count; index++)
         {
             var action = actions[index];
@@ -164,7 +167,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 capture,
                 deviceIdentifier,
                 action,
-                CancellationToken.None);
+                ToolExecutionCancellation.Current);
             completedCount++;
             finalBackend = result.Backend;
             if (!result.IsSuccess)
@@ -197,7 +200,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
 
             if (action.PauseAfterMilliseconds > 0)
             {
-                await Task.Delay(action.PauseAfterMilliseconds);
+                await Task.Delay(action.PauseAfterMilliseconds, ToolExecutionCancellation.Current);
             }
         }
 
@@ -212,7 +215,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             Name,
             correlationId,
             settleMilliseconds,
-            CancellationToken.None,
+            ToolExecutionCancellation.Current,
             captureScreenshot: includeScreenshot, externalScreenshots: externalScreenshots);
         var performed = failureCount == 0 && completedCount == actions.Count;
         var message = performed
@@ -273,6 +276,12 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                         tapPoint.Y,
                         capture.Session.AppId),
                     cancellationToken);
+            case LiveUiSequenceActionKind.LongPress:
+                var holdPoint = action.TapPoint!.Value;
+                return await uiInputRouter.LongPressAsync(
+                    new UiLongPressRequest(capture.Session.SessionId, deviceIdentifier,
+                        holdPoint.X, holdPoint.Y, action.HoldDurationMilliseconds!.Value,
+                        capture.Session.AppId), cancellationToken);
             case LiveUiSequenceActionKind.Swipe:
                 var swipePath = action.SwipePath!.Value;
                 return await uiInputRouter.SwipeAsync(
@@ -368,6 +377,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         switch (kind)
         {
             case "tap":
+            case "longpress":
                 if (!LiveUiToolSchemas.TryReadDouble(action, "normalizedX", out var tapX)
                     || !LiveUiToolSchemas.TryReadDouble(action, "normalizedY", out var tapY)
                     || !double.IsFinite(tapX)
@@ -378,16 +388,20 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                     || tapY > 1)
                 {
                     parsed = null;
-                    error = "tap requires finite normalizedX and normalizedY values from 0 through 1.";
+                    error = $"{kind} requires finite normalizedX and normalizedY values from 0 through 1.";
                     return false;
                 }
 
+                var holdDuration = UiLongPressRequest.DefaultDurationMilliseconds;
+                if (kind == "longpress" && !UiLongPressRequest.TryReadDuration(action, out holdDuration, out error))
+                {
+                    parsed = null;
+                    return false;
+                }
                 parsed = new LiveUiSequenceAction(
-                    LiveUiSequenceActionKind.Tap,
-                    new LiveUiScreenPoint(tapX, tapY),
-                    null,
-                    null,
-                    pauseAfterMilliseconds);
+                    kind == "longpress" ? LiveUiSequenceActionKind.LongPress : LiveUiSequenceActionKind.Tap,
+                    new LiveUiScreenPoint(tapX, tapY), null, null, pauseAfterMilliseconds,
+                    kind == "longpress" ? holdDuration : null);
                 error = string.Empty;
                 return true;
             case "swipe":
@@ -440,7 +454,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 return true;
             default:
                 parsed = null;
-                error = "kind must be tap, swipe, pinch, or back.";
+                error = "kind must be tap, longPress, swipe, pinch, or back.";
                 return false;
         }
     }
@@ -466,6 +480,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         => kind switch
         {
             LiveUiSequenceActionKind.Tap => "tap",
+            LiveUiSequenceActionKind.LongPress => "longPress",
             LiveUiSequenceActionKind.Swipe => "swipe",
             LiveUiSequenceActionKind.Pinch => "pinch",
             LiveUiSequenceActionKind.Back => "back",

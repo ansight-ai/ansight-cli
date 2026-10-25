@@ -6,6 +6,27 @@ namespace Ansight.Host.Tests.Unit.Devices;
 
 public sealed class IosPhysicalDeviceAppiumClientTests
 {
+    [Theory]
+    [InlineData(500)]
+    [InlineData(3500)]
+    [InlineData(10000)]
+    public async Task LongPressSendsStationaryHoldWithExactDuration(int duration)
+    {
+        var handler = new RecordingAppiumHandler();
+        using var client = new IosPhysicalDeviceAppiumClient(
+            new IosPhysicalDeviceAppiumOptions(null, null, null, null, null), handler);
+        await client.LongPressAsync("physical-udid", "com.example.target", 0.25, 0.75,
+            duration, CancellationToken.None);
+        var pointer = JsonNode.Parse(handler.ActionsRequestBody!)!["actions"]![0]!;
+        Assert.Equal("touch", pointer["parameters"]!["pointerType"]!.GetValue<string>());
+        var actions = pointer["actions"]!.AsArray();
+        Assert.Equal(new[] { "pointerMove", "pointerDown", "pause", "pointerUp" },
+            actions.Select(action => action!["type"]!.GetValue<string>()));
+        Assert.Equal(100, actions[0]!["x"]!.GetValue<int>());
+        Assert.Equal(599, actions[0]!["y"]!.GetValue<int>());
+        Assert.Equal(duration, actions[2]!["duration"]!.GetValue<int>());
+    }
+
     [Fact]
     public async Task MonitoringSharesOneSessionPerDeviceEvenDuringConcurrentDiscovery()
     {
@@ -215,6 +236,7 @@ public sealed class IosPhysicalDeviceAppiumClientTests
         public List<string> Paths { get; } = [];
 
         public string? SessionRequestBody { get; private set; }
+        public string? ActionsRequestBody { get; private set; }
 
         public string ActiveBundleId { get; set; } = "com.example.target";
         public int SessionRequests { get; private set; }
@@ -250,6 +272,9 @@ public sealed class IosPhysicalDeviceAppiumClientTests
                 response.StatusCode = HttpStatusCode.NotFound;
                 return response;
             }
+
+            if (request.Method == HttpMethod.Post && path.EndsWith("/actions", StringComparison.Ordinal))
+                ActionsRequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
 
             if (path.EndsWith("/window/rect", StringComparison.Ordinal))
             {

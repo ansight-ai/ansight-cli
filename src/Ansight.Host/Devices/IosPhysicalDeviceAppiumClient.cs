@@ -94,6 +94,28 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task LongPressAsync(
+        string deviceIdentifier,
+        string applicationIdentifier,
+        double normalizedX,
+        double normalizedY,
+        int durationMilliseconds,
+        CancellationToken cancellationToken)
+    {
+        new UiLongPressRequest(string.Empty, deviceIdentifier, normalizedX, normalizedY,
+            durationMilliseconds, applicationIdentifier).Validate();
+        var session = await GetSessionAsync(deviceIdentifier, applicationIdentifier, cancellationToken)
+            .ConfigureAwait(false);
+        await SendActionsAsync(session,
+            [
+                PointerMove(ToCoordinate(normalizedX, session.ViewportWidth),
+                    ToCoordinate(normalizedY, session.ViewportHeight), 0),
+                new JsonObject { ["type"] = "pointerDown", ["button"] = 0 },
+                new JsonObject { ["type"] = "pause", ["duration"] = durationMilliseconds },
+                new JsonObject { ["type"] = "pointerUp", ["button"] = 0 }
+            ], cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IosAccessibilityPageSource> GetPageSourceAsync(
         string deviceIdentifier,
         string applicationIdentifier,

@@ -24,7 +24,7 @@ internal sealed class UiInputRouter
 
     internal async Task<UiInputResult> RecordInputAsync(
         string sessionId, string kind, Func<Task<UiInputResult>> deliver,
-        double? x = null, double? y = null)
+        double? x = null, double? y = null, int? durationMilliseconds = null)
     {
         var id = $"host-input-{Guid.NewGuid():N}";
         var started = DateTimeOffset.UtcNow;
@@ -44,7 +44,7 @@ internal sealed class UiInputRouter
             recording?.AddSessionApplicationEvents(sessionId,
                 [new HostInputAction(id, kind, started, DateTimeOffset.UtcNow,
                     result is null ? "interrupted" : result.IsSuccess ? "succeeded" : "failed",
-                    evidenceId, x, y).ToEvent()]);
+                    evidenceId, x, y, durationMilliseconds).ToEvent()]);
         }
     }
 
@@ -149,6 +149,24 @@ internal sealed class UiInputRouter
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
         return result;
+    }
+
+    public async Task<UiInputResult> LongPressAsync(
+        UiLongPressRequest request,
+        CancellationToken cancellationToken)
+    {
+        request.Validate();
+        try
+        {
+            return await RecordInputAsync(request.SessionId, "longPress",
+                () => GetDriver()?.LongPressAsync(request, cancellationToken)
+                    ?? Task.FromResult(UiInputResult.Failure("This host has no UI input driver.")),
+                request.NormalizedX, request.NormalizedY, request.DurationMilliseconds).ConfigureAwait(false);
+        }
+        finally
+        {
+            InvalidateAccessibility(request.SessionId);
+        }
     }
 
     public async Task<UiInputResult> PrepareForInputAsync(

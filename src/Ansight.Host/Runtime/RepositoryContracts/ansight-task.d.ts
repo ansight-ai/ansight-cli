@@ -403,6 +403,7 @@ export interface UiAssertResult extends SessionResultIdentity {
 /** Stable capability identifiers returned by host-owned UI actions. */
 export type UiActionCapability =
   | "ui.tap"
+  | "ui.long_press"
   | "ui.type_text"
   | "ui.swipe"
   | "ui.scroll"
@@ -486,6 +487,12 @@ export interface UiTapArguments extends UiSelector {
   includeScreenshot?: boolean;
 }
 
+/** Arguments accepted by a stationary press-and-hold operation. Uses the same targets as tap. */
+export interface UiLongPressArguments extends UiTapArguments {
+  /** Hold duration in milliseconds, from 500 through 10000. Defaults to 800. */
+  durationMs?: number;
+}
+
 /** Arguments accepted by the UI type text operation. */
 export interface UiTypeTextArguments extends UiSelector {
   /** Opaque freshness value from a discovered tapHint; copy unchanged and rediscover if rejected. */
@@ -554,6 +561,16 @@ export interface UiSequenceTapAction {
   pauseAfterMs?: number;
 }
 
+/** One stationary press and hold in a batched UI sequence. */
+export interface UiSequenceLongPressAction {
+  kind: "longPress";
+  normalizedX: number;
+  normalizedY: number;
+  /** Hold duration from 500 through 10000 milliseconds. Defaults to 800. */
+  durationMs?: number;
+  pauseAfterMs?: number;
+}
+
 /** One swipe in a batched UI sequence. */
 export interface UiSequenceSwipeAction {
   kind: "swipe";
@@ -590,6 +607,7 @@ export interface UiSequenceBackAction {
 /** One supported action in a batched UI sequence. */
 export type UiSequenceAction =
   | UiSequenceTapAction
+  | UiSequenceLongPressAction
   | UiSequenceSwipeAction
   | UiSequencePinchAction
   | UiSequenceBackAction;
@@ -3154,6 +3172,8 @@ export interface TaskHostUiContext {
    * selector over coordinates.
    */
   tap(args?: UiTapArguments): Promise<UiActionResult>;
+  /** Press and hold a selected node or normalized coordinate, release, and retain before-and-after evidence. */
+  longPress(args: UiLongPressArguments): Promise<UiActionResult>;
   /** Enter text into a selected input and retain action evidence. Select the intended input explicitly. */
   typeText(args: UiTypeTextArguments): Promise<UiActionResult>;
   /** Perform a directional gesture when the drag path matters, then inspect the resulting screen. */

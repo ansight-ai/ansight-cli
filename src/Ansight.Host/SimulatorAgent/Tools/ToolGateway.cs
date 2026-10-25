@@ -25,6 +25,7 @@ internal sealed class ToolGateway : IToolGateway
     private static readonly HashSet<string> ActionToolNames = new(StringComparer.Ordinal)
     {
         "ansight_tap_ui",
+        "ansight_long_press_ui",
         "ansight_type_text",
         "ansight_swipe_ui",
         "ansight_scroll_ui",
@@ -42,6 +43,7 @@ internal sealed class ToolGateway : IToolGateway
         "ansight_wait_for_ui",
         "ansight_assert_ui",
         "ansight_tap_ui",
+        "ansight_long_press_ui",
         "ansight_type_text",
         "ansight_swipe_ui",
         "ansight_scroll_ui",
@@ -1675,6 +1677,7 @@ internal sealed class ToolGateway : IToolGateway
             "ansight_tap_ui" =>
                 "Tap an exact live target. screenX/Y are viewport coordinates; targetX/Y are observed surface-local screenPosition coordinates with that surface selector. Points must remain within target and viewport.",
             "ansight_type_text" => "Focus an exact live field and type text. Replaces existing text by default.",
+            "ansight_long_press_ui" => "Press and hold a selected target or normalized point, then release. Copy a fresh tapHint selector; durationMs defaults to 800 (500–10000). Returns before/after evidence.",
             "ansight_swipe_ui" => "Swipe along a recorded path or finger orientation. Up reveals content below. Returns before/after semantic evidence.",
             "ansight_scroll_ui" => "Scroll toward content to reveal: down reveals below, up reveals above. Target the observed scrollable node. Returns before/after semantic evidence.",
             "ansight_pinch_ui" => "Pinch: scale <1 zooms out; >1 zooms in. Returns before/after semantic evidence.",

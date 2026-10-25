@@ -14,9 +14,9 @@ internal sealed class AgentToolBatch(
     public const string UiToolName = "ansight_run_ui_batch";
     private const int MaximumSteps = 8;
     private static readonly string[] allowedTools =
-    ["ansight_find_ui", "ansight_tap_ui", "ansight_type_text", "ansight_wait_for_ui", "ansight_assert_ui"];
+    ["ansight_find_ui", "ansight_tap_ui", "ansight_long_press_ui", "ansight_type_text", "ansight_wait_for_ui", "ansight_assert_ui"];
     private static readonly HashSet<string> actionOptions = new(StringComparer.Ordinal)
-    { "value", "replaceExisting", "settleMs", "includeScreenshot" };
+    { "durationMs", "value", "replaceExisting", "settleMs", "includeScreenshot" };
     private ToolCallResult? lastResult;
     private JsonArray? results;
     private OpenAiFunctionCall? activeCall;
@@ -38,7 +38,7 @@ internal sealed class AgentToolBatch(
         return new JsonObject
         {
             ["type"] = "function", ["name"] = UiToolName, ["strict"] = false,
-            ["description"] = "Run 1–8 UI tools in order without another model pass. Each step uses the named tool's argument schema and normal guards. Stops on failure or an ambiguous/empty find. Set usePreviousTarget=true on tap/type immediately after find to copy its unique exact target. Use only when the whole short plan is known; return to the model for choices between results. Every step is traced separately.",
+            ["description"] = "Run 1–8 UI tools in order without another model pass. Each step uses the named tool's argument schema and normal guards. Stops on failure or an ambiguous/empty find. Set usePreviousTarget=true on tap/long-press/type immediately after find to copy its unique exact target. Use only when the whole short plan is known; return to the model for choices between results. Every step is traced separately.",
             ["parameters"] = new JsonObject
             {
                 ["type"] = "object", ["additionalProperties"] = false,
@@ -68,7 +68,7 @@ internal sealed class AgentToolBatch(
                 ["usePreviousTarget"] = new JsonObject { ["type"] = "boolean", ["enum"] = new JsonArray(false) }
             }
         });
-        foreach (var name in names.Where(name => name is "ansight_tap_ui" or "ansight_type_text"))
+        foreach (var name in names.Where(name => name is "ansight_tap_ui" or "ansight_long_press_ui" or "ansight_type_text"))
         {
             var definition = tools.OfType<JsonObject>().First(tool => ReadString(tool["name"]) == name);
             var properties = new JsonObject();
@@ -267,11 +267,11 @@ internal sealed class AgentToolBatch(
             var fromPrevious = step["usePreviousTarget"] is JsonValue flag && flag.TryGetValue<bool>(out var enabled) && enabled;
             if (step["usePreviousTarget"] is not null && (step["usePreviousTarget"] is not JsonValue scalar || !scalar.TryGetValue<bool>(out _)))
                 return false;
-            if (fromPrevious && (name is not ("ansight_tap_ui" or "ansight_type_text")
+            if (fromPrevious && (name is not ("ansight_tap_ui" or "ansight_long_press_ui" or "ansight_type_text")
                                  || steps.LastOrDefault()?.ToolName != "ansight_find_ui"
                                  || input.Any(property => property.Value is not null && !actionOptions.Contains(property.Key))))
             {
-                error = "usePreviousTarget is only valid on tap/type immediately after find. Omit selector and coordinate overrides so the exact discovered target is preserved.";
+                error = "usePreviousTarget is only valid on tap/long-press/type immediately after find. Omit selector and coordinate overrides so the exact discovered target is preserved.";
                 return false;
             }
             if (name == "ansight_type_text" && ReadString(input["value"]) is null)

@@ -13,7 +13,7 @@ internal sealed class AgentToolCatalog
         ["manual-ui"] = ["ansight_find_ui", "ansight_wait_for_ui", "ansight_tap_ui",
             "ansight_type_text", "ansight_back_ui", AgentToolBatch.UiToolName],
         ["extended-ui"] = ["ansight_assert_ui", "ansight_type_secret", "ansight_scroll_ui"],
-        ["gestures"] = ["ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
+        ["gestures"] = ["ansight_long_press_ui", "ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],
         ["evidence"] = ["ansight_take_screenshot", "ansight_get_live_navigation_structure"],
         ["lifecycle"] = ["ansight_list_host_devices", "ansight_start_device", "ansight_launch_app", "ansight_terminate_app"],
@@ -166,7 +166,7 @@ internal sealed class AgentToolCatalog
         => new()
         {
             ["type"] = "function", ["name"] = LoadToolName,
-            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: swipe/pinch; app-tools: domain tools; evidence: screenshots/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: task details. No app action. Accepted manual-step declarations load manual-ui automatically.",
+            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; app-tools: domain tools; evidence: screenshots/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: task details. No app action. Accepted manual-step declarations load manual-ui automatically.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
             {

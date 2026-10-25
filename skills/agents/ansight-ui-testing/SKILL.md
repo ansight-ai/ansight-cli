@@ -345,7 +345,8 @@ snapshots when the period has many trees or screenshots. Treat the generated
 TypeScript as a draft. Review every `REVIEW:` comment, define the required
 starting state, apply the recorded-evidence selector rules above, and replace the
 generated UI-stability check with a meaningful product outcome assertion.
-Manually author unsupported long presses or multi-touch gestures; a tap without
+Use `ansight.ui.longPress({ automationId, durationMs: 800 })` for press-and-hold actions.
+Manually author unsupported multi-touch gestures; a tap without
 a stable selector remains unresolved. Type-check, rediscover, and run the task
 against a live session with its declared capabilities before relying on it. External recordings have no user touch stream; extract only behavior established by retained automation/evidence and leave unsupported steps for review.
 

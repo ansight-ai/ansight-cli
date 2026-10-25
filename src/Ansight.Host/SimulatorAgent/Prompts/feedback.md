@@ -59,7 +59,7 @@ The swipe was delivered. Query the same authoritative state once and compare it 
 <!-- /template -->
 
 <!-- template:tap-hint -->
-The focused UI query returned one exact visible match with a host-generated tapHint. This instruction requires an action: call ansight_tap_ui now by lifting tapHint.selector into the tool arguments. Do not enumerate controls, request another full visual tree, add enabled=true, or guess alternate automation ids before acting. Then verify the requested postcondition.
+The focused UI query returned one exact visible match with a host-generated tapHint. Perform the requested interaction using tapHint.selector: for a long press or press-and-hold, load gestures if needed and call ansight_long_press_ui with the requested durationMs; otherwise call ansight_tap_ui now. Do not enumerate controls, request another full visual tree, add enabled=true, or guess alternate automation ids before acting. Then verify the requested postcondition.
 <!-- /template -->
 
 <!-- template:target-tap-delivered -->
