@@ -17,6 +17,7 @@ internal static partial class LocalSessionSummaryRunner
             throw new ArgumentException("Choose a section with an end time after its start time.");
 
         bool InRange(DateTimeOffset timestamp) => timestamp >= startUtc && timestamp <= endUtc;
+        var videos = snapshot.VideoRecordings.Where(video => video.StartedUtc < endUtc && video.EndedUtc > startUtc).ToArray();
         var logs = snapshot.Logs.Where(item => InRange(item.TimestampUtc)).ToArray();
         var images = snapshot.Images.Where(item => InRange(item.CapturedAtUtc)).ToArray();
         var touches = snapshot.Touches.Where(item => InRange(item.CapturedAtUtc)).ToArray();
@@ -28,7 +29,7 @@ internal static partial class LocalSessionSummaryRunner
         var annotations = snapshot.Annotations.Where(item => InRange(item.StartUtc)
             && InRange(item.EndUtc ?? item.StartUtc)).ToArray();
         if (logs.Length + images.Length + touches.Length + networkRequests.Length + visualTrees.Length
-            + events.Length + metrics.Length + annotations.Length == 0)
+            + events.Length + metrics.Length + annotations.Length + videos.Length == 0)
             throw new ArgumentException("The selected section has no captured evidence to summarise.");
 
         var metricChannels = snapshot.MetricChannels.Where(channel => metrics.Any(item => item.ChannelId == channel.ChannelId)).ToArray();
@@ -46,6 +47,7 @@ internal static partial class LocalSessionSummaryRunner
             IsHistorical = snapshot.IsHistorical,
             ReplaySource = snapshot.ReplaySource,
             Images = images,
+            VideoRecordings = videos,
             Logs = logs,
             Touches = touches,
             NetworkRequests = networkRequests,
