@@ -14,6 +14,7 @@ public sealed partial class WorkspaceTestService
     private readonly IWorkspaceTestTargetLauncher targetLauncher;
     private readonly IWorkspaceTestRunGateway? runGateway;
     private readonly WorkspaceTestBatchAuditStore batchAuditStore;
+    private readonly ITestVideoRecorder videoRecorder;
     private readonly Lock sessionClaimGate = new();
     private readonly HashSet<string> claimedSessionIds = new(StringComparer.Ordinal);
 
@@ -44,12 +45,14 @@ public sealed partial class WorkspaceTestService
         RuntimeCoordinator runtime,
         SimulatorAgentService simulatorAgent,
         IWorkspaceTestTargetLauncher targetLauncher,
-        IWorkspaceTestRunGateway? runGateway)
+        IWorkspaceTestRunGateway? runGateway,
+        ITestVideoRecorder? videoRecorder = null)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         this.simulatorAgent = simulatorAgent ?? throw new ArgumentNullException(nameof(simulatorAgent));
         this.targetLauncher = targetLauncher ?? throw new ArgumentNullException(nameof(targetLauncher));
         this.runGateway = runGateway;
+        this.videoRecorder = videoRecorder ?? new NativeTestVideoRecorder(runtime.UserPreferences);
         batchAuditStore = new WorkspaceTestBatchAuditStore(runtime.ApplicationPaths);
         History = new WorkspaceTestHistoryService(runtime, simulatorAgent, batchAuditStore);
         Batches = new WorkspaceTestBatchRunner(RunAsync, batchAuditStore, runtime.Analytics);
@@ -251,6 +254,8 @@ public sealed partial class WorkspaceTestService
                 BuildMissingTestMessage(catalog, request.TestId));
         }
 
+        if (request.Video is not null) test = test with { Video = request.Video };
+
         // Explicit draft runs are how an author verifies a test before enabling it
         // in the workspace. Keep the parsed definition and saved source unchanged.
         if (draftTest is null && !test.Enabled)
@@ -415,6 +420,19 @@ public sealed partial class WorkspaceTestService
         SessionUiTestRun? sessionRun = null;
         WorkspaceTestRunResult? sessionRunResult = null;
         var sessionRunCancelled = false;
+        TestVideoCapture? videoCapture = null;
+        DateTimeOffset? executionCompletedUtc = null;
+        var targetStopped = false;
+        async Task StopExecutionCaptureAsync()
+        {
+            executionCompletedUtc ??= DateTimeOffset.UtcNow;
+            if (videoCapture is not null) await videoCapture.StopAsync().ConfigureAwait(false);
+            if (!targetStopped && launchedTarget?.ApplicationLaunched == true)
+            {
+                targetStopped = true;
+                await StopTargetAfterTestAsync(launchedTarget, progress).ConfigureAwait(false);
+            }
+        }
         try
         {
             if (!attachedDeviceSession && ((session is null && string.IsNullOrWhiteSpace(request.SessionId))
@@ -517,6 +535,8 @@ public sealed partial class WorkspaceTestService
 
             if (test.IsTaskOnly)
             {
+                videoCapture = await StartRunVideoAsync(test.Video, session, launchedTarget, sessionRun.RunId,
+                    progress, cancellationToken).ConfigureAwait(false);
                 if (startParticipant is not null)
                 {
                     progress?.Report(new WorkspaceTestRunProgress("run.ready",
@@ -525,6 +545,8 @@ public sealed partial class WorkspaceTestService
                 }
                 sessionRunResult = await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
                     launchedTarget, sessionRun.RunId, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
+                await StopExecutionCaptureAsync().ConfigureAwait(false);
+                sessionRunResult = await CompleteTestVideoAsync(videoCapture, sessionRunResult, progress).ConfigureAwait(false);
                 return sessionRunResult;
             }
 
@@ -556,6 +578,8 @@ public sealed partial class WorkspaceTestService
             var maximumTurnsPerInstruction = Math.Min(
                 request.MaximumTurnsPerInstruction,
                 maximumRoundTrips);
+            videoCapture = await StartRunVideoAsync(test.Video, session, launchedTarget, sessionRun.RunId,
+                progress, cancellationToken).ConfigureAwait(false);
             if (startParticipant is not null)
             {
                 progress?.Report(new WorkspaceTestRunProgress(
@@ -626,6 +650,8 @@ public sealed partial class WorkspaceTestService
             }
 
             stopwatch.Stop();
+            await StopExecutionCaptureAsync().ConfigureAwait(false);
+            runResult = await CompleteTestVideoAsync(videoCapture, runResult, progress).ConfigureAwait(false);
             sessionRunResult = runResult;
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
@@ -688,6 +714,9 @@ public sealed partial class WorkspaceTestService
         }
         finally
         {
+            await StopExecutionCaptureAsync().ConfigureAwait(false);
+            // Cancellation and unexpected exceptions must still finalize and retain available video.
+            if (videoCapture is not null) await videoCapture.CompleteAsync(testPassed: false).ConfigureAwait(false);
             if (sessionRun is not null)
             {
                 runtime.SessionEditing.SetUiTestRun(session!.SessionId, sessionRun with
@@ -696,13 +725,13 @@ public sealed partial class WorkspaceTestService
                     Status = sessionRunResult is not null
                         ? ResolveCompletionStatus(sessionRunResult)
                         : sessionRunCancelled || cancellationToken.IsCancellationRequested ? "cancelled" : "failed",
-                    CompletedUtc = DateTimeOffset.UtcNow
+                    CompletedUtc = executionCompletedUtc
                 });
             }
             runtime.Pairing.RevokeUnconsumedEnrollment(enrollmentInviteId, test.AppId);
             try
             {
-                if (launchedTarget?.ApplicationLaunched == true)
+                if (!targetStopped && launchedTarget?.ApplicationLaunched == true)
                     await StopTargetAfterTestAsync(launchedTarget, progress).ConfigureAwait(false);
             }
             finally

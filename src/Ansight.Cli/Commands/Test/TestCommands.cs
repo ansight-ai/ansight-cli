@@ -72,6 +72,7 @@ internal static class TestCommands
     {
         var workspacePath = arguments.RequirePositional(2, "workspace path");
         var testId = arguments.RequirePositional(3, "test identifier");
+        var video = RunVideoOptions.Resolve(arguments);
         var targets = WorkspaceTestTargetOptions.ResolveMany(arguments);
         if (targets.Count > 1)
         {
@@ -124,6 +125,7 @@ internal static class TestCommands
             !arguments.HasFlag("no-workspace-tools"))
         {
             BatchRunId = ResolveBatchRunId(arguments),
+            Video = video,
             Reasoning = ReasoningOptions.Resolve(arguments),
             CaptureTrace = arguments.CaptureTrace,
             OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
@@ -192,6 +194,7 @@ internal static class TestCommands
         IReadOnlyList<WorkspaceTestTargetRequest> targets,
         CancellationToken cancellationToken)
     {
+        var video = RunVideoOptions.Resolve(arguments);
         var target = targets.Count == 1 ? targets[0] : null;
         var options = await CliTestRuntimeOptionsResolver.ResolveAsync(
             CliRuntime.ResolveOptions(arguments),
@@ -230,6 +233,7 @@ internal static class TestCommands
             !arguments.HasFlag("no-workspace-tools"))
         {
             Source = "cli",
+            Video = video,
             Reasoning = ReasoningOptions.Resolve(arguments),
             CaptureTrace = arguments.CaptureTrace,
             OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
@@ -575,6 +579,13 @@ internal static Task<int> RetryMeteringAsync(
             if (result.TaskAuditPersistenceError is { } error) lines.Add($"Audit persistence failed: {error}");
         }
 
+        if (result.Video is { } video)
+        {
+            lines.Add($"Video: {video.Status} — {video.Message}");
+            if (video.RecordingId is not null && video.Path is not null)
+                lines.Add($"Replay video: {video.RecordingId} ({video.ByteSize:N0} bytes)");
+        }
+
         if (!string.IsNullOrWhiteSpace(result.SessionId))
         {
             lines.Add($"Session: {result.SessionId}");
@@ -804,6 +815,8 @@ internal static Task<int> RetryMeteringAsync(
              --stop-on-failure            Finish active tests, then do not start pending tests
              --no-workspace-tools         Do not expose trusted repository tasks to the agent
              --no-trace                   Disable full trace capture (enabled by default; --trace is still accepted)
+             --no-video                   Disable video capture; overrides saved retention
+             --video-retention <mode>     always (default), on-failure, or off; overrides saved retention
 
            Output and audit:
              --result-file <path>         Write the versioned JSON result to this path

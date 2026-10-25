@@ -301,6 +301,103 @@ public sealed class WorkspaceTaskTestTests
         Assert.True(second.IsSuccess, second.Message);
     }
 
+    [Theory]
+    [InlineData(true, "always", "completed")]
+    [InlineData(false, "on-failure", "completed")]
+    [InlineData(true, "on-failure", "discarded")]
+    public async Task TestVideoIsFinalizedAndPersistedWithTheRun(bool passed, string retention, string expectedStatus)
+    {
+        var recorder = new FakeTestVideoRecorder();
+        using var fixture = new Fixture($"expect({passed.ToString().ToLowerInvariant()}, {{ id: 'outcome' }}).toBe(true);", videoRecorder: recorder);
+        fixture.WriteTest($"taskId: example\nvideo:\n  retention: {retention}");
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
+        {
+            if (value.Stage == "task.running") Assert.Equal(1, recorder.Starts);
+        });
+        var result = await fixture.Service.RunAsync(fixture.Request, progress);
+        Assert.Equal(passed, result.IsSuccess);
+        Assert.Equal(expectedStatus, result.Video?.Status);
+        Assert.Equal(1, recorder.Stops);
+        Assert.Equal(result.RunAudit!.RunId, result.Video!.RunId);
+        Assert.Equal(result.Video, result.RunAudit.Video);
+        Assert.Contains("\"video\"", File.ReadAllText(result.TaskAuditFilePath!));
+        Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var session));
+        Assert.Equal(expectedStatus != "discarded", session!.VideoRecordings.Any());
+        Assert.DoesNotContain(session.ArtifactSnapshots, item => item.Source == "test-video");
+        if (expectedStatus == "discarded") return;
+        var video = Assert.Single(session.VideoRecordings);
+        var archivePath = Path.Combine(fixture.Workspace, "recorded-replay.zip");
+        var exported = await fixture.Runtime.SessionArchives.ExportSessionArchiveAsync(session.SessionId, archivePath,
+            new SessionArchiveExportOptions { IncludeArtifacts = false });
+        Assert.True(exported.IsSuccess, exported.Message);
+        using (var archive = ZipFile.OpenRead(archivePath))
+        {
+            Assert.Equal(video.ByteSize, archive.GetEntry(video.EntryPath)!.Length);
+            Assert.DoesNotContain(archive.Entries, entry => entry.FullName.StartsWith("artifacts/", StringComparison.Ordinal));
+        }
+        var imported = await fixture.Runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
+        Assert.True(imported.IsSuccess, imported.Message);
+        Assert.Equal(video, Assert.Single(imported.ImportedSession!.VideoRecordings));
+        var store = new SessionCaptureStore(fixture.Runtime.ApplicationPaths);
+        Assert.True(store.TryLoad(imported.ImportedSession.SessionId, out var loaded));
+        Assert.Equal(video, Assert.Single(loaded!.VideoRecordings));
+        var sanitizedPath = Path.Combine(fixture.Workspace, "sanitized-replay.zip");
+        var sanitized = await fixture.Runtime.SessionArchives.ExportSessionArchiveAsync(session.SessionId, sanitizedPath,
+            new SessionArchiveExportOptions { Sanitize = true });
+        Assert.True(sanitized.IsSuccess, sanitized.Message);
+        using var sanitizedArchive = ZipFile.OpenRead(sanitizedPath);
+        Assert.DoesNotContain(sanitizedArchive.Entries, entry => entry.FullName.StartsWith("session-video/", StringComparison.Ordinal));
+
+    }
+
+    [Fact]
+    public async Task VideoStartupFailureDoesNotChangeTheAssertionResult()
+    {
+        var recorder = new FakeTestVideoRecorder { StartError = new IOException("Encoder unavailable") };
+        using var fixture = new Fixture("expect(true, { id: 'outcome' }).toBe(true);", videoRecorder: recorder);
+        fixture.WriteTest("taskId: example\nvideo: { retention: always }");
+        var result = await fixture.Service.RunAsync(fixture.Request);
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal("failed", result.Video?.Status);
+        Assert.Contains("Encoder unavailable", result.Video?.Message);
+    }
+
+    [Fact]
+    public async Task CancelledTestStillFinalizesAndRetainsItsVideo()
+    {
+        var recorder = new FakeTestVideoRecorder();
+        using var fixture = new Fixture("await new Promise(() => {});", videoRecorder: recorder);
+        fixture.WriteTest("taskId: example\nvideo: { retention: on-failure }");
+        using var cancellation = new CancellationTokenSource();
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
+        {
+            if (value.Stage == "task.running") cancellation.CancelAfter(300);
+        });
+        var result = await fixture.Service.RunAsync(fixture.Request, progress, cancellation.Token);
+        Assert.True(result.WasCancelled, result.Message);
+        Assert.Equal("completed", result.Video?.Status);
+        Assert.Equal(1, recorder.Stops);
+    }
+
+    [Theory]
+    [InlineData("off", "always", true)]
+    [InlineData("always", "off", false)]
+    [InlineData("always", null, true)]
+    public async Task RunVideoOverrideTakesPrecedenceWithoutEditingTest(string saved, string? requested, bool records)
+    {
+        var recorder = new FakeTestVideoRecorder();
+        using var fixture = new Fixture("expect(true, { id: 'outcome' }).toBe(true);", videoRecorder: recorder);
+        fixture.WriteTest($"taskId: example\nvideo: {{ retention: {saved} }}");
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            Video = requested is null ? null : new TestVideoOptions(requested)
+        });
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(records ? 1 : 0, recorder.Starts);
+        Assert.Equal(records ? "completed" : null, result.Video?.Status);
+        Assert.Equal(saved, Assert.Single(WorkspaceTestCatalog.Load(fixture.Workspace).Tests).Video.Retention);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly TestEnvironment environment = new();
@@ -314,7 +411,7 @@ public sealed class WorkspaceTaskTestTests
         { ExecutionMode = "device" };
         public WorkspaceTestRunRequest Request => new(Workspace, "example", Session.SessionId);
 
-        public Fixture(string body, string descriptor = "")
+        public Fixture(string body, string descriptor = "", ITestVideoRecorder? videoRecorder = null)
         {
             var composition = new MefHostComposition(environment.ApplicationPaths,
                 new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -325,7 +422,7 @@ public sealed class WorkspaceTaskTestTests
             state.TryGetSessionSnapshot(state.CreateDeviceSession(target), out var session);
             Session = session!;
             Launcher = new Launcher(target, Session);
-            Service = new WorkspaceTestService(Runtime, Runtime.SimulatorAgent, Launcher, Gateway);
+            Service = new WorkspaceTestService(Runtime, Runtime.SimulatorAgent, Launcher, Gateway, videoRecorder);
             WriteTest("taskId: example\ntaskInput: { count: 2 }");
             var tasks = Path.Combine(Workspace, "ansight", "tasks");
             Directory.CreateDirectory(tasks);

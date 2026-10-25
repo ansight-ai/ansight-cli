@@ -159,6 +159,7 @@ public static class WorkspaceTestCatalog
             Path.GetFullPath(testPath))
         {
             Enabled = ReadEnabled(root),
+            Video = TestVideoOptions.Read(root),
             TaskId = taskId,
             TaskInput = taskInput,
             HintTasks = hintTasks

@@ -628,6 +628,8 @@ internal static class AppCommands
              --team-id <uuid>         Select an organisation when more than one permits this app
              --app-graph              Include authorized published App Graph route guidance
              --no-trace               Disable full trace capture (enabled by default; --trace is still accepted)
+             --no-video               Disable video capture (enabled by default)
+             --video-retention <mode> always (default), on-failure, or off
              --app <path>             Install and launch an .app, .ipa, or .apk artifact
              --ipa <path>             .ipa-only alias for --app
              --application-path <path> Generic alias for --app

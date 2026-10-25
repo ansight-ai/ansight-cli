@@ -15,6 +15,7 @@ internal static class AppExecutionService
         CliOutput output,
         CancellationToken cancellationToken)
     {
+        _ = RunVideoOptions.Resolve(arguments);
         var targets = ResolveTargets(arguments);
         var prompt = await ReadPromptAsync(arguments, cancellationToken).ConfigureAwait(false);
         if (targets.Count > 1)
@@ -365,6 +366,7 @@ internal static class AppExecutionService
         AppExecutionRunStartParticipant? startParticipant = null)
     {
         using var runStartParticipant = startParticipant;
+        var video = RunVideoOptions.Resolve(arguments) ?? new TestVideoOptions();
         var options = CliRuntime.ResolveOptions(arguments);
         var launchSteps = new List<SimulatorAgentStartupStep>();
         var setupStartedUtc = DateTimeOffset.UtcNow;
@@ -487,13 +489,16 @@ internal static class AppExecutionService
                 if (targetError is not null) throw new CliUsageException(targetError);
             }
 
-            if (executionScope.CloseAppOnCompletion)
+            if (executionScope.CloseAppOnCompletion || (video?.IsEnabled == true
+                && (arguments.HasFlag("device-id") || arguments.HasFlag("device"))))
             {
                 var inventory = await lease.Runtime.Devices.ListAsync(cancellationToken).ConfigureAwait(false);
-                executionScope.SetTarget(AppExecutionScope.ResolveSessionTarget(
+                launchedTarget = AppExecutionScope.ResolveSessionTarget(
                     snapshot,
                     arguments.GetOption("device-id") ?? arguments.GetOption("device"),
-                    inventory));
+                    inventory,
+                    executionScope.CloseAppOnCompletion ? "--close-app-on-completion" : "Video capture");
+                executionScope.SetTarget(launchedTarget);
             }
         }
 
@@ -580,7 +585,7 @@ internal static class AppExecutionService
                 SecretResolver = ResolveSecret,
                 ModelTransport = preparation.ModelTransport,
                 StartupSteps = launchSteps.Concat(preparation.StartupSteps).ToArray(),
-                TrackingRunId = preparation.TrackingRunId,
+                TrackingRunId = preparation.TrackingRunId ?? Guid.NewGuid(),
                 TargetDeviceIdentifier = target.LaunchRequest?.DeviceIdentifier
                                          ?? arguments.GetOption("device-id")
                                          ?? arguments.GetOption("device")
@@ -599,14 +604,24 @@ internal static class AppExecutionService
         var runStopwatch = Stopwatch.StartNew();
         try
         {
-            if (runStartParticipant is not null)
-            {
-                output.WriteProgress(
-                    $"[run.ready] Session '{snapshot.SessionId}' is ready; waiting for the other targets.");
-                await runStartParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            result = await lease.Runtime.SimulatorAgent.RunAsync(request, progress, cancellationToken)
-                .ConfigureAwait(false);
+            result = await AppExecutionVideoRunner.RunAsync(
+                () => lease.Runtime.WorkspaceTests.StartRunVideoAsync(video, snapshot, launchedTarget,
+                    request.TrackingRunId.Value.ToString("N"),
+                    new CliProgress<WorkspaceTestRunProgress>(value => output.WriteProgress($"[{value.Stage}] {value.Message}")),
+                    cancellationToken),
+                async () =>
+                {
+                    if (runStartParticipant is not null)
+                    {
+                        output.WriteProgress(
+                            $"[run.ready] Session '{snapshot.SessionId}' is ready; waiting for the other targets.");
+                        await runStartParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    return await lease.Runtime.SimulatorAgent.RunAsync(request, progress, cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                lease.Runtime.SimulatorAgent.PersistRunAudit,
+                output, executionScope.CloseApplicationAsync).ConfigureAwait(false);
             completionStatus = result.Status.ToString().ToLowerInvariant();
         }
         catch (InvalidOperationException exception)
@@ -768,6 +783,7 @@ internal static Task<Guid?> ResolveHostedGraphTeamIdAsync(
                + $"{runLabel}: {result.Audit.RunId}{Environment.NewLine}"
                + $"Instructions: {result.Instructions.Count}; turns: {result.TotalTurns}; tool calls: {result.TotalToolCalls}"
                + $"{Environment.NewLine}Trace: {(result.Audit.TraceEnabled == true ? "captured" : "not captured; rerun without --no-trace")}"
+               + RunVideoOptions.Render(result.Audit.Video)
                + (string.IsNullOrWhiteSpace(result.AuditFilePath)
                    ? string.Empty
                    : $"{Environment.NewLine}Audit: {result.AuditFilePath}");

@@ -11,6 +11,8 @@ public sealed record WorkspaceTestDefinition(
 {
     public bool Enabled { get; init; } = true;
 
+    public TestVideoOptions Video { get; init; } = new();
+
     public string? TaskId { get; init; }
 
     public System.Text.Json.Nodes.JsonObject? TaskInput { get; init; }

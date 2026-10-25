@@ -363,6 +363,7 @@ public sealed partial class WorkspaceTestBatchRunner
                             message => testProgress?.Report(new WorkspaceTestRunProgress("audio-rejected", message))),
                         Reasoning = request.Reasoning,
                         CaptureTrace = request.CaptureTrace,
+                        Video = request.Video,
                         OpenAiProtocol = request.OpenAiProtocol,
                         SecretResolver = request.SecretResolver,
                         StartParticipant = startParticipant

@@ -6,6 +6,31 @@ namespace Ansight.Host.Tests.Unit.Workspaces;
 public sealed class WorkspaceTestBatchRunnerTests
 {
     [Theory]
+    [InlineData(null)]
+    [InlineData("always")]
+    [InlineData("on-failure")]
+    [InlineData("off")]
+    public async Task BatchPropagatesVideoOverrideToEveryTarget(string? retention)
+    {
+        using var environment = new TestEnvironment();
+        var workspace = CreateWorkspace(environment.RootPath, "video");
+        var test = Assert.Single(WorkspaceTestCatalog.Load(workspace).Tests);
+        var calls = 0;
+        var runner = new WorkspaceTestBatchRunner((request, _, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            Assert.Equal(retention, request.Video?.Retention);
+            return Task.FromResult(new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []));
+        }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
+        await runner.RunAllAsync(new WorkspaceTestBatchRequest(workspace)
+        {
+            Video = retention is null ? null : new TestVideoOptions(retention),
+            Targets = [new(DeviceIdentifier: "device-a"), new(DeviceIdentifier: "device-b")]
+        });
+        Assert.Equal(2, calls);
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData(true, true)]
     [InlineData(false, false)]

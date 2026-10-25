@@ -10,6 +10,7 @@ internal sealed class AppExecutionScope(
     private readonly TimeSpan timeout = cleanupTimeout ?? TimeSpan.FromSeconds(30);
     private WorkspaceTestTarget? target;
     private bool disposed;
+    private bool applicationClosed;
 
     public bool CloseAppOnCompletion { get; } = closeAppOnCompletion;
 
@@ -19,14 +20,14 @@ internal sealed class AppExecutionScope(
 
     public void SetTarget(WorkspaceTestTarget value) => target = value;
 
-    public async ValueTask DisposeAsync()
+    public async Task CloseApplicationAsync()
     {
-        if (disposed)
+        if (applicationClosed)
         {
             return;
         }
 
-        disposed = true;
+        applicationClosed = true;
         try
         {
             if (!CloseAppOnCompletion || target is null)
@@ -58,6 +59,13 @@ internal sealed class AppExecutionScope(
             // Do not mask an execution failure or cancellation with a secondary cleanup error.
             output.WriteProgress($"[app.close.warning] Could not close the app: {exception.Message}");
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed) return;
+        disposed = true;
+        try { await CloseApplicationAsync().ConfigureAwait(false); }
         finally
         {
             try

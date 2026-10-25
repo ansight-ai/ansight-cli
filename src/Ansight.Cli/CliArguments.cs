@@ -63,6 +63,7 @@ internal sealed class CliArguments
         "qr",
         "public",
         "video",
+        "no-video",
         "include-native-logs",
         "include-archived",
         "include-revoked",

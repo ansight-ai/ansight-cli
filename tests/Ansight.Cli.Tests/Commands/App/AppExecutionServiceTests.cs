@@ -4,7 +4,7 @@ using Ansight.Host.Workspaces;
 
 namespace Ansight.Cli.Tests.Commands.App;
 
-public sealed class AppExecutionServiceTests
+public sealed partial class AppExecutionServiceTests
 {
     [Fact]
     public void FormatProgress_ShowsTaskInventoryScoresAndExclusionReasons()

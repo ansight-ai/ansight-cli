@@ -12,6 +12,20 @@
     "else": { "not": { "anyOf": [{ "required": ["validation"] }, { "required": ["hintTasks"] }] } }
   }],
   "properties": {
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retention"],
+      "description": "Continuous test recording is enabled by default. Set retention to off to disable it. V1 supports iOS Simulator on macOS and Android on macOS/Linux, with audio disabled.",
+      "properties": {
+        "retention": {
+          "type": "string",
+          "enum": ["off", "always", "on-failure"],
+          "default": "always",
+          "description": "on-failure records the whole run, then discards video if the test passes. Recording errors do not change the assertion outcome."
+        }
+      }
+    },
     "schemaVersion": {
       "const": 1,
       "description": "Test definition format version. Use 1; if omitted, version 1 is assumed."

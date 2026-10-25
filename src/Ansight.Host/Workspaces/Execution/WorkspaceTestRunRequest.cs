@@ -26,6 +26,8 @@ public sealed record WorkspaceTestRunRequest(
 
     public bool CaptureTrace { get; init; } = true;
 
+    public TestVideoOptions? Video { get; init; }
+
     public SimulatorAgentOpenAiProtocol OpenAiProtocol { get; init; } = SimulatorAgentOpenAiProtocol.Http;
 
     [System.Text.Json.Serialization.JsonIgnore]

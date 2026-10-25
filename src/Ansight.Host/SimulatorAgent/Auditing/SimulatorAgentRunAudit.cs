@@ -30,6 +30,8 @@ public sealed record SimulatorAgentRunAudit(
     IReadOnlyList<SimulatorAgentModelPassAudit> ModelPasses,
     IReadOnlyList<SimulatorAgentToolCallAudit> ToolCalls)
 {
+    public TestVideoResult? Video { get; init; }
+
     // The shared test-history envelope also carries deterministic runs, with no model activity.
     public string ExecutionKind { get; init; } = "agent";
     public string? TraceId { get; init; }

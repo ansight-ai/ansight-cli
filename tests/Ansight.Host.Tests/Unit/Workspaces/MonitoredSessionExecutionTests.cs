@@ -51,6 +51,9 @@ public sealed class MonitoredSessionExecutionTests
         var service = fixture.Service(gateway);
         gateway.BeforePrepare = () =>
         {
+            // An explicit attachment is reserved first. Automatic target resolution
+            // now overlaps preparation, so its reservation is established later.
+            if (!explicitSession) return;
             Assert.Throws<InvalidOperationException>(() => service.ReserveSession(fixture.Session));
             fixture.State.TryGetSessionSnapshot(fixture.Session.SessionId, out var running);
             var properties = running!.CustomProperties!["ui-test"]!;
