@@ -136,6 +136,22 @@ internal sealed class ScreenshotInspectionTool : Operation
         {
             return RequestResult.ToolResult(new JsonObject { ["errorCode"] = "screenshot_geometry_unavailable", ["message"] = exception.Message }, isError: true);
         }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            return RequestResult.ToolResult(new JsonObject
+            {
+                ["errorCode"] = "screenshot_assessment_timeout",
+                ["message"] = "Screenshot assessment timed out. No visual verdict was obtained. Use fresh native/accessibility evidence or retry this read-only assessment; do not repeat a pending UI action."
+            }, isError: true);
+        }
+        catch (HttpRequestException) when (!token.IsCancellationRequested)
+        {
+            return RequestResult.ToolResult(new JsonObject
+            {
+                ["errorCode"] = "screenshot_assessment_transport_failure",
+                ["message"] = "Screenshot assessment could not reach its provider. No visual verdict was obtained. Use fresh native/accessibility evidence or retry this read-only assessment; do not repeat a pending UI action."
+            }, isError: true);
+        }
         catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException
             or InvalidOperationException or FormatException or JsonException)
         {

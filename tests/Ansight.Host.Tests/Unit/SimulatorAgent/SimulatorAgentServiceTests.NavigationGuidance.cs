@@ -7,7 +7,11 @@ public sealed partial class SimulatorAgentServiceTests
     [Fact]
     public async Task RunAsync_DoesNotSelectNavigationInstructionsFromRepositoryTaskOutput()
     {
-        var gateway = new FakeToolGateway { Result = NavigationObservation("maui") };
+        var gateway = new FakeToolGateway
+        {
+            Capabilities = SessionCapabilities.Empty("ios"),
+            Result = NavigationObservation("maui")
+        };
         AddToolLoadingDefinitions(gateway);
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("task", "ansight_run_task", new JsonObject { ["taskId"] = "inspect-domain" }),

@@ -9,6 +9,45 @@ internal sealed record SessionCapabilities(
 {
     public bool IsDeviceOnly { get; init; }
 
+    public IReadOnlyList<string> GuidanceFrameworks
+    {
+        get
+        {
+            if (IsDeviceOnly)
+            {
+                return [];
+            }
+
+            var frameworks = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var framework in NavigationFrameworks)
+            {
+                if (NavigationControllerCatalog.ResolveFramework(framework) is { } controller)
+                {
+                    frameworks.Add(controller.Framework);
+                }
+            }
+
+            if (VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal))
+            {
+                frameworks.Add("maui");
+            }
+
+            if (VisualTreeToolIds.Contains(VisualTreeContract.ReactShadowToolId, StringComparer.Ordinal)
+                || VisualTreeToolIds.Contains(VisualTreeContract.ReactComponentToolId, StringComparer.Ordinal))
+            {
+                frameworks.Add("react-native");
+            }
+
+            if (VisualTreeToolIds.Contains(VisualTreeContract.FlutterToolId, StringComparer.Ordinal))
+            {
+                frameworks.Add("flutter");
+            }
+
+            // A native tree does not identify its UI toolkit; DOM alone does not prove Capacitor.
+            return frameworks.ToArray();
+        }
+    }
+
     private static readonly IReadOnlyList<string> supportedVisualTreeToolIds =
     [
         VisualTreeContract.MauiToolId,

@@ -31,7 +31,7 @@ internal static class LiveUiOcrSearch
             operationName,
             "current",
             correlationId,
-            cancellationToken, externalScreenshots: externalScreenshots);
+            cancellationToken, afterScreenUpdates: true, externalScreenshots: externalScreenshots);
         if (screenshot is null || !File.Exists(screenshot.ArtifactPath))
         {
             return LiveUiOcrSearchResult.Unavailable(

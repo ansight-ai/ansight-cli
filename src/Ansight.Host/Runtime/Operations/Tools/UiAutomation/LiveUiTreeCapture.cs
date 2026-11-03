@@ -98,7 +98,7 @@ internal sealed partial class LiveUiTreeCapture
             cancellationToken);
     }
 
-    public static Task<LiveUiCaptureResult> CaptureForSelectorAsync(
+    public static async Task<LiveUiCaptureResult> CaptureForSelectorAsync(
         AppSessionSnapshot session,
         IAppToolBridge appToolBridge,
         UiInputRouter uiInputRouter,
@@ -110,7 +110,7 @@ internal sealed partial class LiveUiTreeCapture
         string? targetSource = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
-        return CaptureDeviceFirstAsync(
+        var result = await CaptureDeviceFirstAsync(
             session,
             appToolBridge,
             uiInputRouter,
@@ -119,7 +119,9 @@ internal sealed partial class LiveUiTreeCapture
             selector,
             cancellationToken,
             allowCached,
-            targetSource: targetSource);
+            targetSource: targetSource).ConfigureAwait(false);
+        return await ExpandNativeScrollTargetAsync(result, appToolBridge,
+            operationName, correlationId, selector, cancellationToken).ConfigureAwait(false);
     }
 
     public static Task<LiveUiCaptureResult> CaptureAccessibilityAsync(
@@ -303,9 +305,10 @@ internal sealed partial class LiveUiTreeCapture
                     operationName, correlationId, selector!, cancellationToken).ConfigureAwait(false);
             if (!deviceResult.IsSuccess)
                 return deviceResult;
-            return await CaptureWithToolAsync(session, appToolBridge, targetSource,
+            var targetedResult = await CaptureWithToolAsync(session, appToolBridge, targetSource,
                 new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
                 cancellationToken).ConfigureAwait(false);
+            return ValidateForegroundTargets(deviceResult, targetedResult, selector);
         }
         if (deviceResult.IsSuccess
             && (selector is null || ContainsSelectorEvidence(deviceResult, selector)))
@@ -334,7 +337,7 @@ internal sealed partial class LiveUiTreeCapture
         if (fallbackResult.IsSuccess)
         {
             return AddAttemptedToolIds(
-                fallbackResult,
+                ValidateForegroundTargets(deviceResult, fallbackResult, selector),
                 [DeviceAccessibilityToolId, .. fallbackResult.AttemptedToolIds]);
         }
 
@@ -437,7 +440,13 @@ internal sealed partial class LiveUiTreeCapture
                 ["root"] = MauiVisualTreeRootScope.Window
             }
             : toolId == RemoteAppToolIds.UiGetVisualTree
-                ? new JsonObject { ["root"] = VisualTreeContract.RootPageRootScope, ["maxNodes"] = 2000, ["maxDepth"] = 24 }
+                ? new JsonObject
+                {
+                    ["root"] = VisualTreeContract.WindowRootScope,
+                    ["maxNodes"] = 2000,
+                    ["maxDepth"] = 24,
+                    ["includeComputedStyles"] = true
+                }
                 : null;
         if (!GetLiveVisualTreeTool.TryBuildVisualTreeArguments(
                 visualTreeArguments,

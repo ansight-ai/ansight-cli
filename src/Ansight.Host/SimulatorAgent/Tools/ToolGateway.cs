@@ -36,6 +36,7 @@ internal sealed class ToolGateway : IToolGateway
     private static readonly HashSet<string> AllowedToolNames = new(StringComparer.Ordinal)
     {
         "ansight_take_screenshot",
+        "ansight_evaluate_screenshot",
         "ansight_get_live_visual_tree",
         "ansight_get_live_navigation_structure",
         "ansight_find_ui",
@@ -620,6 +621,17 @@ internal sealed class ToolGateway : IToolGateway
             });
     }
 
+    public JsonObject ResolveUiSelectorForTracking(JsonObject arguments)
+    {
+        var resolved = arguments.DeepClone().AsObject();
+        if (currentRun.Value?.UiContext is { } uiContext && !uiContext.TryResolveSelectors(resolved, out _))
+        {
+            return arguments.DeepClone().AsObject();
+        }
+
+        return resolved;
+    }
+
     public bool IsReadOnlyAppToolCall(JsonObject arguments, string sessionId)
     {
         ArgumentNullException.ThrowIfNull(arguments);
@@ -870,6 +882,14 @@ internal sealed class ToolGateway : IToolGateway
         safeArguments.Remove("appId");
         safeArguments.Remove("deviceId");
         safeArguments.Remove("bundleIdentifier");
+        if (toolName == "ansight_evaluate_screenshot")
+        {
+            safeArguments.Remove("teamId");
+            if (safeArguments["reference"] is JsonObject reference && reference.ContainsKey("workspacePath"))
+            {
+                return ErrorResult("Screenshot assessment references must use a retained frameId from the selected session.");
+            }
+        }
         var uiContext = currentRun.Value?.UiContext;
         var isUiTool = IsUiObservationTool(toolName) || ActionToolNames.Contains(toolName);
         if (isUiTool && uiContext is not null
@@ -963,6 +983,11 @@ internal sealed class ToolGateway : IToolGateway
                           && structuredContent is JsonObject taskContent
             ? BuildRepositoryTaskModelOutput(taskContent, isError)
             : null;
+        if (toolName == "ansight_scan_screen" && structuredContent is JsonObject screenText)
+        {
+            modelOutput = ScreenTextObservation.BuildModelOutput(screenText, isError, MaximumToolOutputCharacters);
+        }
+
         if (isUiTool && structuredContent is JsonObject uiContent)
         {
             var observation = UiResultProjection.Project(uiContent, UiProjectionOptions.Model);
@@ -1476,6 +1501,16 @@ internal sealed class ToolGateway : IToolGateway
 
     private static void ProjectModelParameters(string toolName, JsonObject parameters)
     {
+        if (toolName == "ansight_evaluate_screenshot")
+        {
+            RemoveParameter(parameters, "teamId");
+            if (parameters["properties"]?["reference"] is JsonObject reference)
+            {
+                RemoveParameter(reference, "workspacePath");
+                reference["required"] = new JsonArray("frameId");
+                reference["description"] = "Optional reference screenshot: exact retained frameId from the selected session.";
+            }
+        }
         if (ActionToolNames.Contains(toolName))
         {
             RemoveParameter(parameters, "includeScreenshot");
@@ -1684,7 +1719,8 @@ internal sealed class ToolGateway : IToolGateway
             "ansight_back_ui" => "Navigate back once and return before/after semantic evidence.",
             "ansight_run_ui_sequence" => "Run 1–32 known recorded gestures when intermediate inspection is unnecessary. Returns endpoint evidence and per-step outcomes.",
             "ansight_list_app_tools" => "Search executable app tools by focused query, feature, or exact toolId. Read policy by default; write only for requested actions. Critical tools excluded. Follow prerequisiteToolIds.",
-            "ansight_take_screenshot" => "Save a screenshot artifact. Returns metadata, not pixels; cannot locate targets or resolve semantic gaps.",
+            "ansight_take_screenshot" => "Save a fresh screenshot. Returns metadata and frameId; use ansight_evaluate_screenshot to assess its pixels against concrete visible criteria.",
+            "ansight_evaluate_screenshot" => "Assess retained screenshot pixels using the configured model. Supply exact image.frameId and concrete visible criteria, optionally a prior reference.frameId. Returns grounded pass/fail/inconclusive findings and regions. Read-only; does not prove hidden state or stable selector identity.",
             "ansight_call_app_tool" => "Call an exact discovered read/write app tool. Follow prerequisiteToolIds; critical tools are rejected.",
             "ansight_list_tasks" => "Search additional repository tasks with a focused behavioral query/feature when preloaded tasks leave a gap.",
             "ansight_describe_module" => "Describe an exact task/trigger and its schemas when discovery metadata is insufficient.",

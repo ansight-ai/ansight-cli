@@ -163,7 +163,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 correlationId,
                 selector,
                 ToolExecutionCancellation.Current,
-                allowCached: arguments?["targetFingerprint"] is null,
+                allowCached: false,
                 targetSource: arguments?["targetSource"]?.GetValue<string>());
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
@@ -383,12 +383,29 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             return ToolError(tapPointError);
         }
 
+        if (target is not null && actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
+        {
+            var unobstructed = LiveUiUnobstructedPoint.Resolve(capture, target, inputPoint, HasExplicitTapPoint(arguments));
+            if (unobstructed is null)
+            {
+                return ToolError("The tap point overlaps another actionable control and no unoccluded point was established. "
+                    + "No input was delivered. Inspect the rendered target or dismiss the obstruction before retrying.");
+            }
+
+            inputPoint = unobstructed.Value;
+        }
+
+        var scrollEvidence = actionKind == LiveUiActionKind.Scroll
+            ? await LiveUiScrollEvidence.PrepareAsync(capture, target, selector, appToolBridge, uiInputRouter,
+                Name, correlationId, ToolExecutionCancellation.Current)
+            : null;
+        var evidenceCapture = scrollEvidence?.Capture ?? capture;
         var actionId = $"ui-action-{Guid.NewGuid():N}";
         var beforeEvidence = await LiveUiActionEvidence.CaptureAsync(
             runtimeState,
             applicationPaths,
             appToolBridge,
-            capture,
+            evidenceCapture,
             actionId,
             Capability,
             "before",
@@ -488,11 +505,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         var afterCapture = await CaptureAfterEvidenceAsync(
-            capture,
+            evidenceCapture,
             actionId,
             Capability,
             correlationId,
-            includeScreenshot);
+            includeScreenshot,
+            scrollEvidence?.Selector);
         bool? keyboardOpen = null;
         string? postconditionError = null;
         if (actionKind == LiveUiActionKind.Scroll
@@ -500,8 +518,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             && afterCapture.Capture is not null)
         {
             postconditionError = LiveUiMauiContext.DescribeUnexpectedPageChange(
-                capture.Payload,
-                capture.TypeRegistry,
+                evidenceCapture.Payload,
+                evidenceCapture.TypeRegistry,
                 afterCapture.Capture.Payload,
                 afterCapture.Capture.TypeRegistry);
         }
@@ -545,7 +563,11 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             postconditionError,
             ocrTarget,
             ocrTraceEvidence,
-            keyboardOpen);
+            keyboardOpen,
+            scrollObservation: scrollEvidence is not null
+                ? LiveUiScrollObservation.Compare(scrollEvidence.Capture, afterCapture.Capture,
+                    scrollEvidence.Target, scrollEvidence.Selector, afterCapture.ScrollSettled)
+                : null);
     }
 
     internal static bool IsUnsafeImplicitTapTarget(
@@ -791,7 +813,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         string actionId,
         string capability,
         string? correlationId,
-        bool captureScreenshot)
+        bool captureScreenshot,
+        LiveUiSelector? scrollSelector = null)
         => await LiveUiEvidenceCapture.CaptureAfterAsync(
             runtimeState,
             applicationPaths,
@@ -803,7 +826,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             Name,
             correlationId,
             cancellationToken: ToolExecutionCancellation.Current,
-            captureScreenshot: captureScreenshot, externalScreenshots: externalScreenshots);
+            captureScreenshot: captureScreenshot, externalScreenshots: externalScreenshots,
+            scrollSelector: scrollSelector);
 
     private static RequestResult BuildActionResult(
         LiveUiTreeCapture capture,
@@ -818,7 +842,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         JsonObject? screenTarget = null,
         JsonObject? ocrTraceEvidence = null,
         bool? keyboardOpen = null,
-        bool? performed = null)
+        bool? performed = null,
+        JsonObject? scrollObservation = null)
     {
         var message = postconditionError ?? inputResult.Message;
         var structuredContent = new JsonObject
@@ -855,6 +880,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         if (keyboardOpen.HasValue)
         {
             structuredContent["isOpen"] = keyboardOpen.Value;
+        }
+        if (scrollObservation is not null)
+        {
+            structuredContent["scrollObservation"] = scrollObservation;
         }
         return LiveUiActionResponse.Build(
             structuredContent,
@@ -909,7 +938,8 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 nullable: true);
         }
 
-        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress or LiveUiActionKind.TypeText)
+        if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress or LiveUiActionKind.TypeText
+            or LiveUiActionKind.Scroll or LiveUiActionKind.Swipe)
         {
             properties["targetSource"] = ToolSchema.String(
                 "Copy the capture provider from tapHint.selector unchanged. The host resolves the target in that same provider and checks fresh evidence; never invent a source.",
@@ -1196,14 +1226,19 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var startY = centerY - (deltaY / 2);
         var endX = centerX + (deltaX / 2);
         var endY = centerY + (deltaY / 2);
-        var minimumX = Math.Clamp(NormalizeX(gestureBounds.X, viewport), 0.02, 0.98);
+        // A touch starting exactly on a clipped list edge can hit its sibling or
+        // parent instead. Keep generated gestures inside the visible target.
+        var visibleGestureBounds = LiveUiBounds.Intersection(gestureBounds, viewport) ?? gestureBounds;
+        var insetX = visibleGestureBounds.Width * 0.05;
+        var insetY = visibleGestureBounds.Height * 0.05;
+        var minimumX = Math.Clamp(NormalizeX(visibleGestureBounds.X + insetX, viewport), 0.02, 0.98);
         var maximumX = Math.Clamp(
-            NormalizeX(gestureBounds.X + gestureBounds.Width, viewport),
+            NormalizeX(visibleGestureBounds.X + visibleGestureBounds.Width - insetX, viewport),
             minimumX,
             0.98);
-        var minimumY = Math.Clamp(NormalizeY(gestureBounds.Y, viewport), 0.02, 0.98);
+        var minimumY = Math.Clamp(NormalizeY(visibleGestureBounds.Y + insetY, viewport), 0.02, 0.98);
         var maximumY = Math.Clamp(
-            NormalizeY(gestureBounds.Y + gestureBounds.Height, viewport),
+            NormalizeY(visibleGestureBounds.Y + visibleGestureBounds.Height - insetY, viewport),
             minimumY,
             0.98);
         FitSegment(ref startX, ref endX, minimumX, maximumX);

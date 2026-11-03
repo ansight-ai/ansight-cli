@@ -4,6 +4,72 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed class SimulatorAgentNavigationGuidanceTests
 {
+    [Theory]
+    [InlineData("maui.get_visual_tree", "maui")]
+    [InlineData("react.get_component_tree", "react-native")]
+    [InlineData("react.get_shadow_tree", "react-native")]
+    [InlineData("flutter.get_widget_tree", "flutter")]
+    public void TakeKnownGuidance_ComposesOnlyThePublishedFramework(string toolId, string framework)
+    {
+        var capabilities = new SessionCapabilities("ios", [toolId], []);
+        var guidance = new AgentNavigationGuidance();
+
+        Assert.Equal(Section(framework), guidance.TakeKnownGuidance(capabilities));
+        Assert.Empty(guidance.TakeKnownGuidance(capabilities));
+        Assert.Empty(guidance.TakeNewGuidance(new JsonObject
+        {
+            ["capability"] = "ui.observe", ["framework"] = framework
+        }.ToJsonString()));
+        Assert.Equal(Section("ios-swiftui"), guidance.TakeNewGuidance("""
+            {"capability":"ui.observe","graphStructureControllers":[{"framework":"ios-swiftui"}]}
+            """));
+    }
+
+    [Fact]
+    public void TakeKnownGuidance_PreservesMixedFrameworksWithoutDuplicatingProviders()
+    {
+        var capabilities = new SessionCapabilities("ios",
+            [VisualTreeContract.MauiToolId, VisualTreeContract.ReactComponentToolId, VisualTreeContract.ReactShadowToolId],
+            ["maui", "react-native", "ios-uikit"]);
+        Assert.Equal(string.Join("\n\n", Section("ios-uikit"), Section("maui"), Section("react-native")),
+            new AgentNavigationGuidance().TakeKnownGuidance(capabilities));
+    }
+
+    [Fact]
+    public void TakeKnownGuidance_UsesExactNativeControllersWithoutInferringFromPlatformOrDom()
+    {
+        var nativeAndDom = new SessionCapabilities("ios", [VisualTreeContract.NativeToolId, VisualTreeContract.DomToolId], []);
+        Assert.Empty(new AgentNavigationGuidance().TakeKnownGuidance(nativeAndDom));
+
+        foreach (var framework in new[]
+                 {
+                     "ios-uikit", "ios-swiftui", "maccatalyst-uikit", "maccatalyst-swiftui",
+                     "macos-appkit", "macos-swiftui", "android-views", "android-compose", "capacitor"
+                 })
+        {
+            Assert.Equal(Section(framework), new AgentNavigationGuidance().TakeKnownGuidance(
+                nativeAndDom with { NavigationFrameworks = [framework] }));
+        }
+
+        Assert.Empty(new AgentNavigationGuidance().TakeKnownGuidance(
+            nativeAndDom with { NavigationFrameworks = ["maui"], IsDeviceOnly = true }));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SharedInstructionsStayFrameworkNeutralForExecutionAndGraphing(bool graphing)
+    {
+        var capabilities = new SessionCapabilities("ios", [VisualTreeContract.NativeToolId], []);
+        var prompt = SimulatorAgentService.BuildAgentInstructions(false, graphing, capabilities);
+        foreach (var frameworkTerm in new[] { "MAUI", "maui.", ".NET", "FlyoutPage", "UIKit", "SwiftUI", "React Navigation", "Navigator", "NavController" })
+        {
+            Assert.DoesNotContain(frameworkTerm, prompt, StringComparison.Ordinal);
+        }
+
+        Assert.Empty(new AgentNavigationGuidance().TakeKnownGuidance(capabilities));
+    }
+
     [Fact]
     public void TakeNewGuidance_RetainsEachFrameworkOnceAndAddsLaterFrameworks()
     {

@@ -3,7 +3,7 @@ The App Graph completion was rejected. Read the exact rejection returned by comp
 <!-- /template -->
 
 <!-- template:app-graph-scroll-terminal -->
-The App Graph scroll reached an unchanged semantic viewport. Treat this container and direction as terminal, report the scroll coverage change, and choose another safe branch. Do not scroll this scope again.
+The App Graph scroll reached an unchanged semantic viewport. Stop this container and direction. Report complete/not_scrollable only when boundary evidence supports it; otherwise report a blocked observability gap. Other containers and the opposite direction remain separate. Report the coverage change promptly, then return to another pending branch. Repeated taps or selector aliases do not reset this scope.
 <!-- /template -->
 
 <!-- template:app-tool-result -->
@@ -19,7 +19,7 @@ Host camera comparison: cameraChanged=false. The authoritative post-swipe camera
 <!-- /template -->
 
 <!-- template:completion-grace -->
-The $MAXIMUM_TURNS$-turn work budget is exhausted, but the final work turn produced a successful tool result. This is a completion-only pass: call $COMPLETION_TOOL$ exactly once with an honest succeeded or failed outcome based on the evidence already in history. Do not request or describe another action.
+The $MAXIMUM_TURNS$-turn work budget is exhausted, but the final work turn produced a successful tool result. This is a completion-only pass: call $COMPLETION_TOOL$ exactly once with an honest succeeded, failed, or (for incomplete App Graph coverage) partial outcome based on the evidence already in history. Do not request or describe another action.
 <!-- /template -->
 
 <!-- template:continue-with-tool -->
@@ -84,4 +84,8 @@ Shortcut assessment: compare the returned task metadata with the complete curren
 
 <!-- template:text-entry-delivered -->
 The requested text entry was delivered. If it triggers search or filtering, wait once for the exact result inside its observed results container, an explicit empty/error state, or the loading/searching state to end. The query echoed in the textbox is not a search result: do not use an unqualified text wait that matches the input. An immediate zero match while loading is not a completed search. Do not clear or scroll the results before the search settles. Select a result only when requested. Text entry alone does not require another task declaration.
+<!-- /template -->
+
+<!-- template:app-graph-reconcile-state -->
+Input was delivered. Observe its result and call report_app_graph_progress before any further input, including scrolling, Back, dismiss or tab selection. The host has cleared currentDestinationId until reconciliation. Report the current canonical destination, the verified transition (or unchanged state), actionOutcome with the exact pending inputId, actionId, retained evidenceRefs, observed evidence and outcome status, plus any scrollObservation classification. A screen-only report cannot unlock input. Read-only inspection remains available. Reuse existing IDs; do not invent a transition if the evidence is uncertain. Then choose from the newly ordered nextActions. Leave blocked scroll branches behind while unattempted work remains.
 <!-- /template -->

@@ -12,7 +12,7 @@ Next queued action: '$ACTION_ID$' on destination '$DESTINATION_ID$' using $TOOL_
 <!-- /template -->
 
 <!-- template:action-guard-attempted -->
-App Graph action '$AUTOMATION_ID$' from destination '$DESTINATION_ID$' has already been attempted $ATTEMPT_COUNT$ times. Mark it blocked or unavailable with evidence instead of entering the same branch again. $FRONTIER_GUIDANCE$
+App Graph action '$AUTOMATION_ID$' from destination '$DESTINATION_ID$' has already been attempted $ATTEMPT_COUNT$ times. Resolve it from retained evidence or defer it with the remaining work. Use blocked only for an observed limitation, never merely an exhausted attempt budget. $FRONTIER_GUIDANCE$
 <!-- /template -->
 
 <!-- template:action-guard-terminal -->
@@ -28,7 +28,7 @@ No persisted candidate exists yet. $NAVIGATION_HOST_COUNT$ navigation host(s) an
 <!-- /template -->
 
 <!-- template:frontier-pending -->
-Resumed $DESTINATION_COUNT$ destination(s), $TRANSITION_COUNT$ transition(s), $NAVIGATION_HOST_COUNT$ navigation host(s), $TAB_GROUP_COUNT$ tab group(s), and $ACTION_COUNT$ action candidate(s). Explore these lowest-attempt pending actions first:
+Resumed $DESTINATION_COUNT$ destination(s), $TRANSITION_COUNT$ transition(s), $NAVIGATION_HOST_COUNT$ navigation host(s), $TAB_GROUP_COUNT$ tab group(s), and $ACTION_COUNT$ action candidate(s). Prioritize unattempted work on the current state, then less-visited branches; deferred blocked-scroll work follows other pending actions:
 $PENDING_ACTIONS$
 <!-- /template -->
 

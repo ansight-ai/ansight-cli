@@ -170,9 +170,11 @@ public sealed partial class SimulatorAgentServiceTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RunAsync_AllowsScreenScanForDeviceAndSdkExecution(bool deviceMode)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RunAsync_AllowsScreenScanForDeviceAndSdkExecution(bool deviceMode, bool graphMode)
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
@@ -181,13 +183,28 @@ public sealed partial class SimulatorAgentServiceTests
                 "call-scan",
                 "ansight_scan_screen",
                 new JsonObject()),
+            .. graphMode ? new[]
+            {
+                CreateFunctionTurn("call-progress", "report_app_graph_progress", new JsonObject
+                {
+                    ["message"] = "Observed home.",
+                    ["currentDestinationId"] = "home",
+                    ["destinations"] = new JsonArray(new JsonObject
+                    {
+                        ["id"] = "home", ["kind"] = "screen", ["name"] = "Home",
+                        ["purpose"] = "Start", ["scrollStatus"] = "not_scrollable"
+                    }),
+                    ["actions"] = new JsonArray(), ["transitions"] = new JsonArray(),
+                    ["coverage"] = new JsonObject { ["gaps"] = new JsonArray() }
+                })
+            } : Array.Empty<OpenAiTurn>(),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
                 new JsonObject
                 {
                     ["outcome"] = "succeeded",
-                    ["summary"] = "Done."
+                    ["summary"] = graphMode ? CreateAppGraphCompletionSummary("home") : "Done."
                 })
         ]);
         var gateway = new FakeToolGateway
@@ -208,9 +225,12 @@ public sealed partial class SimulatorAgentServiceTests
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest(
             "session-123",
-            ["Inspect the app."]));
+            ["Inspect the app."])
+        {
+            AppGraphExplorationName = graphMode ? "Default" : null
+        });
 
-        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        Assert.True(result.Status == SimulatorAgentRunStatus.Succeeded, result.Message);
         Assert.Contains(client.Tools[0].OfType<JsonObject>(),
             tool => tool["name"]?.GetValue<string>() == "ansight_scan_screen");
         Assert.Equal(deviceMode ? "device" : "sdk", result.Audit.ExecutionMode);
@@ -372,8 +392,13 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains("does not allow broad find_ui enumeration", rejectedCall.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task RunAsync_AppGraphCapsScrollAttemptsPerScope()
+    [Theory]
+    [InlineData("missing", 2)]
+    [InlineData("raw_hash_changes", 2)]
+    [InlineData("unchanged", 1)]
+    [InlineData("changing", 4)]
+    [InlineData("mixed", 5)]
+    public async Task RunAsync_AppGraphContinuesScrollingOnlyWhileSemanticEvidenceChanges(string evidenceMode, int expectedCalls)
     {
         var storage = new InMemoryEncryptedStorage();
         var scrollArguments = new JsonObject
@@ -384,9 +409,11 @@ public sealed partial class SimulatorAgentServiceTests
         };
         var client = new FakeOpenAiClient(
         [
-            CreateFunctionTurn("scroll-1", "ansight_scroll_ui", scrollArguments.DeepClone().AsObject()),
-            CreateFunctionTurn("scroll-2", "ansight_scroll_ui", scrollArguments.DeepClone().AsObject()),
-            CreateFunctionTurn("scroll-3", "ansight_scroll_ui", scrollArguments.DeepClone().AsObject()),
+            .. Enumerable.Range(1, 6).SelectMany(index => new[]
+            {
+                ScrollScopeProgress($"observe-{index}", "home", index > 1 && index <= expectedCalls + 1 ? $"scroll-{index - 1}" : null),
+                CreateFunctionTurn($"scroll-{index}", "ansight_scroll_ui", scrollArguments.DeepClone().AsObject())
+            }),
             CreateFunctionTurn(
                 "call-progress",
                 "report_app_graph_progress",
@@ -423,11 +450,35 @@ public sealed partial class SimulatorAgentServiceTests
                 "complete_instruction",
                 new JsonObject
                 {
-                    ["outcome"] = "succeeded",
+                    ["outcome"] = "failed",
                     ["summary"] = CreateAppGraphCompletionSummary("home")
                 })
         ]);
         var gateway = new FakeToolGateway();
+        for (var index = 1; index <= expectedCalls; index++)
+        {
+            var hasEvidence = evidenceMode != "missing" && !(evidenceMode == "mixed" && index is 1 or 3);
+            var changed = evidenceMode is "changing" or "mixed" && index < expectedCalls;
+            var output = hasEvidence
+                ? new JsonObject
+                {
+                    ["isError"] = false,
+                    ["result"] = new JsonObject
+                    {
+                        ["scrollObservation"] = evidenceMode == "raw_hash_changes" ? null : new JsonObject
+                        {
+                            ["status"] = changed ? "changed" : "unchanged"
+                        },
+                        ["evidence"] = new JsonObject
+                        {
+                            ["before"] = new JsonObject { ["treeHash"] = $"viewport-{index}" },
+                            ["after"] = new JsonObject { ["treeHash"] = $"viewport-{index + 1}" }
+                        }
+                    }
+                }.ToJsonString()
+                : "{\"isError\":false}";
+            gateway.Results.Enqueue(new ToolCallResult(false, output, "Scroll delivered."));
+        }
         gateway.ToolDefinitions.Add(new JsonObject
         {
             ["type"] = "function",
@@ -444,13 +495,13 @@ public sealed partial class SimulatorAgentServiceTests
             AppGraphExplorationName = "Default"
         });
 
-        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
-        Assert.Equal(2, gateway.Calls.Count(call => call.ToolName == "ansight_scroll_ui"));
-        var guardedCall = Assert.Single(
-            result.Audit.ToolCalls,
-            call => call.CallId == "scroll-3");
-        Assert.True(guardedCall.IsError);
-        Assert.Contains("2-attempt limit", guardedCall.Message, StringComparison.Ordinal);
+        Assert.Equal(SimulatorAgentRunStatus.Failed, result.Status);
+        Assert.Equal(expectedCalls, gateway.Calls.Count(call => call.ToolName == "ansight_scroll_ui"));
+        var guardedCalls = result.Audit.ToolCalls.Where(call => call.ToolName == "ansight_scroll_ui" && call.IsError).ToArray();
+        Assert.Equal(6 - expectedCalls, guardedCalls.Length);
+        Assert.All(guardedCalls, call => Assert.Contains(
+            evidenceMode is "missing" or "raw_hash_changes" ? "2 consecutive attempts without evidence" : "unchanged semantic viewport",
+            call.Message, StringComparison.Ordinal));
         var run = Assert.Single(service.ListAppGraphLiveRuns("session-123"));
         Assert.Equal("blocked", Assert.Single(run.Nodes).ScrollStatus);
     }
@@ -468,7 +519,7 @@ public sealed partial class SimulatorAgentServiceTests
             string callId,
             string destinationId,
             bool includeDestination,
-            string actionStatus)
+            string actionStatus, string? previousInputId = null, string? observationId = null)
             => CreateFunctionTurn(
                 callId,
                 "report_app_graph_progress",
@@ -476,6 +527,11 @@ public sealed partial class SimulatorAgentServiceTests
                 {
                     ["message"] = $"{destinationId} is current.",
                     ["currentDestinationId"] = destinationId,
+                    ["actionOutcome"] = previousInputId is null ? null : GraphOutcome(previousInputId, "no_change"),
+                    ["stateObservation"] = observationId is null ? null : new JsonObject
+                    {
+                        ["observationId"] = observationId, ["evidence"] = "Fresh inspection identifies the profile page."
+                    },
                     ["destinations"] = includeDestination
                         ? new JsonArray(
                             new JsonObject
@@ -502,7 +558,7 @@ public sealed partial class SimulatorAgentServiceTests
                             ["semanticMeaning"] = "Open known branch",
                             ["status"] = actionStatus,
                             ["lastOutcome"] = actionStatus == "explored"
-                                ? "Destination change verified."
+                                ? "The observed page is unchanged."
                                 : string.Empty,
                             ["resultDestinationId"] = actionStatus == "explored"
                                 ? destinationId
@@ -522,11 +578,15 @@ public sealed partial class SimulatorAgentServiceTests
         [
             CreateProgressTurn("progress-home-1", "home", includeDestination: true, "queued"),
             CreateFunctionTurn("tap-home-1", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
-            CreateProgressTurn("progress-home-2", "home", includeDestination: false, "explored"),
+            CreateProgressTurn("progress-home-2", "home", includeDestination: false, "explored", "tap-home-1"),
             CreateFunctionTurn("tap-home-2", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
-            CreateProgressTurn("progress-profile", "profile", includeDestination: true, "queued"),
+            CreateFunctionTurn("inspect-profile", "ansight_get_live_visual_tree", new JsonObject
+            {
+                ["toolId"] = "ui.get_visual_tree", ["root"] = "window"
+            }),
+            CreateProgressTurn("progress-profile", "profile", includeDestination: true, "queued", observationId: "inspect-profile"),
             CreateFunctionTurn("tap-profile-1", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
-            CreateProgressTurn("progress-final", "profile", includeDestination: false, "explored"),
+            CreateProgressTurn("progress-final", "profile", includeDestination: false, "explored", "tap-profile-1"),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -760,8 +820,7 @@ public sealed partial class SimulatorAgentServiceTests
             tool => tool["name"]?.GetValue<string>() == "ansight_tap_ui");
         Assert.DoesNotContain(
             client.Tools[0].OfType<JsonObject>(),
-            tool => tool["name"]?.GetValue<string>() is "ansight_scan_screen"
-                or "ansight_list_tasks"
+            tool => tool["name"]?.GetValue<string>() is "ansight_list_tasks"
                 or "ansight_describe_module"
                 or "ansight_run_task"
                 or "ansight_list_app_tools"
@@ -783,132 +842,27 @@ public sealed partial class SimulatorAgentServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_RejectsFailedAppGraphCompletionWhileReportedCoverageIsIncomplete()
+    public async Task RunAsync_AllowsPartialAppGraphCompletionWithoutDiscardingFrontier()
     {
-        var storage = new InMemoryEncryptedStorage();
-        static JsonObject CreateAppGraphAction(string id, string status)
-            => new()
-            {
-                ["id"] = id,
-                ["destinationId"] = "home",
-                ["toolName"] = "ansight_tap_ui",
-                ["automationId"] = id,
-                ["semanticMeaning"] = $"Explore {id}",
-                ["status"] = status,
-                ["lastOutcome"] = status is "explored" or "blocked"
-                    ? $"{id} reached terminal status."
-                    : string.Empty,
-                ["resultDestinationId"] = status == "explored" ? "home" : string.Empty
-            };
         var client = new FakeOpenAiClient(
         [
-            CreateFunctionTurn(
-                "call-progress",
-                "report_app_graph_progress",
-                new JsonObject
-                {
-                    ["message"] = "The Home branch remains incomplete.",
-                    ["currentDestinationId"] = "home",
-                    ["destinations"] = new JsonArray(
-                        new JsonObject
-                        {
-                            ["id"] = "home",
-                            ["kind"] = "screen",
-                            ["name"] = "Home",
-                            ["parentScreen"] = string.Empty,
-                            ["synonyms"] = new JsonArray(),
-                            ["purpose"] = "Navigate the app.",
-                            ["description"] = "Home is visible.",
-                            ["scrollStatus"] = "in_progress",
-                            ["confidence"] = 0.95
-                        }),
-                    ["transitions"] = new JsonArray(),
-                    ["actions"] = new JsonArray(
-                        CreateAppGraphAction("home-action-1", "explored"),
-                        CreateAppGraphAction("home-action-2", "queued"),
-                        CreateAppGraphAction("home-action-3", "queued")),
-                    ["coverage"] = new JsonObject
-                    {
-                        ["safeActionsObserved"] = 3,
-                        ["actionsExplored"] = 1,
-                        ["scrollContainersObserved"] = 1,
-                        ["scrollContainersCompleted"] = 0,
-                        ["gaps"] = new JsonArray("Two branches and one scroll container remain.")
-                    }
-                }),
-            CreateFunctionTurn(
-                "call-premature-failure",
-                "complete_instruction",
-                new JsonObject
-                {
-                    ["outcome"] = "failed",
-                    ["summary"] = "Exploration could not be completed because branches remain."
-                }),
-            CreateFunctionTurn(
-                "call-progress-final",
-                "report_app_graph_progress",
-                new JsonObject
-                {
-                    ["message"] = "All reported branches are covered.",
-                    ["currentDestinationId"] = "home",
-                    ["destinations"] = new JsonArray(
-                        new JsonObject
-                        {
-                            ["id"] = "home",
-                            ["kind"] = "screen",
-                            ["name"] = "Home",
-                            ["parentScreen"] = string.Empty,
-                            ["synonyms"] = new JsonArray(),
-                            ["purpose"] = "Navigate the app.",
-                            ["description"] = "Home coverage is complete.",
-                            ["scrollStatus"] = "complete",
-                            ["confidence"] = 0.95
-                        }),
-                    ["transitions"] = new JsonArray(),
-                    ["actions"] = new JsonArray(
-                        CreateAppGraphAction("home-action-2", "explored"),
-                        CreateAppGraphAction("home-action-3", "blocked")),
-                    ["coverage"] = new JsonObject
-                    {
-                        ["safeActionsObserved"] = 3,
-                        ["actionsExplored"] = 3,
-                        ["scrollContainersObserved"] = 1,
-                        ["scrollContainersCompleted"] = 1,
-                        ["gaps"] = new JsonArray()
-                    }
-                }),
-            CreateFunctionTurn(
-                "call-complete",
-                "complete_instruction",
-                new JsonObject
-                {
-                    ["outcome"] = "succeeded",
-                    ["summary"] = CreateAppGraphCompletionSummary("home")
-                })
+            ScrollScopeProgress("observe", "home"),
+            CreateFunctionTurn("partial", "complete_instruction", new JsonObject
+            {
+                ["outcome"] = "partial", ["summary"] = "Partial pass: remaining home scroll coverage is deferred."
+            })
         ]);
-        using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
+        using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
-
-        var result = await service.RunAsync(new SimulatorAgentRunRequest(
-            "session-123",
-            ["Explore every safe branch."])
+        var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123", ["Inspect one branch."])
         {
             AppGraphExplorationName = "Default"
         });
-
-        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
-        Assert.Equal(4, result.TotalTurns);
-        var prematureCompletion = Assert.Single(
-            result.Audit.ToolCalls,
-            call => call.CallId == "call-premature-failure");
-        Assert.True(prematureCompletion.IsError);
-        Assert.Contains("host-tracked action", prematureCompletion.Message, StringComparison.Ordinal);
-        Assert.Contains("home-action-2", prematureCompletion.Message, StringComparison.Ordinal);
-        Assert.Contains("remain incomplete", prematureCompletion.Message, StringComparison.Ordinal);
-        Assert.Contains(
-            "host-owned action, scroll, or navigation-structure frontier remains incomplete",
-            client.Inputs[2].ToJsonString(),
-            StringComparison.Ordinal);
+        Assert.Equal(SimulatorAgentRunStatus.Failed, result.Status);
+        Assert.Equal(2, result.TotalTurns);
+        Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "partial").IsError);
+        Assert.Equal("partial", Assert.Single(service.ListAppGraphLiveRuns("session-123")).Status);
+        Assert.Equal("in_progress", Assert.Single(Assert.Single(service.ListAppGraphLiveRuns("session-123")).Nodes).ScrollStatus);
     }
 
     [Fact]
@@ -3190,6 +3144,8 @@ public sealed partial class SimulatorAgentServiceTests
 
         public ToolCallResult? InitialObservation { get; init; }
 
+        public string AppState { get; init; } = "foreground";
+
         public Task<ToolCallResult?> CaptureInitialObservationAsync(
             string sessionId, SessionCapabilities capabilities, string correlationId, CancellationToken cancellationToken)
             => Task.FromResult(InitialObservation);
@@ -3293,7 +3249,7 @@ public sealed partial class SimulatorAgentServiceTests
                 "com.example.app",
                 "Example App",
                 IsLive: true,
-                AppState: "foreground",
+                AppState: AppState,
                 Device: new SimulatorAgentRunDevice(
                     "test-device-123",
                     "Apple",

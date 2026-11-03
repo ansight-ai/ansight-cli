@@ -5,6 +5,84 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed partial class AppInteractionBackendTests
 {
+    [Fact]
+    public void StructuralContainerDoesNotAdvertiseTapButItsButtonDoes()
+    {
+        var payload = CreateModalNativeTree();
+        var sheet = payload["root"]!["children"]![0]!.AsObject();
+        sheet["supportedActions"] = new JsonArray();
+        Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var types, out var root));
+        var viewport = LiveUiNodeQuery.ReadCoordinateSpace(payload);
+        var sheetSelector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-sheet" });
+        var sheetMatch = Assert.Single(LiveUiNodeQuery.Find(root!, sheetSelector, types!));
+        var buttonSelector = LiveUiSelector.Parse(ModalCopySelector());
+        var button = LiveUiNodeQuery.Find(root!, buttonSelector, types!)[0];
+
+        Assert.Null(FindLiveUiTool.BuildTapHint(root!, sheetMatch, viewport, sheetSelector, payload));
+        Assert.NotNull(FindLiveUiTool.BuildTapHint(root!, button, viewport, buttonSelector, payload));
+    }
+
+    [Theory]
+    [InlineData("ansight_find_ui", false, true)]
+    [InlineData("ansight_wait_for_ui", false, true)]
+    [InlineData("ansight_find_ui", true, false)]
+    [InlineData("ansight_tap_ui", false, false)]
+    public async Task FlattenedSheetContainerCanBeInspectedThroughCorroboratedChildren(
+        string operation, bool hideSecondChild, bool found)
+    {
+        var session = CreateModalTestSession();
+        var native = CreateModalNativeTree();
+        if (hideSecondChild)
+        {
+            GetModalCopyNodes(native)[1]["visible"] = false;
+        }
+
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(CreateFlatModalAccessibility()));
+        using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-sheet" });
+        var result = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(session,
+            new ModalSelectorBridge(session.SessionId, native), router, operation, null, selector, default);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(found, LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry).Count > 0);
+    }
+
+    [Theory]
+    [InlineData("routes-tab", true)]
+    [InlineData("different-overlay", false)]
+    public async Task RenderedLabelIsCorroboratedByItsAccessibleAncestorIdentity(string foregroundId, bool allowed)
+    {
+        var session = CreateModalTestSession();
+        var native = CreateModalNativeTree();
+        var control = GetModalCopyNodes(native)[0];
+        control["automationId"] = "routes-tab";
+        control["label"] = "Routes, 1 matches";
+        control["children"] = new JsonArray(new JsonObject
+        {
+            ["id"] = "caption", ["typeId"] = 1, ["label"] = "Routes", ["role"] = "text",
+            ["visible"] = true, ["enabled"] = false, ["bounds"] = new JsonArray(320, 500, 32, 32)
+        });
+        var accessible = DeviceAccessibilityTreeNormalizer.NormalizeIos(
+            $"""
+            <AppiumAUT>
+              <XCUIElementTypeApplication type="XCUIElementTypeApplication" name="Test App" enabled="true" visible="true" x="0" y="0" width="400" height="800">
+                <XCUIElementTypeButton type="XCUIElementTypeButton" name="{foregroundId}" label="Routes, 1 matches" enabled="true" visible="true" x="320" y="500" width="32" height="32" />
+              </XCUIElementTypeApplication>
+            </AppiumAUT>
+            """, 400, 800, 40, 16);
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+        using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject { ["text"] = "Routes", ["matchMode"] = "exact" });
+
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session,
+            new ModalSelectorBridge(session.SessionId, native), router, "ansight_tap_ui", null,
+            selector, default, targetSource: RemoteAppToolIds.UiGetVisualTree);
+
+        Assert.Equal(allowed, result.IsSuccess);
+    }
+
     [Theory]
     [InlineData(0, 0.645)]
     [InlineData(1, 0.7825)]
@@ -159,6 +237,139 @@ public sealed partial class AppInteractionBackendTests
         }), types!).Select(match => match.Node).ToArray();
     }
 
+    [Theory]
+    [InlineData(false, null, "conflict", false)]
+    [InlineData(false, "ui.get_visual_tree", "conflict", false)]
+    [InlineData(true, null, "conflict", false)]
+    [InlineData(false, "ui.get_visual_tree", "same-label", true)]
+    [InlineData(true, null, "same-label", true)]
+    [InlineData(false, "ui.get_visual_tree", "elsewhere", true)]
+    [InlineData(false, "ui.get_visual_tree", "hidden", true)]
+    public async Task FlattenedForegroundControlsCannotReceiveInputIntendedForSdkTargets(
+        bool interaction, string? targetSource, string scenario, bool allowed)
+    {
+        var session = CreateModalTestSession();
+        var native = CreateModalNativeTree();
+        var sdkTarget = GetModalCopyNodes(native)[0];
+        sdkTarget["automationId"] = "settings-select-language-button";
+        sdkTarget["label"] = "Change Language";
+        var accessibility = DeviceAccessibilityTreeNormalizer.NormalizeIos(
+            """
+            <AppiumAUT>
+              <XCUIElementTypeApplication type="XCUIElementTypeApplication" name="Test App" enabled="true" visible="true" x="0" y="0" width="400" height="800">
+                <XCUIElementTypeButton type="XCUIElementTypeButton" label="Ελληνικά" enabled="true" visible="true" x="310" y="490" width="50" height="50" />
+              </XCUIElementTypeApplication>
+            </AppiumAUT>
+            """, 400, 800, 40, 16);
+        Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(accessibility, out var registry, out var root));
+        var foreground = Assert.Single(LiveUiNodeQuery.Find(root!, LiveUiSelector.Parse(new JsonObject
+            { ["text"] = "Ελληνικά" }), registry!)).Node;
+        if (scenario == "same-label")
+        {
+            sdkTarget.Remove("label");
+            sdkTarget["children"] = new JsonArray(new JsonObject
+                {
+                    ["typeId"] = 1, ["label"] = "Ελληνικά", ["role"] = "text",
+                    ["visible"] = true, ["enabled"] = true, ["bounds"] = new JsonArray(320, 500, 32, 32)
+                });
+        }
+        if (scenario == "elsewhere") foreground["bounds"] = new JsonArray(0.1, 0.1, 0.1, 0.1);
+        if (scenario == "hidden") foreground["visible"] = false;
+        var bridge = new ModalSelectorBridge(session.SessionId, native);
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(accessibility));
+        using var target = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "settings-select-language-button" });
+
+        var result = interaction
+            ? await LiveUiTreeCapture.CaptureForInteractionAsync(session, bridge, router,
+                "test-interaction", selector, RemoteAppToolIds.UiGetVisualTree, CancellationToken.None)
+            : await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
+                "ansight_tap_ui", null, selector, CancellationToken.None, targetSource: targetSource);
+
+        Assert.True(allowed == result.IsSuccess, result.Message);
+        if (!allowed) Assert.Contains("different foreground accessibility control", result.Message);
+    }
+
+    [Theory]
+    [InlineData("ansight_find_ui")]
+    [InlineData("ansight_wait_for_ui")]
+    [InlineData("ansight_tap_ui")]
+    public async Task NativeFallbackDoesNotBypassForegroundConflict(string toolName)
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
+        state.SetSessionDeviceProfile(sessionId, null,
+            """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
+        var native = CreateModalNativeTree();
+        var background = GetModalCopyNodes(native)[0];
+        background["automationId"] = "background-button";
+        background["label"] = "Change Language";
+        var accessibility = CreateFlatModalAccessibility();
+        Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(accessibility, out var registry, out var root));
+        var modalMarker = Assert.Single(LiveUiNodeQuery.Find(root!, LiveUiSelector.Parse(new JsonObject
+            { ["automationId"] = "PopoverDismissRegion" }), registry!)).Node;
+        modalMarker.Parent!.AsArray().Remove(modalMarker);
+        var bridge = new ModalSelectorBridge(sessionId, native);
+        var composition = new MefHostComposition(environment.ApplicationPaths,
+            new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
+        using var dispatcher = new OperationDispatcher(state, environment.ApplicationPaths,
+            composition.Get<IKnownAppStore>(), composition.Get<IPairingConfigService>(), composition.Get<IPairingConfigCache>(),
+            composition.Get<AppService>(), composition.Get<PairingService>(), composition.Get<DotNetProfilingService>(),
+            composition.Get<NativeProfilingService>(), bridge);
+        var input = new InputDriver();
+        dispatcher.ConfigureUiInputDriver(input);
+        dispatcher.ConfigureUiAccessibilityDriver(new ModalSelectorAccessibility(accessibility));
+        var arguments = new JsonObject
+        {
+            ["sessionId"] = sessionId, ["automationId"] = "background-button",
+            ["visible"] = true, ["enabled"] = true
+        };
+        if (toolName == "ansight_wait_for_ui")
+        {
+            arguments["condition"] = "visible";
+            arguments["timeoutMs"] = 100;
+        }
+        if (toolName == "ansight_tap_ui") arguments["includeScreenshot"] = false;
+
+        var result = await dispatcher.CallToolAsync(toolName, arguments);
+
+        Assert.True(result.Payload?["isError"]?.GetValue<bool>(), result.Payload?.ToJsonString());
+        Assert.Contains("different foreground accessibility control", result.Payload!.ToJsonString());
+        Assert.Equal(0, input.Taps);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task NativeSheetScrollContainerRequiresVisibleChildCorroboration(bool hideSecondChild, bool allowed)
+    {
+        var session = CreateModalTestSession();
+        var native = CreateModalNativeTree();
+        var container = native["root"]!["children"]![0]!["children"]![0]!.AsObject();
+        container["role"] = "scrollview";
+        container["supportedActions"] = new JsonArray("scroll", "swipe");
+        if (hideSecondChild) GetModalCopyNodes(native)[1]["visible"] = false;
+        var bridge = new ModalSelectorBridge(session.SessionId, native);
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(CreateFlatModalAccessibility()));
+        using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject
+        {
+            ["automationId"] = "area-share-options-list", ["action"] = "scroll", ["visible"] = true
+        });
+
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
+            "ansight_scroll_ui", null, selector, CancellationToken.None,
+            allowCached: false, targetSource: RemoteAppToolIds.UiGetVisualTree);
+
+        Assert.True(result.IsSuccess, result.Message);
+        var capture = Assert.IsType<LiveUiTreeCapture>(result.Capture);
+        Assert.Equal(allowed, LiveUiNodeQuery.Find(capture.Root, selector, capture.TypeRegistry).Count > 0);
+        Assert.Equal("window", bridge.LastRoot);
+    }
+
     private static AppSessionSnapshot CreateModalTestSession() => new()
     {
         SessionId = "session-modal", AppId = "test.app", ClientName = "Test App", RemoteAddress = "127.0.0.1",
@@ -228,7 +439,11 @@ public sealed partial class AppInteractionBackendTests
     private sealed class ModalSelectorBridge(string sessionId, JsonObject tree) : IAppToolBridge
     {
         public int Captures { get; private set; }
+        public string? LastRoot { get; private set; }
+        public bool IncludesComputedStyles { get; private set; }
         public bool FailCapture { get; init; }
+        public JsonObject? Subtree { get; init; }
+        public string? LastSubtreeRoot { get; private set; }
         public event EventHandler? ConnectionsChanged { add { } remove { } }
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
         public bool IsSessionConnected(string id) => id == sessionId;
@@ -244,12 +459,19 @@ public sealed partial class AppInteractionBackendTests
             CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
         {
             Assert.Equal(RemoteAppToolIds.UiGetVisualTree, toolId);
+            LastRoot = arguments?["root"]?.GetValue<string>();
+            IncludesComputedStyles = arguments?["includeComputedStyles"]?.GetValue<bool>() == true;
+            LastSubtreeRoot = arguments?["rootNodeId"]?.GetValue<string>();
             Captures++;
             if (FailCapture) return Task.FromResult(AppToolBridgeResponse.FromFailure("Native tree unavailable."));
             return Task.FromResult(AppToolBridgeResponse.FromSuccess("Tree.", new ToolProtocolEnvelope
             {
                 Type = ToolProtocolMessageTypes.ResultType, Id = "tree", SessionId = id,
-                Payload = new JsonObject { ["toolId"] = toolId, ["success"] = true, ["result"] = tree.DeepClone() }
+                Payload = new JsonObject
+                {
+                    ["toolId"] = toolId, ["success"] = true,
+                    ["result"] = (LastSubtreeRoot is not null ? Subtree ?? tree : tree).DeepClone()
+                }
             }));
         }
     }

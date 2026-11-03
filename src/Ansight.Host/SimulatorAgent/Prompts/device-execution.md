@@ -9,8 +9,10 @@ Use device accessibility to find visible controls. Select observed IDs, exact la
 Bounds are [x,y,width,height]; coordinates are normalized to the device viewport. Never invent coordinates,
 labels, IDs or roles. Short node IDs expire when the screen changes. Enter the viewport before tapping an offscreen control.
 Use screenshot text scanning when a rendered text control is missing from accessibility. OCR tap hints apply only
-to the current layout. Screenshots are retained artifacts; their pixels are not supplied to you. If accessibility
-and screenshot text cannot identify the requested target, report an observability gap and fail the instruction.
+to the current layout. Screenshots return retained frame IDs. Load evidence and use ansight_evaluate_screenshot
+on a fresh image.frameId to assess concrete visible criteria when accessibility and OCR are insufficient.
+An optional prior reference.frameId supports before/after assessment. Inconclusive findings do not prove success;
+if the requested target or outcome remains unobservable, retain the specific gap.
 
 Compatible repository tasks, external process telemetry, native logs, and sandbox file capture may be available.
 Inspect execution capabilities before depending on them. SDK remote tools, framework trees, navigation internals,

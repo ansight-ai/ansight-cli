@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Ansight.Host.AppGraphs;
 using Ansight.Host.Runtime.Operations;
 using Ansight.Host.Runtime;
 using Ansight.Host.Runtime.Tasks;
@@ -28,7 +29,7 @@ public sealed partial class SimulatorAgentService : IDisposable
     private const int MaximumModelOutputTokensLimit = 64_000;
     private const int MaximumConsecutiveReadOnlyToolCalls = 8;
     private const int MaximumAppGraphStableActionAttemptsPerScope = 2;
-    private const int MaximumAppGraphScrollAttemptsPerScope = 2;
+    private const int MaximumAppGraphUnverifiedScrollAttemptsPerScope = 2;
     private const int MaximumAuditArgumentCharacters = 32_000;
     private const int MaximumAuditResultCharacters = 256_000;
     private const int MaximumAuditAssistantTextCharacters = 32_000;
@@ -189,6 +190,7 @@ public sealed partial class SimulatorAgentService : IDisposable
         var sessionId = NormalizeRequired(request.SessionId, nameof(request.SessionId));
         var appId = string.IsNullOrWhiteSpace(request.AppId) ? null : request.AppId.Trim();
         var appGraphExplorationName = NormalizeOptional(request.AppGraphExplorationName);
+        var appGraphPartialCompletion = false;
         if (appGraphExplorationName?.Length > 300)
         {
             throw new ArgumentException(
@@ -327,7 +329,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     {
                         SimulatorAgentRunStatus.Succeeded => "succeeded",
                         SimulatorAgentRunStatus.Cancelled => "cancelled",
-                        _ => "failed"
+                        _ => appGraphPartialCompletion ? "partial" : "failed"
                     },
                     message,
                     completedUtc);
@@ -451,7 +453,7 @@ public sealed partial class SimulatorAgentService : IDisposable
 
         try
         {
-            var completionOnlyTools = new JsonArray(BuildCompleteInstructionToolDefinition());
+            var completionOnlyTools = new JsonArray(BuildCompleteInstructionToolDefinition(appGraphExplorationName is not null));
             sessionContext = await toolGateway.GetSessionContextAsync(sessionId, cancellationToken);
             RecordSetupStep("Resolve session context");
             sessionCapabilities = await toolGateway.GetSessionCapabilitiesAsync(
@@ -514,8 +516,6 @@ public sealed partial class SimulatorAgentService : IDisposable
                     repositoryTasks,
                     sessionCapabilities,
                     appGraphContextEnabled);
-                if (appGraphExplorationName is not null && !sessionCapabilities.IsDeviceOnly)
-                    RemoveScreenScanTool(tools);
                 RemoveIrrelevantLifecycleTools(tools, sessionContext, instruction);
                 if (appGraphExplorationName is not null)
                 {
@@ -526,10 +526,12 @@ public sealed partial class SimulatorAgentService : IDisposable
                 {
                     tools.Add(BuildDeclareUncoveredStepToolDefinition(repositoryTasks));
                 }
-                tools.Add(BuildCompleteInstructionToolDefinition());
+                tools.Add(BuildCompleteInstructionToolDefinition(appGraphExplorationName is not null));
                 if (AgentToolBatch.BuildUiDefinition(tools) is { } batchDefinition) tools.Add(batchDefinition);
                 if (AgentTaskBatch.BuildDefinition(tools) is { } taskBatchDefinition) tools.Add(taskBatchDefinition);
-                var toolCatalog = useDeferredToolLoading ? new AgentToolCatalog(tools) : null;
+                var referencedTasksResolved = request.PreferredTaskIds.Count > 0
+                    && request.PreferredTaskIds.All(id => repositoryTasks.Any(task => task.TaskId == id));
+                var toolCatalog = useDeferredToolLoading ? new AgentToolCatalog(tools, referencedTasksResolved) : null;
                 if (toolCatalog is not null)
                 {
                     tools = toolCatalog.InitialTools;
@@ -567,7 +569,11 @@ public sealed partial class SimulatorAgentService : IDisposable
                 }
                 ToolCallResult? initialObservation = null;
                 if (sessionContext is { IsLive: true }
-                    && (sessionCapabilities.IsDeviceOnly || string.Equals(sessionContext.AppState, "foreground", StringComparison.OrdinalIgnoreCase))
+                    && (sessionCapabilities.IsDeviceOnly
+                        || string.Equals(sessionContext.AppState, "foreground", StringComparison.OrdinalIgnoreCase)
+                        // SDK enrollment can precede the first lifecycle event. A read-only
+                        // capture is still useful; missing lifecycle metadata is not background.
+                        || string.Equals(sessionContext.AppState, "unknown", StringComparison.OrdinalIgnoreCase))
                     && totalToolCalls < request.MaximumToolCalls)
                 {
                     var observationStartedUtc = DateTimeOffset.UtcNow;
@@ -614,6 +620,10 @@ public sealed partial class SimulatorAgentService : IDisposable
                     knownSuccessfulAppToolCalls,
                     request.AppGraphPlans,
                     appGraphExplorationName is null ? null : appGraphLiveRuns.Get(runId));
+                if (toolCatalog is not null && referencedTasksResolved)
+                {
+                    initialInput.Add(CreateUserInput("All explicitly referenced task IDs have been resolved and preloaded with their input schemas. Use them directly after checking prerequisites against the current observation. Preserve the instruction's task order and standalone prerequisites: run any required standalone prerequisite task and inspect its result before batching dependent steps. Use ansight_run_task_batch for an already-known sequence once those prerequisites pass. Additional task discovery is deferred; load the tasks bundle only for a concrete requested step not covered by the preloaded tasks."));
+                }
                 if (initialObservation is not null)
                 {
                     initialInput.Add(CreateUserInput("Host-provided current-page observation (captured before this instruction):\n"
@@ -627,6 +637,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     appendOnly: webSocketActive,
                     initialReplayReason: instructionIndex == 0 ? "initial" : "instruction-boundary");
                 var navigationGuidance = new AgentNavigationGuidance();
+                conversation.AddGuidance(navigationGuidance.TakeKnownGuidance(sessionCapabilities));
                 if (initialObservation is not null)
                 {
                     conversation.AddGuidance(navigationGuidance.TakeNewGuidance(
@@ -640,12 +651,14 @@ public sealed partial class SimulatorAgentService : IDisposable
                 var history = conversation.History;
                 var instructionCompleted = false;
                 string? lastToolFailure = null;
+                string? lastCompletionRejection = null;
                 var repeatedToolFailures = new Dictionary<string, int>(StringComparer.Ordinal);
                 var consecutiveReadOnlyToolCalls = 0;
                 var readOnlyStagnationWarningIssued = false;
                 var appGraphScrollAttemptsByScope = new Dictionary<string, int>(StringComparer.Ordinal);
                 var appGraphTerminalScrollScopes = new HashSet<string>(StringComparer.Ordinal);
                 string? appGraphCurrentDestinationId = null;
+                string? appGraphObservationId = null;
                 string? stagnationSummary = null;
                 string? lastCameraStateSignature = null;
                 var awaitingPostSwipeCameraState = false;
@@ -953,6 +966,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                                 && TryBuildAppGraphCompletionRejection(runId, completion, out var rejection))
                             {
                                 completionStopwatch.Stop();
+                                lastCompletionRejection = rejection;
                                 var rejectionOutput = new JsonObject
                                 {
                                     ["accepted"] = false,
@@ -1034,6 +1048,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                             }
                             if (appGraphExplorationName is not null)
                             {
+                                appGraphPartialCompletion = ReadString(call.Arguments, "outcome") == "partial";
                                 appGraphLiveRuns.MergeCompletionSummary(runId, completion.Summary, turn);
                             }
                             completionStopwatch.Stop();
@@ -1081,7 +1096,9 @@ public sealed partial class SimulatorAgentService : IDisposable
                             {
                                 return Finish(
                                     SimulatorAgentRunStatus.Failed,
-                                    $"Instruction {instructionIndex + 1} failed: {completion.Summary}");
+                                    appGraphPartialCompletion
+                                        ? $"Graph pass ended with partial coverage: {completion.Summary}"
+                                        : $"Instruction {instructionIndex + 1} failed: {completion.Summary}");
                             }
 
                             break;
@@ -1091,14 +1108,22 @@ public sealed partial class SimulatorAgentService : IDisposable
                         {
                             var reportStartedUtc = DateTimeOffset.UtcNow;
                             var reportStopwatch = Stopwatch.StartNew();
-                            var update = appGraphLiveRuns.ApplyReport(runId, call.Arguments, turn);
+                            var stateError = ValidateAppGraphStateObservation(
+                                appGraphCurrentDestinationId, appGraphLiveRuns.Get(runId)?.PendingOutcome,
+                                appGraphObservationId, call.Arguments);
+                            var update = stateError is null
+                                ? appGraphLiveRuns.ApplyReport(runId, call.Arguments, turn)
+                                : AppGraphLiveUpdateResult.Failure(stateError);
                             if (update.IsSuccess)
                             {
-                                appGraphCurrentDestinationId = ReadString(
-                                    call.Arguments,
-                                    "currentDestinationId");
+                                appGraphCurrentDestinationId = appGraphLiveRuns.Get(runId)?.CurrentDestinationId;
+                                appGraphObservationId = null;
                             }
                             reportStopwatch.Stop();
+                            var retainedGraph = appGraphLiveRuns.Get(runId);
+                            var pendingActions = retainedGraph is null
+                                ? []
+                                : AppGraphFrontier.Pending(retainedGraph.Frontier, retainedGraph.Nodes, appGraphCurrentDestinationId).ToArray();
                             var reportOutput = new JsonObject
                             {
                                 ["accepted"] = update.IsSuccess,
@@ -1110,8 +1135,15 @@ public sealed partial class SimulatorAgentService : IDisposable
                                 ["tabGroupsAccepted"] = update.TabGroupsAccepted,
                                 ["totalDestinations"] = update.TotalDestinations,
                                 ["totalTransitions"] = update.TotalTransitions,
-                                ["pendingActionCount"] = update.PendingActions.Count,
-                                ["nextActions"] = new JsonArray(update.PendingActions
+                                ["reconciledActionIds"] = JsonSerializer.SerializeToNode(update.ReconciledActionIds),
+                                ["reconciledTransitionIds"] = JsonSerializer.SerializeToNode(update.ReconciledTransitionIds),
+                                ["pendingOutcome"] = retainedGraph?.PendingOutcome?.ToJson(),
+                                ["pendingActionCount"] = pendingActions.Length,
+                                ["structureGaps"] = JsonSerializer.SerializeToNode(appGraphLiveRuns.GetStructureGaps(runId)),
+                                ["unresolvedScroll"] = JsonSerializer.SerializeToNode(retainedGraph?.Nodes
+                                    .Where(node => node.ScrollStatus is "unknown" or "in_progress")
+                                    .Select(node => new { id = node.Id, name = node.Name, scrollStatus = node.ScrollStatus })),
+                                ["nextActions"] = new JsonArray(pendingActions
                                     .Take(8)
                                     .Select(static action => (JsonNode?)new JsonObject
                                     {
@@ -1119,10 +1151,13 @@ public sealed partial class SimulatorAgentService : IDisposable
                                         ["destinationId"] = action.DestinationId,
                                         ["toolName"] = action.ToolName,
                                         ["automationId"] = action.AutomationId,
+                                        ["selector"] = action.Selector.DeepClone(),
                                         ["semanticMeaning"] = action.SemanticMeaning,
                                         ["status"] = action.Status,
                                         ["attemptCount"] = action.AttemptCount,
-                                        ["lastOutcome"] = action.LastOutcome
+                                        ["lastOutcome"] = action.LastOutcome,
+                                        ["hasStableAutomationId"] = action.HasStableAutomationId,
+                                        ["requiresRediscovery"] = !action.HasStableAutomationId
                                     })
                                     .ToArray())
                             }.ToJsonString();
@@ -1181,17 +1216,24 @@ public sealed partial class SimulatorAgentService : IDisposable
                         totalToolCalls++;
                         instructionToolCalls++;
                         activeInstructionToolCalls = instructionToolCalls;
+                        var trackingCall = appGraphExplorationName is null ? call
+                            : call with { Arguments = toolGateway.ResolveUiSelectorForTracking(call.Arguments) };
+                        var appGraphNeedsStateReconciliation = appGraphExplorationName is not null
+                            && (appGraphCurrentDestinationId is null || appGraphLiveRuns.Get(runId)?.PendingOutcome is not null)
+                            && IsAppGraphInputAction(call.Name);
                         var appGraphScrollScope = appGraphExplorationName is not null
                                                   && string.Equals(
                                                       call.Name,
                                                       "ansight_scroll_ui",
                                                       StringComparison.Ordinal)
-                            ? BuildAppGraphScrollScope(call.Arguments)
+                            ? BuildAppGraphScrollScope(
+                                appGraphCurrentDestinationId,
+                                trackingCall.Arguments)
                             : null;
                         var appGraphStableActionScope = appGraphExplorationName is not null
                             ? BuildAppGraphStableActionScope(
                                 appGraphCurrentDestinationId,
-                                call)
+                                trackingCall)
                             : null;
                         ReportProgress(new SimulatorAgentProgress(
                             SimulatorAgentProgressStage.CallingTool,
@@ -1208,8 +1250,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                                 turn,
                                 call.Name);
                         }
-                        var correlationId = RunRequestContext.CreateCorrelationId(
-                            allowScreenshotOcr: sessionCapabilities.IsDeviceOnly || appGraphExplorationName is null);
+                        var correlationId = RunRequestContext.CreateCorrelationId(allowScreenshotOcr: true);
                         var toolCallSignature = BuildToolCallSignature(call);
                         var toolStartedUtc = DateTimeOffset.UtcNow;
                         var toolStopwatch = Stopwatch.StartNew();
@@ -1290,20 +1331,21 @@ public sealed partial class SimulatorAgentService : IDisposable
                                     "taskReassessmentGuard",
                                     taskReassessmentMessage);
                             }
-                            else if (appGraphExplorationName is not null
-                                     && !sessionCapabilities.IsDeviceOnly
-                                     && string.Equals(call.Name, "ansight_scan_screen", StringComparison.Ordinal))
-                            {
-                                toolResult = CreateAgentGuardResult(
-                                    "screenScanGuard",
-                                    "Screenshot OCR and screen scanning are disabled for agent execution. Use accessibility or visual-tree semantics and report unrepresented content as an observability gap.");
-                            }
                             else if (string.Equals(call.Name, "ansight_find_ui", StringComparison.Ordinal)
                                 && !HasFocusedUiSelector(call.Arguments))
                             {
                                 toolResult = CreateAgentGuardResult(
                                     "focusedQueryGuard",
                                     "Agent execution does not allow broad find_ui enumeration. Reuse the current live visual-tree observation or provide a focused selector.");
+                            }
+                            else if (appGraphNeedsStateReconciliation)
+                            {
+                                toolResult = CreateAgentGuardResult(
+                                    "appGraphStateReconciliationGuard",
+                                    "No input was delivered: the current visual state has not been reconciled. "
+                                    + "Observe the current screen, then call report_app_graph_progress with its canonical currentDestinationId and the exact pending actionOutcome "
+                                    + "and the verified result of the preceding action before issuing another input. "
+                                    + "Report the same ID if the state did not change. Read-only inspection remains available.");
                             }
                             else if (appGraphScrollScope is not null
                                      && TryBuildAppGraphScrollGuardMessage(
@@ -1323,7 +1365,8 @@ public sealed partial class SimulatorAgentService : IDisposable
                                          appGraphStableActionScope.ToolName,
                                          appGraphStableActionScope.AutomationId,
                                          MaximumAppGraphStableActionAttemptsPerScope,
-                                         out var stableActionGuardMessage))
+                                         out var stableActionGuardMessage,
+                                         appGraphStableActionScope.Selector))
                             {
                                 toolResult = CreateAgentGuardResult(
                                     "appGraphStableActionGuard",
@@ -1507,40 +1550,52 @@ public sealed partial class SimulatorAgentService : IDisposable
                             ? $"{call.Name}: {toolResult.Message}"
                             : null;
                         turnHadSuccessfulToolCall |= !toolResult.IsError;
-                        if (appGraphExplorationName is not null
-                            && appGraphStableActionScope is not null)
-                        {
-                            appGraphLiveRuns.RecordActionAttempt(
-                                runId,
-                                appGraphStableActionScope.DestinationId,
-                                appGraphStableActionScope.ToolName,
-                                appGraphStableActionScope.Selector,
-                                !toolResult.IsError,
-                                toolResult.Message);
-                        }
                         if (appGraphExplorationName is not null && !toolResult.IsError)
                         {
                             if (appGraphScrollScope is not null)
                             {
+                                var viewportChange = ReadSemanticViewportChange(toolResult.Output);
                                 appGraphScrollAttemptsByScope[appGraphScrollScope] =
-                                    appGraphScrollAttemptsByScope.TryGetValue(
+                                    viewportChange == SemanticViewportChange.Changed ? 0
+                                    : appGraphScrollAttemptsByScope.TryGetValue(
                                         appGraphScrollScope,
                                         out var previousScrollAttempts)
                                         ? previousScrollAttempts + 1
                                         : 1;
-                                if (HasUnchangedSemanticViewport(toolResult.Output))
+                                if (viewportChange == SemanticViewportChange.Unchanged)
                                 {
                                     appGraphTerminalScrollScopes.Add(appGraphScrollScope);
                                     conversation.AddUserInput(ReadFeedbackPrompt(
                                         "app-graph-scroll-terminal"));
                                 }
                             }
-                            else if (IsAppGraphNavigationAction(call.Name))
+                        }
+                        var appGraphInputDelivered = appGraphExplorationName is not null
+                            && IsAppGraphInputAction(call.Name)
+                            && WasAppGraphInputDelivered(toolResult);
+                        var hasGraphObservation = appGraphExplorationName is not null
+                            && toolWasDispatched
+                            && !toolResult.IsError
+                            && IsAppGraphObservationTool(call.Name);
+                        if (hasGraphObservation)
+                        {
+                            appGraphObservationId = IsAppGraphForegroundObservation(call.Name, call.Arguments)
+                                ? call.CallId : null;
+                            if (appGraphObservationId is not null)
                             {
-                                appGraphCurrentDestinationId = null;
-                                appGraphScrollAttemptsByScope.Clear();
-                                appGraphTerminalScrollScopes.Clear();
+                                conversation.AddUserInput($"Fresh foreground observationId: {call.CallId}. If correcting the current destination without input, bind stateObservation to this ID and explain which surface is foremost, including any sheet or dialog. Background text or a partial tree cannot prove an overlay is absent. Coverage-only updates retain the current destination.");
                             }
+                        }
+                        if (appGraphInputDelivered)
+                        {
+                            var pendingOutcome = appGraphLiveRuns.RecordDeliveredInput(
+                                runId, appGraphCurrentDestinationId!, call.Name, trackingCall.Arguments,
+                                call.CallId, ReadAppGraphInputEvidenceId(toolResult) ?? call.CallId, toolResult.Message);
+                            appGraphCurrentDestinationId = null;
+                            appGraphObservationId = null;
+                            conversation.AddFeedback(ReadFeedbackPrompt("app-graph-reconcile-state")
+                                + "\nRequired pending actionOutcome: " + pendingOutcome?.ToJson().ToJsonString(),
+                                "Resolve the exact delivered input before further input.");
                         }
                         if (!toolResult.IsError
                             && string.Equals(call.Name, "ansight_list_tasks", StringComparison.Ordinal))
@@ -1809,7 +1864,9 @@ public sealed partial class SimulatorAgentService : IDisposable
                     var summary = roundTripBudgetExhausted
                         ? $"Run exhausted its {request.MaximumRoundTrips}-round-trip organisation limit."
                         : completionGracePassUsed
-                        ? $"Instruction exhausted its {request.MaximumTurnsPerInstruction}-turn work budget and did not call {CompleteInstructionToolName} during the completion-only pass."
+                        ? lastCompletionRejection is not null
+                            ? $"Instruction exhausted its {request.MaximumTurnsPerInstruction}-turn work budget; completion was rejected: {lastCompletionRejection}"
+                            : $"Instruction exhausted its {request.MaximumTurnsPerInstruction}-turn work budget and did not call {CompleteInstructionToolName} during the completion-only pass."
                         : lastToolFailure is null
                         ? $"Instruction exceeded its {request.MaximumTurnsPerInstruction}-turn limit without calling {CompleteInstructionToolName}."
                         : $"Instruction exceeded its {request.MaximumTurnsPerInstruction}-turn limit. Last tool error: {lastToolFailure}";
@@ -2005,9 +2062,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                 new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["VISUAL_TREE_PROVIDER_INSTRUCTIONS"] = BuildVisualTreeProviderInstructions(capabilities),
-                    ["SCREEN_SCAN_INSTRUCTIONS"] = isAppGraphExploration
-                        ? "Screenshot tools save artifacts without sending pixels; OCR and screen scanning are unavailable for App Graph exploration."
-                        : "If a named visible target is missing from semantic trees, use ansight_scan_screen or a focused ansight_find_ui text query to check the current screenshot. OCR matches are current-layout evidence: use a unique exact match, verify the result after tapping, and never treat OCR as a stable automation ID.",
+                    ["SCREEN_SCAN_INSTRUCTIONS"] = "If a named visible target is missing from semantic trees, use ansight_scan_screen or a focused ansight_find_ui text query to check the current screenshot. OCR matches are current-layout evidence: use a unique exact match, verify the result after tapping, and never treat OCR as a stable automation ID. Retain OCR-discovered graph actions with hasStableAutomationId=false and the observed text selector. For non-text effects or ambiguous foreground state, load evidence and use ansight_evaluate_screenshot with fresh retained frame IDs and concrete visible criteria; inconclusive results remain unresolved.",
                     ["APP_GRAPH_FALLBACK_INSTRUCTIONS"] = hasUsableAppGraphRoute || isAppGraphExploration
                         ? "Use authorized App Graph routes when they cover the requested transition."
                         : string.Empty,
@@ -2038,17 +2093,6 @@ public sealed partial class SimulatorAgentService : IDisposable
         {
             instructions +=
                 " No app-tree provider is published; do not invent a toolId.";
-        }
-
-        if (capabilities.VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
-            || capabilities.NavigationFrameworks.Contains("maui", StringComparer.Ordinal))
-        {
-            instructions += " For MAUI apps, use native visual trees and device accessibility as the source of truth for visible controls, sheets, dialogs, and the active window.";
-            if (capabilities.VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal))
-            {
-                instructions += " Prefer toolId=ui.get_visual_tree when requesting an app tree.";
-            }
-            instructions += " MAUI currentPage, rootPage, and window trees describe the logical framework hierarchy and may omit custom sheets hosted in separate native windows. Use them for bindings, framework state, or navigation structure; do not let an unchanged MAUI page tree override native evidence of a visible sheet. Scope controls to the observed native sheet, not the page behind it. A truncated native tree is incomplete evidence: use a focused query or increase its bounded depth before declaring a control missing.";
         }
 
         return instructions
@@ -2177,7 +2221,9 @@ public sealed partial class SimulatorAgentService : IDisposable
                 ["INDEX"] = (index + 1).ToString(),
                 ["TOOL_NAME"] = task.ToolName,
                 ["TASK_ID"] = task.TaskId
-            }));
+            }) + $" {task.Title}: {task.Description}"
+            + (string.IsNullOrWhiteSpace(task.StartingState) ? string.Empty : $" Starting state: {task.StartingState}")
+            + (string.IsNullOrWhiteSpace(task.SuccessState) ? string.Empty : $" Success state: {task.SuccessState}"));
         return RenderPromptSection(
             "context.md",
             "repository-tasks-section",
@@ -2187,17 +2233,14 @@ public sealed partial class SimulatorAgentService : IDisposable
             });
     }
 
-    private static string BuildAppGraphFrontierText(SimulatorAgentAppGraphLiveRun? run)
+    internal static string BuildAppGraphFrontierText(SimulatorAgentAppGraphLiveRun? run)
     {
         if (run is null)
         {
             return string.Empty;
         }
 
-        var pending = run.Frontier
-            .Where(static action => action.Status is "queued" or "attempted")
-            .OrderBy(static action => action.AttemptCount)
-            .ThenBy(static action => action.FirstObservedUtc)
+        var pending = AppGraphFrontier.Pending(run.Frontier, run.Nodes, run.CurrentDestinationId)
             .Take(12)
             .Select(action => RenderPromptSection(
                 "app-graph.md",
@@ -2225,7 +2268,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                         ["ACTION_COUNT"] = run.Frontier.Count.ToString(),
                         ["NAVIGATION_HOST_COUNT"] = run.NavigationHosts.Count.ToString(),
                         ["TAB_GROUP_COUNT"] = run.TabGroups.Count.ToString()
-                    }));
+                    }) + BuildRetainedGraphInventory(run));
         }
 
         return WrapAppGraphFrontierText(RenderPromptSection(
@@ -2239,8 +2282,28 @@ public sealed partial class SimulatorAgentService : IDisposable
                 ["TAB_GROUP_COUNT"] = run.TabGroups.Count.ToString(),
                 ["ACTION_COUNT"] = run.Frontier.Count.ToString(),
                 ["PENDING_ACTIONS"] = string.Join(Environment.NewLine, pending)
-            }));
+            }) + BuildRetainedGraphInventory(run));
     }
+
+    private static string BuildRetainedGraphInventory(SimulatorAgentAppGraphLiveRun run)
+        => run.Nodes.Count == 0 ? string.Empty : "\nRetained canonical graph inventory (reuse these IDs; reconcile stale actions with explicit status updates):\n"
+            + JsonSerializer.Serialize(new
+            {
+                destinations = run.Nodes.Select(node => new
+                {
+                    node.Id, node.Kind, node.Name, node.ParentScreen, node.Purpose, node.ScrollStatus
+                }),
+                transitions = run.Edges.Select(edge => new
+                {
+                    edge.Id, edge.From, edge.To, edge.AutomationId, edge.SemanticMeaning, edge.Selector,
+                    edge.NavigationKind, edge.NavigationContext
+                }),
+                navigationHosts = run.NavigationHosts,
+                tabGroups = run.TabGroups,
+                pendingActions = run.Frontier.Where(action => !action.IsNavigationEssential
+                    && action.Status is ("queued" or "attempted" or "needs_verification" or "deferred")),
+                pendingOutcome = run.PendingOutcome?.ToJson()
+            }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
     private static string WrapAppGraphFrontierText(string frontier)
         => RenderPromptSection(
@@ -2268,25 +2331,19 @@ public sealed partial class SimulatorAgentService : IDisposable
         }
     }
 
-    private static void RemoveScreenScanTool(JsonArray tools)
-    {
-        for (var index = tools.Count - 1; index >= 0; index--)
-        {
-            if (string.Equals(
-                    tools[index]?["name"]?.GetValue<string>(),
-                    "ansight_scan_screen",
-                    StringComparison.Ordinal))
-            {
-                tools.RemoveAt(index);
-            }
-        }
-    }
-
     private bool TryBuildAppGraphCompletionRejection(
         string runId,
         SimulatorAgentCompletion completion,
         out string message)
     {
+        // Ending a partial instruction is distinct from claiming complete graph coverage.
+        // The failed/partial run remains resumable with its pending evidence obligation.
+        if (!completion.Succeeded)
+        {
+            message = string.Empty;
+            return false;
+        }
+
         var run = appGraphLiveRuns.Get(runId);
         if (run is null || run.Nodes.Count == 0)
         {
@@ -2294,8 +2351,14 @@ public sealed partial class SimulatorAgentService : IDisposable
             return true;
         }
 
+        if (run.PendingOutcome is { } pendingOutcome)
+        {
+            message = $"Input '{pendingOutcome.InputId}' still requires an evidence-backed actionOutcome.";
+            return true;
+        }
+
         var pendingActions = run.Frontier
-            .Where(static action => action.Status is "queued" or "attempted")
+            .Where(static action => !action.IsNavigationEssential && action.Status is "queued" or "attempted" or "needs_verification" or "deferred" or "blocked")
             .OrderBy(static action => action.AttemptCount)
             .ThenBy(static action => action.FirstObservedUtc)
             .ToArray();
@@ -2305,7 +2368,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                 0,
                 run.Coverage.SafeActionsObserved - run.Coverage.ActionsExplored);
         var pendingScrollDestinations = run.Nodes
-            .Where(static node => node.ScrollStatus is "unknown" or "in_progress")
+            .Where(static node => node.ScrollStatus is "unknown" or "in_progress" or "blocked")
             .OrderBy(static node => node.FirstObservedUtc)
             .ToArray();
         var remainingScrollContainers = pendingScrollDestinations.Length > 0
@@ -2315,9 +2378,10 @@ public sealed partial class SimulatorAgentService : IDisposable
                 run.Coverage.ScrollContainersObserved
                 - run.Coverage.ScrollContainersCompleted);
         var structureGaps = appGraphLiveRuns.GetStructureGaps(runId);
-        if (remainingActions == 0
+        var coverageComplete = remainingActions == 0
             && remainingScrollContainers == 0
-            && structureGaps.Count == 0)
+            && structureGaps.Count == 0;
+        if (coverageComplete)
         {
             if (completion.Succeeded
                 && !AppGraphExplorationSummaryValidator.TryValidate(completion.Summary, out var contractError))
@@ -2805,6 +2869,7 @@ public sealed partial class SimulatorAgentService : IDisposable
             or "ansight_find_ui"
             or "ansight_scan_screen"
             or "ansight_take_screenshot"
+            or "ansight_evaluate_screenshot"
             or "ansight_wait_for_ui"
             or "ansight_assert_ui"
             or "ansight_list_host_devices"
@@ -2815,6 +2880,7 @@ public sealed partial class SimulatorAgentService : IDisposable
 
     private static bool IsManualUiMutationTool(string toolName)
         => toolName is "ansight_tap_ui"
+            or "ansight_scroll_ui"
             or "ansight_long_press_ui"
             or "ansight_type_text"
             or "ansight_type_secret"
@@ -3189,35 +3255,54 @@ public sealed partial class SimulatorAgentService : IDisposable
            || ReadString(arguments, "ancestorAutomationId") is not null
            || ReadString(arguments, "action") is not null;
 
-    private static string BuildAppGraphScrollScope(JsonObject arguments)
+    private static string BuildAppGraphScrollScope(string? destinationId, JsonObject arguments)
     {
-        var scope = new JsonObject();
-        foreach (var propertyName in new[]
-                 {
-                     "nodeId",
-                     "automationId",
-                     "text",
-                     "role",
-                     "type",
-                     "ancestorAutomationId",
-                     "action"
-                 })
+        var scope = new JsonObject { ["destinationId"] = destinationId };
+        var automationId = NormalizeOptional(ReadString(arguments, "automationId"));
+        var nodeId = NormalizeOptional(ReadString(arguments, "nodeId"));
+        if (automationId is not null)
         {
-            var value = NormalizeOptional(ReadString(arguments, propertyName));
-            if (value is not null)
+            scope["automationId"] = automationId;
+        }
+        else if (ReadString(arguments, "ancestorAutomationId") is not null)
+        {
+            // A recreated container gets a new runtime node ID but retains its qualified identity.
+            foreach (var propertyName in new[] { "ancestorAutomationId", "role", "type", "text" })
             {
-                scope[propertyName] = value;
+                if (ReadString(arguments, propertyName) is { } value)
+                {
+                    scope[propertyName] = value;
+                }
+            }
+        }
+        else if (nodeId is not null)
+        {
+            scope["nodeId"] = nodeId;
+        }
+        else
+        {
+            foreach (var propertyName in new[] { "text", "role", "type", "ancestorAutomationId" })
+            {
+                var value = NormalizeOptional(ReadString(arguments, propertyName));
+                if (value is not null)
+                {
+                    scope[propertyName] = value;
+                }
             }
         }
 
         scope["index"] = arguments["index"]?.DeepClone() ?? JsonValue.Create(0);
-        scope["orientation"] = NormalizeOptional(ReadString(arguments, "orientation"))?.ToLowerInvariant()
-                               ?? string.Empty;
-        scope["direction"] = NormalizeOptional(ReadString(arguments, "direction"))?.ToLowerInvariant()
-                             ?? string.Empty;
-        if (scope.Count == 3)
+        var orientation = ReadString(arguments, "orientation")
+            ?? ReadString(arguments, "direction")
+            ?? "up";
+        if (LiveUiSwipeOrientation.TryParse(orientation, out var vector))
         {
-            scope["target"] = "viewport";
+            scope["directionX"] = Math.Round(vector.X, 3);
+            scope["directionY"] = Math.Round(vector.Y, 3);
+        }
+        else
+        {
+            scope["orientation"] = orientation.ToLowerInvariant();
         }
 
         return scope.ToJsonString();
@@ -3228,16 +3313,17 @@ public sealed partial class SimulatorAgentService : IDisposable
         OpenAiFunctionCall call)
     {
         var destinationId = NormalizeOptional(currentDestinationId);
-        var automationId = ReadString(call.Arguments, "automationId");
-        if (destinationId is null
-            || automationId is null
-            || !IsAppGraphNavigationAction(call.Name))
+        var automationId = ReadString(call.Arguments, "automationId") ?? string.Empty;
+        var cannotTrackAction = destinationId is null
+            || !IsAppGraphNavigationAction(call.Name)
+            || (call.Name != "ansight_back_ui" && !AppGraphActionIdentity.HasObservedSelector(call.Arguments));
+        if (cannotTrackAction)
         {
             return null;
         }
 
         return new AppGraphStableActionScope(
-            destinationId,
+            destinationId!,
             call.Name,
             automationId,
             BuildAppGraphActionSelector(call.Arguments));
@@ -3254,6 +3340,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                      "role",
                      "type",
                      "ancestorAutomationId",
+                     "index",
                      "action",
                      "exact",
                      "targetX",
@@ -3279,14 +3366,14 @@ public sealed partial class SimulatorAgentService : IDisposable
     {
         if (terminalScopes.Contains(scrollScope))
         {
-            message = "This App Graph scroll scope already reached an unchanged semantic viewport. Mark its scroll coverage complete or blocked and move to another safe branch.";
+            message = "This App Graph scroll scope already reached an unchanged semantic viewport. Do not repeat this direction. Classify coverage from boundary evidence, or record a blocked observability gap, and move to another safe branch.";
             return true;
         }
 
         var attempts = attemptsByScope.TryGetValue(scrollScope, out var count) ? count : 0;
-        if (attempts >= MaximumAppGraphScrollAttemptsPerScope)
+        if (attempts >= MaximumAppGraphUnverifiedScrollAttemptsPerScope)
         {
-            message = $"This App Graph scroll scope has reached its {MaximumAppGraphScrollAttemptsPerScope}-attempt limit. Record any remaining content as a blocked coverage gap and move to another safe branch.";
+            message = $"This App Graph scroll scope has reached {MaximumAppGraphUnverifiedScrollAttemptsPerScope} consecutive attempts without evidence of semantic viewport change. Record remaining coverage as blocked; do not navigate away merely to reset this guard.";
             return true;
         }
 
@@ -3294,29 +3381,65 @@ public sealed partial class SimulatorAgentService : IDisposable
         return false;
     }
 
-    private static bool HasUnchangedSemanticViewport(string output)
+    private enum SemanticViewportChange { Unknown, Unchanged, Changed }
+
+    private static SemanticViewportChange ReadSemanticViewportChange(string output)
     {
         try
         {
             var root = JsonNode.Parse(output) as JsonObject;
-            var evidence = root?["result"]?["evidence"] as JsonObject;
-            if (evidence?["before"] is not JsonObject before
-                || evidence["after"] is not JsonObject after)
+            if (root?["result"]?["scrollObservation"] is not JsonObject observation)
             {
-                return false;
+                return SemanticViewportChange.Unknown;
             }
 
-            var beforeTreeHash = ReadString(before, "treeHash");
-            var afterTreeHash = ReadString(after, "treeHash");
-            return beforeTreeHash is not null
-                   && afterTreeHash is not null
-                   && string.Equals(beforeTreeHash, afterTreeHash, StringComparison.Ordinal);
+            // Persisted tree hashes include capture metadata and may use different providers.
+            // Only the action's paired, container-scoped observation can prove movement.
+            return ReadString(observation, "status") switch
+            {
+                "changed" => SemanticViewportChange.Changed,
+                "unchanged" => SemanticViewportChange.Unchanged,
+                _ => SemanticViewportChange.Unknown
+            };
+        }
+        catch (JsonException)
+        {
+            return SemanticViewportChange.Unknown;
+        }
+    }
+
+    private static string? ReadAppGraphInputEvidenceId(ToolCallResult result)
+    {
+        try
+        {
+            return JsonNode.Parse(result.Output)?["result"]?["actionId"]?.GetValue<string>();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool WasAppGraphInputDelivered(ToolCallResult result)
+    {
+        if (!result.IsError)
+        {
+            return true;
+        }
+
+        try
+        {
+            return JsonNode.Parse(result.Output)?["result"]?["performed"]?.GetValue<bool>() == true;
         }
         catch (JsonException)
         {
             return false;
         }
     }
+
+    private static bool IsAppGraphInputAction(string toolName)
+        => toolName is "ansight_scroll_ui" or "ansight_open_keyboard" or "ansight_dismiss_keyboard"
+            or "ansight_press_keyboard" or "ansight_submit_keyboard" || IsAppGraphNavigationAction(toolName);
 
     private static bool IsAppGraphNavigationAction(string toolName)
         => toolName is "ansight_tap_ui"
@@ -3865,6 +3988,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                 ["enum"] = new JsonArray("screen", "dialog", "state")
             },
             ["name"] = StringSchema("Canonical user-facing destination name."),
+            ["identityEvidence"] = StringSchema("Empty for an existing state. If creating a distinct same-named state, describe its observed route, container, or visible state difference; otherwise reuse the retained ID."),
             ["parentScreen"] = StringSchema("Containing destination ID for an internal state or structurally grouped host child; otherwise an empty string. Host and tab-group reports also derive this relationship."),
             ["synonyms"] = StringArraySchema("Evidence-backed alternative names."),
             ["purpose"] = StringSchema("What the user can accomplish at this destination."),
@@ -3872,7 +3996,7 @@ public sealed partial class SimulatorAgentService : IDisposable
             ["scrollStatus"] = new JsonObject
             {
                 ["type"] = "string",
-                ["description"] = "Destination scroll classification. unknown and in_progress remain on the host frontier; not_scrollable, complete, and blocked are terminal.",
+                ["description"] = "unknown and in_progress are resumable; blocked is an evidenced limitation, never completed coverage. Only not_scrollable and complete verify coverage. Pass budgets leave in_progress.",
                 ["enum"] = new JsonArray("unknown", "not_scrollable", "in_progress", "complete", "blocked")
             },
             ["confidence"] = ConfidenceSchema()
@@ -3883,6 +4007,8 @@ public sealed partial class SimulatorAgentService : IDisposable
             ["from"] = StringSchema("Source destination ID."),
             ["to"] = StringSchema("Resulting destination ID."),
             ["automationId"] = StringSchema("Observed stable automation ID, or an empty string when the gap must remain visible."),
+            ["selector"] = BuildAppGraphObservedSelectorSchema(),
+            ["navigationKind"] = StringSchema("back, pop, or dismiss for a return action; tab or menu for those navigation controls; otherwise an empty string. Return destinations depend on the caller and are retained separately."),
             ["semanticMeaning"] = StringSchema("What using the interacted element means to the user."),
             ["confidence"] = ConfidenceSchema()
         };
@@ -3909,9 +4035,9 @@ public sealed partial class SimulatorAgentService : IDisposable
                     "other")
             },
             ["name"] = StringSchema("Canonical user-facing name for the persistent navigation host."),
-            ["destinationId"] = StringSchema("Destination ID representing the persistent host itself."),
+            ["destinationId"] = StringSchema("Destination ID representing the persistent host itself; it may also be a direct child of an outer host."),
             ["activeChildDestinationId"] = StringSchema("Currently selected child destination ID."),
-            ["childDestinationIds"] = StringArraySchema("Every ordered child destination exposed by the host, including the active child."),
+            ["childDestinationIds"] = StringArraySchema("Every ordered direct child destination exposed by the host, including the active child. A flyout may own one tabbed-page host; list the tab screens on that nested host, not also on the flyout."),
             ["framework"] = StringSchema("Compatibility projection of technology.framework."),
             ["technology"] = StrictObjectSchema(navigationTechnologyProperties.DeepClone().AsObject()),
             ["confidence"] = ConfidenceSchema()
@@ -3930,7 +4056,9 @@ public sealed partial class SimulatorAgentService : IDisposable
             ["id"] = StringSchema("Stable canonical action candidate ID for this run."),
             ["destinationId"] = StringSchema("Canonical source destination ID where the action was observed."),
             ["toolName"] = StringSchema("Exact Ansight action tool used or intended for this candidate."),
-            ["automationId"] = StringSchema("Observed stable automation ID, or an empty string only for a terminal unavailable or blocked candidate."),
+            ["automationId"] = StringSchema("Observed stable automation ID, or an empty string when only an observed selector is available. Missing IDs do not make safe actions unavailable."),
+            ["selector"] = BuildAppGraphObservedSelectorSchema(),
+            ["navigationKind"] = StringSchema("back, pop, dismiss, tab, or menu for reusable navigation; otherwise empty. Navigation essentials remain available after every use."),
             ["semanticMeaning"] = StringSchema("What using this action means to the user."),
             ["status"] = new JsonObject
             {
@@ -3938,12 +4066,16 @@ public sealed partial class SimulatorAgentService : IDisposable
                 ["enum"] = new JsonArray(
                     "queued",
                     "attempted",
+                    "needs_verification",
+                    "deferred",
                     "explored",
                     "blocked",
                     "unsafe",
-                    "unavailable")
+                    "unavailable",
+                    "navigation")
             },
             ["lastOutcome"] = StringSchema("Latest evidence-backed outcome, or an empty string before the first attempt."),
+            ["recheckReason"] = StringSchema("Empty normally. To reopen a blocked, attempted, deferred or previously attempted queued action as queued, explain NEW evidence or a repaired capability. The bounded retry allowance survives resumption; repeating the same reason does not renew it. Prior attempts remain recorded; unsafe exclusions cannot be reopened."),
             ["resultDestinationId"] = StringSchema("Verified destination ID reached by this action, or an empty string when not established.")
         };
         var coverageProperties = new JsonObject
@@ -3954,6 +4086,39 @@ public sealed partial class SimulatorAgentService : IDisposable
             ["scrollContainersCompleted"] = NonNegativeIntegerSchema(),
             ["gaps"] = StringArraySchema("Known inaccessible branches, missing automation IDs, or blocked scroll coverage.")
         };
+        var outcomeSchema = StrictObjectSchema(new JsonObject
+        {
+            ["inputId"] = StringSchema("Exact pending inputId supplied by the host."),
+            ["actionId"] = StringSchema("Exact pending actionId supplied by the host, or empty to resolve the action bound to inputId."),
+            ["status"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray("verified", "no_change", "needs_verification", "deferred", "blocked")
+            },
+            ["evidenceRefs"] = StringArraySchema("Include the host's pending evidenceId; it identifies retained before/after evidence for this exact input."),
+            ["evidence"] = StringSchema("Observed after-state and how it verifies the intended result, unchanged result, or limitation. Input delivery alone is insufficient."),
+            ["navigationKind"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray("", "back", "pop", "dismiss", "tab", "menu"),
+                ["description"] = "Classify this observed action: closing a screen/sheet uses dismiss, returning uses back/pop, selecting a tab uses tab. These remain reusable navigation even if no action candidate was reported before input. Empty for ordinary discovery actions."
+            },
+            ["reason"] = StringSchema("Concrete remaining work for unresolved outcomes; otherwise empty. Budget or focus limits use deferred."),
+            ["blockerKind"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray("", "observation", "target", "capability", "application")
+            }
+        });
+        outcomeSchema["type"] = new JsonArray("object", "null");
+        outcomeSchema["description"] = "Resolve the exact pending input before more input. Null only when no input awaits resolution. needs_verification permits observations but keeps input locked; deferred remains on the frontier.";
+        var stateObservationSchema = StrictObjectSchema(new JsonObject
+        {
+            ["observationId"] = StringSchema("Exact fresh UI observationId supplied by the host since the last accepted report."),
+            ["evidence"] = StringSchema("Visible evidence correcting the current destination without input; do not use a historical coverage update as evidence of navigation.")
+        });
+        stateObservationSchema["type"] = new JsonArray("object", "null");
+        stateObservationSchema["description"] = "Normally null. Required to change a known current destination without a pending input or explicit destination alias.";
         return new JsonObject
         {
             ["type"] = "function",
@@ -3967,6 +4132,31 @@ public sealed partial class SimulatorAgentService : IDisposable
                 {
                     ["message"] = StringSchema("Short description of the latest verified exploration progress."),
                     ["currentDestinationId"] = StringSchema("Current destination ID, or an empty string when unknown."),
+                    ["actionOutcome"] = outcomeSchema,
+                    ["stateObservation"] = stateObservationSchema,
+                    ["transitionCorrections"] = new JsonObject
+                    {
+                        ["type"] = "array",
+                        ["description"] = "Send a correction once, then use an empty array after acceptance. Correct an observed attribution error on a retained edge; duplicate corrected edges merge. Retire any wrongly attributed action alias separately.",
+                        ["items"] = StrictObjectSchema(new JsonObject
+                        {
+                            ["id"] = StringSchema("Exact retained edge ID containing the attribution error."),
+                            ["from"] = StringSchema("Observed true source destination ID."),
+                            ["to"] = StringSchema("Observed true resulting destination ID."),
+                            ["evidence"] = StringSchema("Observed evidence explaining the original attribution error and corrected transition.")
+                        })
+                    },
+                    ["destinationAliases"] = new JsonObject
+                    {
+                        ["type"] = "array",
+                        ["description"] = "Explicitly merge confirmed duplicate retained states. Empty normally. Preserve distinct same-named states; evidence must establish equivalence.",
+                        ["items"] = StrictObjectSchema(new JsonObject
+                        {
+                            ["from"] = StringSchema("Duplicate retained destination ID to remove."),
+                            ["to"] = StringSchema("Canonical retained destination ID to preserve."),
+                            ["evidence"] = StringSchema("Observed evidence establishing the same route, container and visual state.")
+                        })
+                    },
                     ["destinations"] = new JsonObject
                     {
                         ["type"] = "array",
@@ -3994,7 +4184,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     ["actions"] = new JsonObject
                     {
                         ["type"] = "array",
-                        ["description"] = "New or updated action candidates for observed destinations. Reuse existing IDs and terminalize blocked, unsafe, or unrepresented branches instead of leaving them queued.",
+                        ["description"] = "New or updated observed actions, including targets without stable automation IDs. Keep safe observed selectors queued. Mark back/pop/dismiss, tab switches, and menu toggles as navigation, never explored. Reuse canonical IDs.",
                         ["items"] = StrictObjectSchema(actionProperties)
                     },
                     ["coverage"] = StrictObjectSchema(coverageProperties)
@@ -4002,6 +4192,10 @@ public sealed partial class SimulatorAgentService : IDisposable
                 ["required"] = new JsonArray(
                     "message",
                     "currentDestinationId",
+                    "actionOutcome",
+                    "stateObservation",
+                    "transitionCorrections",
+                    "destinationAliases",
                     "destinations",
                     "transitions",
                     "navigationHosts",
@@ -4012,6 +4206,23 @@ public sealed partial class SimulatorAgentService : IDisposable
             }
         };
     }
+
+    private static JsonObject BuildAppGraphObservedSelectorSchema()
+        => StrictObjectSchema(new JsonObject
+        {
+            ["automationId"] = StringSchema("Exact observed automation ID, or empty."),
+            ["text"] = StringSchema("Exact observed visible text, or empty."),
+            ["role"] = StringSchema("Observed role, or empty."),
+            ["type"] = StringSchema("Observed type, or empty."),
+            ["ancestorAutomationId"] = StringSchema("Observed ancestor automation ID, or empty."),
+            ["nodeId"] = StringSchema("Observation-scoped node ID, or empty. Re-resolve before reuse."),
+            ["index"] = new JsonObject
+            {
+                ["type"] = new JsonArray("integer", "null"),
+                ["minimum"] = 0,
+                ["description"] = "Observed match index for repeated labels, or null for the first match. Re-resolve before reuse."
+            }
+        });
 
     private static JsonObject StrictObjectSchema(JsonObject properties)
         => new()
@@ -4117,7 +4328,7 @@ public sealed partial class SimulatorAgentService : IDisposable
         };
     }
 
-    private static JsonObject BuildCompleteInstructionToolDefinition()
+    private static JsonObject BuildCompleteInstructionToolDefinition(bool appGraph = false)
     {
         return new JsonObject
         {
@@ -4133,7 +4344,8 @@ public sealed partial class SimulatorAgentService : IDisposable
                     ["outcome"] = new JsonObject
                     {
                         ["type"] = "string",
-                        ["enum"] = new JsonArray("succeeded", "failed")
+                        ["enum"] = appGraph ? new JsonArray("succeeded", "failed", "partial") : new JsonArray("succeeded", "failed"),
+                        ["description"] = "Use partial for an App Graph pass that stopped with retained unresolved work. Only succeeded claims complete coverage."
                     },
                     ["summary"] = new JsonObject
                     {
@@ -4157,7 +4369,7 @@ public sealed partial class SimulatorAgentService : IDisposable
         var outcome = ReadString(arguments, "outcome");
         var summary = ReadString(arguments, "summary") ?? "The model did not provide an outcome summary.";
         var succeeded = string.Equals(outcome, "succeeded", StringComparison.OrdinalIgnoreCase);
-        var normalizedOutcome = succeeded ? "succeeded" : "failed";
+        var normalizedOutcome = succeeded ? "succeeded" : outcome == "partial" ? "partial" : "failed";
         return new SimulatorAgentCompletion(
             succeeded,
             summary,

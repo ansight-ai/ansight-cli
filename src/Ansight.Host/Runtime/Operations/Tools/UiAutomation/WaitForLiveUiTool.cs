@@ -87,11 +87,13 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             attempts++;
             var capturedStableTarget = false;
             var captureResult = condition == "stable" && stableUsesNativeTree
-                ? await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(
+                ? await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                     session,
                     appToolBridge,
+                    uiInputRouter,
                     Name,
                     correlationId,
+                    selector,
                     ToolExecutionCancellation.Current)
                 : await LiveUiTreeCapture.CaptureForSelectorAsync(
                     session,
@@ -196,11 +198,13 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                                                          + Math.Max(
                                                              MinimumNativeVisualTreeIntervalMilliseconds,
                                                              pollIntervalMs * 4L);
-                    var nativeResult = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(
+                    var nativeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                         session,
                         appToolBridge,
+                        uiInputRouter,
                         Name,
                         correlationId,
+                        selector,
                         ToolExecutionCancellation.Current);
                     if (nativeResult.Capture is { } nativeCapture)
                     {
@@ -261,11 +265,13 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                                                      + Math.Max(
                                                          MinimumNativeVisualTreeIntervalMilliseconds,
                                                          pollIntervalMs * 4L);
-                var nativeResult = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(
+                var nativeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                     session,
                     appToolBridge,
+                    uiInputRouter,
                     Name,
                     correlationId,
+                    selector,
                     ToolExecutionCancellation.Current);
                 if (nativeResult.Capture is { } nativeCapture)
                 {

@@ -7,14 +7,23 @@ public sealed record AppGraphNavigationTechnologyDescriptor(
     string Framework,
     string Kind,
     string NavigationToolId,
-    string StructureFingerprint);
+    string StructureFingerprint)
+{
+    public AppGraphNavigationParadigm? Paradigm => AppGraphNavigationTechnologyCatalog
+        .GetKinds(Framework).FirstOrDefault(kind => string.Equals(
+            kind.Kind, Kind?.Trim(), StringComparison.OrdinalIgnoreCase))?.Paradigm;
+}
 
 public sealed record AppGraphNavigationTechnologyKind(
     string Kind,
     string Label,
     string NormalizedRole,
     bool SupportsNavigationHost,
-    bool SupportsTabGroup);
+    bool SupportsTabGroup)
+{
+    public AppGraphNavigationParadigm Paradigm { get; init; } =
+        AppGraphNavigationParadigms.Resolve("native-unknown", "generic_host");
+}
 
 public sealed record AppGraphNavigationFramework(
     string Framework,
@@ -29,6 +38,7 @@ public static class AppGraphNavigationTechnologyCatalog
     private static readonly IReadOnlyList<AppGraphNavigationFramework> frameworks =
     [
         Framework("maui", ".NET MAUI",
+            Kind("flyout_page", "FlyoutPage", "flyout", host: true),
             Kind("shell_flyout", "Shell Flyout", "flyout", host: true),
             Kind("shell_tab_bar", "Shell TabBar", "bottom_tabs", host: true, tabs: true),
             Kind("shell_section", "Shell Section", "shell", host: true),
@@ -132,8 +142,28 @@ public static class AppGraphNavigationTechnologyCatalog
             ["label"] = kind.Label,
             ["normalizedRole"] = kind.NormalizedRole,
             ["supportsNavigationHost"] = kind.SupportsNavigationHost,
-            ["supportsTabGroup"] = kind.SupportsTabGroup
+            ["supportsTabGroup"] = kind.SupportsTabGroup,
+            ["paradigm"] = kind.Paradigm.ToJson()
         }).ToArray());
+
+    public static bool TryValidateChildOrder(
+        AppGraphNavigationTechnologyDescriptor? technology,
+        IReadOnlyList<string> children,
+        string activeChild,
+        out string error)
+    {
+        var conflictsWithStackOrder = technology?.Paradigm?.ActiveChildMustBeLast == true
+            && children.Count > 0
+            && !string.Equals(children[^1], activeChild, StringComparison.Ordinal);
+        if (conflictsWithStackOrder)
+        {
+            error = $"Technology '{technology!.Framework}/{technology.Kind}' requires root-to-top child order with the active child last. Preserve the observed stack order.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
 
     public static bool TryValidate(
         AppGraphNavigationTechnologyDescriptor? technology,
@@ -215,14 +245,18 @@ public static class AppGraphNavigationTechnologyCatalog
             ["framework"] = technology.Framework.Trim().ToLowerInvariant(),
             ["kind"] = technology.Kind.Trim().ToLowerInvariant(),
             ["navigationToolId"] = technology.NavigationToolId?.Trim() ?? string.Empty,
-            ["structureFingerprint"] = technology.StructureFingerprint?.Trim().ToLowerInvariant() ?? string.Empty
+            ["structureFingerprint"] = technology.StructureFingerprint?.Trim().ToLowerInvariant() ?? string.Empty,
+            ["paradigm"] = technology.Paradigm?.ToJson()
         };
 
     private static AppGraphNavigationFramework Framework(
         string framework,
         string label,
         params AppGraphNavigationTechnologyKind[] kinds)
-        => new(framework, label, kinds);
+        => new(framework, label, kinds.Select(kind => kind with
+        {
+            Paradigm = AppGraphNavigationParadigms.Resolve(framework, kind.Kind)
+        }).ToArray());
 
     private static AppGraphNavigationTechnologyKind Kind(
         string kind,

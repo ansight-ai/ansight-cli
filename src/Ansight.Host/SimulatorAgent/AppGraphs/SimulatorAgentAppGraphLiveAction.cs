@@ -15,4 +15,11 @@ public sealed record SimulatorAgentAppGraphLiveAction(
     string LastOutcome,
     string? ResultDestinationId,
     DateTimeOffset FirstObservedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    string NavigationKind = "")
+{
+    public int RecheckAttemptBaseline { get; init; }
+    public string LastRecheckReason { get; init; } = string.Empty;
+    public bool HasStableAutomationId => !string.IsNullOrWhiteSpace(AutomationId);
+    public bool IsNavigationEssential => NavigationKind.Length > 0;
+}

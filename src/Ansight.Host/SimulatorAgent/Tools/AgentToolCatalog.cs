@@ -15,9 +15,9 @@ internal sealed class AgentToolCatalog
         ["extended-ui"] = ["ansight_assert_ui", "ansight_type_secret", "ansight_scroll_ui"],
         ["gestures"] = ["ansight_long_press_ui", "ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],
-        ["evidence"] = ["ansight_take_screenshot", "ansight_get_live_navigation_structure"],
+        ["evidence"] = ["ansight_take_screenshot", "ansight_evaluate_screenshot", "ansight_get_live_navigation_structure"],
         ["lifecycle"] = ["ansight_list_host_devices", "ansight_start_device", "ansight_launch_app", "ansight_terminate_app"],
-        ["tasks"] = ["ansight_describe_module"],
+        ["tasks"] = ["ansight_list_tasks", "ansight_describe_module"],
         ["diagnostics"] = ["ansight_get_logs", "ansight_get_telemetry", "ansight_get_execution_capabilities", "ansight_require_capabilities"],
         ["files"] = ["ansight_list_sandbox_file", "ansight_read_sandbox_file", "ansight_capture_sandbox_file"],
         ["screen-text"] = ["ansight_scan_screen"]
@@ -28,7 +28,7 @@ internal sealed class AgentToolCatalog
     private readonly HashSet<string> refreshedBundles = new(StringComparer.Ordinal);
     private int contextGeneration;
 
-    public AgentToolCatalog(JsonArray fullTools)
+    public AgentToolCatalog(JsonArray fullTools, bool deferTaskDiscovery = false)
     {
         FullTools = fullTools.DeepClone().AsArray();
         definitions = fullTools.OfType<JsonObject>()
@@ -37,6 +37,7 @@ internal sealed class AgentToolCatalog
         InitialTools = new JsonArray();
         foreach (var name in coreToolNames)
         {
+            if (deferTaskDiscovery && name == "ansight_list_tasks") continue;
             if (definitions.TryGetValue(name, out var definition))
             {
                 InitialTools.Add(definition.DeepClone());
@@ -156,6 +157,7 @@ internal sealed class AgentToolCatalog
             "diagnostics" => "Read only evidence required by the instruction. Scope logs and telemetry to the run's time interval and relevant streams.",
             "files" => "Use discovered app-sandbox paths and bounded reads. Preserve file evidence in the audit.",
             "screen-text" => "Screen OCR is evidence for visible text only, not an automation ID or framework type. Respect the run's screen-scan policy.",
+            "tasks" => "Search only for a concrete requested step that the preloaded tasks do not cover. Do not rediscover tasks whose IDs, schemas and prerequisites are already supplied.",
             _ => EmbeddedTextResource.ReadSection("SimulatorAgent/Prompts/tool-capabilities.md", bundle)
         };
 
@@ -166,7 +168,7 @@ internal sealed class AgentToolCatalog
         => new()
         {
             ["type"] = "function", ["name"] = LoadToolName,
-            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; app-tools: domain tools; evidence: screenshots/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: task details. No app action. Accepted manual-step declarations load manual-ui automatically.",
+            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; app-tools: domain tools; evidence: screenshots/visual assessment/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: discovery/details for a concrete gap in preloaded tasks. No app action. Accepted manual-step declarations load manual-ui automatically.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
             {

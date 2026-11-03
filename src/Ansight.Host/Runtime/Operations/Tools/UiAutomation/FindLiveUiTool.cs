@@ -91,11 +91,13 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         if (semanticSelection.ResolutionMatches.Count == 0 && ocrResult.Matches.Count == 0)
         {
             attemptedSources.Add("visualTree");
-            var visualTreeResult = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(
+            var visualTreeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                 session,
                 appToolBridge,
+                uiInputRouter,
                 Name,
                 correlationId,
+                selector,
                 ToolExecutionCancellation.Current);
             if (visualTreeResult.Capture is { } visualTreeCapture)
             {
@@ -278,11 +280,23 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         JsonObject? payload = null,
         string? targetSource = null)
     {
+        var actions = LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry);
+        var structuralContainer = !actions.Any(action => action is "tap" or "typeText")
+            && LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry)
+                is "view" or "scrollview" or "list" or "window" or "application" or "dialog" or "group";
+        if (structuralContainer)
+        {
+            return null;
+        }
+
         var bounds = LiveUiNodeQuery.ReadBounds(match.Node);
-        if (bounds is null || bounds.Width <= 0 || bounds.Height <= 0
-            || !LiveUiNodeQuery.IsEffectivelyVisible(match)
-            || !LiveUiNodeQuery.IsEffectivelyEnabled(match)
-            || ResolveViewportRelation(bounds, viewport) is not ("inside" or "partial"))
+        var usableTarget = bounds is not null
+            && bounds.Width > 0
+            && bounds.Height > 0
+            && LiveUiNodeQuery.IsEffectivelyVisible(match)
+            && LiveUiNodeQuery.IsEffectivelyEnabled(match)
+            && ResolveViewportRelation(bounds, viewport) is "inside" or "partial";
+        if (!usableTarget)
         {
             return null;
         }

@@ -18,6 +18,12 @@ internal sealed record AppGraphLiveUpdateResult(
     int TotalTransitions,
     IReadOnlyList<SimulatorAgentAppGraphLiveAction> PendingActions)
 {
+    public IReadOnlyDictionary<string, string> ReconciledActionIds { get; init; }
+        = new Dictionary<string, string>();
+
+    public IReadOnlyDictionary<string, string> ReconciledTransitionIds { get; init; }
+        = new Dictionary<string, string>();
+
     public static AppGraphLiveUpdateResult Failure(string message)
         => new(false, message, 0, 0, 0, 0, 0, 0, 0, []);
 
@@ -33,7 +39,7 @@ internal sealed record AppGraphLiveUpdateResult(
         => new(
             true,
             $"Live App Graph now contains {totalDestinations} destinations, {totalTransitions} transitions, "
-            + $"and {pendingActions.Count} queued or attempted action(s).",
+            + $"and {pendingActions.Count} pending action(s).",
             destinationsAccepted,
             transitionsAccepted,
             actionsAccepted,

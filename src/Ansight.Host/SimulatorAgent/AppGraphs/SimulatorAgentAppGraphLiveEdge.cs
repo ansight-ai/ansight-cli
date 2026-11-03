@@ -11,4 +11,10 @@ public sealed record SimulatorAgentAppGraphLiveEdge(
     string SemanticMeaning,
     decimal Confidence,
     DateTimeOffset FirstObservedUtc,
-    DateTimeOffset UpdatedUtc);
+    DateTimeOffset UpdatedUtc,
+    JsonObject? Selector = null,
+    string NavigationKind = "",
+    SimulatorAgentAppGraphNavigationContext? NavigationContext = null)
+{
+    public bool HasStableAutomationId => !string.IsNullOrWhiteSpace(AutomationId);
+}

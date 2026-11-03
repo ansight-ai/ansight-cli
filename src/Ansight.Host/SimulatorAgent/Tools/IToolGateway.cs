@@ -36,6 +36,8 @@ internal interface IToolGateway
     OpenAiFunctionCall NormalizeFunctionCall(
         OpenAiFunctionCall call);
 
+    JsonObject ResolveUiSelectorForTracking(JsonObject arguments) => arguments.DeepClone().AsObject();
+
     bool IsReadOnlyAppToolCall(JsonObject arguments, string sessionId);
 
     Task<ToolSessionContext?> GetSessionContextAsync(

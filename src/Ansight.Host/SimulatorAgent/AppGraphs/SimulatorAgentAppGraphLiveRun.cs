@@ -23,4 +23,7 @@ public sealed record SimulatorAgentAppGraphLiveRun(
     IReadOnlyList<SimulatorAgentAppGraphLiveNavigationHost> NavigationHosts,
     IReadOnlyList<SimulatorAgentAppGraphLiveTabGroup> TabGroups,
     IReadOnlyList<SimulatorAgentAppGraphLiveAction> Frontier,
-    IReadOnlyList<SimulatorAgentAppGraphLiveTraceEntry> Trace);
+    IReadOnlyList<SimulatorAgentAppGraphLiveTraceEntry> Trace)
+{
+    public SimulatorAgentAppGraphPendingOutcome? PendingOutcome { get; init; }
+}

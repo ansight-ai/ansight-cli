@@ -6,7 +6,7 @@ using Ansight.Host.AppGraphs;
 
 namespace Ansight.Host.SimulatorAgent.AppGraphs;
 
-internal sealed class AppGraphLiveRunStore
+internal sealed partial class AppGraphLiveRunStore
 {
     private const int MaximumRetainedRuns = 12;
     private const int MaximumRetainedTraceEntries = 12_288;
@@ -15,7 +15,7 @@ internal sealed class AppGraphLiveRunStore
     private static readonly HashSet<string> supportedScrollStatuses =
         new(["unknown", "not_scrollable", "in_progress", "complete", "blocked"], StringComparer.Ordinal);
     private static readonly HashSet<string> supportedActionStatuses =
-        new(["queued", "attempted", "explored", "blocked", "unsafe", "unavailable"], StringComparer.Ordinal);
+        new(["queued", "attempted", "needs_verification", "deferred", "explored", "blocked", "unsafe", "unavailable", "navigation"], StringComparer.Ordinal);
     private static readonly HashSet<string> supportedNavigationHostKinds =
         new(["flyout", "drawer", "bottom_tabs", "top_tabs", "navigation_rail", "shell", "other"], StringComparer.Ordinal);
     private static readonly HashSet<string> terminalActionStatuses =
@@ -49,6 +49,7 @@ internal sealed class AppGraphLiveRunStore
                 startedUtc);
             if (resumeState is not null)
             {
+                run.PendingOutcome = resumeState.PendingOutcome;
                 foreach (var node in resumeState.Nodes)
                 {
                     run.Nodes[node.Id] = node;
@@ -61,17 +62,60 @@ internal sealed class AppGraphLiveRunStore
                 {
                     run.NavigationHosts[navigationHost.Id] = navigationHost;
                 }
-                foreach (var tabGroup in resumeState.TabGroups)
+                foreach (var tabGroup in resumeState.TabGroups.OrderBy(group => group.FirstObservedUtc))
                 {
+                    if (run.TabGroups.Values.Any(group => group.ParentDestinationId == tabGroup.ParentDestinationId
+                        && group.TabDestinationIds.SequenceEqual(tabGroup.TabDestinationIds))) continue;
                     run.TabGroups[tabGroup.Id] = tabGroup;
                 }
                 foreach (var action in resumeState.Actions)
                 {
+                    var automationId = NormalizeOptional(action.AutomationId)
+                        ?? NormalizeOptional(ReadString(action.Selector, "automationId")) ?? string.Empty;
+                    var navigationKind = AppGraphActionIdentity.NavigationKind(action.ToolName, automationId, action.Selector, action.NavigationKind);
+                    const string legacyRecheckPrefix = "Rechecking a prior-run blocker: ";
+                    var wasAutomaticallyRequeued = action.Status == "queued"
+                        && action.AttemptCount == 0
+                        && action.LastOutcome.StartsWith(legacyRecheckPrefix, StringComparison.Ordinal);
+                    var retainedStatus = wasAutomaticallyRequeued ? "blocked" : action.Status;
                     run.Actions[action.Id] = action with
                     {
-                        Selector = action.Selector.DeepClone().AsObject()
+                        AutomationId = automationId,
+                        Selector = AppGraphActionIdentity.NormalizeSelector(action.Selector),
+                        NavigationKind = navigationKind,
+                        Status = navigationKind.Length > 0
+                            && retainedStatus is not ("unsafe" or "blocked" or "unavailable") ? "navigation"
+                            : retainedStatus,
+                        LastOutcome = wasAutomaticallyRequeued
+                            ? action.LastOutcome[legacyRecheckPrefix.Length..] : action.LastOutcome
                     };
                 }
+
+                foreach (var edge in run.Edges.Values.ToArray())
+                {
+                    var action = FindMatchingAction(run.Actions.Values, edge.From,
+                        "ansight_tap_ui", edge.AutomationId, edge.Selector);
+                    var navigationKind = AppGraphActionIdentity.NavigationKind(
+                        "ansight_tap_ui", edge.AutomationId, edge.Selector,
+                        NormalizeOptional(edge.NavigationKind) ?? action?.NavigationKind);
+                    run.Edges[edge.Id] = edge with
+                    {
+                        NavigationKind = navigationKind,
+                        NavigationContext = navigationKind is "back" or "pop" or "dismiss"
+                            ? new SimulatorAgentAppGraphNavigationContext(edge.To)
+                            : edge.NavigationContext
+                    };
+                }
+
+                if (run.PendingOutcome is { } pending && run.Actions.TryGetValue(pending.ActionId, out var pendingAction))
+                {
+                    run.PendingOutcome = pending with
+                    {
+                        SemanticMeaning = pendingAction.SemanticMeaning,
+                        Selector = pendingAction.Selector.DeepClone().AsObject()
+                    };
+                }
+
                 run.Coverage = DeriveCoverage(run, SimulatorAgentAppGraphLiveCoverage.Empty);
                 run.Message = $"Resumed the incomplete frontier from run '{resumeState.RunId}'.";
             }
@@ -113,6 +157,21 @@ internal sealed class AppGraphLiveRunStore
             return runs.TryGetValue(runId.Trim(), out var run)
                 ? BuildStructureGaps(run)
                 : ["The live App Graph run is no longer available."];
+        }
+    }
+
+    public void InvalidateCurrentDestination(string runId)
+    {
+        lock (gate)
+        {
+            if (!runs.TryGetValue(runId, out var run) || run.CompletedUtc.HasValue)
+            {
+                return;
+            }
+
+            run.CurrentDestinationId = null;
+            run.UpdatedUtc = DateTimeOffset.UtcNow;
+            database.Save(CreateSnapshot(run));
         }
     }
 
@@ -207,10 +266,25 @@ internal sealed class AppGraphLiveRunStore
             var navigationHostValues = arguments["navigationHosts"] as JsonArray ?? [];
             var tabGroupValues = arguments["tabGroups"] as JsonArray ?? [];
 
+            // Validate a staged copy. A rejected report must not leave its earlier
+            // destinations, ownership changes, or action statuses in the live graph.
+            run = run.CopyForReport();
+
+            var aliasError = ApplyDestinationAliases(run, arguments);
+            if (aliasError is not null)
+            {
+                return AppGraphLiveUpdateResult.Failure(aliasError);
+            }
+
             var now = DateTimeOffset.UtcNow;
             var destinationCount = 0;
             foreach (var value in destinationValues)
             {
+                if (value is JsonObject candidate && ValidateNewDestinationIdentity(candidate, run) is { } identityError)
+                {
+                    return AppGraphLiveUpdateResult.Failure(identityError);
+                }
+
                 SimulatorAgentAppGraphLiveNode? node = null;
                 string? error = null;
                 if (value is not JsonObject destination
@@ -268,6 +342,7 @@ internal sealed class AppGraphLiveRunStore
             ApplyStructureParents(run, now);
 
             var actionCount = 0;
+            var reconciledActionIds = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var value in actionValues)
             {
                 SimulatorAgentAppGraphLiveAction? action = null;
@@ -279,20 +354,10 @@ internal sealed class AppGraphLiveRunStore
                         error ?? "An action candidate update was invalid.");
                 }
 
-                var matchingAction = action!.AutomationId.Length == 0
-                    ? null
-                    : FindMatchingAction(
-                        run.Actions.Values,
-                        action.DestinationId,
-                        action.ToolName,
-                        action.AutomationId);
-                if (matchingAction is not null
-                    && !string.Equals(matchingAction.Id, action.Id, StringComparison.Ordinal))
+                var reportedId = ReadString(actionValue, "id")!;
+                if (!string.Equals(reportedId, action!.Id, StringComparison.Ordinal))
                 {
-                    return AppGraphLiveUpdateResult.Failure(
-                        $"Action '{action.AutomationId}' from destination "
-                        + $"'{action.DestinationId}' is already tracked as '{matchingAction.Id}'. "
-                        + "Update the existing canonical action instead of creating an alias.");
+                    reconciledActionIds[reportedId] = action.Id;
                 }
 
                 run.Actions[action.Id] = action;
@@ -300,23 +365,44 @@ internal sealed class AppGraphLiveRunStore
             }
 
             var transitionCount = 0;
+            var reconciledTransitionIds = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var value in transitionValues)
             {
                 SimulatorAgentAppGraphLiveEdge? edge = null;
                 string? error = null;
                 if (value is not JsonObject transition
-                    || !TryReadTransition(transition, run.Edges, now, out edge, out error))
+                    || !TryReadTransition(transition, run.Edges, run.Nodes, run.Actions.Values, now, out edge, out error))
                 {
                     return AppGraphLiveUpdateResult.Failure(
                         error ?? "A transition update was invalid.");
                 }
 
-                run.Edges[edge!.Id] = edge;
+                var reportedId = ReadString(transition, "id")!;
+                if (!string.Equals(reportedId, edge!.Id, StringComparison.Ordinal))
+                {
+                    reconciledTransitionIds[reportedId] = edge.Id;
+                }
+
+                run.Edges[edge.Id] = edge;
                 MarkTransitionActionExplored(run, edge, now);
                 transitionCount++;
             }
 
+            var correctionError = ApplyTransitionCorrections(run, arguments, now);
+            if (correctionError is not null)
+            {
+                return AppGraphLiveUpdateResult.Failure(correctionError);
+            }
+
             run.CurrentDestinationId = NormalizeOptional(ReadString(arguments, "currentDestinationId"));
+            var referenceError = ValidateReportReferences(run, arguments);
+            if (referenceError is not null)
+                return AppGraphLiveUpdateResult.Failure(referenceError);
+            var outcomeError = ResolvePendingOutcome(run, arguments, now);
+            if (outcomeError is not null)
+            {
+                return AppGraphLiveUpdateResult.Failure(outcomeError);
+            }
             run.Message = NormalizeOptional(ReadString(arguments, "message"))
                           ?? $"Observed {run.Nodes.Count} destinations and {run.Edges.Count} transitions.";
             run.Coverage = DeriveCoverage(
@@ -328,6 +414,7 @@ internal sealed class AppGraphLiveRunStore
             run.UpdatedUtc = now;
             var snapshot = CreateSnapshot(run);
             database.Save(snapshot);
+            runs[runId] = run;
             return AppGraphLiveUpdateResult.Success(
                 destinationCount,
                 transitionCount,
@@ -336,7 +423,11 @@ internal sealed class AppGraphLiveRunStore
                 tabGroupCount,
                 run.Nodes.Count,
                 run.Edges.Count,
-                BuildPendingActions(run.Actions.Values));
+                AppGraphFrontier.Pending(run.Actions.Values, run.Nodes.Values, run.CurrentDestinationId)) with
+            {
+                ReconciledActionIds = reconciledActionIds,
+                ReconciledTransitionIds = reconciledTransitionIds
+            };
         }
     }
 
@@ -346,12 +437,14 @@ internal sealed class AppGraphLiveRunStore
         string toolName,
         JsonObject selector,
         bool succeeded,
-        string outcome)
+        string outcome,
+        bool persist = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
         ArgumentNullException.ThrowIfNull(selector);
+        selector = AppGraphActionIdentity.NormalizeSelector(selector);
         lock (gate)
         {
             if (!runs.TryGetValue(runId, out var run) || run.CompletedUtc.HasValue)
@@ -364,10 +457,15 @@ internal sealed class AppGraphLiveRunStore
                 run.Actions.Values,
                 destinationId,
                 toolName,
-                automationId);
+                automationId,
+                selector);
             var now = DateTimeOffset.UtcNow;
             var id = existing?.Id ?? BuildActionId(destinationId, toolName, selector);
-            var status = existing is not null && terminalActionStatuses.Contains(existing.Status)
+            var navigationKind = AppGraphActionIdentity.NavigationKind(toolName!, automationId, selector, existing?.NavigationKind);
+            var status = existing is not null && existing.Status is ("unsafe" or "blocked" or "unavailable")
+                ? existing.Status
+                : navigationKind.Length > 0 ? "navigation"
+                : existing is not null && terminalActionStatuses.Contains(existing.Status)
                 ? existing.Status
                 : succeeded ? "attempted" : existing?.Status ?? "queued";
             run.Actions[id] = new SimulatorAgentAppGraphLiveAction(
@@ -382,10 +480,18 @@ internal sealed class AppGraphLiveRunStore
                 NormalizeOptional(outcome) ?? (succeeded ? "Action delivered." : "Action failed."),
                 existing?.ResultDestinationId,
                 existing?.FirstObservedUtc ?? now,
-                now);
+                now,
+                navigationKind)
+            {
+                RecheckAttemptBaseline = existing?.RecheckAttemptBaseline ?? 0,
+                LastRecheckReason = existing?.LastRecheckReason ?? string.Empty
+            };
             run.Coverage = DeriveCoverage(run, run.Coverage);
             run.UpdatedUtc = now;
-            database.Save(CreateSnapshot(run));
+            if (persist)
+            {
+                database.Save(CreateSnapshot(run));
+            }
         }
     }
 
@@ -395,7 +501,8 @@ internal sealed class AppGraphLiveRunStore
         string toolName,
         string automationId,
         int maximumAttempts,
-        out string message)
+        out string message,
+        JsonObject? selector = null)
     {
         lock (gate)
         {
@@ -409,14 +516,60 @@ internal sealed class AppGraphLiveRunStore
                 run.Actions.Values,
                 destinationId,
                 toolName,
-                automationId);
+                automationId,
+                selector);
             if (action is null)
             {
                 message = string.Empty;
                 return false;
             }
 
-            var guidance = BuildFrontierGuidance(run.Actions.Values);
+            var guidance = BuildFrontierGuidance(run);
+            // Completion of a return path must never remove the ability to traverse it again.
+            // Explicit unsafe/blocked/unavailable classifications still apply.
+            if (AppGraphActionIdentity.NavigationKind(toolName, automationId, selector ?? action.Selector, action.NavigationKind).Length > 0
+                && action.Status is not ("unsafe" or "blocked" or "unavailable"))
+            {
+                message = string.Empty;
+                return false;
+            }
+            // An explored edge is also a route to other work. Its recorded transition
+            // permits traversal without resetting exploration status or retrying a no-op.
+            var hasVerifiedRoute = action.Status == "explored"
+                && toolName == "ansight_tap_ui"
+                && action.ResultDestinationId is { } resultDestinationId
+                && resultDestinationId != destinationId
+                && run.Edges.Values.Any(edge =>
+                {
+                    var sameEndpoints = edge.From == destinationId
+                        && IsDestinationWithin(run.Nodes, resultDestinationId, edge.To);
+                    var sameAction = action.AutomationId.Length > 0
+                        ? edge.AutomationId == action.AutomationId
+                        : AppGraphActionIdentity.HasObservedSelector(edge.Selector)
+                            && JsonNode.DeepEquals(action.Selector, edge.Selector);
+                    return sameEndpoints && sameAction;
+                });
+            if (hasVerifiedRoute)
+            {
+                message = string.Empty;
+                return false;
+            }
+            var recheckBaseline = Math.Clamp(action.RecheckAttemptBaseline, 0, action.AttemptCount);
+            var attemptsSinceRecheck = action.AttemptCount - recheckBaseline;
+            // Sorting and filtering can change visible state without changing the
+            // canonical screen ID. Preserve one bounded interaction to restore it.
+            // A no_change outcome is deliberately insufficient for this exception.
+            var canRestoreVerifiedState = action.Status == "explored"
+                && toolName is ("ansight_tap_ui" or "ansight_type_text")
+                && action.ResultDestinationId == destinationId
+                && action.LastOutcome.StartsWith("verified:", StringComparison.Ordinal)
+                && attemptsSinceRecheck < maximumAttempts;
+            if (canRestoreVerifiedState)
+            {
+                message = string.Empty;
+                return false;
+            }
+
             if (terminalActionStatuses.Contains(action.Status))
             {
                 message = RenderPrompt(
@@ -431,7 +584,22 @@ internal sealed class AppGraphLiveRunStore
                 return true;
             }
 
-            if (action.AttemptCount >= maximumAttempts)
+            var untriedHere = AppGraphFrontier.Pending(run.Actions.Values, run.Nodes.Values, destinationId)
+                .FirstOrDefault(candidate =>
+                {
+                    var untouchedHere = candidate.DestinationId == destinationId
+                        && candidate.AttemptCount == 0
+                        && candidate.Status == "queued";
+                    return untouchedHere;
+                });
+            if (attemptsSinceRecheck > 0 && untriedHere is not null)
+            {
+                message = $"Resolve the retained outcome through observation before repeating '{action.Id}'. "
+                    + $"Untouched action '{untriedHere.Id}' remains on this destination. Navigation essentials remain available.";
+                return true;
+            }
+
+            if (attemptsSinceRecheck >= maximumAttempts)
             {
                 message = RenderPrompt(
                     "action-guard-attempted",
@@ -439,7 +607,7 @@ internal sealed class AppGraphLiveRunStore
                     {
                         ["AUTOMATION_ID"] = action.AutomationId,
                         ["DESTINATION_ID"] = action.DestinationId,
-                        ["ATTEMPT_COUNT"] = action.AttemptCount.ToString(),
+                        ["ATTEMPT_COUNT"] = attemptsSinceRecheck.ToString(),
                         ["FRONTIER_GUIDANCE"] = guidance
                     });
                 return true;
@@ -510,6 +678,7 @@ internal sealed class AppGraphLiveRunStore
                     ["to"] = ReadString(transition, "to") ?? string.Empty,
                     ["automationId"] = ReadString(transition["action"] as JsonObject, "automationId") ?? string.Empty,
                     ["semanticMeaning"] = ReadString(transition["action"] as JsonObject, "semanticMeaning") ?? string.Empty,
+                    ["selector"] = transition["action"]?["selector"]?.DeepClone(),
                     ["confidence"] = ReadDecimal(transition["binding"] as JsonObject, "confidence", 0.8m)
                 })
                 .ToArray<JsonNode?>()),
@@ -563,21 +732,6 @@ internal sealed class AppGraphLiveRunStore
             return false;
         }
 
-        var duplicate = existing.Values.FirstOrDefault(candidate =>
-            !string.Equals(candidate.Id, id, StringComparison.Ordinal)
-            && string.Equals(candidate.Kind, kind, StringComparison.Ordinal)
-            && string.Equals(NormalizeIdentity(candidate.Name), NormalizeIdentity(name), StringComparison.Ordinal)
-            && string.Equals(
-                NormalizeIdentity(candidate.ParentScreen),
-                NormalizeIdentity(ReadString(value, "parentScreen")),
-                StringComparison.Ordinal));
-        if (duplicate is not null)
-        {
-            error = $"Destination '{name}' is already tracked as '{duplicate.Id}'. "
-                    + "Update the existing canonical destination instead of creating an alias.";
-            return false;
-        }
-
         var scrollStatus = NormalizeOptional(ReadString(value, "scrollStatus"))?.ToLowerInvariant()
                            ?? "unknown";
         if (!supportedScrollStatuses.Contains(scrollStatus))
@@ -605,6 +759,8 @@ internal sealed class AppGraphLiveRunStore
     private static bool TryReadTransition(
         JsonObject value,
         IReadOnlyDictionary<string, SimulatorAgentAppGraphLiveEdge> existing,
+        IReadOnlyDictionary<string, SimulatorAgentAppGraphLiveNode> nodes,
+        IEnumerable<SimulatorAgentAppGraphLiveAction> actions,
         DateTimeOffset now,
         out SimulatorAgentAppGraphLiveEdge? edge,
         out string? error)
@@ -615,41 +771,144 @@ internal sealed class AppGraphLiveRunStore
         var from = NormalizeOptional(ReadString(value, "from"));
         var to = NormalizeOptional(ReadString(value, "to"));
         var semanticMeaning = NormalizeOptional(ReadString(value, "semanticMeaning"));
-        if (id is null || from is null || to is null || semanticMeaning is null)
+        var missingIdentity = id is null
+            || from is null
+            || to is null
+            || semanticMeaning is null;
+        if (missingIdentity)
         {
             error = "Each transition requires id, from, to, and semanticMeaning.";
             return false;
         }
 
-        var automationId = NormalizeOptional(ReadString(value, "automationId")) ?? string.Empty;
+        existing.TryGetValue(id!, out var reportedPrevious);
+        var reportedSelector = reportedPrevious is not null && reportedPrevious.From == from
+            ? reportedPrevious.Selector
+            : null;
+        var selector = AppGraphActionIdentity.NormalizeSelector(
+            value["selector"] as JsonObject ?? reportedSelector);
+        var automationId = NormalizeOptional(ReadString(value, "automationId"))
+            ?? NormalizeOptional(ReadString(selector, "automationId"))
+            ?? string.Empty;
         if (automationId.Length > 0)
         {
-            var duplicate = existing.Values.FirstOrDefault(candidate =>
-                !string.Equals(candidate.Id, id, StringComparison.Ordinal)
-                && string.Equals(candidate.From, from, StringComparison.Ordinal)
-                && string.Equals(candidate.AutomationId, automationId, StringComparison.Ordinal));
-            if (duplicate is not null)
+            selector["automationId"] = automationId;
+        }
+
+        var matches = existing.Values
+            .Where(candidate => HasSameTransitionAction(candidate, from!, automationId, selector))
+            .ToArray();
+        var previous = matches.FirstOrDefault(candidate => candidate.To == to);
+        var matchesLegacyUnidentifiedTransition = reportedPrevious is not null
+            && reportedPrevious.From == from
+            && reportedPrevious.To == to
+            && automationId.Length == 0
+            && selector.Count == 0;
+        var hasSameReportedIdentity = reportedPrevious is not null
+            && (HasSameTransitionAction(reportedPrevious, from!, automationId, selector)
+                || matchesLegacyUnidentifiedTransition);
+        var action = FindMatchingAction(actions, from!, "ansight_tap_ui", automationId, selector);
+        var navigationKind = AppGraphActionIdentity.NavigationKind(
+            "ansight_tap_ui", automationId, selector,
+            NormalizeOptional(ReadString(value, "navigationKind"))
+                ?? action?.NavigationKind
+                ?? previous?.NavigationKind
+                ?? (hasSameReportedIdentity ? reportedPrevious?.NavigationKind : null));
+        var isReturn = navigationKind is "back" or "pop" or "dismiss";
+        if (!isReturn && previous is null)
+        {
+            var owningTransition = matches.FirstOrDefault(candidate => IsDestinationWithin(nodes, to!, candidate.To));
+            if (owningTransition is not null)
             {
-                error = string.Equals(duplicate.To, to, StringComparison.Ordinal)
-                    ? $"Action '{automationId}' from '{from}' is already recorded as transition '{duplicate.Id}'. "
-                      + "Update the existing canonical transition instead of creating an alias."
-                    : $"Action '{automationId}' from '{from}' already leads to '{duplicate.To}'. "
-                      + $"The conflicting destination '{to}' must be canonicalized before reporting this transition.";
-                return false;
+                // Entering a known screen can restore one of its internal states.
+                // Preserve the proven entry route; the current node and action outcome
+                // still retain the exact observed child state.
+                to = owningTransition.To;
+                previous = owningTransition;
             }
         }
 
-        existing.TryGetValue(id, out var previous);
+        var conflictingDestination = matches.FirstOrDefault(candidate => candidate.To != to);
+        if (!isReturn && conflictingDestination is not null)
+        {
+            error = $"Action '{automationId}' from '{from}' already leads to '{conflictingDestination.To}'. "
+                + "A different destination requires a distinct observed state or return-navigation context.";
+            return false;
+        }
+
+        var reportedReturnDestination = ReadString(value["navigationContext"] as JsonObject, "returnDestinationId");
+        var hasInvalidReturnContext = reportedReturnDestination is not null
+            && (!isReturn || reportedReturnDestination != to);
+        if (hasInvalidReturnContext)
+        {
+            error = "Return-navigation context must identify this return transition's destination.";
+            return false;
+        }
+
+        var needsDistinctTransitionId = reportedPrevious is not null
+            && (!hasSameReportedIdentity || reportedPrevious.To != to);
+        if (previous is not null)
+        {
+            id = previous.Id;
+        }
+        else if (needsDistinctTransitionId)
+        {
+            if (hasSameReportedIdentity && !isReturn)
+            {
+                error = $"Transition '{id}' cannot replace its previously observed destination.";
+                return false;
+            }
+
+            id = FindUnusedId(BuildTransitionId(from!, to!, automationId, selector), existing.Keys);
+        }
+        else
+        {
+            previous = reportedPrevious;
+        }
+
         edge = new SimulatorAgentAppGraphLiveEdge(
-            id,
-            from,
-            to,
+            id!,
+            from!,
+            to!,
             automationId,
-            semanticMeaning,
+            semanticMeaning!,
             ClampConfidence(ReadDecimal(value, "confidence", previous?.Confidence ?? 0.8m)),
             previous?.FirstObservedUtc ?? now,
-            now);
+            now,
+            selector,
+            navigationKind,
+            isReturn ? new SimulatorAgentAppGraphNavigationContext(to!) : null);
         return true;
+    }
+
+    private static bool HasSameTransitionAction(
+        SimulatorAgentAppGraphLiveEdge edge,
+        string from,
+        string automationId,
+        JsonObject? selector)
+    {
+        if (edge.From != from)
+        {
+            return false;
+        }
+
+        return automationId.Length > 0
+            ? edge.AutomationId == automationId
+            : AppGraphActionIdentity.HasObservedSelector(selector)
+                && JsonNode.DeepEquals(AppGraphActionIdentity.NormalizeSelector(edge.Selector), selector);
+    }
+
+    private static string BuildTransitionId(string from, string to, string automationId, JsonObject selector)
+    {
+        var identity = new JsonObject
+        {
+            ["from"] = from,
+            ["to"] = to,
+            ["automationId"] = automationId,
+            ["selector"] = selector.DeepClone()
+        };
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity.ToJsonString()));
+        return $"edge_{Convert.ToHexString(hash)[..24].ToLowerInvariant()}";
     }
 
     private static bool TryReadNavigationHost(
@@ -701,6 +960,13 @@ internal sealed class AppGraphLiveRunStore
                 return false;
             }
         }
+        if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                technology, childDestinationIds, activeChildDestinationId, out var orderError))
+        {
+            error = orderError;
+            return false;
+        }
+
         navigationHost = new SimulatorAgentAppGraphLiveNavigationHost(
             id,
             kind,
@@ -743,6 +1009,14 @@ internal sealed class AppGraphLiveRunStore
         }
 
         existing.TryGetValue(id, out var previous);
+        var duplicate = existing.Values.FirstOrDefault(group => group.Id != id
+            && group.ParentDestinationId == parentDestinationId
+            && group.TabDestinationIds.SequenceEqual(tabDestinationIds));
+        if (duplicate is not null)
+        {
+            error = $"This tab group is already tracked as '{duplicate.Id}'. Update that canonical group.";
+            return false;
+        }
         AppGraphNavigationTechnologyDescriptor? technology = previous?.Technology;
         if (value["technology"] is JsonObject technologyValue
             && !AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
@@ -757,7 +1031,7 @@ internal sealed class AppGraphLiveRunStore
         tabGroup = new SimulatorAgentAppGraphLiveTabGroup(
             id,
             parentDestinationId,
-            previous?.SelectedDestinationId ?? selectedDestinationId,
+            selectedDestinationId,
             tabDestinationIds,
             ClampConfidence(ReadDecimal(value, "confidence", previous?.Confidence ?? 0.8m)),
             previous?.FirstObservedUtc ?? now,
@@ -818,45 +1092,130 @@ internal sealed class AppGraphLiveRunStore
         var automationId = NormalizeOptional(ReadString(value, "automationId")) ?? string.Empty;
         var semanticMeaning = NormalizeOptional(ReadString(value, "semanticMeaning"));
         var status = NormalizeOptional(ReadString(value, "status"))?.ToLowerInvariant();
-        if (id is null
+        var hasInvalidIdentityOrStatus = id is null
             || destinationId is null
             || toolName is null
             || semanticMeaning is null
             || status is null
-            || !supportedActionStatuses.Contains(status))
+            || !supportedActionStatuses.Contains(status);
+        if (hasInvalidIdentityOrStatus)
         {
             error = "Each action requires id, destinationId, toolName, semanticMeaning, and a supported status.";
             return false;
         }
 
-        existing.TryGetValue(id, out var previous);
-        if (previous is not null
-            && terminalActionStatuses.Contains(previous.Status)
-            && !string.Equals(previous.Status, status, StringComparison.Ordinal))
+        existing.TryGetValue(id!, out var previous);
+        var canReuseReportedSelector = previous is not null
+            && previous.DestinationId == destinationId
+            && previous.ToolName == toolName;
+        var selector = AppGraphActionIdentity.NormalizeSelector(
+            value["selector"] as JsonObject ?? (canReuseReportedSelector ? previous?.Selector : null));
+        if (automationId.Length == 0)
         {
-            error = $"Terminal action '{id}' cannot move from '{previous.Status}' back to '{status}'.";
-            return false;
+            automationId = NormalizeOptional(ReadString(selector, "automationId")) ?? string.Empty;
         }
-
-        var selector = previous?.Selector.DeepClone().AsObject() ?? new JsonObject();
         if (automationId.Length > 0)
         {
             selector["automationId"] = automationId;
         }
+
+        var matchingAction = FindMatchingAction(existing.Values, destinationId!, toolName!, automationId, selector);
+        var previousMatchesIdentity = previous is not null
+            && previous.DestinationId == destinationId
+            && previous.ToolName == toolName
+            && (automationId.Length > 0
+                ? previous.AutomationId == automationId
+                : JsonNode.DeepEquals(AppGraphActionIdentity.NormalizeSelector(previous.Selector), selector));
+        if (previousMatchesIdentity && matchingAction?.Status == "unavailable")
+        {
+            matchingAction = previous;
+        }
+
+        var isExplicitRetirement = status == "unavailable"
+            && !string.IsNullOrWhiteSpace(ReadString(value, "lastOutcome"));
+        if (matchingAction is not null && !isExplicitRetirement)
+        {
+            id = matchingAction.Id;
+            previous = matchingAction;
+        }
+        else if (previous is not null && !previousMatchesIdentity)
+        {
+            id = FindUnusedId(BuildActionId(destinationId!, toolName!, selector), existing.Keys);
+            previous = null;
+        }
+
+        var navigationKind = AppGraphActionIdentity.NavigationKind(toolName!, automationId, selector,
+            NormalizeOptional(ReadString(value, "navigationKind")) ?? previous?.NavigationKind);
+        if (status == "navigation" && navigationKind.Length == 0)
+        {
+            error = $"Action '{id}' needs a back, pop, dismiss, tab, or menu navigationKind to use navigation status.";
+            return false;
+        }
+        if (navigationKind.Length > 0 && status is not ("unsafe" or "blocked" or "unavailable"))
+        {
+            status = "navigation";
+        }
+
+        var recheckReason = NormalizeOptional(ReadString(value, "recheckReason"));
+        var explicitlyRechecksAction = IsExplicitRecheck(previous, status, recheckReason);
+        var isStaleDiscoveryStatus = previous is not null
+            && terminalActionStatuses.Contains(previous.Status)
+            && !explicitlyRechecksAction
+            && status is "queued" or "attempted" or "needs_verification" or "deferred";
+        if (isStaleDiscoveryStatus)
+        {
+            status = previous!.Status;
+        }
+
+        var restoresNavigation = previous?.Status == "unavailable"
+            && status == "navigation"
+            && !string.IsNullOrWhiteSpace(ReadString(value, "lastOutcome"));
+        var changesTerminalStatus = previous is not null
+            && terminalActionStatuses.Contains(previous.Status)
+            && !(navigationKind.Length > 0 && previous.Status == "explored")
+            && !restoresNavigation
+            && !explicitlyRechecksAction
+            && !string.Equals(previous.Status, status, StringComparison.Ordinal);
+        if (changesTerminalStatus)
+        {
+            error = $"Terminal action '{id}' cannot move from '{previous!.Status}' back to '{status}'.";
+            return false;
+        }
+
         action = new SimulatorAgentAppGraphLiveAction(
-            id,
-            destinationId,
-            toolName,
+            id!,
+            destinationId!,
+            toolName!,
             automationId,
             selector,
-            semanticMeaning,
-            status,
+            semanticMeaning!,
+            status!,
             previous?.AttemptCount ?? 0,
-            NormalizeOptional(ReadString(value, "lastOutcome")) ?? previous?.LastOutcome ?? string.Empty,
+            explicitlyRechecksAction ? $"Explicit recheck: {recheckReason}. Previous outcome: {previous!.LastOutcome}"
+                : NormalizeOptional(ReadString(value, "lastOutcome")) ?? previous?.LastOutcome ?? string.Empty,
             NormalizeOptional(ReadString(value, "resultDestinationId")) ?? previous?.ResultDestinationId,
             previous?.FirstObservedUtc ?? now,
-            now);
+            now,
+            navigationKind)
+        {
+            RecheckAttemptBaseline = explicitlyRechecksAction
+                ? previous!.AttemptCount : previous?.RecheckAttemptBaseline ?? 0,
+            LastRecheckReason = explicitlyRechecksAction
+                ? recheckReason! : previous?.LastRecheckReason ?? string.Empty
+        };
         return true;
+    }
+
+    private static bool IsExplicitRecheck(
+        SimulatorAgentAppGraphLiveAction? previous, string? status, string? reason)
+    {
+        var hasUnresolvedAttempt = previous?.Status is "blocked" or "attempted" or "deferred"
+            || previous is { Status: "queued", AttemptCount: > 0 };
+        var explicitlyRechecks = hasUnresolvedAttempt
+            && status is "queued" or "navigation"
+            && reason is not null
+            && !string.Equals(reason, previous?.LastRecheckReason, StringComparison.OrdinalIgnoreCase);
+        return explicitlyRechecks;
     }
 
     private static SimulatorAgentAppGraphLiveCoverage MergeCoverage(
@@ -883,11 +1242,10 @@ internal sealed class AppGraphLiveRunStore
         if (run.Actions.Count > 0)
         {
             safeActionsObserved = run.Actions.Values.Count(static action =>
-                !string.Equals(action.Status, "unsafe", StringComparison.Ordinal));
+                !action.IsNavigationEssential &&
+                action.Status is not ("unsafe" or "unavailable"));
             actionsExplored = run.Actions.Values.Count(static action =>
-                string.Equals(action.Status, "explored", StringComparison.Ordinal)
-                || string.Equals(action.Status, "blocked", StringComparison.Ordinal)
-                || string.Equals(action.Status, "unavailable", StringComparison.Ordinal));
+                !action.IsNavigationEssential && action.Status == "explored");
         }
 
         var scrollContainersObserved = run.Nodes.Count > 0
@@ -895,7 +1253,7 @@ internal sealed class AppGraphLiveRunStore
             : legacyCoverage.ScrollContainersObserved;
         var scrollContainersCompleted = run.Nodes.Count > 0
             ? run.Nodes.Values.Count(static node =>
-                node.ScrollStatus is "not_scrollable" or "complete" or "blocked")
+                node.ScrollStatus is "not_scrollable" or "complete")
             : Math.Min(
                 legacyCoverage.ScrollContainersCompleted,
                 legacyCoverage.ScrollContainersObserved);
@@ -913,14 +1271,11 @@ internal sealed class AppGraphLiveRunStore
         SimulatorAgentAppGraphLiveEdge edge,
         DateTimeOffset now)
     {
-        if (edge.AutomationId.Length == 0)
-        {
-            return;
-        }
-
         var action = run.Actions.Values.FirstOrDefault(candidate =>
             string.Equals(candidate.DestinationId, edge.From, StringComparison.Ordinal)
-            && string.Equals(candidate.AutomationId, edge.AutomationId, StringComparison.Ordinal));
+            && (edge.AutomationId.Length > 0
+                ? string.Equals(candidate.AutomationId, edge.AutomationId, StringComparison.Ordinal)
+                : AppGraphActionIdentity.HasObservedSelector(edge.Selector) && JsonNode.DeepEquals(candidate.Selector, edge.Selector)));
         if (action is null)
         {
             return;
@@ -928,7 +1283,7 @@ internal sealed class AppGraphLiveRunStore
 
         run.Actions[action.Id] = action with
         {
-            Status = "explored",
+            Status = action.IsNavigationEssential ? "navigation" : "explored",
             LastOutcome = $"Verified transition to '{edge.To}'.",
             ResultDestinationId = edge.To,
             UpdatedUtc = now
@@ -939,37 +1294,51 @@ internal sealed class AppGraphLiveRunStore
         IEnumerable<SimulatorAgentAppGraphLiveAction> actions,
         string destinationId,
         string toolName,
-        string automationId)
+        string automationId,
+        JsonObject? selector = null)
     {
         var normalizedAutomationId = NormalizeOptional(automationId) ?? string.Empty;
-        return actions.FirstOrDefault(action =>
+        return actions.OrderBy(action => action.Status == "unavailable").FirstOrDefault(action =>
             string.Equals(action.DestinationId, destinationId, StringComparison.Ordinal)
             && string.Equals(action.ToolName, toolName, StringComparison.Ordinal)
-            && string.Equals(action.AutomationId, normalizedAutomationId, StringComparison.Ordinal));
+            && (normalizedAutomationId.Length > 0
+                ? string.Equals(action.AutomationId, normalizedAutomationId, StringComparison.Ordinal)
+                : selector is not null && (AppGraphActionIdentity.HasObservedSelector(selector) || toolName == "ansight_back_ui")
+                  && JsonNode.DeepEquals(action.Selector, AppGraphActionIdentity.NormalizeSelector(selector))));
     }
-
-    private static IReadOnlyList<SimulatorAgentAppGraphLiveAction> BuildPendingActions(
-        IEnumerable<SimulatorAgentAppGraphLiveAction> actions)
-        => actions
-            .Where(static action => action.Status is "queued" or "attempted")
-            .OrderBy(static action => action.AttemptCount)
-            .ThenBy(static action => action.FirstObservedUtc)
-            .ThenBy(static action => action.Id, StringComparer.Ordinal)
-            .ToArray();
 
     private static IReadOnlyList<string> BuildStructureGaps(MutableRun run)
     {
         var gaps = new List<string>();
-        var childHostIds = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var action in run.Actions.Values)
+        {
+            if (!run.Nodes.ContainsKey(action.DestinationId))
+                gaps.Add($"Action '{action.Id}' is missing destination '{action.DestinationId}'.");
+            if (action.ResultDestinationId is { } result && !run.Nodes.ContainsKey(result))
+                gaps.Add($"Action '{action.Id}' is missing result destination '{result}'.");
+        }
+        foreach (var edge in run.Edges.Values)
+        {
+            if (!run.Nodes.ContainsKey(edge.From) || !run.Nodes.ContainsKey(edge.To))
+                gaps.Add($"Transition '{edge.Id}' references an unknown destination.");
+        }
+
         foreach (var navigationHost in run.NavigationHosts.Values)
         {
             if (!run.Nodes.ContainsKey(navigationHost.DestinationId))
             {
                 gaps.Add($"Navigation host '{navigationHost.Id}' is missing destination '{navigationHost.DestinationId}'.");
             }
-            if (navigationHost.ChildDestinationIds.Count < 2)
+            if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                    navigationHost.Technology, navigationHost.ChildDestinationIds,
+                    navigationHost.ActiveChildDestinationId, out var orderError))
             {
-                gaps.Add($"Navigation host '{navigationHost.Id}' has only one child; inventory every flyout, tab-bar, drawer, or rail destination.");
+                gaps.Add(orderError);
+            }
+            if (navigationHost.ChildDestinationIds.Count == 0)
+            {
+                gaps.Add($"Navigation host '{navigationHost.Id}' has no observed children; inventory its direct destinations.");
             }
             if (!navigationHost.ChildDestinationIds.Contains(
                     navigationHost.ActiveChildDestinationId,
@@ -984,28 +1353,18 @@ internal sealed class AppGraphLiveRunStore
                 {
                     gaps.Add($"Navigation host '{navigationHost.Id}' is missing child destination '{childDestinationId}'.");
                 }
-                if (childHostIds.TryGetValue(childDestinationId, out var existingHostId)
-                    && !string.Equals(existingHostId, navigationHost.Id, StringComparison.Ordinal))
-                {
-                    gaps.Add($"Destination '{childDestinationId}' belongs to both navigation hosts '{existingHostId}' and '{navigationHost.Id}'.");
-                }
-                else
-                {
-                    childHostIds[childDestinationId] = navigationHost.Id;
-                }
             }
         }
 
-        var tabMemberships = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var tabGroup in run.TabGroups.Values)
         {
             if (!run.Nodes.ContainsKey(tabGroup.ParentDestinationId))
             {
                 gaps.Add($"Tab group '{tabGroup.Id}' is missing parent destination '{tabGroup.ParentDestinationId}'.");
             }
-            if (tabGroup.TabDestinationIds.Count < 2)
+            if (tabGroup.TabDestinationIds.Count == 0)
             {
-                gaps.Add($"Tab group '{tabGroup.Id}' has only one tab; record the initially selected tab and every visible sibling tab before navigating.");
+                gaps.Add($"Tab group '{tabGroup.Id}' has no observed tabs; record the selected tab and every visible sibling before navigating.");
             }
             if (!tabGroup.TabDestinationIds.Contains(
                     tabGroup.SelectedDestinationId,
@@ -1020,25 +1379,20 @@ internal sealed class AppGraphLiveRunStore
                 {
                     gaps.Add($"Tab group '{tabGroup.Id}' is missing tab destination '{tabDestinationId}'.");
                 }
-                if (tabMemberships.TryGetValue(tabDestinationId, out var existingGroupId)
-                    && !string.Equals(existingGroupId, tabGroup.Id, StringComparison.Ordinal))
-                {
-                    gaps.Add($"Destination '{tabDestinationId}' belongs to both tab groups '{existingGroupId}' and '{tabGroup.Id}'.");
-                }
-                else
-                {
-                    tabMemberships[tabDestinationId] = tabGroup.Id;
-                }
             }
         }
 
+        gaps.AddRange(AppGraphContainment.FindErrors(
+            run.NavigationHosts.Values.SelectMany(host => host.ChildDestinationIds.Select(child =>
+                new AppGraphContainmentRelation(host.DestinationId, child)))
+            .Concat(run.TabGroups.Values.SelectMany(group => group.TabDestinationIds.Select(child =>
+                new AppGraphContainmentRelation(group.ParentDestinationId, child))))));
         return gaps.Distinct(StringComparer.Ordinal).ToArray();
     }
 
-    private static string BuildFrontierGuidance(
-        IEnumerable<SimulatorAgentAppGraphLiveAction> actions)
+    private static string BuildFrontierGuidance(MutableRun run)
     {
-        var pending = BuildPendingActions(actions);
+        var pending = AppGraphFrontier.Pending(run.Actions.Values, run.Nodes.Values, run.CurrentDestinationId);
         if (pending.Count == 0)
         {
             return ReadPrompt("action-frontier-complete");
@@ -1080,6 +1434,20 @@ internal sealed class AppGraphLiveRunStore
         return $"action_{hash[..16]}";
     }
 
+    private static string FindUnusedId(string proposedId, IEnumerable<string> existingIds)
+    {
+        var usedIds = new HashSet<string>(existingIds, StringComparer.Ordinal);
+        var id = proposedId;
+        var suffix = 2;
+        while (usedIds.Contains(id))
+        {
+            id = $"{proposedId}_{suffix}";
+            suffix++;
+        }
+
+        return id;
+    }
+
     private static string NormalizeIdentity(string? value)
         => string.Concat((value ?? string.Empty)
             .Where(static character => char.IsLetterOrDigit(character)))
@@ -1116,7 +1484,10 @@ internal sealed class AppGraphLiveRunStore
                     Selector = action.Selector.DeepClone().AsObject()
                 })
                 .ToArray(),
-            run.Trace.ToArray());
+            run.Trace.ToArray())
+        {
+            PendingOutcome = run.PendingOutcome
+        };
 
     private void TrimRetainedRuns()
     {
@@ -1171,6 +1542,34 @@ internal sealed class AppGraphLiveRunStore
     private static string? NormalizeOptional(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string? ValidateReportReferences(MutableRun run, JsonObject report)
+    {
+        // Only validate supplied records here, so an older incomplete graph can be
+        // repaired incrementally. Completion checks inspect the entire graph.
+        var fields = new Dictionary<string, string[]>
+        {
+            ["destinations"] = ["parentScreen"],
+            ["transitions"] = ["from", "to"],
+            ["actions"] = ["destinationId", "resultDestinationId"],
+            ["navigationHosts"] = ["destinationId", "activeChildDestinationId", "childDestinationIds"],
+            ["tabGroups"] = ["parentDestinationId", "selectedDestinationId", "tabDestinationIds"]
+        };
+        foreach (var collection in fields)
+        foreach (var record in (report[collection.Key] as JsonArray ?? []).OfType<JsonObject>())
+        foreach (var field in collection.Value)
+        {
+            var references = record[field] is JsonArray ? ReadStringArray(record, field)
+                : new[] { ReadString(record, field) ?? string.Empty };
+            foreach (var reference in references.Where(value => !string.IsNullOrWhiteSpace(value)))
+                if (!run.Nodes.ContainsKey(reference))
+                    return $"{collection.Key} record '{ReadString(record, "id")}' references unknown destination '{reference}' in {field}. "
+                           + "Reuse a retained destination ID or include its observed destination in this report. No changes were applied.";
+        }
+        if (run.CurrentDestinationId is { } current && !run.Nodes.ContainsKey(current))
+            return $"currentDestinationId '{current}' is unknown. Report the observed destination first. No changes were applied.";
+        return null;
+    }
+
     private sealed class MutableRun
     {
         public MutableRun(
@@ -1224,8 +1623,28 @@ internal sealed class AppGraphLiveRunStore
 
         public Dictionary<string, SimulatorAgentAppGraphLiveAction> Actions { get; } = new(StringComparer.Ordinal);
 
+        public SimulatorAgentAppGraphPendingOutcome? PendingOutcome { get; set; }
+
         public long TraceSequence { get; set; }
 
         public List<SimulatorAgentAppGraphLiveTraceEntry> Trace { get; } = [];
+
+        public MutableRun CopyForReport()
+        {
+            var copy = new MutableRun(RunId, SessionId, AppId, GraphName, StartedUtc)
+            {
+                Status = Status, Message = Message, CurrentDestinationId = CurrentDestinationId,
+                ActiveToolName = ActiveToolName, Turn = Turn, UpdatedUtc = UpdatedUtc,
+                CompletedUtc = CompletedUtc, Coverage = Coverage, TraceSequence = TraceSequence,
+                PendingOutcome = PendingOutcome
+            };
+            foreach (var entry in Nodes) copy.Nodes.Add(entry.Key, entry.Value);
+            foreach (var entry in Edges) copy.Edges.Add(entry.Key, entry.Value);
+            foreach (var entry in NavigationHosts) copy.NavigationHosts.Add(entry.Key, entry.Value);
+            foreach (var entry in TabGroups) copy.TabGroups.Add(entry.Key, entry.Value);
+            foreach (var entry in Actions) copy.Actions.Add(entry.Key, entry.Value);
+            copy.Trace.AddRange(Trace);
+            return copy;
+        }
     }
 }

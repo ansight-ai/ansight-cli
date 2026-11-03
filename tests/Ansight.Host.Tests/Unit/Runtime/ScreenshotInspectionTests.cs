@@ -222,6 +222,64 @@ public sealed partial class ScreenshotInspectionTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Call(true, args));
     }
 
+    [Theory]
+    [InlineData(false, "screenshot_assessment_timeout")]
+    [InlineData(true, "screenshot_assessment_transport_failure")]
+    public async Task AssessmentProviderFailureReturnsToolErrorWithoutInventingAVerdict(
+        bool networkFailure, string expectedCode)
+    {
+        using var fixture = new Fixture();
+        var frame = await fixture.Frame(Png(50, 50));
+        fixture.Services.ScreenshotEvaluator = new ThrowingEvaluator(() => networkFailure
+            ? new HttpRequestException("Provider unavailable.")
+            : new TaskCanceledException("HttpClient request timed out."));
+        var args = new JsonObject
+        {
+            ["sessionId"] = fixture.SessionId,
+            ["image"] = new JsonObject { ["frameId"] = frame.FrameId },
+            ["criteria"] = Criteria(2)
+        };
+
+        var result = await new ScreenshotInspectionTool(fixture.Services, true).ExecuteAsync(args, null);
+
+        Assert.True(result.Payload!["isError"]!.GetValue<bool>());
+        var content = result.Payload["structuredContent"]!;
+        Assert.Equal(expectedCode, content["errorCode"]!.GetValue<string>());
+        Assert.Null(content["verdict"]);
+        Assert.Contains("do not repeat a pending UI action", content["message"]!.GetValue<string>());
+        Assert.Empty(fixture.Snapshot.ArtifactSnapshots);
+    }
+
+    [Fact]
+    public async Task CancellationDuringAssessmentStillCancelsTheCaller()
+    {
+        using var fixture = new Fixture();
+        var frame = await fixture.Frame(Png(50, 50));
+        using var cancellation = new CancellationTokenSource();
+        fixture.Services.ScreenshotEvaluator = new ThrowingEvaluator(() =>
+        {
+            cancellation.Cancel();
+            return new OperationCanceledException(cancellation.Token);
+        });
+        using var scope = ToolExecutionCancellation.Push(cancellation.Token);
+        var args = new JsonObject
+        {
+            ["image"] = new JsonObject { ["frameId"] = frame.FrameId },
+            ["criteria"] = Criteria(2)
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Call(true, args));
+    }
+
+    private sealed class ThrowingEvaluator(Func<Exception> createException) : IScreenshotEvaluator
+    {
+        public Task<ScreenshotEvaluationResponse> EvaluateAsync(
+            ScreenshotEvaluationRequest request, CancellationToken token)
+        {
+            throw createException();
+        }
+    }
+
     private const string ValidAssessment = """
         {"criteria":[{"id":"purple","verdict":"pass","explanation":"Two purple cubes are visible.","regionIds":["one","two"]}],
         "objects":[{"id":"one","label":"cube","attributes":{"color":"purple"},"bounds":{"x":0.1,"y":0.1,"width":0.2,"height":0.2}},

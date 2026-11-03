@@ -31,6 +31,47 @@ internal static class VisualTreePresentationNormalizer
         return presentation;
     }
 
+    internal static bool IsBehind(
+        JsonObject payload, LiveUiNodeMatch candidate, LiveUiNodeMatch target)
+    {
+        if (!ShouldNormalize(payload))
+        {
+            return false;
+        }
+
+        var candidatePath = candidate.Ancestors.Append(candidate.Node).ToArray();
+        var targetPath = target.Ancestors.Append(target.Node).ToArray();
+        var sharedDepth = 0;
+        while (sharedDepth < Math.Min(candidatePath.Length, targetPath.Length)
+               && ReferenceEquals(candidatePath[sharedDepth], targetPath[sharedDepth]))
+        {
+            sharedDepth++;
+        }
+
+        var hasDistinctBranches = sharedDepth > 0
+            && sharedDepth < candidatePath.Length
+            && sharedDepth < targetPath.Length;
+        if (!hasDistinctBranches || targetPath[sharedDepth - 1]["children"] is not JsonArray siblings)
+        {
+            return false;
+        }
+
+        // Compare branches at their common parent. A descendant's local z value
+        // does not reorder its ancestor against the target's sibling branch.
+        var candidateBranch = candidatePath[sharedDepth];
+        var targetBranch = targetPath[sharedDepth];
+        var candidateIndex = siblings.IndexOf(candidateBranch);
+        var targetIndex = siblings.IndexOf(targetBranch);
+        var candidateZ = ReadNumber(candidateBranch, "z") ?? 0;
+        var targetZ = ReadNumber(targetBranch, "z") ?? 0;
+        var orderedBehind = candidateZ < targetZ
+            || NearlyEqual(candidateZ, targetZ) && candidateIndex < targetIndex;
+        var hasKnownEarlierPosition = candidateIndex >= 0
+            && targetIndex >= 0
+            && orderedBehind;
+        return hasKnownEarlierPosition;
+    }
+
     public static void NormalizeSerializedSession(JsonNode? serializedSession)
     {
         if (serializedSession is not JsonObject session

@@ -108,6 +108,8 @@ public sealed partial class SimulatorAgentServiceTests
         var loadedDeclaration = Assert.Single(AdditionalToolItems(session.Requests[1].IncrementalInput!));
         var guidance = Assert.Single(session.Requests[1].IncrementalInput!.OfType<JsonObject>(),
             item => item["role"]?.GetValue<string>() == "developer" && item["type"] is null);
+        var frameworkGuidance = Assert.Single(NavigationGuidanceInputs(session.Requests[0].Input));
+
         foreach (var request in session.Requests.Skip(2))
         {
             Assert.False(request.StartNewConversation);
@@ -115,8 +117,8 @@ public sealed partial class SimulatorAgentServiceTests
             Assert.Equal(request == session.Requests[2] ? 2 : 3, declarations.Length);
             Assert.True(JsonNode.DeepEquals(loadedDeclaration, declarations[1]));
             var retainedGuidance = Assert.Single(request.Input.OfType<JsonObject>(),
-                item => item["role"]?.GetValue<string>() == "developer" && item["type"] is null);
-            Assert.True(JsonNode.DeepEquals(guidance, retainedGuidance));
+                item => JsonNode.DeepEquals(guidance, item));
+            Assert.Equal(frameworkGuidance, Assert.Single(NavigationGuidanceInputs(request.Input)));
             var checkpointItem = Assert.Single(request.Input.OfType<JsonObject>(),
                 item => item["type"]?.GetValue<string>() == "compaction");
             Assert.True(JsonNode.DeepEquals(checkpoint, checkpointItem));
@@ -325,6 +327,58 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.True(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "second-hidden").IsError);
         Assert.Single(AdditionalToolItems(session.Requests[4].IncrementalInput!));
         Assert.Single(gateway.Calls);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_DefersDiscoveryOnlyWhenEveryReferencedTaskWasPreloaded(bool resolved)
+    {
+        var gateway = new FakeToolGateway
+        {
+            RepositoryTaskShortcuts = [CreateRepositoryTaskShortcut("ansight_task_account", "account", "Account")
+                with { StartingState = "Home tab is visible.", SuccessState = "Account page is visible." }]
+        };
+        AddToolLoadingDefinitions(gateway, "ansight_describe_module");
+        var session = new FakeOpenAiSession([CompleteWebSocketTurn()]);
+        using var service = CreateToolLoadingService(session, gateway);
+        var result = await service.RunAsync(ToolLoadingRequest("Run the account task.") with
+        {
+            PreferredTaskIds = resolved ? ["account"] : ["account", "missing"]
+        });
+        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        var request = Assert.Single(session.Requests);
+        Assert.Equal(!resolved, ToolNames(request.Tools).Contains("ansight_list_tasks"));
+        Assert.Contains("Home tab is visible.", request.Input.ToJsonString());
+        Assert.Contains("Account page is visible.", request.Input.ToJsonString());
+        Assert.DoesNotContain(AdditionalToolItems(request.Input).SelectMany(item => ToolNames(item["tools"]!.AsArray())),
+            name => name == "ansight_list_tasks");
+    }
+
+    [Fact]
+    public async Task RunAsync_DeferredTaskDiscoveryCanBeLoadedForAnUncoveredStep()
+    {
+        var gateway = new FakeToolGateway
+        {
+            RepositoryTaskShortcuts = [CreateRepositoryTaskShortcut("ansight_task_account", "account", "Account")]
+        };
+        AddToolLoadingDefinitions(gateway, "ansight_describe_module");
+        var session = new FakeOpenAiSession([
+            CreateFunctionTurn("premature", "ansight_list_tasks", new JsonObject { ["query"] = "settings" }),
+            CreateFunctionTurn("load", "ansight_load_tools", new JsonObject { ["bundle"] = "tasks" }),
+            CreateFunctionTurn("discover", "ansight_list_tasks", new JsonObject { ["query"] = "settings" }),
+            CompleteWebSocketTurn()
+        ]);
+        using var service = CreateToolLoadingService(session, gateway);
+        var result = await service.RunAsync(ToolLoadingRequest("Open account then the uncovered settings page.") with
+        {
+            PreferredTaskIds = ["account"]
+        });
+        Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+        Assert.True(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "premature").IsError);
+        Assert.Equal("ansight_list_tasks", Assert.Single(gateway.Calls).ToolName);
+        Assert.Contains(AdditionalToolItems(session.Requests[2].IncrementalInput!).SelectMany(item => ToolNames(item["tools"]!.AsArray())),
+            name => name == "ansight_list_tasks");
     }
 
     private static SimulatorAgentRunRequest ToolLoadingRequest(string instruction)

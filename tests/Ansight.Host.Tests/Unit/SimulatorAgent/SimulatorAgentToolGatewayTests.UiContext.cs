@@ -64,10 +64,11 @@ public sealed partial class SimulatorAgentToolGatewayTests
         finally { gateway.EndRun(); }
     }
 
-    [Fact]
-    public async Task UiAliases_ResolveBeforeDispatchAndRejectExpiredAliasesWithoutDispatch()
+    [Theory]
+    [InlineData("f1681cbb-d68d-4b99-9519-27ae54cbe7a2")]
+    [InlineData("n10")]
+    public async Task UiAliases_ResolveBeforeDispatchAndRejectExpiredAliasesWithoutDispatch(string runtimeId)
     {
-        const string runtimeId = "f1681cbb-d68d-4b99-9519-27ae54cbe7a2";
         var dispatcher = new RecordingOperationDispatcher();
         dispatcher.Responses["ansight_find_ui"] = RequestResult.ToolResult(new JsonObject
         {
@@ -85,6 +86,9 @@ public sealed partial class SimulatorAgentToolGatewayTests
             Assert.Contains(runtimeId, observation.Output);
             Assert.DoesNotContain(runtimeId, observation.ModelOutput!);
             var arguments = new JsonObject { ["nodeId"] = alias };
+            var tracking = gateway.ResolveUiSelectorForTracking(arguments);
+            Assert.Equal(runtimeId, tracking["nodeId"]!.GetValue<string>());
+            Assert.Equal(alias, arguments["nodeId"]!.GetValue<string>());
             var action = await gateway.ExecuteAsync("ansight_tap_ui", arguments, "session", "tap", default);
             Assert.False(action.IsError);
             Assert.Equal(runtimeId, dispatcher.LastArguments!["nodeId"]!.GetValue<string>());

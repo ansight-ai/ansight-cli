@@ -489,6 +489,12 @@ public sealed partial class LocalAppGraphService
             }
 
             var hosts = recording.Definition["navigationHosts"]!.AsArray();
+            if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                    request.Technology, children, request.ActiveChildDestinationId, out var orderError))
+            {
+                return RecordingMutation.Failure(orderError);
+            }
+
             var hostId = string.IsNullOrWhiteSpace(request.HostId)
                 ? CreateUniqueId(hosts.OfType<JsonObject>().Select(host => ReadString(host, "id")), request.Name, "navigation-host")
                 : request.HostId.Trim();
@@ -926,9 +932,24 @@ public sealed partial class LocalAppGraphService
         {
             var id = ReadString(host, "id") ?? "unknown";
             var children = ReadIds(host["childDestinationIds"]);
-            if (strict && children.Count < 2)
+            if (host["technology"] is JsonObject technologyValue)
             {
-                gaps.Add($"Navigation host '{id}' needs at least two child screens.");
+                if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
+                        technologyValue, AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                        out var technology, out _, out var technologyError))
+                {
+                    gaps.Add(technologyError);
+                }
+                else if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                             technology, children, ReadString(host, "activeChildDestinationId") ?? string.Empty,
+                             out var orderError))
+                {
+                    gaps.Add(orderError);
+                }
+            }
+            if (strict && children.Count == 0)
+            {
+                gaps.Add($"Navigation host '{id}' needs a complete direct-child inventory.");
             }
             if (!children.Contains(ReadString(host, "activeChildDestinationId") ?? string.Empty, StringComparer.Ordinal))
             {
@@ -958,9 +979,9 @@ public sealed partial class LocalAppGraphService
         {
             var id = ReadString(group, "id") ?? "unknown";
             var tabs = ReadIds(group["tabDestinationIds"]);
-            if (strict && tabs.Count < 2)
+            if (strict && tabs.Count == 0)
             {
-                gaps.Add($"Tab group '{id}' needs at least two internal states.");
+                gaps.Add($"Tab group '{id}' needs at least one observed internal state.");
             }
             if (!tabs.Contains(ReadString(group, "selectedDestinationId") ?? string.Empty, StringComparer.Ordinal))
             {
@@ -971,6 +992,7 @@ public sealed partial class LocalAppGraphService
                 gaps.Add($"Tab group '{id}' may contain only internal state destinations.");
             }
         }
+        gaps.AddRange(AppGraphContainment.FindErrors(AppGraphContainmentReader.ReadRelations(definition)));
         return gaps.Distinct(StringComparer.Ordinal).ToArray();
     }
 

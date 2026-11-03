@@ -1,9 +1,16 @@
 <!-- template:maui -->
-Treat Shell, FlyoutItem, TabBar, and other persistent navigation roots as hosts. Inventory every host child from rootPage or window structure, and model NavigationPage and modal stacks as routes. For an internal tab set, record the currently selected tab before using any tab action.
+For this confirmed MAUI app, prefer device accessibility and the published native visual tree for visible controls,
+sheets, dialogs, and the active window. When ui.get_visual_tree is published, prefer it for visible app content.
+MAUI currentPage, rootPage, and window trees describe the logical framework hierarchy and may omit custom sheets
+hosted in separate native windows. Use them for bindings, framework state, and navigation structure. An unchanged
+logical page tree must not override native evidence of a visible sheet. Scope targets to the foreground sheet;
+do not interact with its background page. A truncated tree is incomplete evidence: use a focused query or increase
+its bounded depth before declaring a control missing.
+Treat Shell, FlyoutPage, FlyoutItem, TabbedPage, TabBar, and other persistent navigation roots as hosts. Preserve FlyoutPage.Detail and Shell containment: a flyout owns the tabbed-page host, which owns its tab screens. Record direct children only; a flyout with one tabbed-page child is complete when the structural inventory confirms it. Do not flatten its tabs into peer flyout destinations. Inventory every host child from rootPage or window structure, and model NavigationPage and modal stacks as routes. For an internal tab set, record the currently selected tab before using any tab action.
 <!-- /template -->
 
 <!-- template:react-native -->
-Use React Navigation drawer, tab, and stack router state as the authoritative host hierarchy. Preserve nested route state, route keys, and each router's active index. Record the active route of every tab router before changing tabs.
+When exposed by the app, use React Navigation drawer, tab, and stack router state as the authoritative host hierarchy. Preserve nested route state, route keys, and each router's active index. Record the active route of every tab router before changing tabs. Do not infer unexposed router state from component names.
 <!-- /template -->
 
 <!-- template:flutter -->

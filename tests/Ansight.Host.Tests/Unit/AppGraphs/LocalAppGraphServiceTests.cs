@@ -341,8 +341,12 @@ public sealed class LocalAppGraphServiceTests
         Assert.Null(updated.PendingTransition);
     }
 
-    [Fact]
-    public void ManualRecording_RequiresCompleteNavigationAndTabGroupsBeforeCommit()
+    [Theory]
+    [InlineData("maui", "flyout", "shell_flyout")]
+    [InlineData("maui", "bottom_tabs", "shell_tab_bar")]
+    [InlineData("ios-swiftui", "other", "sheet")]
+    [InlineData("ios-uikit", "other", "presented_view_controller")]
+    public void ManualRecording_AcceptsOneObservedChildAcrossFrameworks(string framework, string kind, string technologyKind)
     {
         using var directory = new TemporaryDirectory();
         var service = new LocalAppGraphService(new DataToolApplicationPaths(directory.RootPath));
@@ -367,23 +371,22 @@ public sealed class LocalAppGraphServiceTests
         Assert.True(service.UpsertRecordingNavigationHost(
             recording.Id,
             new LocalAppGraphRecordingNavigationHostRequest(
-                "flyout",
+                kind,
                 "Main drawer",
                 shellId,
                 homeId,
                 [homeId],
-                "maui",
+                framework,
                 Technology: new AppGraphNavigationTechnologyDescriptor(
-                    "maui",
-                    "shell_flyout",
-                    "maui.get_navigation_state",
+                    framework,
+                    technologyKind,
+                    "",
                     new string('a', 64)))).IsSuccess);
         Assert.True(service.StopRecording(recording.Id).IsSuccess);
 
         var committed = service.CommitRecording(recording.Id);
 
-        Assert.False(committed.IsSuccess);
-        Assert.Contains("at least two child screens", committed.Message, StringComparison.Ordinal);
+        Assert.True(committed.IsSuccess, committed.Message);
     }
 
     private static JsonObject CreateDefinition(string destination) => JsonNode.Parse(

@@ -174,6 +174,7 @@ internal static class AppGraphExplorationCompiler
         }
 
         var edges = new JsonArray();
+        var observedTransitions = new JsonArray();
         var bindingCandidates = new JsonArray();
         var usedEdgeIds = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < transitionValues.Count; index++)
@@ -197,11 +198,6 @@ internal static class AppGraphExplorationCompiler
                 error = $"Exploration transition {index + 1} requires id, from, to, and semantic action values.";
                 return false;
             }
-            if (string.IsNullOrWhiteSpace(automationId))
-            {
-                error = $"Exploration transition '{sourceEdgeId}' requires the interacted element's automation ID.";
-                return false;
-            }
             if (!destinationIds.TryGetValue(sourceFrom, out var from))
             {
                 error = $"Exploration transition '{sourceEdgeId}' references unknown source destination '{sourceFrom}'.";
@@ -220,20 +216,40 @@ internal static class AppGraphExplorationCompiler
                 var targetName = (nodes.FirstOrDefault(node => node?["id"]?.GetValue<string>() == to) as JsonObject)?["name"]?.GetValue<string>();
                 postconditions = [$"{targetName ?? "The resulting destination"} is visible"];
             }
-            edges.Add(new JsonObject
+            var hasStableAutomationId = !string.IsNullOrWhiteSpace(automationId);
+            var navigationKind = AppGraphActionIdentity.NavigationKind(
+                "ansight_tap_ui", automationId ?? string.Empty,
+                action?["selector"] as JsonObject, action is null ? null : ReadString(action, "navigationKind"));
+            var requiresReturnContext = navigationKind is "back" or "pop" or "dismiss";
+            var compiledEdge = new JsonObject
             {
                 ["id"] = edgeId,
                 ["from"] = from,
                 ["to"] = to,
                 ["action"] = new JsonObject
                 {
-                    ["automationId"] = automationId.Trim(),
-                    ["semanticMeaning"] = semanticMeaning.Trim()
+                    ["automationId"] = automationId?.Trim() ?? string.Empty,
+                    ["semanticMeaning"] = semanticMeaning.Trim(),
+                    ["hasStableAutomationId"] = hasStableAutomationId,
+                    ["selector"] = action?["selector"]?.DeepClone(),
+                    ["navigationKind"] = navigationKind
                 },
+                ["navigationContext"] = requiresReturnContext
+                    ? new JsonObject { ["returnDestinationId"] = to }
+                    : null,
                 ["parameters"] = JsonSerializer.SerializeToNode(ReadStringArray(transition, "parameters")),
                 ["preconditions"] = JsonSerializer.SerializeToNode(ReadStringArray(transition, "preconditions")),
                 ["postconditions"] = JsonSerializer.SerializeToNode(postconditions)
-            });
+            };
+
+            if (!hasStableAutomationId || requiresReturnContext)
+            {
+                // Caller-dependent returns remain evidence until execution can verify the caller.
+                // Ephemeral selectors likewise cannot become deterministic bindings.
+                observedTransitions.Add(compiledEdge);
+                continue;
+            }
+            edges.Add(compiledEdge);
 
             if (transition["binding"] is JsonObject binding
                 && ReadString(binding, "mechanism") is { } mechanism
@@ -244,7 +260,7 @@ internal static class AppGraphExplorationCompiler
                 if (string.Equals(mechanism, "ui_action", StringComparison.Ordinal))
                 {
                     var selector = normalizedConfiguration["selector"] as JsonObject ?? new JsonObject();
-                    selector["automationId"] ??= automationId.Trim();
+                    selector["automationId"] ??= automationId!.Trim();
                     normalizedConfiguration["selector"] = selector;
                 }
                 bindingCandidates.Add(new JsonObject
@@ -267,6 +283,7 @@ internal static class AppGraphExplorationCompiler
                 ["schema"] = "ansight.app-graph/v1",
                 ["nodes"] = nodes,
                 ["edges"] = edges,
+                ["observedTransitions"] = observedTransitions,
                 ["navigationHosts"] = navigationHosts,
                 ["tabGroups"] = tabGroups
             },
@@ -274,12 +291,13 @@ internal static class AppGraphExplorationCompiler
             {
                 ["schema"] = "ansight.app-graph-exploration-evidence/v1",
                 ["summary"] = summary,
-                ["bindingCandidates"] = bindingCandidates
+                ["bindingCandidates"] = bindingCandidates,
+                ["observedTransitions"] = observedTransitions.DeepClone()
             },
             ReadConfidence(root, 0.65m),
             summary,
             nodes.Count,
-            edges.Count);
+            edges.Count + observedTransitions.Count);
         return true;
     }
 
@@ -328,6 +346,21 @@ internal static class AppGraphExplorationCompiler
         return true;
     }
 
+    private static JsonObject? EnrichNavigationTechnology(JsonObject source)
+    {
+        if (source["technology"] is not JsonObject technology)
+        {
+            return null;
+        }
+
+        var descriptor = new AppGraphNavigationTechnologyDescriptor(
+            ReadString(technology, "framework") ?? string.Empty,
+            ReadString(technology, "kind") ?? string.Empty,
+            ReadString(technology, "navigationToolId") ?? string.Empty,
+            ReadString(technology, "structureFingerprint") ?? string.Empty);
+        return AppGraphNavigationTechnologyCatalog.ToJson(descriptor);
+    }
+
     private static bool TryCompileNavigationStructure(
         JsonObject root,
         IReadOnlyDictionary<string, string> destinationIds,
@@ -350,20 +383,21 @@ internal static class AppGraphExplorationCompiler
                 return false;
             }
 
-            var id = ReadString(source, "id");
+            var id = ReadString(source, "id") ?? string.Empty;
             var kind = ReadString(source, "kind")?.Trim().ToLowerInvariant();
-            var name = ReadString(source, "name");
-            var destinationId = ReadString(source, "destinationId");
-            var activeChildDestinationId = ReadString(source, "activeChildDestinationId");
+            var name = ReadString(source, "name") ?? string.Empty;
+            var destinationId = ReadString(source, "destinationId") ?? string.Empty;
+            var activeChildDestinationId = ReadString(source, "activeChildDestinationId") ?? string.Empty;
             var childDestinationIds = ReadStringArray(source, "childDestinationIds");
-            if (string.IsNullOrWhiteSpace(id)
+            var hasIncompleteHost = string.IsNullOrWhiteSpace(id)
                 || kind is not ("flyout" or "drawer" or "bottom_tabs" or "top_tabs" or "navigation_rail" or "shell" or "other")
                 || string.IsNullOrWhiteSpace(name)
                 || string.IsNullOrWhiteSpace(destinationId)
                 || string.IsNullOrWhiteSpace(activeChildDestinationId)
-                || childDestinationIds.Count < 2)
+                || childDestinationIds.Count == 0;
+            if (hasIncompleteHost)
             {
-                error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least two childDestinationIds.";
+                error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least one observed direct child.";
                 return false;
             }
             if (!destinationIds.TryGetValue(destinationId, out var normalizedDestinationId)
@@ -400,7 +434,7 @@ internal static class AppGraphExplorationCompiler
                 ["activeChildDestinationId"] = destinationIds[activeChildDestinationId],
                 ["childDestinationIds"] = normalizedChildren,
                 ["framework"] = ReadString(source, "framework")?.Trim() ?? "unknown",
-                ["technology"] = source["technology"]?.DeepClone(),
+                ["technology"] = EnrichNavigationTechnology(source),
                 ["confidence"] = ReadConfidence(source, 0.8m)
             });
         }
@@ -414,16 +448,17 @@ internal static class AppGraphExplorationCompiler
                 return false;
             }
 
-            var id = ReadString(source, "id");
-            var parentDestinationId = ReadString(source, "parentDestinationId");
-            var selectedDestinationId = ReadString(source, "selectedDestinationId");
+            var id = ReadString(source, "id") ?? string.Empty;
+            var parentDestinationId = ReadString(source, "parentDestinationId") ?? string.Empty;
+            var selectedDestinationId = ReadString(source, "selectedDestinationId") ?? string.Empty;
             var tabDestinationIds = ReadStringArray(source, "tabDestinationIds");
-            if (string.IsNullOrWhiteSpace(id)
+            var hasIncompleteTabGroup = string.IsNullOrWhiteSpace(id)
                 || string.IsNullOrWhiteSpace(parentDestinationId)
                 || string.IsNullOrWhiteSpace(selectedDestinationId)
-                || tabDestinationIds.Count < 2)
+                || tabDestinationIds.Count == 0;
+            if (hasIncompleteTabGroup)
             {
-                error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least two tabDestinationIds.";
+                error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least one observed tabDestinationId.";
                 return false;
             }
             if (!destinationIds.TryGetValue(parentDestinationId, out var normalizedParentId)
@@ -462,7 +497,7 @@ internal static class AppGraphExplorationCompiler
                 ["parentDestinationId"] = normalizedParentId,
                 ["selectedDestinationId"] = destinationIds[selectedDestinationId],
                 ["tabDestinationIds"] = normalizedTabs,
-                ["technology"] = source["technology"]?.DeepClone(),
+                ["technology"] = EnrichNavigationTechnology(source),
                 ["confidence"] = ReadConfidence(source, 0.8m)
             });
         }

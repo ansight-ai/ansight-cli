@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host.Cloud;
+using Ansight.Host.AppGraphs;
 
 namespace Ansight.Cli.AppGraphs;
 
@@ -46,12 +47,13 @@ internal static class AppGraphPlanner
         var navigationHostParentsByChildId = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var host in definition.NavigationHosts)
         {
-            if (string.IsNullOrWhiteSpace(host.Id)
+            var hasIncompleteHost = string.IsNullOrWhiteSpace(host.Id)
                 || string.IsNullOrWhiteSpace(host.DestinationId)
                 || string.IsNullOrWhiteSpace(host.ActiveChildDestinationId)
-                || host.ChildDestinationIds.Count < 2)
+                || host.ChildDestinationIds.Count == 0;
+            if (hasIncompleteHost)
             {
-                errors.Add("Every navigation host requires an ID, host destination, active child, and at least two child destinations.");
+                errors.Add("Every navigation host requires an ID, host destination, active child, and at least one observed direct child.");
                 continue;
             }
             if (!nodes.TryGetValue(host.DestinationId, out var hostDestination))
@@ -62,6 +64,20 @@ internal static class AppGraphPlanner
             if (!host.ChildDestinationIds.Contains(host.ActiveChildDestinationId, StringComparer.Ordinal))
             {
                 errors.Add($"Navigation host '{host.Id}' does not include active child '{host.ActiveChildDestinationId}'.");
+            }
+            if (host.Technology is not null)
+            {
+                if (!AppGraphNavigationTechnologyCatalog.TryValidate(
+                        host.Technology, AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                        out _, out var technologyError))
+                {
+                    errors.Add(technologyError);
+                }
+            }
+            if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                    host.Technology, host.ChildDestinationIds, host.ActiveChildDestinationId, out var orderError))
+            {
+                errors.Add(orderError);
             }
             foreach (var childId in host.ChildDestinationIds)
             {
@@ -87,6 +103,8 @@ internal static class AppGraphPlanner
                 errors.Add($"Screen destination '{node.Id}' may only identify a parent when that navigation host declares it as a child.");
             }
         }
+
+        errors.AddRange(AppGraphContainment.FindErrors(AppGraphContainmentReader.ReadRelations(detail.Version.Definition)));
 
         var edgeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var edge in definition.Edges)
@@ -128,8 +146,14 @@ internal static class AppGraphPlanner
         if (definition is null || errors.Count > 0) return new AppGraphPlan(errors, []);
 
         var nodes = definition.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
-        var incomingNodeIds = definition.Edges.Select(edge => edge.To).ToHashSet(StringComparer.Ordinal);
-        var outgoingNodeIds = definition.Edges.Select(edge => edge.From).ToHashSet(StringComparer.Ordinal);
+        var routableEdges = definition.Edges.Where(edge =>
+        {
+            var navigationKind = AppGraphActionIdentity.NavigationKind(
+                "ansight_tap_ui", edge.Action?.AutomationId ?? string.Empty, null, edge.Action?.NavigationKind);
+            return edge.NavigationContext is null && navigationKind is not ("back" or "pop" or "dismiss");
+        }).ToArray();
+        var incomingNodeIds = routableEdges.Select(edge => edge.To).ToHashSet(StringComparer.Ordinal);
+        var outgoingNodeIds = routableEdges.Select(edge => edge.From).ToHashSet(StringComparer.Ordinal);
         var explicitStarts = definition.Nodes.Where(node => node.IsEntry).ToArray();
         var inferredStarts = definition.Nodes.Where(node => !incomingNodeIds.Contains(node.Id)).ToArray();
         var starts = explicitStarts.Length > 0
@@ -143,7 +167,7 @@ internal static class AppGraphPlanner
         if (errors.Count > 0) return new AppGraphPlan(errors, []);
 
         var targetIds = targets.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
-        var outgoing = definition.Edges.GroupBy(edge => edge.From, StringComparer.Ordinal)
+        var outgoing = routableEdges.GroupBy(edge => edge.From, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var queue = new Queue<string>();
         var previous = new Dictionary<string, AppGraphDocumentEdge>(StringComparer.Ordinal);

@@ -1123,6 +1123,21 @@ public sealed class FrameworkToolIntegrationTests
         Assert.Equal(437, path.DurationMilliseconds);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GeneratedSwipeStaysInsideClippedNativeList(bool scroll)
+    {
+        var list = new LiveUiBounds(16, 401, 358, 310);
+        var viewport = new LiveUiBounds(0, 0, 390, 844);
+        Assert.True(LiveUiActionTool.TryResolveSwipePath(
+            new JsonObject { ["orientation"] = scroll ? "down" : "up", ["length"] = 0.5 },
+            list, viewport, scroll, out var path, out var error), error);
+        Assert.True(path.StartY < 711d / 844 && path.StartY > 401d / 844);
+        Assert.True(path.EndY < 711d / 844 && path.EndY > 401d / 844);
+        Assert.True(path.StartY > path.EndY);
+    }
+
     [Fact]
     public void LiveUiSwipePath_RejectsAPartialRecordedPath()
     {

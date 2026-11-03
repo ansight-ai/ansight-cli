@@ -6,6 +6,9 @@ internal sealed class AgentNavigationGuidance
 {
     private readonly HashSet<string> retainedFrameworks = new(StringComparer.Ordinal);
 
+    public string TakeKnownGuidance(SessionCapabilities capabilities)
+        => TakeFrameworkGuidance(capabilities.GuidanceFrameworks);
+
     public string TakeNewGuidance(string observationOutput)
     {
         if (string.IsNullOrWhiteSpace(observationOutput))
@@ -24,8 +27,13 @@ internal sealed class AgentNavigationGuidance
             return string.Empty;
         }
 
+        return TakeFrameworkGuidance(observedFrameworks);
+    }
+
+    private string TakeFrameworkGuidance(IEnumerable<string> frameworks)
+    {
         var sections = new List<string>();
-        foreach (var framework in observedFrameworks)
+        foreach (var framework in frameworks)
         {
             if (retainedFrameworks.Add(framework))
             {

@@ -111,6 +111,13 @@ public static class AppGraphExplorationSummaryValidator
             return false;
         }
 
+        var containmentErrors = AppGraphContainment.FindErrors(AppGraphContainmentReader.ReadRelations(root));
+        if (containmentErrors.Count > 0)
+        {
+            error = string.Join(" ", containmentErrors);
+            return false;
+        }
+
         for (var index = 0; index < transitions.Count; index++)
         {
             if (transitions[index] is not JsonObject transition)
@@ -133,9 +140,11 @@ public static class AppGraphExplorationSummaryValidator
                 error = $"Exploration transition {index + 1} requires id, from, to, and semantic action values.";
                 return false;
             }
-            if (string.IsNullOrWhiteSpace(automationId))
+            if (string.IsNullOrWhiteSpace(automationId)
+                && !(action?["hasStableAutomationId"] is JsonValue stable && stable.TryGetValue<bool>(out var isStable)
+                     && !isStable && AppGraphActionIdentity.HasObservedSelector(action["selector"] as JsonObject)))
             {
-                error = $"Exploration transition '{id}' requires the interacted element's automation ID.";
+                error = $"Exploration transition '{id}' requires the interacted element's automation ID, or hasStableAutomationId=false with an observed selector.";
                 return false;
             }
             if (!destinationsById.ContainsKey(from))
@@ -147,6 +156,21 @@ public static class AppGraphExplorationSummaryValidator
             {
                 error = $"Exploration transition '{id}' references unknown resulting destination '{to}'.";
                 return false;
+            }
+
+            if (transition["navigationContext"] is { } context)
+            {
+                var navigationKind = AppGraphActionIdentity.NavigationKind(
+                    "ansight_tap_ui", automationId ?? string.Empty,
+                    action?["selector"] as JsonObject, ReadString(action!, "navigationKind"));
+                var isValidReturnContext = context is JsonObject contextObject
+                    && ReadString(contextObject, "returnDestinationId") == to
+                    && navigationKind is "back" or "pop" or "dismiss";
+                if (!isValidReturnContext)
+                {
+                    error = $"Exploration transition '{id}' requires return-navigation context matching its destination.";
+                    return false;
+                }
             }
         }
 
@@ -168,21 +192,22 @@ public static class AppGraphExplorationSummaryValidator
                 return false;
             }
 
-            var id = ReadString(host, "id");
+            var id = ReadString(host, "id") ?? string.Empty;
             var kind = ReadString(host, "kind")?.Trim().ToLowerInvariant();
-            var name = ReadString(host, "name");
-            var destinationId = ReadString(host, "destinationId");
-            var activeChildDestinationId = ReadString(host, "activeChildDestinationId");
+            var name = ReadString(host, "name") ?? string.Empty;
+            var destinationId = ReadString(host, "destinationId") ?? string.Empty;
+            var activeChildDestinationId = ReadString(host, "activeChildDestinationId") ?? string.Empty;
             var childDestinationIds = ReadStringArray(host, "childDestinationIds");
-            if (string.IsNullOrWhiteSpace(id)
+            var hasIncompleteHost = string.IsNullOrWhiteSpace(id)
                 || kind is null
                 || !SupportedNavigationHostKinds.Contains(kind)
                 || string.IsNullOrWhiteSpace(name)
                 || string.IsNullOrWhiteSpace(destinationId)
                 || string.IsNullOrWhiteSpace(activeChildDestinationId)
-                || childDestinationIds.Count < 2)
+                || childDestinationIds.Count == 0;
+            if (hasIncompleteHost)
             {
-                error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least two childDestinationIds.";
+                error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least one observed direct child.";
                 return false;
             }
             if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
@@ -214,6 +239,11 @@ public static class AppGraphExplorationSummaryValidator
                 error = $"Navigation host '{id}' does not include active child '{activeChildDestinationId}'.";
                 return false;
             }
+            if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
+                    technology, childDestinationIds, activeChildDestinationId, out error))
+            {
+                return false;
+            }
 
             foreach (var childDestinationId in childDestinationIds)
             {
@@ -243,16 +273,17 @@ public static class AppGraphExplorationSummaryValidator
                 return false;
             }
 
-            var id = ReadString(tabGroup, "id");
-            var parentDestinationId = ReadString(tabGroup, "parentDestinationId");
-            var selectedDestinationId = ReadString(tabGroup, "selectedDestinationId");
+            var id = ReadString(tabGroup, "id") ?? string.Empty;
+            var parentDestinationId = ReadString(tabGroup, "parentDestinationId") ?? string.Empty;
+            var selectedDestinationId = ReadString(tabGroup, "selectedDestinationId") ?? string.Empty;
             var tabDestinationIds = ReadStringArray(tabGroup, "tabDestinationIds");
-            if (string.IsNullOrWhiteSpace(id)
+            var hasIncompleteTabGroup = string.IsNullOrWhiteSpace(id)
                 || string.IsNullOrWhiteSpace(parentDestinationId)
                 || string.IsNullOrWhiteSpace(selectedDestinationId)
-                || tabDestinationIds.Count < 2)
+                || tabDestinationIds.Count == 0;
+            if (hasIncompleteTabGroup)
             {
-                error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least two tabDestinationIds.";
+                error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least one observed tabDestinationId.";
                 return false;
             }
             if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(

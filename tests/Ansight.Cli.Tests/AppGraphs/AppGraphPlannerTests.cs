@@ -5,6 +5,69 @@ namespace Ansight.Cli.Tests.AppGraphs;
 
 public sealed class AppGraphPlannerTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExplorationCompilerRetainsObservedOnlyTransitionsWithoutExecutableBindings(bool includeSelector)
+    {
+        var summary = JsonNode.Parse("""
+            {
+              "schema": "ansight.app-graph-exploration/v1",
+              "destinations": [
+                { "id": "home", "kind": "screen", "name": "Home", "synonyms": [], "purpose": "Start." },
+                { "id": "account", "kind": "screen", "name": "Account", "synonyms": [], "purpose": "View account." }
+              ],
+              "transitions": [{ "id": "account", "from": "home", "to": "account",
+                "action": { "automationId": "", "hasStableAutomationId": false, "semanticMeaning": "Open Account" },
+                "binding": { "mechanism": "ui_action", "configuration": { "action": "tap" } }
+              }]
+            }
+            """)!.AsObject();
+        if (includeSelector)
+            summary["transitions"]![0]!["action"]!["selector"] = new JsonObject { ["text"] = "Account", ["role"] = "text" };
+        var compiled = AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error);
+        Assert.Equal(includeSelector, compiled);
+        if (!includeSelector) { Assert.Contains("observed selector", error); return; }
+        Assert.Empty(candidate!.Definition["edges"]!.AsArray());
+        var observed = Assert.Single(candidate.Definition["observedTransitions"]!.AsArray());
+        Assert.False(observed!["action"]!["hasStableAutomationId"]!.GetValue<bool>());
+        Assert.Equal("Account", observed["action"]!["selector"]!["text"]!.GetValue<string>());
+        Assert.Empty(candidate.Evidence["bindingCandidates"]!.AsArray());
+        Assert.Single(candidate.Evidence["observedTransitions"]!.AsArray());
+        Assert.Equal(1, candidate.ElementActionCount);
+    }
+
+    [Theory]
+    [InlineData("back")]
+    [InlineData("pop")]
+    [InlineData("dismiss")]
+    public void ReturnTransitionsRemainContextualEvidence(string navigationKind)
+    {
+        var summary = JsonNode.Parse("""
+            {
+              "schema": "ansight.app-graph-exploration/v1",
+              "destinations": [
+                { "id": "guide", "kind": "screen", "name": "Guide", "purpose": "View guide" },
+                { "id": "home", "kind": "screen", "name": "Home", "purpose": "Browse" }
+              ],
+              "transitions": [{ "id": "return", "from": "guide", "to": "home",
+                "action": { "automationId": "custom-return", "semanticMeaning": "Return" },
+                "binding": { "mechanism": "ui_action", "configuration": { "action": "tap" } }
+              }]
+            }
+            """)!.AsObject();
+        summary["transitions"]![0]!["action"]!["navigationKind"] = navigationKind;
+        Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error), error);
+        Assert.Empty(candidate!.Definition["edges"]!.AsArray());
+        Assert.Empty(candidate.Evidence["bindingCandidates"]!.AsArray());
+        var observed = Assert.Single(candidate.Definition["observedTransitions"]!.AsArray());
+        Assert.Equal("screen_home", observed!["navigationContext"]!["returnDestinationId"]!.GetValue<string>());
+
+        summary["transitions"]![0]!["navigationContext"] = new JsonObject { ["returnDestinationId"] = "guide" };
+        Assert.False(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out _, out error));
+        Assert.Contains("return-navigation context", error);
+    }
+
     [Fact]
     public void ExplorationDefaultsUseLongRunningAgentBudgets()
     {
@@ -29,11 +92,15 @@ public sealed class AppGraphPlannerTests
         Assert.Contains("Exhaustively map every safely reachable destination", instruction, StringComparison.Ordinal);
         Assert.Contains("Use a breadth-first traversal", instruction, StringComparison.Ordinal);
         Assert.Contains("Scroll it in bounded increments", instruction, StringComparison.Ordinal);
-        Assert.Contains("App Graph exploration is semantic-only", instruction, StringComparison.Ordinal);
-        Assert.Contains("never request screenshot OCR or a rendered-screen content scan", instruction, StringComparison.Ordinal);
+        Assert.Contains("Start with device accessibility and native", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("MAUI", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain(".NET", instruction, StringComparison.Ordinal);
+        Assert.DoesNotContain("React Native", instruction, StringComparison.Ordinal);
+        Assert.Contains("OCR", instruction, StringComparison.Ordinal);
         Assert.Contains("never call it with only", instruction, StringComparison.Ordinal);
-        Assert.Contains("never exceed two scroll attempts", instruction, StringComparison.Ordinal);
-        Assert.Contains("at most two successful uses of the same stable automation ID", instruction, StringComparison.Ordinal);
+        Assert.Contains("Continue while fresh before/after evidence shows changed semantic content", instruction, StringComparison.Ordinal);
+        Assert.Contains("do not navigate away merely to reset a guard", instruction, StringComparison.Ordinal);
+        Assert.Contains("reusable navigation essentials", instruction, StringComparison.Ordinal);
         Assert.Contains("selector-free bounded viewport", instruction, StringComparison.Ordinal);
         Assert.Contains("focused semantic match", instruction, StringComparison.Ordinal);
         Assert.Contains("call report_app_graph_progress", instruction, StringComparison.Ordinal);
@@ -43,7 +110,7 @@ public sealed class AppGraphPlannerTests
         Assert.Contains("Graph 'Default' has no existing version", instruction, StringComparison.Ordinal);
         Assert.Contains("\"schema\":\"ansight.app-graph/v1\"", instruction, StringComparison.Ordinal);
         Assert.Contains("no safe unexplored branch remains", instruction, StringComparison.Ordinal);
-        Assert.Contains("Emit only transitions whose interacted element has an observed stable automation ID", instruction, StringComparison.Ordinal);
+        Assert.Contains("Collect and explore safe controls even when they lack stable automation IDs", instruction, StringComparison.Ordinal);
         Assert.Contains("human-facing app surface", instruction, StringComparison.Ordinal);
         Assert.Contains("do not discover or call repository tasks or arbitrary app-owned tools", instruction, StringComparison.Ordinal);
         Assert.Contains("call ansight_get_live_navigation_structure once", instruction, StringComparison.Ordinal);
@@ -280,6 +347,27 @@ public sealed class AppGraphPlannerTests
         var step = Assert.Single(plan.Steps);
         Assert.Equal("open", step.Edge.Id);
         Assert.Equal(["app_tool", "ui_action"], step.Bindings.Select(binding => binding.Mechanism));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PlannerDoesNotUseCallerDependentReturnAsUnconditionalRoute(bool explicitContext)
+    {
+        var detail = CreateDetail([CreateBinding("open", 0, "ui_action")]);
+        var edge = detail.Version.Definition["edges"]![0]!;
+        if (explicitContext)
+        {
+            edge["navigationContext"] = new JsonObject { ["returnDestinationId"] = "ready" };
+        }
+        else
+        {
+            edge["action"]!["navigationKind"] = "back";
+        }
+
+        var plan = AppGraphPlanner.Build(detail, "3D guide ready");
+        Assert.NotEmpty(plan.Errors);
+        Assert.Empty(plan.Steps);
     }
 
     [Fact]

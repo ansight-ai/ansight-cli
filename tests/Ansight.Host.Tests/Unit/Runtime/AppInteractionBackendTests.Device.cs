@@ -9,6 +9,59 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed partial class AppInteractionBackendTests
 {
     [Fact]
+    public async Task FreshOcrCaptureDoesNotReuseAnOlderRecordedFrame()
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var id = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
+        var path = Path.Combine(environment.RootPath, "fresh-ocr.png");
+        using var bitmap = new SKBitmap(30, 60);
+        bitmap.Erase(SKColors.Blue);
+        using var encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        var bytes = encoded.ToArray();
+        await File.WriteAllBytesAsync(path, bytes);
+        var oldFrame = await state.AddSessionEvidenceImageAsync(id, DateTimeOffset.UtcNow.AddMinutes(-1),
+            "png", 30, 60, 100, bytes);
+        var bridge = new ScreenshotBridge(id, path);
+        Assert.True(state.TryGetSessionSnapshot(id, out var snapshot));
+
+        var evidence = await LiveUiActionEvidence.CaptureScreenshotAsync(
+            state, environment.ApplicationPaths, bridge, snapshot!, "scan", "current",
+            "simulator-agent-test", default, afterScreenUpdates: true);
+
+        Assert.NotNull(evidence);
+        Assert.Equal(1, bridge.Captures);
+        Assert.NotEqual(oldFrame!.FrameId, evidence.Frame.FrameId);
+        Assert.True(evidence.Frame.CapturedAtUtc > oldFrame.CapturedAtUtc);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SdkActionEvidenceRequestsAFreshImageWhilePeriodicCaptureIsPaused(bool hostAvailable)
+    {
+        using var environment = new TestEnvironment();
+        var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
+        var id = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
+        var path = Path.Combine(environment.RootPath, "fresh.png");
+        using var bitmap = new SKBitmap(30, 60);
+        bitmap.Erase(SKColors.Blue);
+        using var encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        await File.WriteAllBytesAsync(path, encoded.ToArray());
+        var bridge = new ScreenshotBridge(id, path, strictSettling: false);
+        var screenshots = new StaticScreenshots { Paused = true, Available = hostAvailable };
+        Assert.True(state.TryGetSessionSnapshot(id, out var snapshot));
+        var evidence = await Ansight.Host.Runtime.Operations.Tools.UiAutomation.LiveUiActionEvidence.CaptureScreenshotAsync(
+            state, environment.ApplicationPaths, bridge, snapshot!, "action", "after", "simulator-agent-test",
+            default, externalScreenshots: screenshots);
+        Assert.NotNull(evidence);
+        Assert.Equal(1, screenshots.Captures);
+        Assert.Equal(hostAvailable ? 0 : 1, bridge.Captures);
+        Assert.True(state.TryGetSessionSnapshot(id, out snapshot));
+        Assert.Single(snapshot!.Images);
+    }
+
+    [Fact]
     public async Task DeviceModeCapturesAndTapsWithDisconnectedSdkAndExportsEvidence()
     {
         using var environment = new TestEnvironment();
@@ -100,11 +153,14 @@ public sealed partial class AppInteractionBackendTests
     }
     private sealed class StaticScreenshots : IExternalSessionScreenshotCaptureManager
     {
+        public bool Paused { get; init; }
+        public bool Available { get; init; } = true;
         public int Captures { get; private set; }
         public event EventHandler<ExternalSessionScreenshotCaptureFailedEventArgs>? CaptureFailed { add { } remove { } }
         public Task<byte[]?> CaptureFrameAsync(string sessionId, CancellationToken cancellationToken)
         {
             Captures++;
+            if (!Available) return Task.FromResult<byte[]?>(null);
             using var bitmap = new SKBitmap(30, 60);
             bitmap.Erase(SKColors.White);
             using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
@@ -114,6 +170,9 @@ public sealed partial class AppInteractionBackendTests
             string? profileJson, ExternalSessionScreenshotCaptureRequest request, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public IDisposable BeginTestRun(string sessionId) => throw new NotSupportedException();
+        public IDisposable SuspendPeriodicCapture(string sessionId) => throw new NotSupportedException();
+        public bool IsPeriodicCaptureSuspended(string sessionId) => Paused;
+        public event EventHandler<string>? PeriodicCaptureChanged { add { } remove { } }
         public void SetInterval(string sessionId, int intervalMilliseconds) => throw new NotSupportedException();
         public Task StopAsync(string sessionId, string reason) => Task.CompletedTask;
     }

@@ -11,4 +11,7 @@ internal sealed record AppGraphResumeState(
     IReadOnlyList<SimulatorAgentAppGraphLiveEdge> Edges,
     IReadOnlyList<SimulatorAgentAppGraphLiveNavigationHost> NavigationHosts,
     IReadOnlyList<SimulatorAgentAppGraphLiveTabGroup> TabGroups,
-    IReadOnlyList<SimulatorAgentAppGraphLiveAction> Actions);
+    IReadOnlyList<SimulatorAgentAppGraphLiveAction> Actions)
+{
+    public SimulatorAgentAppGraphPendingOutcome? PendingOutcome { get; init; }
+}

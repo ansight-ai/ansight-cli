@@ -88,20 +88,23 @@ internal static class LiveUiActionEvidence
         bool afterScreenUpdates = false,
         IExternalSessionScreenshotCaptureManager? externalScreenshots = null)
     {
-        if (session.CaptureSource == WorkspaceExecutionModes.Device)
+        if (session.CaptureSource == WorkspaceExecutionModes.Device
+            || externalScreenshots?.IsPeriodicCaptureSuspended(session.SessionId) == true)
         {
             var screenshot = await ReadExternalScreenshotAsync(externalScreenshots, session, 1024, cancellationToken).ConfigureAwait(false);
-            return screenshot is null ? null
-                : await PersistAppScreenshotAsync(runtimeState, session, screenshot, applicationPaths).ConfigureAwait(false);
+            if (screenshot is not null)
+                return await PersistAppScreenshotAsync(runtimeState, session, screenshot, applicationPaths).ConfigureAwait(false);
+            if (session.CaptureSource == WorkspaceExecutionModes.Device) return null;
         }
         if (RunRequestContext.IsTestRunCorrelationId(correlationId)
-            && UsesHostManagedTestCapture(session))
+            && UsesHostManagedTestCapture(session)
+            && externalScreenshots?.IsPeriodicCaptureSuspended(session.SessionId) != true)
         {
             var managedScreenshot = await ResolveHostManagedScreenshotAsync(
                 runtimeState,
                 applicationPaths,
                 session,
-                waitForFreshFrame: string.Equals(phase, "after", StringComparison.Ordinal),
+                waitForFreshFrame: afterScreenUpdates || string.Equals(phase, "after", StringComparison.Ordinal),
                 cancellationToken);
             if (managedScreenshot is not null)
             {
@@ -318,20 +321,37 @@ internal static class LiveUiEvidenceCapture
         int settleMilliseconds = 200,
         CancellationToken cancellationToken = default,
         bool captureScreenshot = true,
-        IExternalSessionScreenshotCaptureManager? externalScreenshots = null)
+        IExternalSessionScreenshotCaptureManager? externalScreenshots = null,
+        LiveUiSelector? scrollSelector = null)
     {
         if (settleMilliseconds > 0)
         {
             await Task.Delay(settleMilliseconds, cancellationToken);
         }
 
-        var captureResult = await LiveUiTreeCapture.CaptureAsync(
-            beforeCapture.Session,
-            appToolBridge,
-            uiInputRouter,
-            toolName,
-            correlationId,
-            cancellationToken);
+        var captureResult = scrollSelector is null
+            ? await LiveUiTreeCapture.CaptureAsync(
+                beforeCapture.Session,
+                appToolBridge,
+                uiInputRouter,
+                toolName,
+                correlationId,
+                cancellationToken)
+            : await LiveUiTreeCapture.CaptureForSelectorAsync(
+                beforeCapture.Session, appToolBridge, uiInputRouter, toolName, correlationId,
+                scrollSelector, cancellationToken, allowCached: false, targetSource: beforeCapture.ToolId);
+        var scrollSettled = true;
+        if (scrollSelector is not null && captureResult.IsSuccess)
+        {
+            var settled = await LiveUiScrollSettlement.CaptureAsync(captureResult, scrollSelector,
+                token => LiveUiTreeCapture.CaptureForSelectorAsync(
+                    beforeCapture.Session, appToolBridge, uiInputRouter, toolName, correlationId,
+                    scrollSelector, token, allowCached: false, targetSource: beforeCapture.ToolId),
+                cancellationToken).ConfigureAwait(false);
+            captureResult = settled.Result;
+            scrollSettled = settled.IsSettled;
+        }
+
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return new AfterActionCapture(
@@ -357,7 +377,7 @@ internal static class LiveUiEvidenceCapture
             correlationId,
             cancellationToken,
             captureScreenshot, externalScreenshots);
-        return new AfterActionCapture(evidence, captureResult.Capture);
+        return new AfterActionCapture(evidence, captureResult.Capture) { ScrollSettled = scrollSettled };
     }
 }
 
@@ -374,4 +394,7 @@ internal sealed record ActionEvidenceCapture(
 
 internal sealed record AfterActionCapture(
     ActionEvidenceCapture Evidence,
-    LiveUiTreeCapture? Capture);
+    LiveUiTreeCapture? Capture)
+{
+    public bool ScrollSettled { get; init; } = true;
+}

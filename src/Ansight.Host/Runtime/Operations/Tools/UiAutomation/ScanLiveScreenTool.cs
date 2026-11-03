@@ -61,7 +61,7 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
             "scan-live-screen",
             "current",
             correlationId,
-            CancellationToken.None, externalScreenshots: externalScreenshots);
+            CancellationToken.None, afterScreenUpdates: true, externalScreenshots: externalScreenshots);
         if (screenshot is null || !File.Exists(screenshot.ArtifactPath))
         {
             return ToolError("A current rendered screenshot was unavailable for screen-content scanning.");
@@ -105,9 +105,9 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
         var textCounts = eligibleBlocks
             .GroupBy(block => block.Text.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var selection = LiveUiScreenTextSelection.Select(eligibleBlocks, bitmap.Height, limit);
         var visibleContent = new JsonArray(
-            eligibleBlocks
-                .Take(limit)
+            selection.Blocks
                 .Select(block => (JsonNode?)ToJson(
                     block,
                     bitmap.Width,
@@ -135,9 +135,11 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
                 ["screenHeight"] = bitmap.Height,
                 ["content"] = visibleContent,
                 ["count"] = visibleContent.Count,
-                ["totalCount"] = eligibleBlocks.Length,
-                ["truncated"] = eligibleBlocks.Length > visibleContent.Count,
-                ["warning"] = "Screen text is current-pixel evidence only. Tap hints expire after any layout change and do not substitute for stable automation IDs in reusable graph transitions.",
+                ["totalCount"] = selection.TotalCount,
+                ["rawBlockCount"] = selection.RawCount,
+                ["truncated"] = selection.TotalCount > visibleContent.Count,
+                ["selection"] = "overlapping text compacted; bounded results distributed across screen height",
+                ["warning"] = "Screen text may include background content behind a sheet. Missing or truncated text cannot prove that a foreground overlay is absent. Tap hints expire after any layout change and do not substitute for stable automation IDs in reusable graph transitions.",
                 [LiveUiOcrTraceEvidence.PayloadPropertyName] = traceEvidence
             },
             isError: false);

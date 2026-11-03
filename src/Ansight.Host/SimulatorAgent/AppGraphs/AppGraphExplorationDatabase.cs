@@ -65,32 +65,30 @@ internal sealed class AppGraphExplorationDatabase
                 EnsureDatabase();
                 using var connection = OpenConnection();
                 using var command = connection.CreateCommand();
-                var appFilter = string.IsNullOrWhiteSpace(appId)
-                    ? string.Empty
-                    : "AND app_id = $app_id";
+                var hasAppId = !string.IsNullOrWhiteSpace(appId);
+                var scopeFilter = hasAppId ? "app_id = $app_id" : "session_id = $session_id";
                 command.CommandText = $"""
-                    SELECT run_id, status
+                    SELECT run_id, status, pending_outcome_json
                     FROM app_graph_runs
-                    WHERE session_id = $session_id
+                    WHERE {scopeFilter}
                       AND graph_name = $graph_name
-                      {appFilter}
                     ORDER BY updated_utc DESC
                     LIMIT 1;
                     """;
-                command.Parameters.AddWithValue("$session_id", sessionId.Trim());
                 command.Parameters.AddWithValue("$graph_name", graphName.Trim());
-                if (appFilter.Length > 0)
-                {
-                    command.Parameters.AddWithValue("$app_id", appId!.Trim());
-                }
+                command.Parameters.AddWithValue(hasAppId ? "$app_id" : "$session_id",
+                    hasAppId ? appId!.Trim() : sessionId.Trim());
 
                 string? runId = null;
+                SimulatorAgentAppGraphPendingOutcome? pendingOutcome = null;
                 using (var reader = command.ExecuteReader())
                 {
                     if (reader.Read()
                         && !string.Equals(reader.GetString(1), "succeeded", StringComparison.Ordinal))
                     {
                         runId = reader.GetString(0);
+                        pendingOutcome = reader.IsDBNull(2) ? null
+                            : JsonSerializer.Deserialize<SimulatorAgentAppGraphPendingOutcome>(reader.GetString(2));
                     }
                 }
 
@@ -102,7 +100,7 @@ internal sealed class AppGraphExplorationDatabase
                         ReadEdges(connection, runId),
                         ReadNavigationHosts(connection, runId),
                         ReadTabGroups(connection, runId),
-                        ReadActions(connection, runId));
+                        ReadActions(connection, runId)) { PendingOutcome = pendingOutcome };
             }
             catch (Exception exception) when (exception is SqliteException
                                                or IOException
@@ -227,6 +225,13 @@ internal sealed class AppGraphExplorationDatabase
                 ON app_graph_action_candidates(run_id, status, source_node_id);
             """;
         command.ExecuteNonQuery();
+        EnsureColumn(connection, "app_graph_runs", "pending_outcome_json", "TEXT NULL");
+        EnsureColumn(connection, "app_graph_action_candidates", "navigation_kind", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumn(connection, "app_graph_action_candidates", "recheck_attempt_baseline", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(connection, "app_graph_action_candidates", "last_recheck_reason", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumn(connection, "app_graph_edges", "selector_json", "TEXT NOT NULL DEFAULT '{}'");
+        EnsureColumn(connection, "app_graph_edges", "navigation_kind", "TEXT NOT NULL DEFAULT ''");
+        EnsureColumn(connection, "app_graph_edges", "return_destination_id", "TEXT NULL");
         EnsureColumn(
             connection,
             "app_graph_navigation_hosts",
@@ -287,12 +292,12 @@ internal sealed class AppGraphExplorationDatabase
                 run_id, session_id, app_id, graph_name, status, message,
                 current_destination_id, turn, safe_actions_observed, actions_explored,
                 scroll_containers_observed, scroll_containers_completed,
-                started_utc, updated_utc, completed_utc)
+                started_utc, updated_utc, completed_utc, pending_outcome_json)
             VALUES (
                 $run_id, $session_id, $app_id, $graph_name, $status, $message,
                 $current_destination_id, $turn, $safe_actions_observed, $actions_explored,
                 $scroll_containers_observed, $scroll_containers_completed,
-                $started_utc, $updated_utc, $completed_utc)
+                $started_utc, $updated_utc, $completed_utc, $pending_outcome_json)
             ON CONFLICT(run_id) DO UPDATE SET
                 session_id = excluded.session_id,
                 app_id = excluded.app_id,
@@ -306,8 +311,11 @@ internal sealed class AppGraphExplorationDatabase
                 scroll_containers_observed = excluded.scroll_containers_observed,
                 scroll_containers_completed = excluded.scroll_containers_completed,
                 updated_utc = excluded.updated_utc,
-                completed_utc = excluded.completed_utc;
+                completed_utc = excluded.completed_utc,
+                pending_outcome_json = excluded.pending_outcome_json;
             """;
+        command.Parameters.AddWithValue("$pending_outcome_json", run.PendingOutcome is null
+            ? DBNull.Value : JsonSerializer.Serialize(run.PendingOutcome));
         command.Parameters.AddWithValue("$run_id", run.RunId);
         command.Parameters.AddWithValue("$session_id", run.SessionId);
         command.Parameters.AddWithValue("$app_id", (object?)run.AppId ?? DBNull.Value);
@@ -384,13 +392,19 @@ internal sealed class AppGraphExplorationDatabase
             command.CommandText = """
                 INSERT INTO app_graph_edges (
                     run_id, edge_id, source_node_id, destination_node_id, automation_id,
-                    semantic_meaning, confidence, first_observed_utc, updated_utc)
+                    semantic_meaning, confidence, first_observed_utc, updated_utc, selector_json,
+                    navigation_kind, return_destination_id)
                 VALUES (
                     $run_id, $edge_id, $source_node_id, $destination_node_id, $automation_id,
-                    $semantic_meaning, $confidence, $first_observed_utc, $updated_utc);
+                    $semantic_meaning, $confidence, $first_observed_utc, $updated_utc, $selector_json,
+                    $navigation_kind, $return_destination_id);
                 """;
             command.Parameters.AddWithValue("$run_id", run.RunId);
             command.Parameters.AddWithValue("$edge_id", edge.Id);
+            command.Parameters.AddWithValue("$selector_json", (edge.Selector ?? new JsonObject()).ToJsonString());
+            command.Parameters.AddWithValue("$navigation_kind", edge.NavigationKind);
+            command.Parameters.AddWithValue("$return_destination_id",
+                (object?)edge.NavigationContext?.ReturnDestinationId ?? DBNull.Value);
             command.Parameters.AddWithValue("$source_node_id", edge.From);
             command.Parameters.AddWithValue("$destination_node_id", edge.To);
             command.Parameters.AddWithValue("$automation_id", edge.AutomationId);
@@ -416,14 +430,17 @@ internal sealed class AppGraphExplorationDatabase
                 INSERT INTO app_graph_action_candidates (
                     run_id, action_id, source_node_id, tool_name, automation_id, selector_json,
                     semantic_meaning, status, attempt_count, last_outcome, result_node_id,
-                    first_observed_utc, updated_utc)
+                    first_observed_utc, updated_utc, navigation_kind, recheck_attempt_baseline, last_recheck_reason)
                 VALUES (
                     $run_id, $action_id, $source_node_id, $tool_name, $automation_id, $selector_json,
                     $semantic_meaning, $status, $attempt_count, $last_outcome, $result_node_id,
-                    $first_observed_utc, $updated_utc);
+                    $first_observed_utc, $updated_utc, $navigation_kind, $recheck_attempt_baseline, $last_recheck_reason);
                 """;
             command.Parameters.AddWithValue("$run_id", run.RunId);
             command.Parameters.AddWithValue("$action_id", action.Id);
+            command.Parameters.AddWithValue("$navigation_kind", action.NavigationKind);
+            command.Parameters.AddWithValue("$recheck_attempt_baseline", action.RecheckAttemptBaseline);
+            command.Parameters.AddWithValue("$last_recheck_reason", action.LastRecheckReason);
             command.Parameters.AddWithValue("$source_node_id", action.DestinationId);
             command.Parameters.AddWithValue("$tool_name", action.ToolName);
             command.Parameters.AddWithValue("$automation_id", action.AutomationId);
@@ -576,7 +593,8 @@ internal sealed class AppGraphExplorationDatabase
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT edge_id, source_node_id, destination_node_id, automation_id,
-                   semantic_meaning, confidence, first_observed_utc, updated_utc
+                   semantic_meaning, confidence, first_observed_utc, updated_utc, selector_json,
+                   navigation_kind, return_destination_id
             FROM app_graph_edges
             WHERE run_id = $run_id
             ORDER BY first_observed_utc, edge_id;
@@ -594,7 +612,10 @@ internal sealed class AppGraphExplorationDatabase
                 reader.GetString(4),
                 Convert.ToDecimal(reader.GetDouble(5)),
                 DateTimeOffset.Parse(reader.GetString(6)),
-                DateTimeOffset.Parse(reader.GetString(7))));
+                DateTimeOffset.Parse(reader.GetString(7)),
+                JsonNode.Parse(reader.GetString(8)) as JsonObject,
+                reader.GetString(9),
+                reader.IsDBNull(10) ? null : new SimulatorAgentAppGraphNavigationContext(reader.GetString(10))));
         }
         return edges;
     }
@@ -676,7 +697,7 @@ internal sealed class AppGraphExplorationDatabase
         command.CommandText = """
             SELECT action_id, source_node_id, tool_name, automation_id, selector_json,
                    semantic_meaning, status, attempt_count, last_outcome, result_node_id,
-                   first_observed_utc, updated_utc
+                   first_observed_utc, updated_utc, navigation_kind, recheck_attempt_baseline, last_recheck_reason
             FROM app_graph_action_candidates
             WHERE run_id = $run_id
             ORDER BY first_observed_utc, action_id;
@@ -698,7 +719,12 @@ internal sealed class AppGraphExplorationDatabase
                 reader.GetString(8),
                 reader.IsDBNull(9) ? null : reader.GetString(9),
                 DateTimeOffset.Parse(reader.GetString(10)),
-                DateTimeOffset.Parse(reader.GetString(11))));
+                DateTimeOffset.Parse(reader.GetString(11)),
+                reader.GetString(12))
+            {
+                RecheckAttemptBaseline = reader.GetInt32(13),
+                LastRecheckReason = reader.GetString(14)
+            });
         }
         return actions;
     }
