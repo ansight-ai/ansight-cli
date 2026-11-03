@@ -26,7 +26,7 @@ developer or agent. The recording is already there when you need it.
 ### Live capture
 
 Workspace tests and app executions retain a continuous MP4 recording by default; use `--no-video` to opt out. See
-[execution video recording](docs/test-video-recording.md) for CLI flags and saved configuration
+[execution video recording](https://www.ansight.ai/docs/local-player/execution-video-recording) for CLI flags and saved configuration
 and supported targets.
 
 <p align="center">
