@@ -15,6 +15,7 @@ internal sealed class TestVideoCapture
     private Task<TestVideoResult>? completion;
     private Task<TestVideoRecordingCompletion>? stopping;
     private ISessionVideoTranscoder? transcoder;
+    private IDisposable? periodicScreenshotSuspension;
 
     private TestVideoCapture(string runId, string sessionId, string? deviceIdentifier,
         TestVideoOptions options, Func<SessionVideoRecording, string, OperationResult> saveRecording)
@@ -30,7 +31,8 @@ internal sealed class TestVideoCapture
     internal static async Task<TestVideoCapture> StartAsync(string runId, string sessionId,
         string? deviceIdentifier, string platform, bool isVirtual, TestVideoOptions options,
         ITestVideoRecorder recorder, Func<SessionVideoRecording, string, OperationResult> saveRecording,
-        CancellationToken cancellationToken, ISessionVideoTranscoder? transcoder = null)
+        CancellationToken cancellationToken, ISessionVideoTranscoder? transcoder = null,
+        Func<IDisposable?>? suspendPeriodicScreenshots = null)
     {
         var capture = new TestVideoCapture(runId, sessionId, deviceIdentifier, options, saveRecording);
         capture.transcoder = transcoder;
@@ -42,14 +44,19 @@ internal sealed class TestVideoCapture
             capture.recording = await recorder.StartAsync(new(platform, deviceIdentifier, isVirtual, capture.videoPath),
                 cancellationToken).ConfigureAwait(false);
             capture.result = capture.result with { Source = capture.recording.Source, Status = "recording", StartedUtc = DateTimeOffset.UtcNow };
+            capture.periodicScreenshotSuspension = suspendPeriodicScreenshots?.Invoke();
+            _ = capture.ResumeScreenshotsOnExitAsync(capture.recording);
         }
         catch (OperationCanceledException)
         {
+            await capture.StopAsync().ConfigureAwait(false);
             capture.DeleteWorkingFiles();
             throw;
         }
         catch (Exception exception)
         {
+            await capture.StopAsync().ConfigureAwait(false);
+            capture.recording = null;
             capture.result = capture.result with
             {
                 Status = exception is NotSupportedException ? "unsupported" : "failed",
@@ -58,6 +65,15 @@ internal sealed class TestVideoCapture
         }
         return capture;
     }
+
+    private async Task ResumeScreenshotsOnExitAsync(ITestVideoRecording activeRecording)
+    {
+        try { await activeRecording.Completion.ConfigureAwait(false); }
+        finally { ResumePeriodicScreenshots(); }
+    }
+
+    private void ResumePeriodicScreenshots()
+        => Interlocked.Exchange(ref periodicScreenshotSuspension, null)?.Dispose();
 
     public Task<TestVideoResult> CompleteAsync(bool testPassed)
     {
@@ -83,6 +99,7 @@ internal sealed class TestVideoCapture
         }
         finally
         {
+            ResumePeriodicScreenshots();
             result = result with { CompletedUtc = DateTimeOffset.UtcNow };
         }
     }

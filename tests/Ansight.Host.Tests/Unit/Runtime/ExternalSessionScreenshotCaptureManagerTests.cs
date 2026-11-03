@@ -8,6 +8,94 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed class ExternalSessionScreenshotCaptureManagerTests
 {
     [Fact]
+    public async Task VideoSuspendsPeriodicCaptureButAllowsDirectFramesAndNestedRuns()
+    {
+        using var context = new CaptureTestContext();
+        var calls = 0;
+        context.Manager.ConfigurePhysicalIosCapture((_, _, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(context.Bytes);
+        });
+        try
+        {
+            await context.AttachAsync();
+            using var first = context.Manager.SuspendPeriodicCapture(context.SessionId);
+            using var second = context.Manager.SuspendPeriodicCapture(context.SessionId);
+            using var test = context.Manager.BeginTestRun(context.SessionId);
+            context.Manager.SetInterval(context.SessionId, 100);
+            await Task.Delay(500);
+            Assert.Equal(1, Volatile.Read(ref calls));
+            Assert.Equal(context.Bytes, await context.Manager.CaptureFrameAsync(context.SessionId, default));
+            Assert.Equal(2, Volatile.Read(ref calls));
+            first.Dispose();
+            first.Dispose();
+            Assert.True(context.Manager.IsPeriodicCaptureSuspended(context.SessionId));
+            await Task.Delay(500);
+            Assert.Equal(2, Volatile.Read(ref calls));
+            second.Dispose();
+            Assert.False(context.Manager.IsPeriodicCaptureSuspended(context.SessionId));
+            await TestWait.UntilAsync(() => Volatile.Read(ref calls) > 2);
+        }
+        finally { await context.Manager.StopAsync(context.SessionId, "test complete"); }
+    }
+
+    [Fact]
+    public async Task VideoSuspensionSurvivesCaptureReattachment()
+    {
+        using var context = new CaptureTestContext();
+        var calls = 0;
+        context.Manager.ConfigurePhysicalIosCapture((_, _, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(context.Bytes);
+        });
+        using var video = context.Manager.SuspendPeriodicCapture(context.SessionId);
+        try
+        {
+            await context.AttachAsync(100);
+            await context.AttachAsync(100);
+            await Task.Delay(350);
+            Assert.Equal(2, Volatile.Read(ref calls)); // Availability probes only.
+            Assert.Empty(context.Snapshot.Images);
+            video.Dispose();
+            await TestWait.UntilAsync(() => context.Snapshot.Images.Count > 0);
+        }
+        finally { await context.Manager.StopAsync(context.SessionId, "test complete"); }
+    }
+
+    [Fact]
+    public async Task FrameAlreadyInFlightIsNotRetainedDuringVideo()
+    {
+        using var context = new CaptureTestContext();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        context.Manager.ConfigurePhysicalIosCapture(async (_, _, _) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) return context.Bytes;
+            started.TrySetResult();
+            await release.Task;
+            return context.ChangedBytes;
+        });
+        try
+        {
+            await context.AttachAsync(100);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            using var video = context.Manager.SuspendPeriodicCapture(context.SessionId);
+            release.TrySetResult();
+            await Task.Delay(350);
+            Assert.Single(context.Snapshot.Images);
+            Assert.Equal(2, Volatile.Read(ref calls));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await context.Manager.StopAsync(context.SessionId, "test complete");
+        }
+    }
+
+    [Fact]
     public async Task OverlappingAttachmentsCannotLeaveAnUntrackedCaptureRunning()
     {
         using var context = new CaptureTestContext();

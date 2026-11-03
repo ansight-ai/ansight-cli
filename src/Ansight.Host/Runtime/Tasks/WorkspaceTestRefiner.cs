@@ -139,10 +139,10 @@ public static class WorkspaceTestRefiner
             ["type"] = "input_text",
             ["text"] = prompt
         });
-        var screenshotCount = ReplayExtractionEvidence.AppendScreenshots(runtime, snapshot, startUtc, endUtc,
+        var screenshotCount = await ReplayExtractionEvidence.AppendScreenshotsAsync(runtime, snapshot, startUtc, endUtc,
             sections.Select(static section => section.EndUtc).Where(static end => end.HasValue).Select(static end => end!.Value),
-            content);
-        reportProgress?.Invoke($"Added {screenshotCount} screenshot(s) to the AI request.");
+            content, cancellationToken).ConfigureAwait(false);
+        reportProgress?.Invoke($"Added {screenshotCount} visual frame(s) to the AI request.");
         var input = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
         var stopwatch = Stopwatch.StartNew();
         OpenAiTurn? turn = null;

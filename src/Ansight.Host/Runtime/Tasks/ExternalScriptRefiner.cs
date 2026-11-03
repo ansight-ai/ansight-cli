@@ -90,8 +90,8 @@ public static class ExternalScriptRefiner
             var sectionEnds = snapshot.Annotations
                 .Where(annotation => annotation.StartUtc >= startUtc && annotation.EndUtc <= endUtc)
                 .Select(annotation => annotation.EndUtc).OfType<DateTimeOffset>();
-            var screenshotCount = ReplayExtractionEvidence.AppendScreenshots(runtime, snapshot, startUtc, endUtc, sectionEnds, content);
-            reportProgress?.Invoke($"Added {screenshotCount} screenshot(s) to the AI request.");
+            var screenshotCount = await ReplayExtractionEvidence.AppendScreenshotsAsync(runtime, snapshot, startUtc, endUtc, sectionEnds, content, cancellationToken).ConfigureAwait(false);
+            reportProgress?.Invoke($"Added {screenshotCount} visual frame(s) to the AI request.");
             var input = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
             using var client = new OpenAiResponsesClient();
             for (var attempt = 1; attempt <= MaximumAttempts; attempt++)

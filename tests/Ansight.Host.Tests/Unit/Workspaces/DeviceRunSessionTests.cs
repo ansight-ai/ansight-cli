@@ -94,6 +94,9 @@ public sealed class DeviceRunSessionTests
             string? profileJson, ExternalSessionScreenshotCaptureRequest captureRequest, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public IDisposable BeginTestRun(string sessionId) => throw new NotSupportedException();
+        public IDisposable SuspendPeriodicCapture(string sessionId) => throw new NotSupportedException();
+        public bool IsPeriodicCaptureSuspended(string sessionId) => false;
+        public event EventHandler<string>? PeriodicCaptureChanged { add { } remove { } }
         public void SetInterval(string sessionId, int intervalMilliseconds) => throw new NotSupportedException();
         public Task StopAsync(string sessionId, string reason)
         {

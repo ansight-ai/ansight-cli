@@ -6,6 +6,56 @@ namespace Ansight.Host.Tests.Unit.Workspaces;
 
 public sealed class TestVideoCaptureTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResumesScreenshotsOnNormalStopOrUnexpectedRecorderExit(bool unexpected)
+    {
+        var recorder = new FakeTestVideoRecorder();
+        var scope = new CaptureScope();
+        var capture = await TestVideoCapture.StartAsync("run", "session", "device", "android", true,
+            new("always"), recorder, (_, _) =>
+            {
+                Assert.Equal(1, scope.Disposals);
+                return OperationResult.Success("Saved");
+            }, default, suspendPeriodicScreenshots: () => scope);
+        Assert.Equal(0, scope.Disposals);
+        if (unexpected)
+        {
+            recorder.ExitUnexpectedly();
+            await TestWait.UntilAsync(() => scope.Disposals == 1);
+        }
+        else await capture.StopAsync();
+        Assert.Equal(1, scope.Disposals);
+        await capture.CompleteAsync(true);
+        Assert.Equal(1, scope.Disposals);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedOrCancelledStartupDoesNotSuspendScreenshots(bool cancelled)
+    {
+        var recorder = new FakeTestVideoRecorder
+        {
+            StartError = cancelled ? new OperationCanceledException() : new IOException("Recorder unavailable")
+        };
+        var pauses = 0;
+        var starting = TestVideoCapture.StartAsync("run", "session", "device", "android", true,
+            new("always"), recorder, (_, _) => OperationResult.Success("Saved"), default,
+            suspendPeriodicScreenshots: () => { pauses++; return new CaptureScope(); });
+        if (cancelled) await Assert.ThrowsAsync<OperationCanceledException>(() => starting);
+        else Assert.Equal("failed", (await (await starting).CompleteAsync(false)).Status);
+        Assert.Equal(0, pauses);
+    }
+
+    private sealed class CaptureScope : IDisposable
+    {
+        private int disposals;
+        public int Disposals => Volatile.Read(ref disposals);
+        public void Dispose() => Interlocked.Increment(ref disposals);
+    }
+
     [Fact]
     public void OmittedVideoSettingsDefaultToAlways()
     {
@@ -117,6 +167,7 @@ public sealed class TestVideoCaptureTests
         var start = Shell("trap 'exit 0' INT; echo 'Recording started'; while :; do sleep 0.02; done");
         var recording = await NativeTestVideoRecording.StartAsync(start, "fixture", CancellationToken.None);
         var result = await recording.StopAsync();
+        await recording.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(result.IsComplete, result.Error);
         Assert.Equal(result, await recording.StopAsync());
     }

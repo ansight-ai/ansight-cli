@@ -17,7 +17,8 @@ public sealed partial class WorkspaceTestService
             DeviceKinds.IsVirtual(target?.DeviceKind) || device?.IsVirtual == true || device?.IsEmulator == true,
             options, videoRecorder,
             (recording, path) => runtime.SessionEditing.AddVideoRecording(session.SessionId, recording, path),
-            cancellationToken, runtime.SessionVideoTranscoder).ConfigureAwait(false);
+            cancellationToken, runtime.SessionVideoTranscoder,
+            () => runtime.SuspendPeriodicScreenshots(session.SessionId)).ConfigureAwait(false);
     }
 
     private async Task<WorkspaceTestRunResult> CompleteTestVideoAsync(TestVideoCapture? capture,

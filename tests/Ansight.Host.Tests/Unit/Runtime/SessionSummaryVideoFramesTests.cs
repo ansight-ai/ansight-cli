@@ -11,6 +11,34 @@ public sealed class SessionSummaryVideoFramesTests
     private static readonly DateTimeOffset start = DateTimeOffset.Parse("2026-10-25T00:00:00Z");
 
     [Fact]
+    public async Task ReplayTestExtractionReadsVideoWithoutStoredScreenshotsAndCleansUpFrames()
+    {
+        using var fixture = new Fixture();
+        var snapshot = Snapshot();
+        fixture.WriteVideo(snapshot);
+        var content = new JsonArray();
+        var count = await ReplayExtractionEvidence.AppendScreenshotsAsync(fixture.Runtime, snapshot,
+            start, start.AddSeconds(10), [start.AddSeconds(3)], content, default);
+        Assert.InRange(count, 1, 6);
+        Assert.Equal(count, content.Count(item => item?["type"]?.GetValue<string>() == "input_image"));
+        Assert.Contains(content, item => item?["text"]?.GetValue<string>()?.StartsWith("Replay video") == true);
+        Assert.All(fixture.Extractor.Sources, source => Assert.EndsWith(".mp4", source));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(fixture.Extractor.Output!)));
+    }
+
+    [Fact]
+    public async Task ReplayTestExtractionCleansUpAfterDecoderFailure()
+    {
+        using var fixture = new Fixture();
+        var snapshot = Snapshot();
+        fixture.WriteVideo(snapshot);
+        fixture.Extractor.Fail = true;
+        await Assert.ThrowsAsync<IOException>(() => ReplayExtractionEvidence.AppendScreenshotsAsync(
+            fixture.Runtime, snapshot, start, start.AddSeconds(10), [], new JsonArray(), default));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(fixture.Extractor.Output!)));
+    }
+
+    [Fact]
     public void SelectsInitialFinalErrorAndNavigationFramesWithinTheModelBudget()
     {
         var snapshot = Snapshot(events:
@@ -143,7 +171,10 @@ public sealed class SessionSummaryVideoFramesTests
         {
             Sources.Add(videoPath);
             Output = imagePath;
-            await File.WriteAllBytesAsync(imagePath, [1, 2, 3], token);
+            using var bitmap = new SKBitmap(10, 10);
+            bitmap.Erase(SKColors.Red);
+            using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 80);
+            await File.WriteAllBytesAsync(imagePath, data.ToArray(), token);
             if (Fail) throw new IOException("Decoder failed.");
         }
     }

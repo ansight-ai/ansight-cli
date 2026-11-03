@@ -46,6 +46,8 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     private Task? maintenanceTask;
     private bool disposed;
     private bool started;
+    internal IDisposable? SuspendPeriodicScreenshots(string sessionId)
+        => externalScreenshotCaptures?.SuspendPeriodicCapture(sessionId);
     private string[] startupWarnings = [];
 
     public RuntimeCoordinator()

@@ -63,6 +63,8 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         if (this.externalSessionScreenshotCaptureManager is not null)
         {
             this.externalSessionScreenshotCaptureManager.CaptureFailed += ExternalSessionScreenshotCaptureManagerOnCaptureFailed;
+            this.externalSessionScreenshotCaptureManager.PeriodicCaptureChanged += (_, sessionId) =>
+                UpdatePeriodicScreenshotPolicyAsync(sessionId).SafeFireAndForget();
         }
     }
 

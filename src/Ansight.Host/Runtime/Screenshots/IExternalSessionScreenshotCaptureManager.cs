@@ -18,6 +18,12 @@ internal interface IExternalSessionScreenshotCaptureManager
 
     IDisposable BeginTestRun(string sessionId);
 
+    IDisposable SuspendPeriodicCapture(string sessionId);
+
+    bool IsPeriodicCaptureSuspended(string sessionId);
+
+    event EventHandler<string>? PeriodicCaptureChanged;
+
     void SetInterval(string sessionId, int intervalMilliseconds);
 
     Task StopAsync(string sessionId, string reason);

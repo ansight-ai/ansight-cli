@@ -53,11 +53,13 @@ internal sealed class NativeTestVideoRecording : ITestVideoRecording
 {
     private readonly Process process;
     private readonly TaskCompletionSource ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Lock gate = new();
     private readonly Queue<string> diagnostics = new();
     private Task<TestVideoRecordingCompletion>? stopTask;
     private long startedTimestamp;
     public string Source { get; }
+    public Task Completion => exited.Task;
 
     private NativeTestVideoRecording(ProcessStartInfo start, string source)
     {
@@ -65,7 +67,11 @@ internal sealed class NativeTestVideoRecording : ITestVideoRecording
         process = new Process { StartInfo = start, EnableRaisingEvents = true };
         process.OutputDataReceived += ReceiveOutput;
         process.ErrorDataReceived += ReceiveOutput;
-        process.Exited += (_, _) => ready.TrySetException(new IOException($"The {Source} recorder exited before becoming ready. {DiagnosticText()}"));
+        process.Exited += (_, _) =>
+        {
+            ready.TrySetException(new IOException($"The {Source} recorder exited before becoming ready. {DiagnosticText()}"));
+            exited.TrySetResult();
+        };
     }
 
     internal static async Task<NativeTestVideoRecording> StartAsync(

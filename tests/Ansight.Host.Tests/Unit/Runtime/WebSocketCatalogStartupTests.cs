@@ -7,6 +7,52 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed class WebSocketCatalogStartupTests
 {
     [Fact]
+    public async Task VideoPauseAndResumeReachSdkWithoutChangingScreenshotOwner()
+    {
+        using var directory = TestDirectory.Create();
+        var paths = new DataToolApplicationPaths(directory.Path);
+        var state = new RuntimeState(new SessionCaptureStore(paths));
+        var sessionId = state.CreateSession("com.example.app", "Example", IPAddress.Loopback, null, null);
+        var screenshots = new ExternalSessionScreenshotCaptureManager(state,
+            new Ansight.Infrastructure.Preferences.UserPreferences(new Ansight.Infrastructure.Preferences.FilePreferencesStore(
+                Path.Combine(directory.Path, "preferences.json"))));
+        var manager = new WebSocketSessionManager(state, new HostOperationTrafficLog(paths),
+            externalSessionScreenshotCaptureManager: screenshots);
+        using var socket = new ScriptedWebSocket();
+        var session = manager.RunConnectedSessionAsync(sessionId, socket,
+            new PairingSessionAuthorization(2, "grant-1", "read"));
+        try
+        {
+            socket.SendControl("profile", PairingControlActions.DeviceProfile, new JsonObject
+            {
+                ["periodicScreenshotCaptureControlVersion"] = 1,
+                ["sessionJpegCapture"] = new JsonObject { ["includeSystemUiMetadata"] = true }
+            });
+            var profile = await socket.ReadSentAsync();
+            Assert.Equal("app", profile["payload"]?["sessionJpegCapture"]?["mode"]?.GetValue<string>());
+            await AcknowledgePolicy(false);
+            using var video = screenshots.SuspendPeriodicCapture(sessionId);
+            await AcknowledgePolicy(true);
+            video.Dispose();
+            await AcknowledgePolicy(false);
+        }
+        finally { socket.End(); await session.WaitAsync(TimeSpan.FromSeconds(5)); }
+
+        async Task AcknowledgePolicy(bool paused)
+        {
+            var request = await socket.ReadSentAsync();
+            Assert.Equal("session.screenshots", request["type"]?.GetValue<string>());
+            Assert.Equal(paused, request["payload"]?["paused"]?.GetValue<bool>());
+            socket.Receive(new JsonObject
+            {
+                ["type"] = "session.screenshots.result", ["id"] = Guid.NewGuid().ToString("N"),
+                ["replyTo"] = request["id"]!.GetValue<string>(),
+                ["payload"] = new JsonObject { ["paused"] = paused }
+            });
+        }
+    }
+
+    [Fact]
     public async Task StartupCatalogQuery_IsSentOnceAfterASuccessfulSessionOpenAcknowledgement()
     {
         using var directory = TestDirectory.Create();

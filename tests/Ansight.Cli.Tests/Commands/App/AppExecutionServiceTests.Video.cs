@@ -124,6 +124,8 @@ public sealed partial class AppExecutionServiceTests
 
     private sealed class RecordingVideoRecorder : ITestVideoRecorder, ITestVideoRecording
     {
+        private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task Completion => exited.Task;
         public string Source => "fixture";
         public bool FailStart { get; init; }
         public int Starts { get; private set; }
@@ -141,6 +143,7 @@ public sealed partial class AppExecutionServiceTests
         public Task<TestVideoRecordingCompletion> StopAsync()
         {
             Stops++;
+            exited.TrySetResult();
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), OutputPath!);
             return Task.FromResult(new TestVideoRecordingCompletion(true));
         }

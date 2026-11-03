@@ -14,6 +14,9 @@ internal sealed record ExternalSessionScreenshotCapturePolicy(
     public const string HostMode = "host";
     public const string ControlVersionPropertyName = "sessionJpegCaptureControlVersion";
     public const int ControlVersion = 1;
+    public const string PeriodicControlVersionPropertyName = "periodicScreenshotCaptureControlVersion";
+    public const string PeriodicControlType = "session.screenshots";
+    public const string PeriodicControlResultType = "session.screenshots.result";
 
     public static ExternalSessionScreenshotCapturePolicy App(string reason)
         => new(AppMode, "app", reason, 2_000, 60, ExternalSessionScreenshotCaptureRequest.Default.MaxWidth);
@@ -26,10 +29,11 @@ internal sealed record ExternalSessionScreenshotCapturePolicy(
            && controlVersionNode.TryGetValue<int>(out var controlVersion)
            && controlVersion >= ControlVersion;
 
-    public JsonObject ToResponsePayload()
+    public JsonObject ToResponsePayload(bool periodicScreenshotsPaused = false)
         => new()
         {
             ["screenshotGeometry"] = true,
+            ["periodicScreenshotsPaused"] = periodicScreenshotsPaused,
             ["sessionJpegCapture"] = new JsonObject
             {
                 ["mode"] = Mode,

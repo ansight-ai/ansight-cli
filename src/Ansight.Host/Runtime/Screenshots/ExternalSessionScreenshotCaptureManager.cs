@@ -22,6 +22,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     private readonly Lock captureGate = new();
     private readonly Dictionary<string, CaptureHandle> capturesBySessionId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CancellationTokenSource> pendingAttachmentsBySessionId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> periodicCaptureSuspensions = new(StringComparer.Ordinal);
     private Func<string, string, CancellationToken, Task<byte[]>>? physicalIosCapture;
 
     [ImportingConstructor]
@@ -34,6 +35,41 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     }
 
     public event EventHandler<ExternalSessionScreenshotCaptureFailedEventArgs>? CaptureFailed;
+    public event EventHandler<string>? PeriodicCaptureChanged;
+
+    public bool IsPeriodicCaptureSuspended(string sessionId)
+    {
+        lock (captureGate) return periodicCaptureSuspensions.ContainsKey(sessionId);
+    }
+
+    public IDisposable SuspendPeriodicCapture(string sessionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+        lock (captureGate)
+        {
+            periodicCaptureSuspensions.TryGetValue(sessionId, out var count);
+            periodicCaptureSuspensions[sessionId] = count + 1;
+            if (capturesBySessionId.TryGetValue(sessionId, out var handle))
+            {
+                handle.PeriodicCaptureVersion++;
+                handle.SignalProfileChanged();
+            }
+        }
+        PeriodicCaptureChanged?.Invoke(this, sessionId);
+        return new PeriodicCaptureScope(this, sessionId);
+    }
+
+    private void ResumePeriodicCapture(string sessionId)
+    {
+        lock (captureGate)
+        {
+            if (!periodicCaptureSuspensions.TryGetValue(sessionId, out var count)) return;
+            if (count > 1) periodicCaptureSuspensions[sessionId] = count - 1;
+            else periodicCaptureSuspensions.Remove(sessionId);
+            if (capturesBySessionId.TryGetValue(sessionId, out var handle)) handle.SignalProfileChanged();
+        }
+        PeriodicCaptureChanged?.Invoke(this, sessionId);
+    }
 
     internal void ConfigurePhysicalIosCapture(Func<string, string, CancellationToken, Task<byte[]>> capture)
         => physicalIosCapture = capture ?? throw new ArgumentNullException(nameof(capture));
@@ -138,7 +174,8 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                     || !IsSessionActive(sessionId))
                     return ExternalSessionScreenshotCapturePolicy.App("External screenshot capture was stopped.");
 
-                AddFrame(sessionId, probe, ExternalSessionScreenshotCaptureProfile.Standard(captureRequest));
+                if (!IsPeriodicCaptureSuspended(sessionId))
+                    AddFrame(sessionId, probe, ExternalSessionScreenshotCaptureProfile.Standard(captureRequest));
                 var handle = new CaptureHandle(new CancellationTokenSource(), target, captureRequest);
                 pendingAttachmentsBySessionId.Remove(sessionId);
                 capturesBySessionId[sessionId] = handle;
@@ -287,9 +324,11 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             while (!handle.Cancellation.IsCancellationRequested)
             {
                 var profile = ResolveCaptureProfile(handle);
-                var remaining = profile.Interval - Stopwatch.GetElapsedTime(lastCaptureStarted);
+                var remaining = IsPeriodicCaptureSuspended(sessionId) ? Timeout.InfiniteTimeSpan
+                    : profile.Interval - Stopwatch.GetElapsedTime(lastCaptureStarted);
                 if (await handle.ProfileChanged
-                        .WaitAsync(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero, handle.Cancellation.Token)
+                        .WaitAsync(remaining == Timeout.InfiniteTimeSpan || remaining > TimeSpan.Zero
+                            ? remaining : TimeSpan.Zero, handle.Cancellation.Token)
                         .ConfigureAwait(false))
                 {
                     continue;
@@ -308,6 +347,12 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
 
                 try
                 {
+                    long captureVersion;
+                    lock (captureGate)
+                    {
+                        if (IsPeriodicCaptureSuspended(sessionId)) continue;
+                        captureVersion = handle.PeriodicCaptureVersion;
+                    }
                     lastCaptureStarted = Stopwatch.GetTimestamp();
                     using var captureCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                         handle.Cancellation.Token);
@@ -322,7 +367,9 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                             || !ReferenceEquals(current, handle)
                             || !IsSessionActive(sessionId))
                             break;
-                        AddFrame(sessionId, bytes, ResolveCaptureProfile(handle));
+                        // A command already in flight may finish after recording starts.
+                        if (!IsPeriodicCaptureSuspended(sessionId) && captureVersion == handle.PeriodicCaptureVersion)
+                            AddFrame(sessionId, bytes, ResolveCaptureProfile(handle));
                     }
                     consecutiveFailures = 0;
                 }
@@ -340,6 +387,11 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                 }
                 catch (Exception ex)
                 {
+                    if (IsPeriodicCaptureSuspended(sessionId))
+                    {
+                        consecutiveFailures = 0;
+                        continue;
+                    }
                     consecutiveFailures++;
                     log.Warning($"external_session_screenshot_failed sessionId={sessionId} count={consecutiveFailures} reason=\"{ex.Message}\"");
                     if (consecutiveFailures >= maximumConsecutiveFailures)
@@ -617,6 +669,8 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
 
         public int TestRunCount { get; set; }
 
+        public long PeriodicCaptureVersion { get; set; }
+
         public Task? Task { get; set; }
 
         public void SignalProfileChanged()
@@ -663,5 +717,11 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         {
             Interlocked.Exchange(ref owner, null)?.EndTestRun(sessionId);
         }
+    }
+
+    private sealed class PeriodicCaptureScope(ExternalSessionScreenshotCaptureManager owner, string sessionId) : IDisposable
+    {
+        private ExternalSessionScreenshotCaptureManager? owner = owner;
+        public void Dispose() => Interlocked.Exchange(ref owner, null)?.ResumePeriodicCapture(sessionId);
     }
 }

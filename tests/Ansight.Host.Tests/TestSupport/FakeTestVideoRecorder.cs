@@ -2,6 +2,9 @@ namespace Ansight.Host.Tests.TestSupport;
 
 internal sealed class FakeTestVideoRecorder : ITestVideoRecorder, ITestVideoRecording
 {
+    private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Task Completion => exited.Task;
+    public void ExitUnexpectedly() => exited.TrySetResult();
     public string Source => "test-recorder";
     public string? OutputPath { get; private set; }
     public int Starts { get; private set; }
@@ -21,6 +24,7 @@ internal sealed class FakeTestVideoRecorder : ITestVideoRecorder, ITestVideoReco
     public Task<TestVideoRecordingCompletion> StopAsync()
     {
         Stops++;
+        exited.TrySetResult();
         if (InvalidFile) File.WriteAllText(OutputPath!, "incomplete MP4");
         else File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), OutputPath!, overwrite: true);
         return Task.FromResult(new TestVideoRecordingCompletion(Complete, Complete ? null : "Device disconnected."));

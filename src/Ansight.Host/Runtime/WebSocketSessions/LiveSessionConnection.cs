@@ -41,6 +41,7 @@ internal sealed class LiveSessionConnection
     internal AppToolCatalogCache ToolCatalogCache { get; } = new();
 
     internal SemaphoreSlim ToolCatalogQueryLock { get; } = new(1, 1);
+    internal SemaphoreSlim PeriodicScreenshotPolicyLock { get; } = new(1, 1);
 
     public bool IsDisconnectRequested
     {

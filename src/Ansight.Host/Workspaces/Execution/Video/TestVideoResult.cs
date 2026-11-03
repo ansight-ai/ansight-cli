@@ -29,6 +29,8 @@ internal sealed record TestVideoRecordingCompletion(bool IsComplete, string? Err
 internal interface ITestVideoRecording
 {
     string Source { get; }
+    // Completes on any recorder exit, including unexpected exits during execution.
+    Task Completion { get; }
     Task<TestVideoRecordingCompletion> StopAsync();
 }
 

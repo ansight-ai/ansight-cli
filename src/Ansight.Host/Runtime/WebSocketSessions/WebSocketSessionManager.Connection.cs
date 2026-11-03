@@ -116,6 +116,8 @@ internal sealed partial class WebSocketSessionManager
                     var controlResponse = await HandleControlRequestAsync(sessionId, controlRequest);
                     await SendJsonAsync(socket, controlResponse, CancellationToken.None);
                     runtimeState.AddSessionLog(sessionId, CreateLogEntry($"Sent control response for {controlRequest.Action}.", "WebSocket"));
+                    if (controlResponse.Success && controlRequest.Action == PairingControlActions.DeviceProfile)
+                        UpdatePeriodicScreenshotPolicyAsync(sessionId).SafeFireAndForget();
                     // SDKs install their tool receiver before opening the logical session.
                     // Sending on the WebSocket handshake can otherwise lose the first query.
                     if (!catalogCaptureStarted && controlResponse.Success
@@ -512,7 +514,7 @@ internal sealed partial class WebSocketSessionManager
                         request,
                         success: true,
                         "Device profile received.",
-                        capturePolicy.ToResponsePayload());
+                        capturePolicy.ToResponsePayload(externalSessionScreenshotCaptureManager?.IsPeriodicCaptureSuspended(sessionId) == true));
                 }
                 case PairingControlActions.AppState:
                 {

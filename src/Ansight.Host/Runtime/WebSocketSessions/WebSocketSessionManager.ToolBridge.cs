@@ -567,6 +567,7 @@ internal sealed partial class WebSocketSessionManager
             || (!string.Equals(envelope.Type, ToolProtocolMessageTypes.CatalogType, StringComparison.Ordinal)
                 && !string.Equals(envelope.Type, ToolProtocolMessageTypes.ResultType, StringComparison.Ordinal)
                 && !string.Equals(envelope.Type, AppToolProtocolContracts.BatchResultType, StringComparison.Ordinal)
+                && !string.Equals(envelope.Type, ExternalSessionScreenshotCapturePolicy.PeriodicControlResultType, StringComparison.Ordinal)
                 && !string.Equals(envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal)))
         {
             return false;
