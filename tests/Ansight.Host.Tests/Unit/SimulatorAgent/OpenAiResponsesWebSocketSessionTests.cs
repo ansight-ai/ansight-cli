@@ -5,7 +5,7 @@ using Ansight.Host.Tests.TestSupport;
 
 namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
-public sealed class OpenAiResponsesWebSocketSessionTests
+public sealed partial class OpenAiResponsesWebSocketSessionTests
 {
     [Fact]
     public async Task CreateResponseAsync_TraceDescribesTheExactWireRegistrationsWithoutToolArguments()

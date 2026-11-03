@@ -64,6 +64,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
             throw new InvalidOperationException("OpenAI returned malformed JSON.", exception);
         }
 
+        RecordUsage(request, responseJson);
         var turn = ParseResponse(responseJson);
         return turn with
         {
@@ -79,6 +80,41 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
                 }
             ], 0)
         };
+    }
+
+    internal static void RecordUsage(OpenAiRequest request, JsonObject response)
+    {
+        if (request.Transport is not IModelUsageRecorder recorder)
+        {
+            return;
+        }
+
+        // Read usage independently of tool output parsing, including terminal failures.
+        var responseId = ReadString(response, "id");
+        if (responseId is null || response["usage"] is not JsonObject)
+        {
+            return;
+        }
+
+        var usageResponse = new JsonObject
+        {
+            ["usage"] = response["usage"]!.DeepClone()
+        };
+        var tokens = ParseResponse(usageResponse).Tokens;
+        try
+        {
+            recorder.RecordUsage(new SimulatorAgentModelPassUsage(
+                responseId,
+                ReadString(response, "model") ?? request.Model,
+                ReadString(response, "service_tier"),
+                DateTimeOffset.UtcNow,
+                tokens));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Do not classify a local persistence failure as a retryable provider failure.
+            throw new ModelUsageRecordingException(exception);
+        }
     }
 
     internal static void ValidateRequest(OpenAiRequest request)

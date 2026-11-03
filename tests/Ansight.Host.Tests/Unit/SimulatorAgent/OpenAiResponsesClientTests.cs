@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
-public sealed class OpenAiResponsesClientTests
+public sealed partial class OpenAiResponsesClientTests
 {
 
     [Fact]

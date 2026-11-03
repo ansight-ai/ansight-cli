@@ -70,6 +70,10 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                     response.Tokens));
             }
         }
+        catch (ModelUsageRecordingException)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is OpenAiWebSocketTransportException
                                           or OpenAiPreviousResponseNotFoundException
                                           or InvalidOperationException)
@@ -305,6 +309,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                                    ?? throw new OpenAiWebSocketTransportException(
                                        "OpenAI returned a completed WebSocket event without a response object.");
                     responseCompleted = parseStarted;
+                    OpenAiResponsesClient.RecordUsage(request, response);
                     var turn = OpenAiResponsesClient.ParseResponse(response);
                     parsingDuration = stopwatch.ElapsedMilliseconds - parseStarted;
                     return turn;
@@ -317,6 +322,11 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
 
                 if (eventType is "response.failed" or "response.incomplete")
                 {
+                    if (responseEvent["response"] is JsonObject terminalResponse)
+                    {
+                        OpenAiResponsesClient.RecordUsage(request, terminalResponse);
+                    }
+
                     ThrowTerminalResponseError(responseEvent, eventType);
                 }
             }
