@@ -1,0 +1,29 @@
+<Project DefaultTargets="Test">
+  <PropertyGroup>
+    <RepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</RepositoryRoot>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <TestProject Include="$(RepositoryRoot)/tests/Ansight.Host.Tests/Ansight.Host.Tests.csproj" />
+    <TestProject Include="$(RepositoryRoot)/tests/Ansight.Cli.Tests/Ansight.Cli.Tests.csproj" />
+    <NativeTestScript Include="$(RepositoryRoot)/src/Ansight.Host/Audio/Ios/Native/Tests/run-tests.sh" />
+    <NativeTestScript Include="$(RepositoryRoot)/src/Ansight.MacSimulatorHid/Native/Tests/run-tests.sh" />
+  </ItemGroup>
+
+  <!-- Full validation: dotnet msbuild build/tests.proj. Filtered unit runs use dotnet test directly. -->
+  <Target Name="Test" DependsOnTargets="Managed;Native" />
+
+  <Target Name="Managed">
+    <Exec Command="dotnet test &quot;%(TestProject.Identity)&quot; --configuration &quot;$(Configuration)&quot;" />
+  </Target>
+
+  <!-- Native validation is explicit and independent of managed build settings. -->
+  <Target Name="Native">
+    <Exec
+        Command="bash &quot;%(NativeTestScript.Identity)&quot;"
+        Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <Message Text="Native lifecycle and HID tests require macOS; skipped on this platform."
+             Importance="high" Condition="!$([MSBuild]::IsOSPlatform('OSX'))" />
+  </Target>
+</Project>

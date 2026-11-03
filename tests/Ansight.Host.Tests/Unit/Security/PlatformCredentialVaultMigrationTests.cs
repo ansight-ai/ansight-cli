@@ -5,7 +5,7 @@ public sealed class PlatformCredentialVaultMigrationTests
     [Fact]
     public void TryMigrateCopiesAndVerifiesPlaintextBeforeDeletingSource()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         File.WriteAllText(
             environment.SecureStorageFilePath,
             "{\"legacy-account\":\"refresh-token\",\"test-secret\":\"password\"}");
@@ -25,7 +25,7 @@ public sealed class PlatformCredentialVaultMigrationTests
     [Fact]
     public void TryMigrateCopiesExistingAesVaultBeforeDeletingSourceAndLocalKey()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var source = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
         source.Set("example", "encrypted-value");
         var destination = new InMemoryEncryptedStorage();
@@ -43,7 +43,7 @@ public sealed class PlatformCredentialVaultMigrationTests
     [Fact]
     public void TryMigratePreservesExistingVaultValueAndCopiesMissingValues()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         File.WriteAllText(
             environment.SecureStorageFilePath,
             "{\"existing\":\"stale-file-value\",\"missing\":\"legacy-value\"}");
@@ -63,7 +63,7 @@ public sealed class PlatformCredentialVaultMigrationTests
     [Fact]
     public void TryMigrateLeavesSourceIntactWhenDestinationCannotVerifyValue()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         const string sourceContent = "{\"legacy-account\":\"refresh-token\"}";
         File.WriteAllText(environment.SecureStorageFilePath, sourceContent);
 
@@ -79,7 +79,7 @@ public sealed class PlatformCredentialVaultMigrationTests
     [Fact]
     public void TryMigrateLeavesSourceIntactWhenDestinationThrows()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         const string sourceContent = "{\"legacy-account\":\"refresh-token\"}";
         File.WriteAllText(environment.SecureStorageFilePath, sourceContent);
 

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "dotnet msbuild build/tests.proj -verbosity:minimal",
+    "test:native": "dotnet msbuild build/tests.proj -target:Native -verbosity:minimal",
     "build:player": "dotnet msbuild build/player-assets.proj -verbosity:minimal"
   },
   "devDependencies": {

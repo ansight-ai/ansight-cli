@@ -16,7 +16,7 @@ public sealed class EncryptedStorageFactoryTests
     [Fact]
     public void CreateDefault_WithFilePathOverride_UsesFileBackedStorage()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
 
         var storage = EncryptedStorageFactory.CreateDefault(
             environment.ApplicationPaths,
@@ -32,7 +32,7 @@ public sealed class EncryptedStorageFactoryTests
     [Fact]
     public void ResolveFileBackedStoragePath_UsesApplicationDataPathByDefault()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
 
         var path = EncryptedStorageFactory.ResolveFileBackedStoragePath(environment.ApplicationPaths);
 

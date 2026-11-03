@@ -7,7 +7,7 @@ public sealed class FileBackedEncryptedStorageTests
     [Fact]
     public void SeparateInstances_SeeLatestValuesFromSharedBackingFile()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var first = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
         var second = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
 
@@ -24,7 +24,7 @@ public sealed class FileBackedEncryptedStorageTests
     [Fact]
     public void PersistedStoreDoesNotContainKeysOrValuesInPlaintext()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var storage = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
 
         storage.Set("service-password", "extremely-secret-value");
@@ -38,7 +38,7 @@ public sealed class FileBackedEncryptedStorageTests
     [Fact]
     public void ConstructorMigratesLegacyPlaintextDictionaryInPlace()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         File.WriteAllText(
             environment.SecureStorageFilePath,
             "{\"legacy-key\":\"legacy-secret\"}");
@@ -54,7 +54,7 @@ public sealed class FileBackedEncryptedStorageTests
     [Fact]
     public void ConstructorRejectsStoreEncryptedWithDifferentKey()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         File.Delete(environment.SecureStorageFilePath);
         var firstKey = RandomNumberGenerator.GetBytes(32);
         var secondKey = RandomNumberGenerator.GetBytes(32);

@@ -33,19 +33,4 @@
     <None Update="Fixtures/test-recording*.mp4" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Target
-      Name="RunAudioNativeLifecycleTests"
-      BeforeTargets="VSTest"
-      Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/../../src/Ansight.Host/Audio/Ios/Native/Tests/run-tests.sh&quot;" />
-  </Target>
-
-  <Target
-      Name="RunSimulatorHidRecoveryTests"
-      BeforeTargets="VSTest"
-      Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <!-- Run even when compilation is skipped: native input recovery is part of the host test gate. -->
-    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/../../src/Ansight.MacSimulatorHid/Native/Tests/run-tests.sh&quot;" />
-  </Target>
-
 </Project>

@@ -7,7 +7,7 @@ public sealed class HostIdentityStoreTests
     [Fact]
     public void Current_CreatesAndPersistsIdentityWhenStorageIsEmpty()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var storage = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
 
         string hostId;
@@ -37,7 +37,7 @@ public sealed class HostIdentityStoreTests
     [Fact]
     public void Current_MigratesLegacyIdentityFileIntoEncryptedStorage()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var legacyPath = Path.Combine(environment.ApplicationPaths.ApplicationDataPath, "host-identity.json");
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var privateKeyPkcs8 = key.ExportPkcs8PrivateKey();
@@ -68,7 +68,7 @@ public sealed class HostIdentityStoreTests
     [Fact]
     public void Current_UsesRuntimeIdentityScopeWithoutReplacingProductionIdentity()
     {
-        using var environment = new TestSupport.TestEnvironment();
+        using var environment = new TestSupport.StorageTestEnvironment();
         var storage = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
 
         using var productionStore = new IdentityStore(

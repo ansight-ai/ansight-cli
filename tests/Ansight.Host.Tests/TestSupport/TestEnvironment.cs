@@ -3,6 +3,7 @@ namespace Ansight.Host.Tests.TestSupport;
 internal sealed class TestEnvironment : IDisposable
 {
     private bool disposed;
+    private readonly StorageTestEnvironment storage;
     private readonly IDisposable protocolOverride;
 
     public TestEnvironment(int webSocketSessionPortCount = 1)
@@ -13,16 +14,7 @@ internal sealed class TestEnvironment : IDisposable
         var webSocketPort = FindFreeTcpPort();
         var sessionPortRange = FindFreeTcpPortRange(webSocketSessionPortCount);
 
-        RootPath = Path.Combine(
-            Path.GetTempPath(),
-            "ansight-host-tests",
-            Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(RootPath);
-        ApplicationPaths = new DataToolApplicationPaths(RootPath);
-        SecureStorageFilePath = Path.Combine(RootPath, "secure-storage.json");
-        SecureStorageKeyFilePath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(
-            SecureStorageFilePath);
-        FileEncryptionKeyProvider.CreateKeyFile(SecureStorageKeyFilePath);
+        storage = new StorageTestEnvironment();
         protocolOverride = ProtocolDefaults.PushOverride(
             discoveryPort: discoveryPort,
             webSocketPort: webSocketPort,
@@ -31,13 +23,13 @@ internal sealed class TestEnvironment : IDisposable
             webSocketSessionPortRangeEnd: sessionPortRange.End);
     }
 
-    public string RootPath { get; }
+    public string RootPath => storage.RootPath;
 
-    public string SecureStorageFilePath { get; }
+    public string SecureStorageFilePath => storage.SecureStorageFilePath;
 
-    public string SecureStorageKeyFilePath { get; }
+    public string SecureStorageKeyFilePath => storage.SecureStorageKeyFilePath;
 
-    public DataToolApplicationPaths ApplicationPaths { get; }
+    public DataToolApplicationPaths ApplicationPaths => storage.ApplicationPaths;
 
     public RuntimeCoordinator CreateRuntime(bool enableRepositoryAutomations = false)
     {
@@ -100,18 +92,7 @@ internal sealed class TestEnvironment : IDisposable
 
         disposed = true;
         protocolOverride.Dispose();
-
-        try
-        {
-            if (Directory.Exists(RootPath))
-            {
-                Directory.Delete(RootPath, recursive: true);
-            }
-        }
-        catch
-        {
-            // Ignore cleanup failures in tests.
-        }
+        storage.Dispose();
     }
 
     private static int FindFreeTcpPort()
