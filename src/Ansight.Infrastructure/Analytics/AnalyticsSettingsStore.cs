@@ -41,9 +41,11 @@ public sealed class AnalyticsSettingsStore
 
                 var accountId = AnalyticsAccount.Read(dataDirectory);
                 var saved = JsonSerializer.Deserialize<AnalyticsSettings>(File.ReadAllText(settingsPath), jsonOptions);
-                return accountId is not null
-                       && saved?.DetailedTrackingEnabled == true
-                       && string.Equals(saved.AccountId, accountId, StringComparison.Ordinal);
+                var hasAccountConsent = accountId is not null
+                    && saved?.DetailedTrackingEnabled == true
+                    && string.Equals(saved.AccountId, accountId, StringComparison.Ordinal);
+
+                return hasAccountConsent;
             }
             catch (Exception exception) when (exception is IOException
                                                or UnauthorizedAccessException
@@ -60,24 +62,53 @@ public sealed class AnalyticsSettingsStore
 
     public bool HasSignedInAccount => AnalyticsAccount.Read(dataDirectory) is not null;
 
+    public string? DetailedTrackingConsentId
+    {
+        get
+        {
+            try
+            {
+                if (!IsDetailedTrackingActive)
+                {
+                    return null;
+                }
+
+                var saved = JsonSerializer.Deserialize<AnalyticsSettings>(File.ReadAllText(settingsPath), jsonOptions);
+                return saved?.ConsentId ?? "legacy";
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     public void SetDetailedTrackingEnabled(bool enabled)
     {
         var accountId = AnalyticsAccount.Read(dataDirectory);
+        var consentId = enabled ? DetailedTrackingConsentId ?? Guid.NewGuid().ToString("D") : null;
         if (enabled && accountId is null)
+        {
             throw new InvalidOperationException("Sign in before opting in to detailed analytics.");
+        }
+
         Directory.CreateDirectory(AnalyticsDirectoryPath);
         var temporaryPath = $"{settingsPath}.{Guid.NewGuid():N}.tmp";
         try
         {
             File.WriteAllText(
                 temporaryPath,
-                JsonSerializer.Serialize(new AnalyticsSettings(enabled, enabled ? accountId : null), jsonOptions));
+                JsonSerializer.Serialize(new AnalyticsSettings(enabled, enabled ? accountId : null)
+                {
+                    ConsentId = consentId
+                }, jsonOptions));
             TryRestrictFilePermissions(temporaryPath);
             File.Move(temporaryPath, settingsPath, overwrite: true);
             TryRestrictFilePermissions(settingsPath);
             if (!enabled)
             {
                 ProductUsage.Flush(dataDirectory, force: true);
+                new LocalCaptureUsage(dataDirectory).Clear();
                 new EventOutbox(AnalyticsDirectoryPath).RemoveDetailedEvents();
             }
         }

@@ -9,6 +9,57 @@ namespace Ansight.Host.Tests.Unit.Analytics;
 public sealed class AnonymousAnalyticsDeliveryTests
 {
     [Fact]
+    public async Task AcknowledgedCaptureSnapshotsStayDeliveredAcrossRestartUntilCountsChange()
+    {
+        using var directory = new TemporaryDirectory();
+        AnalyticsAccount.Update(directory.RootPath, Guid.NewGuid().ToString("D"));
+        new AnalyticsSettingsStore(directory.RootPath).SetDetailedTrackingEnabled(true);
+        var usage = new LocalCaptureUsage(directory.RootPath);
+        var created = DateTimeOffset.UtcNow.AddMinutes(-1);
+        Assert.True(usage.Register("delivered", created, "sdk"));
+        Assert.True(usage.RecordSavedEvidence("delivered", created, DateTimeOffset.UtcNow));
+        usage.Flush(true);
+        using var handler = new RecordingHandler();
+        using var client = new HttpClient(handler);
+        Assert.True(await new PostHogDispatcher(directory.RootPath, client,
+            "https://posthog.example", "public-project-key").FlushAsync(CancellationToken.None));
+        var outbox = new EventOutbox(Path.Combine(directory.RootPath, "analytics"));
+        usage = new LocalCaptureUsage(directory.RootPath);
+        usage.Flush(true);
+        Assert.Empty(outbox.Load(250));
+
+        Assert.True(usage.Register("next", created, "device"));
+        Assert.True(usage.RecordSavedEvidence("next", created, DateTimeOffset.UtcNow));
+        usage.Flush(true);
+        var next = Assert.Single(outbox.Load(250));
+        Assert.Equal("2", next.Envelope.Properties["capture_count"]!.ToString());
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task CaptureDeliveryRejectsSnapshotsFromAnEarlierConsentPeriod()
+    {
+        using var directory = new TemporaryDirectory();
+        var account = Guid.NewGuid().ToString("D");
+        AnalyticsAccount.Update(directory.RootPath, account);
+        var settings = new AnalyticsSettingsStore(directory.RootPath);
+        settings.SetDetailedTrackingEnabled(true);
+        var oldConsent = settings.DetailedTrackingConsentId;
+        settings.SetDetailedTrackingEnabled(false);
+        settings.SetDetailedTrackingEnabled(true);
+        var outbox = new EventOutbox(settings.AnalyticsDirectoryPath);
+        foreach (var consent in new[] { oldConsent, settings.DetailedTrackingConsentId })
+            outbox.TryStore(new EventEnvelope(consent!, LocalCaptureUsage.EventName, "cli_anon_device", EventLevel.Detailed,
+                new Dictionary<string, object?> { ["account_id"] = account, ["consent_epoch"] = consent }, DateTimeOffset.UtcNow));
+        using var handler = new RecordingHandler();
+        using var client = new HttpClient(handler);
+        Assert.True(await new PostHogDispatcher(directory.RootPath, client,
+            "https://posthog.example", "public-project-key").FlushAsync(CancellationToken.None));
+        var batch = Assert.Single(handler.Requests).Payload["batch"]!.AsArray();
+        Assert.Equal(settings.DetailedTrackingConsentId, Assert.Single(batch)!["properties"]!["consent_epoch"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task MissingBuildTokenKeepsAnonymousEventsForLaterDelivery()
     {
         using var directory = new TemporaryDirectory();

@@ -32,6 +32,7 @@ internal sealed partial class RuntimeState : IRuntimeState
     private readonly HashSet<string> pendingSessionPersistenceIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> lastSessionPersistenceUtcById = new(StringComparer.Ordinal);
     private readonly SessionCaptureStore sessionCaptureStore;
+    private readonly IKnownAppStore? captureKnownApps;
     private readonly SessionNormalizationService sessionNormalizationService;
     private Timer? sessionUpdateBroadcastTimer;
     private int sessionUpdateFlushActive;
@@ -40,9 +41,11 @@ internal sealed partial class RuntimeState : IRuntimeState
 
     [ImportingConstructor]
     public RuntimeState(
-        SessionCaptureStore sessionCaptureStore)
+        SessionCaptureStore sessionCaptureStore,
+        [Import(AllowDefault = true)] IKnownAppStore? captureKnownApps = null)
     {
         this.sessionCaptureStore = sessionCaptureStore;
+        this.captureKnownApps = captureKnownApps;
         sessionNormalizationService = new SessionNormalizationService(sessionCaptureStore.CapturesRootPath);
     }
 
@@ -422,11 +425,25 @@ internal sealed partial class RuntimeState : IRuntimeState
             };
 
             sessionsById[sessionId] = state;
+            RegisterCaptureUsage(state);
         }
 
         PersistAndBroadcast(sessionId);
         log.Info($"session_created sessionId={sessionId} appId={safeAppId} clientName={safeClientName} remoteAddress={safeRemoteAddress} configId={safeConfigId} processSessionId={safeProcessSessionId}");
         return sessionId;
+    }
+
+    private void RegisterCaptureUsage(SessionState session)
+    {
+        string? appBusiness = null;
+        if (captureKnownApps?.TryGet(session.AppId, out var app) == true)
+        {
+            appBusiness = app?.SourceTeamId;
+        }
+
+        var business = CaptureBusinessAttribution.Resolve(sessionCaptureStore.AnalyticsDataDirectory,
+            session.AppId, appBusiness);
+        sessionCaptureStore.RegisterLocalCapture(session.SessionId, session.CreatedUtc, session.CaptureSource, business);
     }
 
     public int BeginSessionConnection(string sessionId)

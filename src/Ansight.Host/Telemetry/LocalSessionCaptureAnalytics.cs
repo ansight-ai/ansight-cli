@@ -4,6 +4,32 @@ using Ansight.Host;
 
 public static class LocalSessionCaptureAnalytics
 {
+    // Only captured evidence establishes a new capture; annotations/AI review do not.
+    public static bool HasCapturedEvidence(AppSessionSnapshot snapshot)
+    {
+        var hasTelemetry = Math.Max(snapshot.TotalLogCount, snapshot.Logs.Count) > 0
+            || Math.Max(snapshot.TotalImageCount, snapshot.Images.Count) > 0
+            || Math.Max(snapshot.TotalMetricSampleCount, snapshot.Metrics.Count) > 0
+            || Math.Max(snapshot.TotalNetworkRequestCount, snapshot.NetworkRequests.Count) > 0
+            || Math.Max(snapshot.TotalApplicationEventCount, snapshot.ApplicationEvents.Count) > 0;
+
+        if (hasTelemetry)
+        {
+            return true;
+        }
+
+        var hasInteractionEvidence = snapshot.Touches.Count > 0
+            || snapshot.VisualTreeSnapshots.Count > 0
+            || snapshot.ArtifactSnapshots.Count > 0;
+
+        if (hasInteractionEvidence)
+        {
+            return true;
+        }
+
+        return snapshot.VideoRecordings.Any(recording => recording.ByteSize > 0 && recording.DurationUs > 0);
+    }
+
     public const string CompletedEventName = "local_session_capture_completed";
 
     public static bool ShouldReportCompletion(string? previousStatus, AppSessionSnapshot snapshot)
@@ -25,10 +51,20 @@ public static class LocalSessionCaptureAnalytics
     // A saved recording may end through a transport failure. Count the observed
     // live-to-historical transition, while excluding imports and connection attempts.
     public static bool ShouldReportRecordedCapture(string? previousStatus, AppSessionSnapshot snapshot)
-        => previousStatus is "Connected" or "WebSocket Open"
-           && snapshot.IsHistorical
-           && (IsCaptureCompletionStatus(snapshot.Status)
-               || snapshot.Status is "WebSocket Error" or "WebSocket Timeout" or "Sign In Required");
+    {
+        var wasLiveSession = previousStatus is "Connected" or "WebSocket Open";
+        if (!wasLiveSession || !snapshot.IsHistorical)
+        {
+            return false;
+        }
+
+        var hasEndedCapture = IsCaptureCompletionStatus(snapshot.Status)
+            || snapshot.Status is "WebSocket Error"
+            || snapshot.Status is "WebSocket Timeout"
+            || snapshot.Status is "Sign In Required";
+
+        return hasEndedCapture;
+    }
 
     public static string CaptureUsageOutcome(AppSessionSnapshot snapshot)
         => snapshot.Status is "WebSocket Error" or "WebSocket Timeout" ? "failed"
@@ -48,6 +84,15 @@ public static class LocalSessionCaptureAnalytics
         var visualTreeCount = snapshot.VisualTreeSnapshots.Count;
         var artifactCount = snapshot.ArtifactSnapshots.Count;
         var analysisCount = snapshot.Analyses.Count;
+        var hasEvidence = Math.Max(snapshot.TotalNetworkRequestCount, snapshot.NetworkRequests.Count) > 0
+            || logCount > 0
+            || annotationCount > 0
+            || imageCount > 0
+            || metricSampleCount > 0
+            || touchCount > 0
+            || visualTreeCount > 0
+            || artifactCount > 0
+            || analysisCount > 0;
 
         return new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -67,15 +112,7 @@ public static class LocalSessionCaptureAnalytics
             ["visualTreeCount"] = visualTreeCount,
             ["artifactCount"] = artifactCount,
             ["analysisCount"] = analysisCount,
-            ["hasEvidence"] = Math.Max(snapshot.TotalNetworkRequestCount, snapshot.NetworkRequests.Count) > 0
-                              || logCount > 0
-                              || annotationCount > 0
-                              || imageCount > 0
-                              || metricSampleCount > 0
-                              || touchCount > 0
-                              || visualTreeCount > 0
-                              || artifactCount > 0
-                              || analysisCount > 0
+            ["hasEvidence"] = hasEvidence
         };
     }
 
@@ -119,9 +156,11 @@ public static class LocalSessionCaptureAnalytics
             return "timed_out";
         }
 
-        if (status.Contains("error", StringComparison.OrdinalIgnoreCase)
+        var hasFailureStatus = status.Contains("error", StringComparison.OrdinalIgnoreCase)
             || status.Contains("sign in required", StringComparison.OrdinalIgnoreCase)
-            || status.Contains("rejected", StringComparison.OrdinalIgnoreCase))
+            || status.Contains("rejected", StringComparison.OrdinalIgnoreCase);
+
+        if (hasFailureStatus)
         {
             return "failed";
         }

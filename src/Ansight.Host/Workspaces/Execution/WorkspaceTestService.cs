@@ -255,6 +255,8 @@ public sealed partial class WorkspaceTestService
         }
 
         if (request.Video is not null) test = test with { Video = request.Video };
+        using var captureBusiness = Ansight.Analytics.CaptureBusinessAttribution.Select(
+            runtime.BaseFolderPath, test.AppId, request.TeamId);
 
         // Explicit draft runs are how an author verifies a test before enabling it
         // in the workspace. Keep the parsed definition and saved source unchanged.

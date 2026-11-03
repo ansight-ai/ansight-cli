@@ -75,5 +75,8 @@ public sealed class ProductAnalytics
     }
 
     public void Flush(bool force = false)
-        => ProductUsage.Flush(dataDirectory, force);
+    {
+        ProductUsage.Flush(dataDirectory, force);
+        new LocalCaptureUsage(dataDirectory).Flush(force);
+    }
 }

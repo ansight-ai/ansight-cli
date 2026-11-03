@@ -48,6 +48,7 @@ public static class AnalyticsAccount
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             using (var stream = new StreamWriter(new FileStream(temporary, options))) stream.Write(value);
             File.Move(temporary, path, true);
+            new LocalCaptureUsage(dataDirectory).Clear();
             ProductUsage.Flush(dataDirectory, force: true);
             new EventOutbox(Path.Combine(Path.GetFullPath(dataDirectory), "analytics")).RemoveDetailedEvents();
         }

@@ -77,6 +77,7 @@ internal sealed partial class SessionCaptureStore
             RemoteAddress = snapshot.RemoteAddress,
             Name = snapshot.Name,
             CreatedUtc = snapshot.CreatedUtc,
+            FirstCaptureEvidenceUtc = FirstCaptureEvidenceUtc(snapshot, layout.SummaryFilePath, savedAtUtc),
             ConfigId = snapshot.ConfigId,
             ProcessSessionId = snapshot.ProcessSessionId,
             Status = snapshot.Status,
@@ -116,6 +117,7 @@ internal sealed partial class SessionCaptureStore
         var summarySnapshot = CreateSummarySnapshot(summary, snapshot, appIcon);
 
         WriteJsonAtomic(layout.SummaryFilePath, summaryDocument);
+        RecordCaptureEvidence(summary);
         DeleteIfExists(SessionCaptureArchiveCodec.GetSessionArchivePath(layout.SessionDirectoryPath));
         var capturesWriteUtc = TouchCapturesIndex();
         persistedStatusBySessionId[snapshot.SessionId] = new PersistedSessionStatus(snapshot.Status);

@@ -56,6 +56,7 @@ internal sealed partial class RuntimeState
                 Author = ResolveCurrentAuthor()
             });
             activeDeviceSessionIds.Add(sessionId);
+            RegisterCaptureUsage(sessionsById[sessionId]);
         }
         PersistAndBroadcast(sessionId);
         return sessionId;

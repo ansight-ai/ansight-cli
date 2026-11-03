@@ -1,3 +1,6 @@
 namespace Ansight.Analytics;
 
-public sealed record AnalyticsSettings(bool DetailedTrackingEnabled, string? AccountId = null);
+public sealed record AnalyticsSettings(bool DetailedTrackingEnabled, string? AccountId = null)
+{
+    public string? ConsentId { get; init; }
+}

@@ -63,6 +63,10 @@ internal sealed partial class SessionCaptureStore
 
     private readonly string capturesRootPath;
     private readonly ProductAnalytics analytics;
+    private readonly LocalCaptureUsage captureUsage;
+    private readonly ConcurrentDictionary<string, bool> localCaptureRegistrations = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset?> firstCaptureEvidenceByKey = new();
+    private readonly ConcurrentDictionary<string, bool> queuedCaptureReceipts = new();
     private readonly Lock indexGate = new();
     private readonly Lock pendingSnapshotGate = new();
     private readonly Lock pendingLogBatchGate = new();
@@ -113,6 +117,7 @@ internal sealed partial class SessionCaptureStore
         ArgumentNullException.ThrowIfNull(applicationPaths);
 
         analytics = ProductAnalytics.For(applicationPaths);
+        captureUsage = new LocalCaptureUsage(analytics.DataDirectoryPath);
         capturesRootPath = Path.Combine(applicationPaths.ApplicationDataPath, "session-captures");
         Directory.CreateDirectory(capturesRootPath);
         snapshotWriterTask = Task.WhenAll(Enumerable.Range(0, PersistenceWriterCount)
@@ -120,6 +125,7 @@ internal sealed partial class SessionCaptureStore
         logBatchWriterTask = Task.WhenAll(Enumerable.Range(0, PersistenceWriterCount)
             .Select(_ => Task.Run(ProcessPendingLogBatchesAsync)));
         imageWriterTask = Task.Run(ProcessPendingImagesAsync);
+        RecoverCaptureUsage();
     }
 
     public IReadOnlyList<AppSessionSnapshot> LoadSummaries()

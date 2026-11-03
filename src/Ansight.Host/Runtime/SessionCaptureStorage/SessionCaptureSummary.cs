@@ -17,6 +17,8 @@ internal sealed class SessionCaptureSummary
     public required string Status { get; init; }
     public required DateTimeOffset LastUpdatedUtc { get; init; }
     public required bool IsHistorical { get; init; }
+    // Local cache receipt only. Snapshot/archive exporters intentionally do not copy this.
+    public DateTimeOffset? FirstCaptureEvidenceUtc { get; init; }
     public long CacheSizeBytes { get; init; }
     public bool IsPinned { get; init; }
     public SessionCaptureAuthorMetadata? Author { get; init; }

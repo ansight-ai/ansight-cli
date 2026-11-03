@@ -571,7 +571,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             shutdownTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, FeatureLifetime);
             var lifetime = shutdownTokenSource.Token;
             pairingTask = Task.Run(() => RunPairingAndAnalyticsAsync(lifetime), CancellationToken.None);
-            analyticsTask = Task.Run(() => new PostHogDispatcher(BaseFolderPath).RunAsync(lifetime), CancellationToken.None);
+            analyticsTask = Task.Run(() => new PostHogDispatcher(BaseFolderPath).RunAsync(lifetime, PrepareCaptureAttribution), CancellationToken.None);
             startupWarnings = [];
             audioInjectionEngine.Start();
             started = true;
