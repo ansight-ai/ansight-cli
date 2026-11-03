@@ -67,6 +67,23 @@ internal static class ControlClient
         }
 
         var forwardedArguments = CreateForwardedArguments(arguments, Environment.CurrentDirectory);
+        var isAccountUpload = !hostCommand
+                              && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments)
+                              && CliCommandAccessPolicy.Classify(arguments, CliCommandAccessPolicy.HasRunnerCredentials) == CliAccessClass.Cloud;
+        if (isAccountUpload)
+        {
+            callerUserId = CliAccessContext.Current?.Lease.Decision.UserId;
+            if (string.IsNullOrWhiteSpace(callerUserId))
+            {
+                return AccessDecision.AuthenticationRequired.WriteFailure(output);
+            }
+        }
+
+        if (CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments))
+        {
+            forwardedArguments = CreateUploadForwardedArguments(forwardedArguments, options);
+        }
+
         var secretValue = await ReadForwardedSecretAsync(arguments, cancellationToken).ConfigureAwait(false);
         var secretValues = CollectForwardedSecretValues(
             CliArguments.Parse(forwardedArguments),
@@ -75,12 +92,15 @@ internal static class ControlClient
         Ansight.Host.Workspaces.Execution.RunnerAiCredentials? runnerAiCredentials = null;
         if (CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments) && CliCommandAccessPolicy.HasRunnerCredentials)
         {
-            var key = Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY");
+            var scopedCredentials = Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current;
+            var key = scopedCredentials?.ApiKey ?? Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY");
             if (string.IsNullOrWhiteSpace(key)) key = Environment.GetEnvironmentVariable("ANSIGHT_API_KEY");
-            runnerAiCredentials = new(key!.Trim(), arguments.GetOption("team-id") ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
+            runnerAiCredentials = new(key!.Trim(), arguments.GetOption("team-id")
+                ?? scopedCredentials?.TeamId ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
         }
         var request = new ControlRequest(
-            runnerAiCredentials is not null ? ControlProtocol.RunnerAiRequestSchema
+            isAccountUpload ? ControlProtocol.AccountUploadRequestSchema
+                : runnerAiCredentials is not null ? ControlProtocol.RunnerAiRequestSchema
                 : callerUserId is null ? ControlProtocol.RequestSchema : ControlProtocol.HostLeaseRequestSchema,
             forwardedArguments,
             secretValue,
@@ -136,17 +156,21 @@ internal static class ControlClient
             throw new CliHostUnavailableException(
                 "The resident host disconnected before returning the command result. The operation may have run partially; inspect the latest trace before retrying.");
         }
-        if (runnerAiCredentials is null && callerUserId is not null
-            && string.Equals(response.Schema, ControlProtocol.ResponseSchema, StringComparison.Ordinal))
+        var rejectedLegacyLease = !isAccountUpload
+                                  && runnerAiCredentials is null
+                                  && callerUserId is not null
+                                  && string.Equals(response.Schema, ControlProtocol.ResponseSchema, StringComparison.Ordinal);
+        if (rejectedLegacyLease)
         {
             // An older host rejected v2 before executing anything. Use the normal access path.
             return null;
         }
-        var expectedSchema = runnerAiCredentials is not null ? ControlProtocol.RunnerAiResponseSchema
+        var expectedSchema = isAccountUpload ? ControlProtocol.AccountUploadResponseSchema
+            : runnerAiCredentials is not null ? ControlProtocol.RunnerAiResponseSchema
             : callerUserId is null ? ControlProtocol.ResponseSchema : ControlProtocol.HostLeaseResponseSchema;
         if (!string.Equals(response.Schema, expectedSchema, StringComparison.Ordinal))
         {
-            throw new CliHostUnavailableException("The resident host returned an incompatible CLI control response. Restart it with this CLI version before using runner AI credentials.");
+            throw new CliHostUnavailableException("The resident host returned an incompatible CLI control response. Restart it once with this CLI version to enable authenticated uploads and runner requests.");
         }
 
         output.WriteRaw(response.StandardOutput, response.StandardError);
@@ -299,7 +323,8 @@ internal static class ControlClient
             var schema = document.RootElement.TryGetProperty("schema", out var schemaElement)
                 ? schemaElement.GetString()
                 : null;
-            if (schema is ControlProtocol.ResponseSchema or ControlProtocol.HostLeaseResponseSchema or ControlProtocol.RunnerAiResponseSchema)
+            if (schema is ControlProtocol.ResponseSchema or ControlProtocol.HostLeaseResponseSchema
+                or ControlProtocol.RunnerAiResponseSchema or ControlProtocol.AccountUploadResponseSchema)
             {
                 return JsonSerializer.Deserialize<ControlResponse>(responseLine, jsonOptions);
             }
@@ -444,6 +469,36 @@ internal static class ControlClient
         return forwardedArguments;
     }
 
+    internal static string[] CreateUploadForwardedArguments(string[] arguments, CliRuntimeOptions options)
+    {
+        var forwarded = arguments.ToList();
+        var parsed = CliArguments.Parse(arguments);
+        AddOption("data-dir", options.DataDirectory);
+        AddOption("secret-store-file", options.SecureStorageFilePath);
+        AddOption("secret-key-file", options.SecureStorageKeyFilePath);
+        AddOption("team-id", Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.TeamId
+            ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
+        if (parsed.Positionals[0].Equals("cloud", StringComparison.OrdinalIgnoreCase))
+        {
+            AddOption("app-id", Environment.GetEnvironmentVariable("ANSIGHT_APP_ID"));
+        }
+
+        return forwarded.ToArray();
+
+        void AddOption(string name, string? value)
+        {
+            if (parsed.GetOption(name) is not null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            forwarded.Add("--" + name);
+            forwarded.Add(name is "data-dir" or "secret-store-file" or "secret-key-file"
+                ? Path.GetFullPath(value)
+                : value);
+        }
+    }
+
     private static void ResolvePathOptions(
         string[] arguments,
         string workingDirectory,
@@ -475,6 +530,7 @@ internal static class ControlClient
 
             if (optionName.ToLowerInvariant() is not (
                     "app" or "ipa" or "application-path" or "result-file" or "data-dir"
+                    or "secret-store-file" or "secret-key-file"
                     or "workspace" or "repository" or "output" or "file" or "instructions-file"
                     or "prompt-file" or "sanitizer" or "policy" or "input-file"))
             {

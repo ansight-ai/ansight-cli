@@ -19,6 +19,7 @@ internal sealed class ControlServer : IAsyncDisposable
     private readonly string dataDirectory;
     private readonly Action? stopHost;
     private readonly CliArguments? startupArguments;
+    private readonly Func<CliRuntimeOptions, ICliAccessAuthorizer> accountAuthorizerFactory;
     private readonly List<CancellationTokenSource> generationLifetimes = [];
     private Task? serverTask;
 
@@ -29,13 +30,17 @@ internal sealed class ControlServer : IAsyncDisposable
         ICliAccessAuthorizer accessAuthorizer,
         CliAccessLease? accessLease = null,
         Action? stopHost = null,
-        CliArguments? startupArguments = null)
+        CliArguments? startupArguments = null,
+        Func<CliRuntimeOptions, ICliAccessAuthorizer>? accountAuthorizerFactory = null)
     {
         this.dataDirectory = Path.GetFullPath(dataDirectory);
         ArgumentNullException.ThrowIfNull(accessAuthorizer);
         if (runtime is not null) AttachGeneration(runtime, accessAuthorizer, accessLease, shutdownToken);
         this.stopHost = stopHost;
         this.startupArguments = startupArguments;
+        this.accountAuthorizerFactory = accountAuthorizerFactory
+            ?? (options => Extensions.CliExtensionDispatch.Invoke<ICliAccessAuthorizer>(
+                "Access.CreateAccountAuthorizer", [options]));
         PipeName = CreatePipeName(this.dataDirectory);
         shutdown = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
     }
@@ -179,16 +184,22 @@ internal sealed class ControlServer : IAsyncDisposable
 
         var request = JsonSerializer.Deserialize<ControlRequest>(requestLine, jsonOptions)
                       ?? throw new InvalidDataException("The CLI control request is invalid.");
-        if (request.Schema is not (ControlProtocol.RequestSchema or ControlProtocol.HostLeaseRequestSchema or ControlProtocol.RunnerAiRequestSchema)
-            || request.Arguments is null
-            || request.Arguments.Length == 0
-            || request.Arguments.Length > MaximumArgumentCount
-            || request.Arguments.Any(static argument => argument is null || argument.Length > 65_536))
+        var requestArguments = request.Arguments
+                               ?? throw new InvalidDataException("The CLI control request is missing arguments.");
+        var supportedSchema = request.Schema is ControlProtocol.RequestSchema
+                              or ControlProtocol.HostLeaseRequestSchema
+                              or ControlProtocol.RunnerAiRequestSchema
+                              or ControlProtocol.AccountUploadRequestSchema;
+        var invalidRequest = !supportedSchema
+                             || requestArguments.Length == 0
+                             || requestArguments.Length > MaximumArgumentCount
+                             || requestArguments.Any(static argument => argument is null || argument.Length > 65_536);
+        if (invalidRequest)
         {
             throw new InvalidDataException("The CLI control request has an unsupported schema or argument shape.");
         }
 
-        var parsedArguments = CliArguments.Parse(request.Arguments);
+        var parsedArguments = CliArguments.Parse(requestArguments);
         if (parsedArguments.Positionals.Count >= 2 && parsedArguments.Positionals[0].Equals("host", StringComparison.OrdinalIgnoreCase)
             && parsedArguments.Positionals[1].ToLowerInvariant() is "run" or "stop" or "status")
         {
@@ -238,7 +249,7 @@ internal sealed class ControlServer : IAsyncDisposable
         try
         {
             using var commandCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var arguments = CliArguments.Parse(request.Arguments);
+            var arguments = CliArguments.Parse(requestArguments);
             if (AppInteractionCommand.IsMatch(arguments))
             {
                 return await InteractionServer.RunAsync(arguments, reader, responseWriter,
@@ -266,7 +277,7 @@ internal sealed class ControlServer : IAsyncDisposable
                 }
             }
         }
-        catch (Exception exception) when (request.Schema is ControlProtocol.HostLeaseRequestSchema or ControlProtocol.RunnerAiRequestSchema)
+        catch (Exception exception) when (request.Schema is ControlProtocol.HostLeaseRequestSchema or ControlProtocol.RunnerAiRequestSchema or ControlProtocol.AccountUploadRequestSchema)
         {
             var message = exception.GetBaseException().Message;
             if (!string.IsNullOrEmpty(request.RunnerAiCredentials?.ApiKey))
@@ -331,6 +342,20 @@ internal sealed class ControlServer : IAsyncDisposable
             standardOutput,
             standardError,
             arguments.IsSilent);
+        if (request.Schema == ControlProtocol.AccountUploadRequestSchema)
+        {
+            var invalidAccountUpload = string.IsNullOrWhiteSpace(request.CallerUserId)
+                                       || request.RunnerAiCredentials is not null
+                                       || !CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments);
+            if (invalidAccountUpload)
+            {
+                return AccessDecision.AuthenticationRequired.WriteFailure(output);
+            }
+
+            accessAuthorizer = accountAuthorizerFactory(CliRuntime.ResolveOptions(arguments));
+            accessLease = null;
+        }
+
         if (request.Schema == ControlProtocol.HostLeaseRequestSchema)
         {
             if (string.IsNullOrWhiteSpace(request.CallerUserId)
@@ -363,11 +388,15 @@ internal sealed class ControlServer : IAsyncDisposable
             cancellationToken,
             allowResidentHostForwarding: false,
             accessAuthorizer: accessAuthorizer,
-            existingLease: accessLease).ConfigureAwait(false);
+            existingLease: accessLease,
+            expectedAccountUserId: request.Schema == ControlProtocol.AccountUploadRequestSchema
+                ? request.CallerUserId
+                : null).ConfigureAwait(false);
     }
 
     private static string ResponseSchemaFor(ControlRequest request)
-        => request.Schema == ControlProtocol.RunnerAiRequestSchema ? ControlProtocol.RunnerAiResponseSchema
+        => request.Schema == ControlProtocol.AccountUploadRequestSchema ? ControlProtocol.AccountUploadResponseSchema
+            : request.Schema == ControlProtocol.RunnerAiRequestSchema ? ControlProtocol.RunnerAiResponseSchema
             : request.Schema == ControlProtocol.HostLeaseRequestSchema
             ? ControlProtocol.HostLeaseResponseSchema : ControlProtocol.ResponseSchema;
 

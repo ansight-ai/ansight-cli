@@ -479,19 +479,6 @@ public sealed class CliArgumentsTests
     [InlineData("secret alias", "ansight secret list <app-id>")]
     [InlineData("invite identifier", "ansight pairing list")]
     [InlineData("capture identifier", "ansight profile dotnet list")]
-    public void RequirePositionalSuggestsHowToFindRequiredIdentifiers(
-        string label,
-        string expectedCommand)
-    {
-        var arguments = CliArguments.Parse(["command"]);
-
-        var exception = Assert.Throws<CliUsageException>(() =>
-            arguments.RequirePositional(2, label));
-
-        Assert.Contains(expectedCommand, exception.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
     [InlineData("host subcommand", "ansight host help")]
     [InlineData("device subcommand", "ansight device help")]
     [InlineData("location action", "ansight device help")]
@@ -510,7 +497,7 @@ public sealed class CliArgumentsTests
     [InlineData("test subcommand", "ansight test help")]
     [InlineData("workspace action", "ansight workspace help")]
     [InlineData("definition kind", "ansight workspace help")]
-    public void RequirePositionalSuggestsOwningHelpCommand(
+    public void RequirePositionalSuggestsRelevantCommand(
         string label,
         string expectedCommand)
     {

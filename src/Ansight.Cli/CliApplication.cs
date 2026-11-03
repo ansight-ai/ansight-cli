@@ -105,13 +105,23 @@ public static class CliApplication
         ICliAccessAuthorizer? accessAuthorizer = null,
         Func<CliArguments, CliOutput, CancellationToken, Task<int?>>? residentHostForwarder = null,
         TimeProvider? timeProvider = null,
-        CliAccessLease? existingLease = null)
+        CliAccessLease? existingLease = null,
+        string? expectedAccountUserId = null)
     {
         using var callerContext = SessionActivityContext.Current is null
             ? SessionActivityContext.Push(new SessionActivityContext(ActivityCaller.FromEnvironment())) : null;
         try
         {
-            var accessClass = CliCommandAccessPolicy.Classify(arguments, CliCommandAccessPolicy.HasRunnerCredentials);
+            var useRunnerCredentials = expectedAccountUserId is null
+                                       && CliCommandAccessPolicy.HasRunnerCredentials;
+            var accessClass = CliCommandAccessPolicy.Classify(arguments, useRunnerCredentials);
+            var invalidAccountRequest = expectedAccountUserId is not null
+                                        && (accessClass != CliAccessClass.Cloud
+                                            || !CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments));
+            if (invalidAccountRequest)
+            {
+                return AccessDecision.AuthenticationRequired.WriteFailure(output);
+            }
             if (accessClass == CliAccessClass.ResidentHost)
             {
                 return await HostCommands.RunRecoverableHostAsync(arguments, output, cancellationToken,
@@ -127,11 +137,12 @@ public static class CliApplication
                     residentHostForwarder).ConfigureAwait(false);
             }
 
-            // Account identity belongs to the calling process. Runner operations may use
-            // the host's session storage with request-scoped keys after authorization;
-            // the host independently authorizes the key before executing the command.
-            allowResidentHostForwarding &= accessClass == CliAccessClass.Runner
-                && CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments);
+            // Uploads reuse the host's storage under the caller's request-scoped identity.
+            var canForwardRunnerRequest = accessClass == CliAccessClass.Runner
+                                          && CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments);
+            var canForwardAccountUpload = accessClass == CliAccessClass.Cloud
+                                          && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments);
+            allowResidentHostForwarding &= canForwardRunnerRequest || canForwardAccountUpload;
             accessAuthorizer = accessClass == CliAccessClass.Runner
                 ? Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<ICliAccessAuthorizer>("Access.CreateRunnerAuthorizer", [arguments])
                 : accessAuthorizer is CliLocalAccessAuthorizer || accessAuthorizer is null
@@ -139,6 +150,19 @@ public static class CliApplication
                     : accessAuthorizer;
             await using var lease = await CliAccessLease.CreateAsync(accessAuthorizer, cancellationToken, timeProvider)
                 .ConfigureAwait(false);
+            if (expectedAccountUserId is not null && lease.Decision.UserId != expectedAccountUserId)
+            {
+                return AccessDecision.AuthenticationRequired.WriteFailure(output);
+            }
+
+            if (expectedAccountUserId is not null && accessAuthorizer is not ICliAccountAccessAuthorizer)
+            {
+                return AccessDecision.Unavailable.WriteFailure(output);
+            }
+
+            using var accountScope = canForwardAccountUpload && accessAuthorizer is ICliAccountAccessAuthorizer accountAuthorizer
+                ? accountAuthorizer.BeginAccountScope(lease.Decision.UserId!)
+                : null;
             using var accessContext = CliAccessContext.Push(accessAuthorizer, lease);
             using var authenticatedCaller = lease.Decision.UserId is { } principalId
                 ? SessionActivityContext.Push((SessionActivityContext.Current!) with

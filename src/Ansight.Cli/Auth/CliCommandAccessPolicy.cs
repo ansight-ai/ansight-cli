@@ -117,11 +117,45 @@ internal static class CliCommandAccessPolicy
     internal static bool UsesRequestScopedRunnerCredentials(CliArguments arguments)
     {
         if (UsesAiGateway(arguments)) return true;
+        if (UsesResidentHostCloudUpload(arguments))
+        {
+            return Classify(arguments, runnerConfigured: true) == CliAccessClass.Runner;
+        }
+
         var parts = arguments.Positionals;
         if (parts.Count < 2) return false;
         var command = parts[0].ToLowerInvariant();
         return (command is "session" or "sessions" || command == "cloud" && parts[1].ToLowerInvariant() is "analysis" or "analyses")
             && Classify(arguments, runnerConfigured: true) == CliAccessClass.Runner;
+    }
+
+    internal static bool UsesResidentHostCloudUpload(CliArguments arguments)
+    {
+        var parts = arguments.Positionals;
+        if (parts.Count < 2)
+        {
+            return false;
+        }
+
+        var command = parts[0].ToLowerInvariant();
+        var resource = parts[1].ToLowerInvariant();
+        if (command is "session" or "sessions")
+        {
+            return resource is "share" or "share-batch";
+        }
+
+        if (command != "cloud" || parts.Count < 3)
+        {
+            return false;
+        }
+
+        var action = parts[2].ToLowerInvariant();
+        return resource switch
+        {
+            "test" or "tests" => action is "upload" or "sync" or "import",
+            "trends" => action is "upload" or "sync",
+            _ => false
+        };
     }
 
     public static bool HasRunnerCredentials
