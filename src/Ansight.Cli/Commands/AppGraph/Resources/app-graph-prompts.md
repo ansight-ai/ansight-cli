@@ -46,7 +46,8 @@ Starting from the current visible state:
   boundary, re-observe semantic content after every scroll, and inspect all newly revealed actions before
   leaving. Continue while fresh before/after evidence shows changed semantic content, within the configured run
   limits. Stop at the first unchanged semantic viewport. Two consecutive scrolls without comparable evidence
-  block that destination/container/direction; taps and selector aliases do not reset the guard. Use the
+  block that destination/container/direction; taps and selector aliases do not reset the guard. If blocked,
+  do not navigate away merely to reset a guard. Use the
   scrollObservation status, not raw capture hashes, to assess movement. An unchanged viewport alone does not
   prove all directions or containers are covered: classify from boundary evidence or record a blocked gap.
   Report the classification promptly, then use a return action to reach the next pending branch. When the screen clearly has one dominant
