@@ -9,6 +9,8 @@ internal interface IAppGraphExplorationDatabase
 {
     void Save(SimulatorAgentAppGraphLiveRun run);
 
+    IReadOnlyList<SimulatorAgentAppGraphLiveRun> List(string? sessionId, int limit);
+
     AppGraphResumeState? LoadLatestIncomplete(
         string sessionId,
         string? appId,

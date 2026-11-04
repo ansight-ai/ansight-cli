@@ -113,6 +113,80 @@ internal sealed class AppGraphExplorationDatabase
         }
     }
 
+    public IReadOnlyList<SimulatorAgentAppGraphLiveRun> List(string? sessionId, int limit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        lock (databaseGate)
+        {
+            try
+            {
+                EnsureDatabase();
+                using var connection = OpenConnection();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    SELECT run_id, session_id, app_id, graph_name, status, message,
+                           current_destination_id, turn, safe_actions_observed, actions_explored,
+                           scroll_containers_observed, scroll_containers_completed,
+                           started_utc, updated_utc, completed_utc, pending_outcome_json
+                    FROM app_graph_runs
+                    WHERE $session_id IS NULL OR session_id = $session_id
+                    ORDER BY updated_utc DESC
+                    LIMIT $limit;
+                    """;
+                command.Parameters.AddWithValue("$session_id",
+                    string.IsNullOrWhiteSpace(sessionId) ? DBNull.Value : sessionId.Trim());
+                command.Parameters.AddWithValue("$limit", limit);
+
+                var retainedRuns = new List<SimulatorAgentAppGraphLiveRun>();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        retainedRuns.Add(new SimulatorAgentAppGraphLiveRun(
+                            "ansight.app-graph-live/v3",
+                            reader.GetString(0),
+                            reader.GetString(1),
+                            reader.IsDBNull(2) ? null : reader.GetString(2),
+                            reader.GetString(3),
+                            reader.GetString(4),
+                            reader.GetString(5),
+                            reader.IsDBNull(6) ? null : reader.GetString(6),
+                            null,
+                            reader.GetInt32(7),
+                            DateTimeOffset.Parse(reader.GetString(12)),
+                            DateTimeOffset.Parse(reader.GetString(13)),
+                            reader.IsDBNull(14) ? null : DateTimeOffset.Parse(reader.GetString(14)),
+                            new SimulatorAgentAppGraphLiveCoverage(
+                                reader.GetInt32(8), reader.GetInt32(9),
+                                reader.GetInt32(10), reader.GetInt32(11), []),
+                            [], [], [], [], [], [])
+                        {
+                            PendingOutcome = reader.IsDBNull(15) ? null
+                                : JsonSerializer.Deserialize<SimulatorAgentAppGraphPendingOutcome>(reader.GetString(15))
+                        });
+                    }
+                }
+
+                return retainedRuns.Select(run => run with
+                {
+                    Nodes = ReadNodes(connection, run.RunId),
+                    Edges = ReadEdges(connection, run.RunId),
+                    NavigationHosts = ReadNavigationHosts(connection, run.RunId),
+                    TabGroups = ReadTabGroups(connection, run.RunId),
+                    Frontier = ReadActions(connection, run.RunId)
+                }).ToArray();
+            }
+            catch (Exception exception) when (exception is SqliteException
+                                               or IOException
+                                               or UnauthorizedAccessException
+                                               or JsonException
+                                               or FormatException)
+            {
+                return [];
+            }
+        }
+    }
+
     private void EnsureDatabase()
     {
         EnsureProviderInitialized();

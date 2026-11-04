@@ -588,6 +588,10 @@ public sealed partial class SimulatorAgentAppGraphLiveRunStoreTests
             connection.Close();
 
             var resumedStore = new AppGraphLiveRunStore(database);
+            var historical = Assert.Single(resumedStore.List("session-1"));
+            Assert.Equal(6, historical.Nodes.Count);
+            Assert.Equal("shell_tab_bar", Assert.Single(historical.NavigationHosts).Technology?.Kind);
+            Assert.Equal("tabbed_page", Assert.Single(historical.TabGroups).Technology?.Kind);
             resumedStore.Begin(
                 "run-resumed",
                 "session-1",

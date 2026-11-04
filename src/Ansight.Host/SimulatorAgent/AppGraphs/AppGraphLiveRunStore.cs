@@ -129,11 +129,26 @@ internal sealed partial class AppGraphLiveRunStore
     {
         lock (gate)
         {
-            return runs.Values
+            var liveSnapshots = runs.Values
                 .Where(run => string.IsNullOrWhiteSpace(sessionId)
                               || string.Equals(run.SessionId, sessionId.Trim(), StringComparison.Ordinal))
-                .OrderByDescending(static run => run.UpdatedUtc)
                 .Select(CreateSnapshot)
+                .ToArray();
+
+            var retainedSnapshots = database.List(sessionId, MaximumRetainedRuns)
+                .Select(static run => run.Status is "starting" or "running"
+                    ? run with
+                    {
+                        Status = "partial",
+                        ActiveToolName = null,
+                        Message = "Exploration was interrupted. Retained coverage is incomplete and can be resumed."
+                    }
+                    : run);
+
+            return liveSnapshots.Concat(retainedSnapshots)
+                .DistinctBy(static run => run.RunId, StringComparer.Ordinal)
+                .OrderByDescending(static run => run.UpdatedUtc)
+                .Take(MaximumRetainedRuns)
                 .ToArray();
         }
     }

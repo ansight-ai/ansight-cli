@@ -20,4 +20,7 @@ internal sealed class NullAppGraphExplorationDatabase
         string? appId,
         string graphName)
         => null;
+
+    public IReadOnlyList<SimulatorAgentAppGraphLiveRun> List(string? sessionId, int limit)
+        => [];
 }
