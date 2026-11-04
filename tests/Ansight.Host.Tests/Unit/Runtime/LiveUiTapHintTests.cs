@@ -156,14 +156,17 @@ public sealed class LiveUiTapHintTests
         Assert.NotNull(hint?["selector"]?["targetFingerprint"]);
     }
 
-    [Fact]
-    public void BuildTapHint_ScopesRepeatedNativeIdsToTheirObservedAncestor()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildTapHint_ScopesActionableNativeIdsToTheirObservedAncestor(bool supportsTap)
     {
         var root = SearchTree();
         var tab = Node("StaticText", "group", 750);
         tab["automationId"] = "1";
         tab["text"] = "Map";
         tab["id"] = "old-native-id";
+        tab["supportedActions"] = supportsTap ? new JsonArray("tap") : new JsonArray();
         var other = tab.DeepClone().AsObject();
         other["id"] = "other-native-id";
         root["children"]!.AsArray().Add(other);
@@ -177,6 +180,12 @@ public sealed class LiveUiTapHintTests
         var match = LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(new JsonObject { ["nodeId"] = "old-native-id" }), registry)[0];
         var hint = FindLiveUiTool.BuildTapHint(root, match, viewport, LiveUiSelector.Parse(null),
             targetSource: RemoteAppToolIds.UiGetVisualTree);
+        if (!supportsTap)
+        {
+            Assert.Null(hint);
+            return;
+        }
+
         var selector = hint!["selector"]!;
         Assert.Equal("1", selector["automationId"]!.GetValue<string>());
         Assert.Equal("bottom-tabs", selector["ancestorAutomationId"]!.GetValue<string>());

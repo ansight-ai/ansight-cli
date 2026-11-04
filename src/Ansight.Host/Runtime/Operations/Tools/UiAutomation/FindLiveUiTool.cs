@@ -290,8 +290,12 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         }
 
         var bounds = LiveUiNodeQuery.ReadBounds(match.Node);
-        var usableTarget = bounds is not null
-            && bounds.Width > 0
+        if (bounds is null)
+        {
+            return null;
+        }
+
+        var usableTarget = bounds.Width > 0
             && bounds.Height > 0
             && LiveUiNodeQuery.IsEffectivelyVisible(match)
             && LiveUiNodeQuery.IsEffectivelyEnabled(match)
