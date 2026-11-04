@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
     <AnsightReleaseVersion>1.8.0</AnsightReleaseVersion>
-    <AnsightReleaseBuildNumber>2026110501</AnsightReleaseBuildNumber>
+    <AnsightReleaseBuildNumber>2026110502</AnsightReleaseBuildNumber>
   </PropertyGroup>
 </Project>
