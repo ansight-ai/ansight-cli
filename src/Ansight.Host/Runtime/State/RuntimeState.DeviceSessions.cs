@@ -55,10 +55,12 @@ internal sealed partial class RuntimeState
                 DeviceProfileJson = profileJson.ToJsonString(JsonUtil.Compact),
                 Author = ResolveCurrentAuthor()
             });
+            BeginHostMetadataCapture(sessionsById[sessionId], target.Platform);
             activeDeviceSessionIds.Add(sessionId);
             RegisterCaptureUsage(sessionsById[sessionId]);
         }
         PersistAndBroadcast(sessionId);
+        CollectHostMetadata(sessionId);
         return sessionId;
     }
 

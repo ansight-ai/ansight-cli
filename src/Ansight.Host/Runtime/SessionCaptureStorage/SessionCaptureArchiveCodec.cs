@@ -89,6 +89,7 @@ internal static class SessionCaptureArchiveCodec
             SdkVersion = SessionSdkVersion.Resolve(summary.SdkVersion, deviceProfile, profileJson),
             Tags = summary.Tags?.ToArray() ?? [],
             Notes = summary.Notes,
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(summary.HostMetadata),
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(summary.CustomProperties),
             AppState = summary.AppState,
             AppStateChangedUtc = summary.AppStateChangedUtc,

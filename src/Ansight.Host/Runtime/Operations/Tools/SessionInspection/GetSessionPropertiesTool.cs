@@ -15,7 +15,7 @@ internal sealed class GetSessionPropertiesTool : Operation
     protected override string Title => "Get Session Properties";
 
     protected override string Description =>
-        "Return the custom properties reported for a live or historical Ansight session.";
+        "Return capture-host metadata and the custom properties reported for a live or historical Ansight session.";
 
     protected override JsonObject InputSchema => SessionInspectionToolSchemas.SessionSelectorSchema();
 
@@ -35,6 +35,7 @@ internal sealed class GetSessionPropertiesTool : Operation
                 ["captureSource"] = snapshot.CaptureSource,
                 ["isLive"] = isLive,
                 ["isHistorical"] = snapshot.IsHistorical,
+                ["hostMetadata"] = JsonSerializer.SerializeToNode(snapshot.HostMetadata, JsonUtil.Compact),
                 ["customProperties"] = snapshot.CustomProperties?.DeepClone() ?? new JsonObject()
             },
             isError: false));

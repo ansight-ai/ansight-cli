@@ -424,11 +424,13 @@ internal sealed partial class RuntimeState : IRuntimeState
                 Author = ResolveCurrentAuthor()
             };
 
+            BeginHostMetadataCapture(state);
             sessionsById[sessionId] = state;
             RegisterCaptureUsage(state);
         }
 
         PersistAndBroadcast(sessionId);
+        CollectHostMetadata(sessionId);
         log.Info($"session_created sessionId={sessionId} appId={safeAppId} clientName={safeClientName} remoteAddress={safeRemoteAddress} configId={safeConfigId} processSessionId={safeProcessSessionId}");
         return sessionId;
     }

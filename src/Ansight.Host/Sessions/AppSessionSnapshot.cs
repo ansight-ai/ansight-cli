@@ -26,6 +26,7 @@ public sealed class AppSessionSnapshot
     public string? SdkVersion { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
     public string? Notes { get; init; }
+    public SessionHostMetadata? HostMetadata { get; init; }
     public JsonObject? CustomProperties { get; init; }
     public AppLifecycleState AppState { get; init; } = AppLifecycleState.Unknown;
     public DateTimeOffset? AppStateChangedUtc { get; init; }

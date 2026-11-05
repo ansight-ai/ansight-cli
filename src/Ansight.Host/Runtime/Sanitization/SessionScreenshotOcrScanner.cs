@@ -171,7 +171,7 @@ internal sealed class TesseractSessionScreenshotOcrScanner : ISessionScreenshotO
         return unionArea <= 0 ? 0 : intersectionArea / (double)unionArea;
     }
 
-    private static string? ResolveExecutablePath(string? configuredExecutablePath)
+    internal static string? ResolveExecutablePath(string? configuredExecutablePath)
     {
         var configured = string.IsNullOrWhiteSpace(configuredExecutablePath)
             ? Environment.GetEnvironmentVariable("ANSIGHT_TESSERACT_PATH")

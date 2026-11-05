@@ -62,6 +62,7 @@ internal sealed partial class RuntimeState
             session.SdkVersion = sdkVersion ?? session.SdkVersion;
             session.AppIcon = appIcon ?? session.AppIcon;
         }, updateTimelineEnd: false);
+        CollectHostMetadata(sessionId, profile?.Device?.OsName);
     }
 
     public void SetSessionCustomProperties(string sessionId, JsonObject? customProperties)

@@ -273,6 +273,7 @@ internal sealed partial class RuntimeState
             Name = NormalizeSessionName(snapshot.Name),
             Tags = NormalizeTags(snapshot.Tags),
             Notes = NormalizeNotes(snapshot.Notes),
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(snapshot.HostMetadata),
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(snapshot.CustomProperties),
             AppState = snapshot.AppState,
             AppStateChangedUtc = snapshot.AppStateChangedUtc,

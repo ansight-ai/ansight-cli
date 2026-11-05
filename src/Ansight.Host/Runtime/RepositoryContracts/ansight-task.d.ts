@@ -1026,6 +1026,41 @@ export interface SessionPropertiesResult<
   isHistorical: boolean;
   /** The app-reported property groups, typed by the repository-supplied contract. */
   customProperties: TProperties;
+  /** Host and relevant tooling observed when this capture began; absent on older/offline captures. */
+  hostMetadata: CaptureHostMetadata | null;
+}
+
+/** Capture-host provenance retained through replay, extraction and export. */
+export interface CaptureHostMetadata {
+  schema: string;
+  capturedAtUtc: string;
+  collectionCompletedUtc?: string | null;
+  status: string;
+  targetPlatform?: string | null;
+  hostApplication?: string | null;
+  cliVersion?: string | null;
+  cliInformationalVersion?: string | null;
+  cliBuildNumber?: string | null;
+  commitSha?: string | null;
+  hostBuildId?: string | null;
+  processorCount: number;
+  repositoryAutomationsEnabled?: boolean | null;
+  osType?: string | null;
+  osVersion?: string | null;
+  osBuild?: string | null;
+  osDescription?: string | null;
+  osArchitecture?: string | null;
+  processArchitecture?: string | null;
+  dotNetRuntime?: string | null;
+  /** Availability and selection at capture time; not a log of tools actually invoked. */
+  tools: Array<{
+    name: string;
+    status: string;
+    version?: string | null;
+    build?: string | null;
+    path?: string | null;
+    selectedVia?: string | null;
+  }>;
 }
 
 /** Arguments accepted by the time window operation. */

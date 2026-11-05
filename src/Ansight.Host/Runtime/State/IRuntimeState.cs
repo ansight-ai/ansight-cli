@@ -8,4 +8,7 @@ internal interface IRuntimeState :
     ISessionEditor,
     ISessionAnnotationMutator
 {
+    void ConfigureHostMetadataCollector(ISessionHostMetadataCollector collector)
+    {
+    }
 }

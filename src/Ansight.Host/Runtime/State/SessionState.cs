@@ -33,6 +33,8 @@ internal sealed class SessionState
     public string CaptureSource { get; set; } = WorkspaceExecutionModes.Sdk;
     public string? SdkVersion { get; set; }
     public string? Notes { get; set; }
+    public bool ShouldCollectHostMetadata { get; set; }
+    public SessionHostMetadata? HostMetadata { get; set; }
     public JsonObject? CustomProperties { get; set; }
     public AppLifecycleState AppState { get; set; } = AppLifecycleState.Unknown;
     public DateTimeOffset? AppStateChangedUtc { get; set; }

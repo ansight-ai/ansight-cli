@@ -88,6 +88,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         ExtensionIdentity = hostIdentityStore.Current;
         Extensions = new Ansight.Infrastructure.Extensions.OptionalExtensions(this, hostRuntimeOptions.ExtensionsDirectory);
         this.runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
+        this.runtimeState.ConfigureHostMetadataCollector(new SessionHostMetadataCollector(hostRuntimeOptions));
         this.pairingServer = pairingServer ?? throw new ArgumentNullException(nameof(pairingServer));
         this.appToolBridge = appToolBridge ?? throw new ArgumentNullException(nameof(appToolBridge));
         this.operationDispatcher = operationDispatcher ?? throw new ArgumentNullException(nameof(operationDispatcher));
@@ -193,6 +194,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 
         composition = new MefHostComposition(ApplicationPaths, encryptedStorage, options.SessionVideoEncoder);
         runtimeState = composition.Get<IRuntimeState>();
+        runtimeState.ConfigureHostMetadataCollector(new SessionHostMetadataCollector(options));
         pairingServer = composition.Get<IUdpPairingServer>();
         appToolBridge = composition.Get<IAppToolBridge>();
         operationDispatcher = composition.Get<IOperationDispatcher>();

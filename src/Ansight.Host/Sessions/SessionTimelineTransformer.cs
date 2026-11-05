@@ -38,6 +38,7 @@ internal static class SessionTimelineTransformer
             SdkVersion = sourceSnapshot.SdkVersion,
             Tags = sourceSnapshot.Tags.ToArray(),
             Notes = sourceSnapshot.Notes,
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(sourceSnapshot.HostMetadata),
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(sourceSnapshot.CustomProperties),
             AppState = sourceSnapshot.AppState,
             AppStateChangedUtc = sourceSnapshot.AppStateChangedUtc,

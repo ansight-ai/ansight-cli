@@ -554,6 +554,7 @@ internal static partial class SessionSnapshotReader
             SdkVersion = SessionSdkVersion.Resolve(snapshot.SdkVersion, snapshot.DeviceProfile, snapshot.DeviceProfileJson),
             Tags = snapshot.Tags.ToArray(),
             Notes = snapshot.Notes,
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(snapshot.HostMetadata),
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(snapshot.CustomProperties),
             AppState = snapshot.AppState,
             AppStateChangedUtc = snapshot.AppStateChangedUtc,

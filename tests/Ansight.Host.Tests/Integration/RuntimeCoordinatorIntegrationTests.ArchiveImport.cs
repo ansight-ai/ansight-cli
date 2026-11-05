@@ -41,6 +41,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             IsHistorical = false,
             IsPinned = true,
             SdkVersion = "0.1.0-import",
+            HostMetadata = new SessionHostMetadata
+            {
+                CapturedAtUtc = DateTimeOffset.Parse("2026-04-01T06:00:00Z"),
+                Status = "complete",
+                CliVersion = "1.2.3-original-host",
+                OsType = "macos",
+                Tools = [new SessionHostToolMetadata("xcode", "available", "26.4")]
+            },
             Tags = ["import", "archive"],
             Notes = "Imported from a zip archive.",
             AppState = AppLifecycleState.Background,
@@ -148,6 +156,8 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.True(importResult.ImportedSession.IsHistorical);
         Assert.True(importResult.ImportedSession.IsPinned);
         Assert.Equal("0.1.0-import", importResult.ImportedSession.SdkVersion);
+        Assert.Equal("1.2.3-original-host", importResult.ImportedSession.HostMetadata!.CliVersion);
+        Assert.Equal("26.4", Assert.Single(importResult.ImportedSession.HostMetadata.Tools).Version);
         Assert.NotNull(importResult.ImportedSession.AppIcon);
         Assert.Equal(["import", "archive"], importResult.ImportedSession.Tags);
         Assert.Single(importResult.ImportedSession.Images);

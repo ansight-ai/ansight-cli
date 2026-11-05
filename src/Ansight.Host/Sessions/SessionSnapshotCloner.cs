@@ -35,6 +35,7 @@ public static class SessionSnapshotCloner
             SdkVersion = snapshot.SdkVersion,
             Tags = snapshot.Tags,
             Notes = snapshot.Notes,
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(snapshot.HostMetadata),
             CustomProperties = CloneCustomProperties(snapshot.CustomProperties),
             AppState = snapshot.AppState,
             AppStateChangedUtc = snapshot.AppStateChangedUtc,
@@ -68,6 +69,11 @@ public static class SessionSnapshotCloner
 
     internal static AppSessionSnapshot WithoutVideoRecordings(AppSessionSnapshot snapshot)
         => WithLogs(snapshot, snapshot.LogStreams, snapshot.Logs, Array.Empty<SessionVideoRecording>());
+
+    public static SessionHostMetadata? CloneHostMetadata(SessionHostMetadata? metadata)
+    {
+        return metadata is null ? null : metadata with { Tools = Array.AsReadOnly(metadata.Tools.ToArray()) };
+    }
 
     public static JsonObject? CloneCustomProperties(JsonObject? customProperties)
     {

@@ -253,6 +253,7 @@ internal sealed class JsonLinesSessionBuilder
             Name = snapshot?.Name,
             Tags = snapshot?.Tags ?? Array.Empty<string>(),
             Notes = Notes ?? snapshot?.Notes,
+            HostMetadata = SessionSnapshotCloner.CloneHostMetadata(snapshot?.HostMetadata),
             CustomProperties = SessionSnapshotCloner.CloneCustomProperties(CustomProperties ?? snapshot?.CustomProperties),
             AppState = AppState ?? snapshot?.AppState ?? AppLifecycleState.Unknown,
             AppStateChangedUtc = AppStateChangedUtc ?? snapshot?.AppStateChangedUtc,

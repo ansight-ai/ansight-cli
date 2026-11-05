@@ -33,5 +33,6 @@ public sealed record SessionLiveUpdate(
 {
     public IReadOnlyList<SessionVideoRecording> VideoRecordings { get; init; } = [];
     public IReadOnlyList<SessionApplicationEvent> LifecycleEvents { get; init; } = [];
+    public SessionHostMetadata? HostMetadata { get; init; }
     public System.Text.Json.Nodes.JsonObject? CustomProperties { get; init; }
 }
