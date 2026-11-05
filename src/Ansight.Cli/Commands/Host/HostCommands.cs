@@ -867,18 +867,16 @@ internal static void ConfigureCompanionRegistration(
         CancellationToken cancellationToken)
     {
         var mode = requestedMode ?? CompanionAccessMode.Disabled;
-        if (!OperatingSystem.IsMacOS())
+        if (!OperatingSystem.IsMacOS() && requestedMode.HasValue)
         {
-            if (requestedMode.HasValue)
-            {
-                throw new PlatformNotSupportedException(
-                    "CLI companion hosting currently requires macOS for simulator video and input.");
-            }
-
-            return null;
+            throw new PlatformNotSupportedException(
+                "Remote companion access currently requires macOS. Local Android screenshot control is available on this host.");
         }
 
-        if (!startForLocalExplorer && !requestedMode.HasValue && mode == CompanionAccessMode.Disabled)
+        var skipLocalControl = !startForLocalExplorer
+            && !requestedMode.HasValue
+            && mode == CompanionAccessMode.Disabled;
+        if (skipLocalControl)
         {
             return null;
         }

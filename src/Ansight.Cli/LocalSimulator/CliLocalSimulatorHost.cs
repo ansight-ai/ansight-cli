@@ -46,10 +46,10 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         Action<string> reportStatus,
         CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsMacOS())
+        if (!OperatingSystem.IsMacOS() && mode != CompanionAccessMode.Disabled)
         {
             throw new PlatformNotSupportedException(
-                "CLI companion hosting currently requires macOS for simulator video and input.");
+                "Remote companion access currently requires macOS. Local Android screenshot control is available on this host.");
         }
 
         var host = new CliLocalSimulatorHost(runtime, options, reportStatus, mode);
@@ -73,7 +73,10 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         }
 
         disposed = true;
-        if (hostedAccess is not null) await hostedAccess.DisposeAsync().ConfigureAwait(false);
+        if (hostedAccess is not null)
+        {
+            await hostedAccess.DisposeAsync().ConfigureAwait(false);
+        }
         runtime.LocalSimulatorControl = null;
 
         if (server is not null)
@@ -160,18 +163,27 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
                 emulatorTracker.FindDevice,
                 emulatorController);
 
-            var scrcpyResolution = await ScrcpyToolLocator.ResolveAsync(
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-            if (scrcpyResolution.IsFound)
+            // The Android capture and input backends are portable. Only the
+            // native WebRTC bridge currently depends on macOS.
+            if (OperatingSystem.IsMacOS())
             {
-                androidWebRtcFactory = new CliAndroidWebRtcSessionFactory(
-                    adbClient,
-                    scrcpyResolution);
-                startupMessages.Add($"Android Emulator WebRTC is ready through scrcpy {scrcpyResolution.Version}.");
+                var scrcpyResolution = await ScrcpyToolLocator.ResolveAsync(
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (scrcpyResolution.IsFound)
+                {
+                    androidWebRtcFactory = new CliAndroidWebRtcSessionFactory(
+                        adbClient,
+                        scrcpyResolution);
+                    startupMessages.Add($"Android Emulator WebRTC is ready through scrcpy {scrcpyResolution.Version}.");
+                }
+                else
+                {
+                    startupMessages.Add($"Android screenshot control is ready. Live video unavailable: {scrcpyResolution.Message}");
+                }
             }
             else
             {
-                startupMessages.Add($"Android video unavailable: {scrcpyResolution.Message}");
+                startupMessages.Add("Android screenshot control is ready. Live WebRTC video currently requires macOS.");
             }
         }
         else
@@ -183,21 +195,16 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         {
             throw new InvalidOperationException(string.Join(' ', startupMessages));
         }
-        if (iosWebRtcFactory is null && androidWebRtcFactory is null)
-        {
-            throw new InvalidOperationException(
-                "No companion WebRTC video backend is available. " + string.Join(' ', startupMessages));
-        }
 
         var runtimeSource = runtimeSources.Count == 1
             ? runtimeSources[0]
             : new CompositeRemoteRuntimeSource(runtimeSources);
         var frameSource = new RoutedSimulatorFrameSource(runtimeSource, frameSources);
         inputSink = new RoutedSimulatorInputSink(runtimeSource, inputSinks);
-        var webRtcFactory = new SelectiveSimulatorWebRtcSessionFactory(
-            runtimeSource,
-            iosWebRtcFactory,
-            androidWebRtcFactory);
+        var hasWebRtcBackend = iosWebRtcFactory is not null || androidWebRtcFactory is not null;
+        var webRtcFactory = hasWebRtcBackend
+            ? new SelectiveSimulatorWebRtcSessionFactory(runtimeSource, iosWebRtcFactory, androidWebRtcFactory)
+            : null;
         deviceDriver = new HeadlessHostDeviceDriver(runtime.Devices, options);
         var lifecycleSource = new CliRemoteDeviceLifecycleSource(deviceDriver);
         var annotationSource = new CliRemoteAnnotationSource(runtime);

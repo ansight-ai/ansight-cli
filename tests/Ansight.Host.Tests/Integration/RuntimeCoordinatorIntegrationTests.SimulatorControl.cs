@@ -11,19 +11,21 @@ namespace Ansight.Host.Tests.Integration;
 public sealed partial class RuntimeCoordinatorIntegrationTests
 {
     [Theory(Timeout = 30000)]
-    [InlineData("Ansight_AnxReader_API36", false)]
-    [InlineData("emulator-5554", false)]
-    [InlineData("Ansight_AnxReader_API36", true)]
-    [InlineData("emulator-5554", true)]
+    [InlineData("Ansight_AnxReader_API36", false, true)]
+    [InlineData("emulator-5554", false, true)]
+    [InlineData("Ansight_AnxReader_API36", true, true)]
+    [InlineData("emulator-5554", true, true)]
+    [InlineData("Ansight_AnxReader_API36", false, false)]
+    [InlineData("emulator-5554", false, false)]
     public async Task SimulatorProxyResolvesAvdNameForVideoFramesAndInput(
-        string reportedIdentifier, bool duplicateAvd)
+        string reportedIdentifier, bool duplicateAvd, bool hasVideoBackend)
     {
         using var environment = new TestEnvironment();
         var pairing = environment.SeedPairingConfig("org.nitri.opentopo", "OpenTopoMapViewer");
         await using var runtime = environment.CreateRuntime();
         await runtime.StartAsync();
         var connected = await SendConnectRequestAsync(pairing);
-        Assert.True(connected.Accepted);
+        Assert.True(connected.Accepted, connected.Reason);
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(new Uri(
             $"ws://127.0.0.1:{connected.WebSocketPort}{connected.WebSocketPath}?token={connected.WebSocketToken}"),
@@ -50,13 +52,15 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 BootIdentifier: "Ansight_AnxReader_API36")
         };
         if (duplicateAvd)
+        {
             devices.Add(devices[0] with { Identifier = "emulator-5556" });
+        }
         var source = new SimulatorProxyRuntimeSource(devices);
         var frames = new SimulatorProxyFrameSource();
         await using var input = new SimulatorProxyInputSink();
         var video = new SimulatorProxyVideoFactory();
         await using var remote = new RemoteControlServer(source, frames, input,
-            requestedPort: 0, webRtcSessionFactory: video);
+            requestedPort: 0, webRtcSessionFactory: hasVideoBackend ? video : null);
         await remote.StartAsync();
         runtime.LocalSimulatorControl = remote;
         var explorer = await runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest());
@@ -79,13 +83,28 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             return;
         }
 
-        Assert.Equal(HttpStatusCode.OK, offer.StatusCode);
+        Assert.Equal(hasVideoBackend ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, offer.StatusCode);
         Assert.Equal(HttpStatusCode.OK, frame.StatusCode);
         Assert.Equal(HttpStatusCode.OK, button.StatusCode);
-        Assert.Equal("emulator-5554", video.LastDeviceIdentifier);
+        Assert.Equal(hasVideoBackend ? "emulator-5554" : null, video.LastDeviceIdentifier);
         Assert.Equal("emulator-5554", frames.LastDeviceIdentifier);
         Assert.Equal("emulator-5554", input.LastDeviceIdentifier);
         Assert.Equal(SimulatorProxyFrameSource.FrameBytes, await frame.Content.ReadAsByteArrayAsync());
+
+        foreach (var phase in new[] { "down", "up" })
+        {
+            using var pointer = await client.PostAsJsonAsync($"{prefix}/input", new
+            {
+                phase,
+                x = 0.25,
+                y = 0.5,
+                pointerId = 1,
+                timestamp = 100
+            });
+            Assert.Equal(HttpStatusCode.OK, pointer.StatusCode);
+        }
+        Assert.Equal(new[] { "down", "up" }, input.PointerPhases);
+
         var summaries = await client.GetFromJsonAsync<SessionExplorerSummary[]>("api/sessions");
         Assert.Equal("emulator-5554", Assert.Single(summaries!, session => session.SessionId == sessionId)
             .RuntimeDeviceIdentifier);
@@ -149,13 +168,18 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         public string BackendName => "test";
         public string Status => "ready";
         public string? LastDeviceIdentifier { get; private set; }
+        public List<string> PointerPhases { get; } = [];
         public Task<InputDeliveryResult> SendButtonAsync(RemoteButtonEvent buttonEvent, CancellationToken cancellationToken = default)
         {
             LastDeviceIdentifier = buttonEvent.DeviceUdid;
             return Task.FromResult(InputDeliveryResult.Success(BackendName));
         }
         public Task<InputDeliveryResult> SendAsync(RemotePointerEvent pointerEvent, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+        {
+            LastDeviceIdentifier = pointerEvent.DeviceUdid;
+            PointerPhases.Add(pointerEvent.Phase);
+            return Task.FromResult(InputDeliveryResult.Success(BackendName));
+        }
         public Task<InputDeliveryResult> SendKeyAsync(RemoteKeyEvent keyEvent, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
         public Task<InputDeliveryResult> SendTextAsync(RemoteTextEvent textEvent, CancellationToken cancellationToken = default)
