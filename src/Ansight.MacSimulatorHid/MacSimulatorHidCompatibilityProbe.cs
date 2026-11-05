@@ -39,7 +39,8 @@ public static class MacSimulatorHidCompatibilityProbe
             return new MacSimulatorHidCompatibility(
                 true,
                 "available",
-                "The native SimulatorKit HID binding loaded successfully for the selected Xcode installation.",
+                "The native SimulatorKit HID binding loaded successfully for the selected Xcode installation. " +
+                "This checks API availability, not input receipt; verify an observed action on the selected simulator.",
                 normalizedDeveloperDirectory);
         }
         catch (Exception exception) when (IsCompatibilityFailure(exception.GetBaseException()))

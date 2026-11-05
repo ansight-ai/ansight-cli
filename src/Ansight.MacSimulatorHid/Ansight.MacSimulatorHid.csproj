@@ -9,8 +9,14 @@
     <NativeMacTargetTriple>$(NativeMacArchitecture)-apple-macos12.0</NativeMacTargetTriple>
     <NativeWrapperSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/AnsightSimulatorHid.m</NativeWrapperSource>
     <NativeWrapperHeader>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/AnsightSimulatorHid.h</NativeWrapperHeader>
+    <NativeXcode27HidSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/_Xcode27SimulatorHid.m</NativeXcode27HidSource>
+    <NativeXcode27HidHeader>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/_Xcode27SimulatorHid.h</NativeXcode27HidHeader>
+    <NativeFrameworkLoaderHeader>$(MSBuildProjectDirectory)/../native/AnsightSimulatorFrameworks.h</NativeFrameworkLoaderHeader>
     <NativeWrapperDirectory>$(MSBuildProjectDirectory)/obj/$(Configuration)/$(TargetFramework)/$(NativeMacArchitecture)/native</NativeWrapperDirectory>
     <NativeWrapperDynamicLibrary>$(NativeWrapperDirectory)/libAnsightSimulatorHid.dylib</NativeWrapperDynamicLibrary>
+    <NativeStylusGuestSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/_Xcode27SimulatorStylusGuest.m</NativeStylusGuestSource>
+    <NativeStylusGuestBuildScript>$(MSBuildProjectDirectory)/Native/AnsightSimulatorHid/build-stylus-helper.sh</NativeStylusGuestBuildScript>
+    <NativeStylusGuestExecutable>$(NativeWrapperDirectory)/AnsightSimulatorStylusGuest</NativeStylusGuestExecutable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content
+        Include="$(NativeStylusGuestExecutable)"
+        Link="AnsightSimulatorStylusGuest"
+        CopyToOutputDirectory="PreserveNewest"
+        CopyToPublishDirectory="PreserveNewest"
+        ExcludeFromSingleFile="true"
+        Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))" />
     <Content
         Include="$(NativeWrapperDynamicLibrary)"
         Link="libAnsightSimulatorHid.dylib"
@@ -32,13 +45,23 @@
   </ItemGroup>
 
   <Target
+      Name="BuildAnsightSimulatorStylusGuest"
+      BeforeTargets="CoreCompile"
+      Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
+      Inputs="$(NativeStylusGuestSource);$(NativeStylusGuestBuildScript)"
+      Outputs="$(NativeStylusGuestExecutable)">
+    <MakeDir Directories="$(NativeWrapperDirectory)" />
+    <Exec Command="/bin/bash &quot;$(NativeStylusGuestBuildScript)&quot; &quot;$(NativeMacArchitecture)&quot; &quot;$(NativeStylusGuestExecutable)&quot;" />
+  </Target>
+
+  <Target
       Name="BuildAnsightSimulatorHidDynamicLibrary"
       BeforeTargets="CoreCompile"
       Condition="$([MSBuild]::IsOSPlatform('OSX')) and ('$(RuntimeIdentifier)' == '' or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-')))"
-      Inputs="$(NativeWrapperSource);$(NativeWrapperHeader)"
+      Inputs="$(NativeWrapperSource);$(NativeWrapperHeader);$(NativeFrameworkLoaderHeader);$(NativeXcode27HidSource);$(NativeXcode27HidHeader)"
       Outputs="$(NativeWrapperDynamicLibrary)">
     <MakeDir Directories="$(NativeWrapperDirectory)" />
-    <Exec Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang -target $(NativeMacTargetTriple) -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(NativeWrapperSource)&quot; -framework Foundation -framework CoreGraphics -o &quot;$(NativeWrapperDynamicLibrary)&quot;" />
+    <Exec Command="&quot;/usr/bin/xcrun&quot; --sdk macosx clang -target $(NativeMacTargetTriple) -dynamiclib -fobjc-arc -fblocks -fmodules -fvisibility=hidden -Wall -Wextra &quot;$(NativeWrapperSource)&quot; &quot;$(NativeXcode27HidSource)&quot; -framework Foundation -framework CoreGraphics -o &quot;$(NativeWrapperDynamicLibrary)&quot;" />
   </Target>
 
 </Project>

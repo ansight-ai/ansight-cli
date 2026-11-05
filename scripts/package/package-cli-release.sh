@@ -165,6 +165,11 @@ if [[ "${RID}" == osx-* ]]; then
   done
   verify_macos_release_signature "${EXECUTABLE}"
   verify_macos_release_signature "${STAGING_DIR}/ansight-app-icon-ios-simulator"
+  if [[ ! -x "${STAGING_DIR}/AnsightSimulatorStylusGuest" ]]; then
+    echo "Expected packaged executable iOS Simulator Pencil helper was not found." >&2
+    exit 1
+  fi
+  verify_macos_release_signature "${STAGING_DIR}/AnsightSimulatorStylusGuest"
   if [[ ! -f "${STAGING_DIR}/libAnsightAudioInjection.dylib" ]]; then
     echo "Expected packaged macOS audio injection library was not found." >&2
     exit 1
@@ -213,6 +218,7 @@ if [[ "${RID}" == osx-* ]]; then
   done < <(/usr/bin/find "${ARCHIVE_VERIFY_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
   verify_macos_release_signature "${ARCHIVE_VERIFY_DIR}/ansight"
   verify_macos_release_signature "${ARCHIVE_VERIFY_DIR}/ansight-app-icon-ios-simulator"
+  verify_macos_release_signature "${ARCHIVE_VERIFY_DIR}/AnsightSimulatorStylusGuest"
   verify_macos_release_signature "${ARCHIVE_VERIFY_DIR}/libAnsightAudioInjection.dylib"
   /usr/bin/codesign --verify --deep --strict --verbose=2 \
     "${ARCHIVE_VERIFY_DIR}/Ansight Tray.app"

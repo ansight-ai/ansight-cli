@@ -128,20 +128,13 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         cancellationToken.ThrowIfCancellationRequested();
-        var simulatorApplicationPath = Path.Combine(
+        var request = CreateSimulatorOpenRequest(
             toolResolution.DeveloperDirectory,
-            "Applications",
-            "Simulator.app");
-        await using var process = processLauncher.Start(new SimCtlProcessStartRequest(
-            "/usr/bin/open",
-            toolResolution.DeveloperDirectory,
-            [
-                "-a",
-                simulatorApplicationPath,
-                "--args",
-                "-CurrentDeviceUDID",
-                deviceUdid
-            ]));
+            deviceUdid,
+            Directory.Exists);
+        var applicationName = Path.GetFileName(request.Arguments[1]);
+
+        await using var process = processLauncher.Start(request);
         process.StandardInput.Dispose();
         using var outputReader = new StreamReader(process.StandardOutput);
         using var errorReader = new StreamReader(process.StandardError);
@@ -155,9 +148,34 @@ public sealed partial class SimCtlClient
             var detail = string.IsNullOrWhiteSpace(error) ? output.Trim() : error.Trim();
             throw new InvalidOperationException(
                 string.IsNullOrWhiteSpace(detail)
-                    ? $"Simulator.app could not be shown (exit code {exitCode})."
-                    : $"Simulator.app could not be shown: {detail}");
+                    ? $"{applicationName} could not be shown (exit code {exitCode})."
+                    : $"{applicationName} could not be shown: {detail}");
         }
+    }
+
+    internal static SimCtlProcessStartRequest CreateSimulatorOpenRequest(
+        string developerDirectory,
+        string deviceUdid,
+        Func<string, bool> directoryExists)
+    {
+        var simulatorApplicationPath = Path.Combine(developerDirectory, "Applications", "Simulator.app");
+        var deviceHubApplicationPath = Path.GetFullPath(
+            Path.Combine(developerDirectory, "..", "Applications", "DeviceHub.app"));
+        var useDeviceHub = !directoryExists(simulatorApplicationPath)
+            && directoryExists(deviceHubApplicationPath);
+
+        if (useDeviceHub)
+        {
+            return new SimCtlProcessStartRequest(
+                "/usr/bin/open",
+                developerDirectory,
+                ["-a", deviceHubApplicationPath, $"devices://device/open?id={Uri.EscapeDataString(deviceUdid)}"]);
+        }
+
+        return new SimCtlProcessStartRequest(
+            "/usr/bin/open",
+            developerDirectory,
+            ["-a", simulatorApplicationPath, "--args", "-CurrentDeviceUDID", deviceUdid]);
     }
 
     public async Task ShutdownAsync(

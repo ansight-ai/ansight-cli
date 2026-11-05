@@ -1,4 +1,5 @@
 #import "AnsightSimulatorRtc.h"
+#import "../../../native/AnsightSimulatorFrameworks.h"
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
@@ -1580,8 +1581,6 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     InitializeRtcLogger();
 
     NSString *coreSimulatorPath = @"/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator";
-    NSString *simulatorKitPath = [developerDirectory stringByAppendingPathComponent:
-        @"Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit"];
     if (dlopen(coreSimulatorPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL) == NULL)
     {
         if (error != NULL)
@@ -1593,13 +1592,14 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         return NO;
     }
 
-    if (dlopen(simulatorKitPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL) == NULL)
+    NSString *simulatorKitFailure = nil;
+    if (AnsightLoadSimulatorKit(developerDirectory, &simulatorKitFailure) == NULL)
     {
         if (error != NULL)
         {
             *error = CreateError(
                 AnsightSimulatorRtcErrorRuntimeSimulatorKitUnavailable,
-                [NSString stringWithFormat:@"Could not load SimulatorKit: %s", dlerror()]);
+                simulatorKitFailure);
         }
         return NO;
     }
@@ -2716,8 +2716,6 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 - (BOOL)loadSimulatorForDeveloperDirectory:(NSString *)developerDirectory error:(NSError **)error
 {
     NSString *coreSimulatorPath = @"/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator";
-    NSString *simulatorKitPath = [developerDirectory stringByAppendingPathComponent:
-        @"Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit"];
     if (dlopen(coreSimulatorPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL) == NULL)
     {
         if (error != NULL)
@@ -2729,13 +2727,14 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         return NO;
     }
 
-    if (dlopen(simulatorKitPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL) == NULL)
+    NSString *simulatorKitFailure = nil;
+    if (AnsightLoadSimulatorKit(developerDirectory, &simulatorKitFailure) == NULL)
     {
         if (error != NULL)
         {
             *error = CreateError(
                 AnsightSimulatorRtcErrorPreviewSimulatorKitUnavailable,
-                [NSString stringWithFormat:@"Could not load SimulatorKit: %s", dlerror()]);
+                simulatorKitFailure);
         }
         return NO;
     }

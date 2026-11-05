@@ -175,6 +175,7 @@ fi
 # but they are not runtime inputs for non-macOS single-file CLI payloads.
 if [[ "${RID}" != osx-* ]]; then
   rm -f \
+    "${OUTPUT_DIR}/AnsightSimulatorStylusGuest" \
     "${OUTPUT_DIR}/libAnsightSimulatorHid.dylib" \
     "${OUTPUT_DIR}/libAnsightSimulatorRtc.dylib" \
     "${OUTPUT_DIR}/libAnsightAudioInjection.dylib"
@@ -182,10 +183,15 @@ fi
 
 if [[ "${RID}" == osx-* ]]; then
   HID_LIBRARY="${OUTPUT_DIR}/libAnsightSimulatorHid.dylib"
+  SIMULATOR_STYLUS_HELPER="${OUTPUT_DIR}/AnsightSimulatorStylusGuest"
   RTC_LIBRARY="${OUTPUT_DIR}/libAnsightSimulatorRtc.dylib"
   SESSION_VIDEO_LIBRARY="${OUTPUT_DIR}/libAnsightSessionVideoMac.dylib"
   AUDIO_INJECTION_LIBRARY="${OUTPUT_DIR}/libAnsightAudioInjection.dylib"
   SIMULATOR_APP_ICON_HELPER="${OUTPUT_DIR}/ansight-app-icon-ios-simulator"
+  if [[ ! -x "${SIMULATOR_STYLUS_HELPER}" ]]; then
+    echo "Expected executable iOS Simulator Pencil helper was not produced: ${SIMULATOR_STYLUS_HELPER}" >&2
+    exit 1
+  fi
   if [[ ! -f "${AUDIO_INJECTION_LIBRARY}" ]]; then
     echo "Expected macOS audio injection library was not produced: ${AUDIO_INJECTION_LIBRARY}" >&2
     exit 1
@@ -217,6 +223,10 @@ if [[ "${RID}" == osx-* ]]; then
   esac
   if ! /usr/bin/lipo "${HID_LIBRARY}" -verify_arch "${EXPECTED_NATIVE_ARCHITECTURE}"; then
     echo "Simulator HID library does not contain ${EXPECTED_NATIVE_ARCHITECTURE}: ${HID_LIBRARY}" >&2
+    exit 1
+  fi
+  if ! /usr/bin/lipo "${SIMULATOR_STYLUS_HELPER}" -verify_arch "${EXPECTED_NATIVE_ARCHITECTURE}"; then
+    echo "Simulator Pencil helper does not contain ${EXPECTED_NATIVE_ARCHITECTURE}: ${SIMULATOR_STYLUS_HELPER}" >&2
     exit 1
   fi
   if ! /usr/bin/lipo "${RTC_LIBRARY}" -verify_arch "${EXPECTED_NATIVE_ARCHITECTURE}"; then
@@ -345,6 +355,13 @@ if [[ "${RID}" == osx-* ]]; then
       --timestamp \
       --sign "${MACOS_CODESIGN_IDENTITY}" \
       "${SIMULATOR_APP_ICON_HELPER}"
+    remove_existing_code_signature "${SIMULATOR_STYLUS_HELPER}"
+    /usr/bin/codesign \
+      --force \
+      --options runtime \
+      --timestamp \
+      --sign "${MACOS_CODESIGN_IDENTITY}" \
+      "${SIMULATOR_STYLUS_HELPER}"
     remove_existing_code_signature "${EXECUTABLE}"
     /usr/bin/codesign \
       --force \
@@ -372,6 +389,7 @@ if [[ "${RID}" == osx-* ]]; then
       /usr/bin/codesign --verify --strict --verbose=2 "${native_library}"
     done < <(/usr/bin/find "${OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
     /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_APP_ICON_HELPER}"
+    /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_STYLUS_HELPER}"
     /usr/bin/codesign --verify --strict --verbose=2 "${EXECUTABLE}"
     /usr/bin/codesign --verify --strict --verbose=2 "${TRAY_APP}"
   else
@@ -380,6 +398,7 @@ if [[ "${RID}" == osx-* ]]; then
       /usr/bin/codesign --force --sign - "${native_library}"
     done < <(/usr/bin/find "${OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
     /usr/bin/codesign --force --sign - "${SIMULATOR_APP_ICON_HELPER}"
+    /usr/bin/codesign --force --sign - "${SIMULATOR_STYLUS_HELPER}"
     /usr/bin/codesign --force --sign - "${EXECUTABLE}"
     /usr/bin/codesign --force --sign - "${TRAY_EXECUTABLE}"
     /usr/bin/codesign --force --sign - "${TRAY_APP}"
@@ -415,6 +434,7 @@ if [[ "${RID}" == osx-* ]]; then
     /usr/bin/codesign --verify --strict --verbose=2 "${native_library}"
   done < <(/usr/bin/find "${OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
   /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_APP_ICON_HELPER}"
+  /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_STYLUS_HELPER}"
   /usr/bin/codesign --verify --strict --verbose=2 "${EXECUTABLE}"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "${TRAY_APP}"
 fi

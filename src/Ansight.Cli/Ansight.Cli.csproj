@@ -57,6 +57,11 @@
       <SimulatorHidArchitecture Condition="'$(SimulatorHidArchitecture)' == ''">arm64</SimulatorHidArchitecture>
     </PropertyGroup>
     <ItemGroup>
+      <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.MacSimulatorHid/obj/$(Configuration)/net10.0/$(SimulatorHidArchitecture)/native/AnsightSimulatorStylusGuest'))">
+        <RelativePath>AnsightSimulatorStylusGuest</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
       <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.MacSimulatorHid/obj/$(Configuration)/net10.0/$(SimulatorHidArchitecture)/native/libAnsightSimulatorHid.dylib'))">
         <RelativePath>libAnsightSimulatorHid.dylib</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

@@ -1,4 +1,6 @@
 #import "AnsightSimulatorHid.h"
+#import "_Xcode27SimulatorHid.h"
+#import "../../../native/AnsightSimulatorFrameworks.h"
 
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
@@ -127,6 +129,9 @@ static const IndigoHIDTarget AnsightMainScreenButtonTarget = 0x33;
 @property(nonatomic, strong) id serviceContext;
 @property(nonatomic, strong) id deviceSet;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, id> *clientsByUdid;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, _Xcode27SimulatorHid *> *xcode27ClientsByUdid;
+@property(nonatomic, assign) BOOL requiresXcode27Hid;
+@property(nonatomic, copy) NSString *developerDirectory;
 @property(nonatomic, assign) IndigoHIDMessageForMouseNSEventFunction messageForMouseEvent;
 @property(nonatomic, assign) IOHIDEventCreateDigitizerEventFunction createDigitizerEvent;
 @property(nonatomic, assign) IOHIDEventCreateDigitizerFingerEventFunction createDigitizerFingerEvent;
@@ -173,6 +178,7 @@ static const IndigoHIDTarget AnsightMainScreenButtonTarget = 0x33;
                  messageBuilder:(AnsightHidMessageBuilder)messageBuilder
                           error:(NSError **)error;
 - (id)clientForUdid:(NSString *)udid error:(NSError **)error;
+- (_Xcode27SimulatorHid *)xcode27ClientForUdid:(NSString *)udid error:(NSError **)error;
 - (id)createClientForUdid:(NSString *)udid error:(NSError **)error;
 - (id)deviceForUdid:(NSString *)udid error:(NSError **)error;
 - (IndigoHIDMessage)digitizerMessageForPoint:(CGPoint)point
@@ -575,8 +581,6 @@ static Class ResolveLegacyHidClientClass(void)
 static BOOL CheckSimulatorHidCompatibility(NSString *developerDirectory, NSError **error)
 {
     NSString *coreSimulatorPath = @"/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator";
-    NSString *simulatorKitPath = [developerDirectory stringByAppendingPathComponent:
-        @"Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit"];
     void *coreSimulator = dlopen(coreSimulatorPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
     if (coreSimulator == NULL)
     {
@@ -589,16 +593,25 @@ static BOOL CheckSimulatorHidCompatibility(NSString *developerDirectory, NSError
         return NO;
     }
 
-    void *simulatorKit = dlopen(simulatorKitPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
+    NSString *simulatorKitFailure = nil;
+    void *simulatorKit = AnsightLoadSimulatorKit(developerDirectory, &simulatorKitFailure);
     if (simulatorKit == NULL)
     {
         if (error != NULL)
         {
-            *error = CreateError(
-                2,
-                [NSString stringWithFormat:@"Could not load SimulatorKit: %s", dlerror()]);
+            *error = CreateError(2, simulatorKitFailure);
         }
         return NO;
+    }
+
+    if (AnsightSimulatorRequiresXcode27Hid())
+    {
+        BOOL available = _Xcode27SimulatorHidIsAvailable();
+        if (!available && error != NULL)
+        {
+            *error = CreateError(50, @"CoreSimulator requires DTUHID input, but its XPC connection APIs are unavailable.");
+        }
+        return available;
     }
 
     if (dlsym(simulatorKit, "IndigoHIDMessageForMouseNSEvent") == NULL
@@ -716,13 +729,13 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     }
 
     self.clientsByUdid = [NSMutableDictionary dictionary];
+    self.developerDirectory = developerDirectory;
+    self.xcode27ClientsByUdid = [NSMutableDictionary dictionary];
     self.accessibilityQueue = dispatch_queue_create(
         "ai.ansight.simulator-accessibility",
         DISPATCH_QUEUE_SERIAL);
 
     NSString *coreSimulatorPath = @"/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator";
-    NSString *simulatorKitPath = [developerDirectory stringByAppendingPathComponent:
-        @"Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit"];
 
     void *coreSimulator = dlopen(coreSimulatorPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
     if (coreSimulator == NULL)
@@ -736,14 +749,13 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
         return nil;
     }
 
-    void *simulatorKit = dlopen(simulatorKitPath.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
+    NSString *simulatorKitFailure = nil;
+    void *simulatorKit = AnsightLoadSimulatorKit(developerDirectory, &simulatorKitFailure);
     if (simulatorKit == NULL)
     {
         if (error != NULL)
         {
-            *error = CreateError(
-                2,
-                [NSString stringWithFormat:@"Could not load SimulatorKit: %s", dlerror()]);
+            *error = CreateError(2, simulatorKitFailure);
         }
         return nil;
     }
@@ -751,6 +763,7 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     self.messageForMouseEvent = (IndigoHIDMessageForMouseNSEventFunction)dlsym(
         simulatorKit,
         "IndigoHIDMessageForMouseNSEvent");
+    self.requiresXcode27Hid = AnsightSimulatorRequiresXcode27Hid();
     self.createDigitizerEvent = (IOHIDEventCreateDigitizerEventFunction)dlsym(
         RTLD_DEFAULT,
         "IOHIDEventCreateDigitizerEvent");
@@ -772,10 +785,11 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     self.messageForModifier = (IndigoHIDMessageForModifierKeyBitFunction)dlsym(
         simulatorKit,
         "IndigoHIDMessageForModifierKeyBit");
-    if (self.messageForMouseEvent == NULL
-        || self.messageForButton == NULL
-        || self.messageForKeyboard == NULL
-        || self.messageForModifier == NULL)
+    BOOL hasLegacyMessageBuilders = self.messageForMouseEvent != NULL
+        && self.messageForButton != NULL
+        && self.messageForKeyboard != NULL
+        && self.messageForModifier != NULL;
+    if (!self.requiresXcode27Hid && !hasLegacyMessageBuilders)
     {
         if (error != NULL)
         {
@@ -786,25 +800,28 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
         return nil;
     }
 
-    Class clientClass = ResolveLegacyHidClientClass();
-    if (clientClass == Nil)
+    if (!self.requiresXcode27Hid)
     {
-        if (error != NULL)
+        Class clientClass = ResolveLegacyHidClientClass();
+        if (clientClass == Nil)
         {
-            *error = CreateError(6, @"SimDeviceLegacyHIDClient is unavailable.");
+            if (error != NULL)
+            {
+                *error = CreateError(6, @"SimDeviceLegacyHIDClient is unavailable.");
+            }
+            return nil;
         }
-        return nil;
-    }
-    if (class_getInstanceMethod(clientClass, sel_registerName("initWithDevice:error:")) == NULL
-        || class_getInstanceMethod(
-            clientClass,
-            sel_registerName("sendWithMessage:freeWhenDone:completionQueue:completion:")) == NULL)
-    {
-        if (error != NULL)
+        if (class_getInstanceMethod(clientClass, sel_registerName("initWithDevice:error:")) == NULL
+            || class_getInstanceMethod(
+                clientClass,
+                sel_registerName("sendWithMessage:freeWhenDone:completionQueue:completion:")) == NULL)
         {
-            *error = CreateError(7, @"SimDeviceLegacyHIDClient has no supported initializer or send selector.");
+            if (error != NULL)
+            {
+                *error = CreateError(7, @"SimDeviceLegacyHIDClient has no supported initializer or send selector.");
+            }
+            return nil;
         }
-        return nil;
     }
 
     Class serviceContextClass = NSClassFromString(@"SimServiceContext");
@@ -866,6 +883,15 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
                     *error = CreateError(16, @"Unsupported keyboard phase.");
                 }
                 return NO;
+        }
+
+        if (self.requiresXcode27Hid)
+        {
+            xpc_object_t payload = xpc_dictionary_create(NULL, NULL, 0);
+            xpc_dictionary_set_uint64(payload, "usageCode", usageCode);
+            xpc_dictionary_set_uint64(payload, "state", operation);
+            return [[self xcode27ClientForUdid:deviceUdid error:error]
+                sendMessageType:@"IndigoKeyboardButtonEvent" payload:payload error:error];
         }
 
         uint32_t modifierBit = 0;
@@ -939,6 +965,36 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     (void)timestampMilliseconds;
     @synchronized (self)
     {
+        if (self.requiresXcode27Hid)
+        {
+            if (phase < AnsightSimulatorPointerPhaseDown || phase > AnsightSimulatorPointerPhaseCancel)
+            {
+                if (error != NULL)
+                {
+                    *error = CreateError(8, @"Unsupported pointer phase.");
+                }
+                return NO;
+            }
+
+            xpc_object_t payload = xpc_dictionary_create(NULL, NULL, 0);
+            xpc_object_t point = xpc_dictionary_create(NULL, NULL, 0);
+            xpc_dictionary_set_double(point, "x", fmax(0.0, fmin(1.0, normalizedX)));
+            xpc_dictionary_set_double(point, "y", fmax(0.0, fmin(1.0, normalizedY)));
+            xpc_dictionary_set_value(payload, "pointOne", point);
+            if (hasSecondaryContact)
+            {
+                xpc_object_t secondaryPoint = xpc_dictionary_create(NULL, NULL, 0);
+                xpc_dictionary_set_double(secondaryPoint, "x", fmax(0.0, fmin(1.0, secondaryNormalizedX)));
+                xpc_dictionary_set_double(secondaryPoint, "y", fmax(0.0, fmin(1.0, secondaryNormalizedY)));
+                xpc_dictionary_set_value(payload, "pointTwo", secondaryPoint);
+            }
+            xpc_dictionary_set_uint64(payload, "eventType", phase == AnsightSimulatorPointerPhaseCancel ? 2 : phase);
+            xpc_dictionary_set_uint64(payload, "edge", 0);
+            xpc_dictionary_set_uint64(payload, "target", 0);
+            return [[self xcode27ClientForUdid:deviceUdid error:error]
+                sendMessageType:@"IndigoDigitizerEvent" payload:payload error:error];
+        }
+
         AnsightHidMessageBuilder messageBuilder = ^IndigoHIDMessage(NSError **messageError) {
             CGPoint point = CGPointMake(
                 fmax(0.0, fmin(1.0, normalizedX)),
@@ -1203,6 +1259,17 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
                 return NO;
         }
 
+        if (self.requiresXcode27Hid)
+        {
+            const uint64_t usageCodes[] = {0x40, 0x30, 0xe9, 0xea};
+            xpc_object_t payload = xpc_dictionary_create(NULL, NULL, 0);
+            xpc_dictionary_set_uint64(payload, "usagePage", 0x0c);
+            xpc_dictionary_set_uint64(payload, "usageCode", usageCodes[keyCode]);
+            xpc_dictionary_set_uint64(payload, "state", operation);
+            return [[self xcode27ClientForUdid:deviceUdid error:error]
+                sendMessageType:@"IndigoButtonEvent" payload:payload error:error];
+        }
+
         AnsightHidMessageBuilder messageBuilder = ^IndigoHIDMessage(NSError **messageError) {
             IndigoHIDMessage message = self.messageForButton(
                 keyCode,
@@ -1294,6 +1361,31 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     if (client != nil)
     {
         self.clientsByUdid[udid] = client;
+    }
+    return client;
+}
+
+- (_Xcode27SimulatorHid *)xcode27ClientForUdid:(NSString *)udid error:(NSError **)error
+{
+    _Xcode27SimulatorHid *client = self.xcode27ClientsByUdid[udid];
+    if (client != nil)
+    {
+        return client;
+    }
+
+    id device = [self deviceForUdid:udid error:error];
+    if (device == nil)
+    {
+        return nil;
+    }
+
+    client = [[_Xcode27SimulatorHid alloc] initWithDevice:device
+                                    developerDirectory:self.developerDirectory
+                                            deviceUdid:udid
+                                                 error:error];
+    if (client != nil)
+    {
+        self.xcode27ClientsByUdid[udid] = client;
     }
     return client;
 }
@@ -2029,16 +2121,61 @@ bool AnsightSimulatorHidSessionSendStylus(
     double roll, double distance, uint32_t pointerId, uint64_t eventTimestamp,
     char *errorBuffer, size_t errorBufferCapacity)
 {
-    @autoreleasepool {
-        if (!session || !deviceUdid || phase < 0 || phase > 6 || !pointerId
-            || !isfinite(x) || !isfinite(y) || x < 0 || x > 1 || y < 0 || y > 1
-            || !isfinite(pressure) || pressure < 0 || pressure > 1
-            || !isfinite(altitude) || altitude < 0 || altitude > M_PI_2
-            || !isfinite(azimuth) || !isfinite(roll)
-            || !isfinite(distance) || distance < 0 || distance > 1) {
+    @autoreleasepool
+    {
+        BOOL validTarget = session != NULL
+            && deviceUdid != NULL
+            && pointerId != 0;
+        BOOL validPhase = phase >= 0 && phase <= 6;
+        BOOL validPosition = isfinite(x)
+            && isfinite(y)
+            && x >= 0
+            && x <= 1
+            && y >= 0
+            && y <= 1;
+        BOOL validPressure = isfinite(pressure)
+            && pressure >= 0
+            && pressure <= 1;
+        BOOL validAngles = isfinite(altitude)
+            && altitude >= 0
+            && altitude <= M_PI_2
+            && isfinite(azimuth)
+            && isfinite(roll);
+        BOOL validDistance = isfinite(distance)
+            && distance >= 0
+            && distance <= 1;
+        BOOL validSample = validTarget
+            && validPhase
+            && validPosition
+            && validPressure
+            && validAngles
+            && validDistance;
+        if (!validSample)
+        {
             CopyError(@"Invalid stylus sample: expected finite normalized coordinates, pressure, distance and UIKit angles.", errorBuffer, errorBufferCapacity);
             return false;
         }
+        AnsightSimulatorHidSession *value = (__bridge AnsightSimulatorHidSession *)session;
+        if (value.requiresXcode27Hid)
+        {
+            @synchronized (value)
+            {
+                NSError *error = nil;
+                _Xcode27SimulatorHid *client = [value xcode27ClientForUdid:
+                    [NSString stringWithUTF8String:deviceUdid] error:&error];
+                BOOL success = [client sendStylusSample:@{
+                    @"phase": @(phase), @"x": @(x), @"y": @(y), @"pressure": @(pressure),
+                    @"altitude": @(altitude), @"azimuth": @(azimuth), @"roll": @(roll),
+                    @"distance": @(distance), @"pointerId": @(pointerId), @"timestamp": @(eventTimestamp)
+                } error:&error];
+                if (!success)
+                {
+                    CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+                }
+                return success;
+            }
+        }
+
         typedef CFTypeRef (*CreateStylus)(CFAllocatorRef, uint64_t, uint32_t, uint32_t,
             uint32_t, uint32_t, double, double, double, double, double, double,
             double, double, uint32_t, uint32_t, uint32_t);
@@ -2046,20 +2183,28 @@ bool AnsightSimulatorHidSessionSendStylus(
         CreateStylus createStylus = (CreateStylus)dlsym(RTLD_DEFAULT,
             "IOHIDEventCreateDigitizerStylusEventWithPolarOrientation");
         SetInteger setInteger = (SetInteger)dlsym(RTLD_DEFAULT, "IOHIDEventSetIntegerValue");
-        AnsightSimulatorHidSession *value = (__bridge AnsightSimulatorHidSession *)session;
-        if (!createStylus || !setInteger || !value.createDigitizerEvent
-            || !value.appendHidEvent || !value.messageForTrackpadEvent) {
+        BOOL hasStylusBuilders = createStylus != NULL
+            && setInteger != NULL
+            && value.createDigitizerEvent != NULL
+            && value.appendHidEvent != NULL
+            && value.messageForTrackpadEvent != NULL;
+        if (!hasStylusBuilders)
+        {
             CopyError(@"This Xcode installation does not expose stylus HID construction.", errorBuffer, errorBufferCapacity);
             return false;
         }
-        @synchronized(value) {
+        @synchronized (value)
+        {
             NSError *error = nil;
             BOOL success = [value sendHidMessageToDevice:[NSString stringWithUTF8String:deviceUdid]
                 messageBuilder:^IndigoHIDMessage(NSError **messageError) {
                     BOOL touching = phase == 0 || phase == 1;
                     BOOL inRange = phase != 3 && phase != 6;
                     uint32_t mask = (phase == 1 || phase == 5) ? 0x44 : 0x67;
-                    if (phase == 3) mask |= 0x80;
+                    if (phase == 3)
+                    {
+                        mask |= 0x80;
+                    }
                     uint64_t timestamp = eventTimestamp ?: mach_absolute_time();
                     // Indigo requires the finger collection envelope even for a stylus child.
                     CFTypeRef parent = value.createDigitizerEvent(NULL, timestamp, 2, 0, 0,
@@ -2070,9 +2215,16 @@ bool AnsightSimulatorHidSessionSendStylus(
                         x, y, distance, touching ? pressure * 500 : 0, 0, roll,
                         M_PI_2 - altitude, 2 * M_PI - azimuth, inRange, false,
                         touching ? 0x00020000 : 0);
-                    if (!parent || !stylus) {
-                        if (parent) CFRelease(parent);
-                        if (stylus) CFRelease(stylus);
+                    if (parent == NULL || stylus == NULL)
+                    {
+                        if (parent != NULL)
+                        {
+                            CFRelease(parent);
+                        }
+                        if (stylus != NULL)
+                        {
+                            CFRelease(stylus);
+                        }
                         *messageError = CreateError(25, @"IOKit did not create the stylus event.");
                         return NULL;
                     }
@@ -2082,8 +2234,12 @@ bool AnsightSimulatorHidSessionSendStylus(
                     IndigoHIDMessage message = value.messageForTrackpadEvent(parent, AnsightMainScreenTouchTarget);
                     CFRelease(stylus);
                     CFRelease(parent);
-                    if (!message || malloc_size(message) < 0x160) {
-                        if (message) free(message);
+                    if (message == NULL || malloc_size(message) < 0x160)
+                    {
+                        if (message != NULL)
+                        {
+                            free(message);
+                        }
                         *messageError = CreateError(26, @"SimulatorKit returned an incompatible stylus packet.");
                         return NULL;
                     }
@@ -2093,14 +2249,20 @@ bool AnsightSimulatorHidSessionSendStylus(
                     // Its current decoder does not carry polar orientation/roll; UIKit on
                     // iOS 26.4 also reports force=0. Never fabricate these in SDK capture.
                     uint8_t *bytes = (uint8_t *)message;
-                    bytes[0x3a] = bytes[0x3b] = bytes[0xda] = bytes[0xdb] = 0;
+                    bytes[0x3a] = 0;
+                    bytes[0x3b] = 0;
+                    bytes[0xda] = 0;
+                    bytes[0xdb] = 0;
                     memcpy(bytes + 0x70, &(uint32_t){1}, 4);
                     memcpy(bytes + 0x110, &(uint32_t){1}, 4);
                     memcpy(bytes + 0x54, &(double){touching ? pressure * 500 : 0}, 8);
                     memcpy(bytes + 0xf4, &(double){touching ? pressure * 500 : 0}, 8);
                     return message;
                 } error:&error];
-            if (!success) CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+            if (!success)
+            {
+                CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+            }
             return success;
         }
     }
