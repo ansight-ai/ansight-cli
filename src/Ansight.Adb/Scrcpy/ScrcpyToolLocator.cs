@@ -7,7 +7,7 @@ public static partial class ScrcpyToolLocator
     private static string InstallGuidance => OperatingSystem.IsMacOS()
         ? "Install it with 'brew install scrcpy', then restart the Android host."
         : OperatingSystem.IsWindows()
-            ? "Install it with 'winget install --exact Genymobile.scrcpy', then restart the Android host."
+            ? "Reinstall the Ansight CLI to restore its bundled scrcpy, or install it with 'winget install --exact Genymobile.scrcpy', then restart the Android host."
             : "Install a complete scrcpy package with its matching scrcpy-server using your system package manager, then restart the Android host.";
     private static readonly string executableName = OperatingSystem.IsWindows() ? "scrcpy.exe" : "scrcpy";
 
@@ -16,14 +16,25 @@ public static partial class ScrcpyToolLocator
         CancellationToken cancellationToken = default)
         => ResolveAsync(configuredPath, new DotNetAdbProcessLauncher(), cancellationToken);
 
-    public static async Task<ScrcpyToolResolution> ResolveAsync(
+    public static Task<ScrcpyToolResolution> ResolveAsync(
         string? configuredPath,
         IAdbProcessLauncher processLauncher,
+        CancellationToken cancellationToken = default)
+        => ResolveAsync(
+            EnumerateCandidates(configuredPath, AppContext.BaseDirectory, executableName, EnumeratePathDirectories()),
+            processLauncher,
+            Environment.GetEnvironmentVariable("SCRCPY_SERVER_PATH"),
+            cancellationToken);
+
+    internal static async Task<ScrcpyToolResolution> ResolveAsync(
+        IEnumerable<ScrcpyToolCandidate> candidates,
+        IAdbProcessLauncher processLauncher,
+        string? configuredServer,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(processLauncher);
         var failures = new List<string>();
-        foreach (var candidate in EnumerateCandidates(configuredPath))
+        foreach (var candidate in candidates)
         {
             if (!File.Exists(candidate.Path))
             {
@@ -33,6 +44,9 @@ public static partial class ScrcpyToolLocator
             var executablePath = Path.GetFullPath(candidate.Path);
             try
             {
+                var bundle = candidate.Source == "bundled"
+                    ? ScrcpyBundle.Validate(executablePath)
+                    : null;
                 var versionResult = await RunVersionAsync(
                         executablePath,
                         processLauncher,
@@ -44,7 +58,16 @@ public static partial class ScrcpyToolLocator
                     continue;
                 }
 
-                var serverPath = ResolveServerPath(executablePath, Environment.GetEnvironmentVariable("SCRCPY_SERVER_PATH"));
+                if (bundle is not null && versionResult.Version != bundle.Version)
+                {
+                    failures.Add($"Bundled scrcpy reports version {versionResult.Version}, but its server belongs to {bundle.Version}. Reinstall the Ansight CLI.");
+                    continue;
+                }
+
+                // A global server override must never mix another installation's server with our bundle.
+                var serverPath = bundle is not null
+                    ? Path.Combine(Path.GetDirectoryName(executablePath)!, "scrcpy-server")
+                    : ResolveServerPath(executablePath, configuredServer);
                 if (serverPath is null)
                 {
                     failures.Add($"scrcpy {versionResult.Version} at '{executablePath}' has no matching scrcpy-server file.");
@@ -89,7 +112,7 @@ public static partial class ScrcpyToolLocator
     }
 
     public static IReadOnlyList<string> GetCandidatePaths(string? configuredPath = null)
-        => EnumerateCandidates(configuredPath)
+        => EnumerateCandidates(configuredPath, AppContext.BaseDirectory, executableName, EnumeratePathDirectories())
             .Select(candidate => candidate.Path)
             .Distinct(PathComparer)
             .ToArray();
@@ -157,25 +180,33 @@ public static partial class ScrcpyToolLocator
             .FirstOrDefault(File.Exists);
     }
 
-    private static IEnumerable<ScrcpyToolCandidate> EnumerateCandidates(string? configuredPath)
+    internal static IEnumerable<ScrcpyToolCandidate> EnumerateCandidates(
+        string? configuredPath,
+        string baseDirectory,
+        string executableFileName,
+        IEnumerable<string> pathDirectories)
     {
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             var normalized = Environment.ExpandEnvironmentVariables(configuredPath.Trim().Trim('"'));
             yield return new ScrcpyToolCandidate(
-                Directory.Exists(normalized) ? Path.Combine(normalized, executableName) : normalized,
+                Directory.Exists(normalized) ? Path.Combine(normalized, executableFileName) : normalized,
                 "configured");
         }
 
-        foreach (var pathDirectory in EnumeratePathDirectories())
+        yield return new ScrcpyToolCandidate(
+            Path.Combine(baseDirectory, "tools", "scrcpy", executableFileName),
+            "bundled");
+
+        foreach (var pathDirectory in pathDirectories)
         {
-            yield return new ScrcpyToolCandidate(Path.Combine(pathDirectory, executableName), "PATH");
+            yield return new ScrcpyToolCandidate(Path.Combine(pathDirectory, executableFileName), "PATH");
         }
 
         if (OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst())
         {
-            yield return new ScrcpyToolCandidate($"/opt/homebrew/bin/{executableName}", "Homebrew");
-            yield return new ScrcpyToolCandidate($"/usr/local/bin/{executableName}", "Homebrew");
+            yield return new ScrcpyToolCandidate($"/opt/homebrew/bin/{executableFileName}", "Homebrew");
+            yield return new ScrcpyToolCandidate($"/usr/local/bin/{executableFileName}", "Homebrew");
         }
     }
 
@@ -202,7 +233,7 @@ public static partial class ScrcpyToolLocator
     [GeneratedRegex(@"(?im)^scrcpy\s+([0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9._-]+)?)\b")]
     private static partial Regex VersionPattern();
 
-    private sealed record ScrcpyToolCandidate(string Path, string Source);
+    internal sealed record ScrcpyToolCandidate(string Path, string Source);
 
     private sealed record ScrcpyVersionResult(bool IsSuccess, string Version, string Message)
     {

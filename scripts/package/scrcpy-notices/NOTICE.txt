@@ -1,0 +1,32 @@
+Ansight's Windows scrcpy bundle
+
+Unmodified scrcpy 3.3.1 Windows x64 distribution:
+https://github.com/Genymobile/scrcpy/releases/tag/v3.3.1
+Copyright (c) 2018-2025 Genymobile and contributors. Apache License 2.0.
+
+This directory contains the upstream license texts. These third-party components
+remain under their own licenses, independently of Ansight's license.
+
+Included dependencies:
+- FFmpeg 7.1.1: LGPL 2.1 or later (shared libraries, no GPL options enabled).
+- libusb 1.0.29: LGPL 2.1 or later (shared library).
+- SDL 2.32.8: zlib license (shared library).
+- dav1d 1.5.0: BSD 2-Clause (linked into FFmpeg).
+- Android platform-tools 36.0.0: see Android-platform-tools-NOTICE.txt.
+
+Corresponding scrcpy, FFmpeg, libusb, SDL and dav1d source archives are included
+in ../sources. The scrcpy source includes the upstream build recipes in
+release/build_windows.sh and app/deps, including compiler and configure options.
+The binary and source archive SHA-256 pins are maintained in Ansight's
+scripts/package/bundle-scrcpy.proj. No modifications were made to those binaries.
+You may replace the shared libraries and exercise the modification, debugging,
+and reverse-engineering rights granted by their respective licenses. Ansight's
+bundle consistency check requires updating bundle.json when replacing files;
+an independently installed scrcpy can also be selected explicitly.
+
+Android notice provenance: platform-tools_r36.0.0-win.zip from
+https://dl.google.com/android/repository/platform-tools_r36.0.0-win.zip
+SHA-256: 12c2841f354e92a0eb2fd7bf6f0f9bf8538abce7bd6b060ac8349d6f6a61107c
+The scrcpy v3.3.1 build recipe selects platform-tools 36.0.0. Google has since
+re-signed that archive; executable code is unchanged, while PE checksums and
+Authenticode signature bytes differ from the copies in the scrcpy release.

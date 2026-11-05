@@ -284,11 +284,29 @@ internal static class ThirdPartySoftwareCatalog
             External(".NET diagnostics tools", null, "MIT", "Optional dotnet-trace and dotnet-dsrouter diagnostics", "https://github.com/dotnet/diagnostics"),
             External("Node.js", null, "MIT and bundled third-party licenses", "Runs repository tasks and sanitizer modules", "https://github.com/nodejs/node", "https://github.com/nodejs/node/blob/main/LICENSE"),
             External("Tesseract OCR", null, "Apache-2.0", "Detects sensitive text in screenshots during sanitization", "https://github.com/tesseract-ocr/tesseract"),
-            External("scrcpy", null, "Apache-2.0", "Optional Android display capture and control", "https://github.com/Genymobile/scrcpy"),
+            .. CreateScrcpyEntries(),
             External("AXe", null, "MIT", "Optional iOS Simulator accessibility-service capture", "https://github.com/cameroncooke/AXe"),
             External("BlackHole", null, "GPL-3.0", "Optional user-installed CoreAudio loopback driver for iOS Simulator microphone injection; not bundled or redistributed", "https://github.com/ExistentialAudio/BlackHole", "https://github.com/ExistentialAudio/BlackHole/blob/master/LICENSE"),
             External("Appium", null, "Apache-2.0", "Optional physical-device automation", "https://github.com/appium/appium"),
             External("Android Debug Bridge", null, "Apache-2.0", "Android app installation, logs, and device automation", "https://android.googlesource.com/platform/packages/modules/adb")
+        ];
+    }
+
+    private static IReadOnlyList<ThirdPartySoftwareEntry> CreateScrcpyEntries()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [External("scrcpy", null, "Apache-2.0", "Optional Android display capture and control", "https://github.com/Genymobile/scrcpy")];
+        }
+
+        return
+        [
+            Bundled("scrcpy", "3.3.1", "Apache-2.0", "Windows Android capture tool and matching server", "https://github.com/Genymobile/scrcpy"),
+            Bundled("FFmpeg", "7.1.1", "LGPL-2.1-or-later", "scrcpy media libraries", "https://ffmpeg.org"),
+            Bundled("SDL", "2.32.8", "Zlib", "scrcpy display and input", "https://github.com/libsdl-org/SDL"),
+            Bundled("libusb", "1.0.29", "LGPL-2.1-or-later", "scrcpy USB support", "https://github.com/libusb/libusb"),
+            Bundled("dav1d", "1.5.0", "BSD-2-Clause", "scrcpy AV1 decoding through FFmpeg", "https://code.videolan.org/videolan/dav1d"),
+            Bundled("Android Debug Bridge (scrcpy)", "36.0.0", "Apache-2.0 and bundled third-party notices", "Private upstream scrcpy ADB dependency", "https://android.googlesource.com/platform/packages/modules/adb")
         ];
     }
 
@@ -368,7 +386,10 @@ internal static class ThirdPartySoftwareCatalog
 
     private static string? ResolveSpdxLicenseUrl(string license)
     {
-        return license is "MIT" or "Apache-2.0" or "MPL-2.0" or "BSD-3-Clause"
+        var isKnownLicense = license is "MIT" or "Apache-2.0" or "MPL-2.0"
+            or "BSD-3-Clause" or "BSD-2-Clause" or "Zlib" or "LGPL-2.1-or-later";
+
+        return isKnownLicense
             ? $"https://spdx.org/licenses/{license}.html"
             : null;
     }

@@ -125,7 +125,7 @@ internal static class DoctorCheckGuidance
 
         if (OperatingSystem.IsWindows())
         {
-            return "Run 'winget install --exact Genymobile.scrcpy' and make scrcpy available on PATH.";
+            return "Reinstall the Ansight CLI to restore tools/scrcpy, or run 'winget install --exact Genymobile.scrcpy' and make scrcpy available on PATH. Windows ARM64 uses the bundled x64 tool through Windows 11 emulation.";
         }
 
         return "Install a complete scrcpy package for the system so the executable and matching scrcpy-server are installed together.";

@@ -225,6 +225,14 @@ try {
         }
     }
 
+    & dotnet msbuild (Join-Path $PSScriptRoot 'bundle-scrcpy.proj') `
+        -nologo `
+        "-p:RuntimeIdentifier=$Rid" `
+        "-p:PublishDir=$stagingDirectory"
+    if ($LASTEXITCODE -ne 0) {
+        throw "scrcpy bundling failed with exit code $LASTEXITCODE."
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($resolvedSignToolPath)) {
         Invoke-AuthenticodeSigning `
             -FilePath $cliExecutable `

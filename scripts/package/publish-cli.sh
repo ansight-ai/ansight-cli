@@ -251,6 +251,11 @@ if [[ "${RID}" == win-* ]]; then
   fi
   cp "${TRAY_BUILD_DIR}/ansight-tray.exe" "${OUTPUT_DIR}/ansight-tray.exe"
   rm -rf "${TRAY_BUILD_DIR}"
+
+  dotnet msbuild "${SCRIPT_DIR}/bundle-scrcpy.proj" \
+    -nologo \
+    "-p:RuntimeIdentifier=${RID}" \
+    "-p:PublishDir=${OUTPUT_DIR}" >&2
 fi
 
 if [[ "${RID}" == osx-* ]]; then

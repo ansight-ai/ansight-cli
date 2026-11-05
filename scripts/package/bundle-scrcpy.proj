@@ -1,0 +1,78 @@
+<Project DefaultTargets="BundleScrcpy">
+  <!-- One packaging implementation for PowerShell, Unix hosts, and both Windows CLI RIDs. -->
+  <PropertyGroup>
+    <ScrcpyVersion>3.3.1</ScrcpyVersion>
+    <ScrcpyArchiveName>scrcpy-win64-v$(ScrcpyVersion).zip</ScrcpyArchiveName>
+    <ScrcpyCacheDirectory Condition="'$(ScrcpyCacheDirectory)' == ''">$(ANSIGHT_SCRCPY_CACHE_DIRECTORY)</ScrcpyCacheDirectory>
+    <ScrcpyCacheDirectory Condition="'$(ScrcpyCacheDirectory)' == ''">$(PublishDir)/.scrcpy-downloads</ScrcpyCacheDirectory>
+    <ScrcpyBundleDirectory>$(PublishDir)/tools/scrcpy</ScrcpyBundleDirectory>
+    <ScrcpyExtractDirectory>$(PublishDir)/.scrcpy-extract</ScrcpyExtractDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Binary digest published in scrcpy v3.3.1/doc/windows.md. Dependency sources and
+         digests come from that tag's app/deps scripts; retain the corresponding sources. -->
+    <ScrcpyAsset Include="$(ScrcpyArchiveName)">
+      <Url>https://github.com/Genymobile/scrcpy/releases/download/v$(ScrcpyVersion)/$(ScrcpyArchiveName)</Url>
+      <Sha256>4fcad494772a3ae5de9a133149f8856d2fc429b41795f7cf7c754e0c1bb6fbc0</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyAsset Include="scrcpy-3.3.1.tar.gz">
+      <Url>https://github.com/Genymobile/scrcpy/archive/refs/tags/v3.3.1.tar.gz</Url>
+      <Sha256>9999d2ff3605e1c5d1efb0b737ed6e240a93a928091ab356ba07199c92f52ace</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyAsset Include="ffmpeg-7.1.1.tar.xz">
+      <Url>https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz</Url>
+      <Sha256>733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyAsset Include="SDL-2.32.8.tar.gz">
+      <Url>https://github.com/libsdl-org/SDL/archive/refs/tags/release-2.32.8.tar.gz</Url>
+      <Sha256>dd35e05644ae527848d02433bec24dd0ea65db59faecf1a0e5d1880c533dac2c</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyAsset Include="libusb-1.0.29.tar.gz">
+      <Url>https://github.com/libusb/libusb/archive/refs/tags/v1.0.29.tar.gz</Url>
+      <Sha256>7c2dd39c0b2589236e48c93247c986ae272e27570942b4163cb00a060fcf1b74</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyAsset Include="dav1d-1.5.0.tar.gz">
+      <Url>https://code.videolan.org/videolan/dav1d/-/archive/1.5.0/dav1d-1.5.0.tar.gz</Url>
+      <Sha256>78b15d9954b513ea92d27f39362535ded2243e1b0924fde39f37a31ebed5f76b</Sha256>
+    </ScrcpyAsset>
+    <ScrcpyRequiredFile Include="scrcpy.exe;scrcpy-server;adb.exe;AdbWinApi.dll;AdbWinUsbApi.dll;SDL2.dll;avcodec-61.dll;avformat-61.dll;avutil-59.dll;swresample-5.dll;libusb-1.0.dll" />
+    <ScrcpyRequiredNotice Include="NOTICE.txt;scrcpy-Apache-2.0.txt;FFmpeg-LGPL-2.1.txt;SDL-zlib.txt;libusb-LGPL-2.1.txt;dav1d-BSD-2-Clause.txt;Android-platform-tools-NOTICE.txt" />
+  </ItemGroup>
+
+  <Target Name="BundleScrcpy">
+    <Error Condition="'$(RuntimeIdentifier)' != 'win-x64' and '$(RuntimeIdentifier)' != 'win-arm64'" Text="scrcpy bundling requires win-x64 or win-arm64." />
+    <Error Condition="'$(PublishDir)' == ''" Text="PublishDir is required for scrcpy bundling." />
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)scrcpy-notices/%(ScrcpyRequiredNotice.Identity)')" Text="Missing scrcpy notice: %(ScrcpyRequiredNotice.Identity)." />
+    <MakeDir Directories="$(ScrcpyCacheDirectory)" />
+    <DownloadFile SourceUrl="%(ScrcpyAsset.Url)" DestinationFolder="$(ScrcpyCacheDirectory)" DestinationFileName="%(ScrcpyAsset.Identity)"
+                  Retries="3" RetryDelayMilliseconds="1000" Condition="!Exists('$(ScrcpyCacheDirectory)/%(ScrcpyAsset.Identity)')" />
+    <!-- Verify even cached inputs. Never extract or ship an unverified download. -->
+    <VerifyFileHash File="$(ScrcpyCacheDirectory)/%(ScrcpyAsset.Identity)" Hash="%(ScrcpyAsset.Sha256)" Algorithm="SHA256" />
+    <RemoveDir Directories="$(ScrcpyExtractDirectory)" />
+    <Unzip SourceFiles="$(ScrcpyCacheDirectory)/$(ScrcpyArchiveName)" DestinationFolder="$(ScrcpyExtractDirectory)" />
+    <PropertyGroup>
+      <ScrcpyExtractRoot>$(ScrcpyExtractDirectory)/scrcpy-win64-v$(ScrcpyVersion)</ScrcpyExtractRoot>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ScrcpyExtractRoot)/%(ScrcpyRequiredFile.Identity)')" Text="Incomplete scrcpy archive: missing %(ScrcpyRequiredFile.Identity)." />
+    <ItemGroup>
+      <ScrcpyBinary Include="$(ScrcpyExtractRoot)/*" />
+      <ScrcpySource Include="@(ScrcpyAsset->'$(ScrcpyCacheDirectory)/%(Identity)')" Exclude="$(ScrcpyCacheDirectory)/$(ScrcpyArchiveName)" />
+      <ScrcpyNotice Include="$(MSBuildThisFileDirectory)scrcpy-notices/*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(ScrcpyBundleDirectory)" />
+    <Copy SourceFiles="@(ScrcpyBinary)" DestinationFolder="$(ScrcpyBundleDirectory)" />
+    <Copy SourceFiles="@(ScrcpySource)" DestinationFolder="$(ScrcpyBundleDirectory)/sources" />
+    <Copy SourceFiles="@(ScrcpyNotice)" DestinationFolder="$(ScrcpyBundleDirectory)/licenses" />
+    <GetFileHash Files="@(ScrcpyRequiredFile->'$(ScrcpyBundleDirectory)/%(Identity)')" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="ScrcpyHashedFile" />
+    </GetFileHash>
+    <PropertyGroup>
+      <ScrcpyManifest>{ "version": "$(ScrcpyVersion)", "architecture": "x64", "files": { @(ScrcpyHashedFile->'&quot;%(Filename)%(Extension)&quot;: &quot;%(FileHash)&quot;', ', ') } }</ScrcpyManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(ScrcpyBundleDirectory)/bundle.json" Lines="$(ScrcpyManifest)" Overwrite="true" Encoding="UTF-8" />
+    <RemoveDir Directories="$(ScrcpyExtractDirectory)" />
+    <RemoveDir Directories="$(ScrcpyCacheDirectory)" Condition="'$(ScrcpyCacheDirectory)' == '$(PublishDir)/.scrcpy-downloads'" />
+    <Message Importance="high" Text="Bundled scrcpy $(ScrcpyVersion) with its matching server, DLLs, notices, and sources. Windows ARM64 uses x64 emulation (Windows 11)." />
+  </Target>
+</Project>
