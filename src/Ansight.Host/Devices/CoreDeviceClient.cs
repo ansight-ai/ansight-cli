@@ -40,6 +40,20 @@ internal sealed class CoreDeviceClient
         var results = new List<CoreDeviceDescriptor>();
         foreach (var device in devices.EnumerateArray())
         {
+            // Newer CoreDevice versions also enumerate simulators, which simctl already supplies.
+            var isSimulator = string.Equals(
+                                  FindString(device, "reality"),
+                                  "simulated",
+                                  StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(
+                                  FindString(device, "provider"),
+                                  "com.apple.CoreSimulator.SimulatorCoreDevicePlugin",
+                                  StringComparison.OrdinalIgnoreCase);
+            if (isSimulator)
+            {
+                continue;
+            }
+
             var identifier = FirstNonEmpty(
                 FindString(device, "udid"),
                 FindString(device, "identifier"),

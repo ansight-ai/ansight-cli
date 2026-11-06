@@ -102,6 +102,46 @@ public sealed class CoreDeviceClientTests
             });
     }
 
+    [Theory]
+    [InlineData("\"hardwareProperties\": { \"reality\": \"simulated\" }")]
+    [InlineData("\"properties\": { \"hardware\": { \"reality\": \"simulated\" } }")]
+    [InlineData("\"deviceProperties\": { \"provider\": \"com.apple.CoreSimulator.SimulatorCoreDevicePlugin\" }")]
+    public void ParseDevices_ExcludesSimulatorsFromPhysicalDeviceDiscovery(string simulatorProperties)
+    {
+        using var document = JsonDocument.Parse(
+            $$"""
+            {
+              "result": {
+                "devices": [
+                  {
+                    "identifier": "0B80617C-2A12-4B93-88A3-39ADF9950D71",
+                    "connectionProperties": {
+                      "pairingState": "paired",
+                      "tunnelState": "connected"
+                    },
+                    {{simulatorProperties}}
+                  },
+                  {
+                    "identifier": "physical-iphone",
+                    "hardwareProperties": { "platform": "iOS" },
+                    "connectionProperties": {
+                      "pairingState": "paired",
+                      "tunnelState": "connected"
+                    }
+                  }
+                ]
+              }
+            }
+            """);
+
+        var devices = CoreDeviceClient.ParseDevices(document.RootElement);
+
+        var device = Assert.Single(devices);
+        Assert.Equal("physical-iphone", device.Identifier);
+        Assert.True(device.IsIos);
+        Assert.True(device.IsAvailable);
+    }
+
     [Fact]
     public void ParseApplications_ReadsAndDeduplicatesBundleIdentifiers()
     {
