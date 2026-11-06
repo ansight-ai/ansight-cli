@@ -47,6 +47,16 @@ public sealed partial class WorkspaceTestBatchRunner
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var hasAttachedSession = !string.IsNullOrWhiteSpace(request.SessionId);
+        var hasLaunchOrParallelOptions = request.Target is not null
+            || request.Targets is { Count: > 0 }
+            || request.Parallel;
+
+        if (hasAttachedSession && hasLaunchOrParallelOptions)
+        {
+            throw new ArgumentException("An attached batch session cannot be combined with launch targets or parallel execution.");
+        }
+
         var catalog = WorkspaceTestCatalog.Load(request.WorkspacePath, cancellationToken);
         var requestedIds = request.TestIds is { Count: > 0 } ? request.TestIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
             : null;
@@ -370,6 +380,7 @@ public sealed partial class WorkspaceTestBatchRunner
                     new WorkspaceTestRunRequest(
                         request.WorkspacePath,
                         test.TestId,
+                        SessionId: request.SessionId,
                         SessionWaitTimeout: request.SessionWaitTimeout,
                         Model: request.Model,
                         MaximumTurnsPerInstruction: request.MaximumTurnsPerInstruction,

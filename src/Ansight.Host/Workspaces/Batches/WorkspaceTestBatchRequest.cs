@@ -13,6 +13,8 @@ public sealed record WorkspaceTestBatchRequest(
     Guid? TeamId = null,
     bool EnableWorkspaceTools = true)
 {
+    public string? SessionId { get; init; }
+
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
 
     public string Source { get; init; } = "host";

@@ -5,6 +5,44 @@ namespace Ansight.Host.Tests.Unit.Workspaces;
 
 public sealed class WorkspaceTestBatchRunnerTests
 {
+    [Fact]
+    public async Task AttachedBatchPreservesTheExactSessionForEveryTest()
+    {
+        using var environment = new TestEnvironment();
+        var workspace = CreateWorkspace(environment.RootPath, "first", "second", "third");
+        var tests = WorkspaceTestCatalog.Load(workspace).Tests;
+        var calls = new List<string>();
+        var runner = new WorkspaceTestBatchRunner((request, _, _) =>
+        {
+            Assert.Equal("attached-session", request.SessionId);
+            Assert.Null(request.Target);
+            calls.Add(request.TestId);
+
+            var test = tests.Single(test => test.TestId == request.TestId);
+
+            return Task.FromResult(new WorkspaceTestRunResult(true, "Passed.", test, request.SessionId, null, []));
+        }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
+
+        var result = await runner.RunAllAsync(new WorkspaceTestBatchRequest(workspace) { SessionId = "attached-session" });
+
+        Assert.Equal(3, result.PassedCount);
+        Assert.Equal(3, calls.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task AttachedBatchRejectsParallelExecutionBeforeStartingTests()
+    {
+        using var environment = new TestEnvironment();
+        var runner = new WorkspaceTestBatchRunner((_, _, _) => throw new InvalidOperationException("Must not run."),
+            new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => runner.RunAllAsync(new WorkspaceTestBatchRequest(environment.RootPath)
+        {
+            SessionId = "attached-session",
+            Parallel = true
+        }));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("always")]

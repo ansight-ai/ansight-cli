@@ -239,6 +239,7 @@ internal static class TestCommands
             WorkspaceTestTeamOptions.Resolve(arguments),
             !arguments.HasFlag("no-workspace-tools"))
         {
+            SessionId = arguments.GetOption("session-id"),
             Source = "cli",
             Video = video,
             Reasoning = ReasoningOptions.Resolve(arguments),
