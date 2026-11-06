@@ -8,6 +8,7 @@ import os
 import platform
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import time
@@ -52,6 +53,8 @@ def main():
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--preview-library", type=Path,
                         help="Also verify the built native preview library receives a simulator surface.")
+    parser.add_argument("--stylus-helper", type=Path,
+                        help="Test this packaged Pencil helper without rebuilding or changing its signature.")
     parser.add_argument("--ansight-cli", type=Path,
                         help="Record app receipts and screens with this CLI and an already running isolated host.")
     parser.add_argument("--ansight-data-dir", type=Path)
@@ -137,7 +140,12 @@ def main():
         ])
         run(["/usr/bin/codesign", "--force", "--sign", "-", app])
         driver = build / "input"
-        run(["/bin/bash", native / "build-stylus-helper.sh", architecture, build / "AnsightSimulatorStylusGuest"])
+        helper = build / "AnsightSimulatorStylusGuest"
+        if args.stylus_helper:
+            shutil.copy2(args.stylus_helper.resolve(), helper)
+            run(["/usr/bin/codesign", "--verify", "--strict", helper])
+        else:
+            run(["/bin/bash", native / "build-stylus-helper.sh", architecture, helper])
         run([
             "/usr/bin/xcrun", "--sdk", "macosx", "clang", "-fobjc-arc", "-fblocks", "-fmodules",
             f"-fmodules-cache-path={build / 'modules'}", "-I", native,
@@ -183,9 +191,10 @@ def main():
                     raise AssertionError(f"{message}. Observed evidence: {events}")
 
                 def ready(events):
-                    has_surface = any(event.get("surface") == surface for event in events)
+                    surface_ready = any(event.get("surface") == surface and event.get("kind") == "ready"
+                                        for event in events)
                     is_active = any(event.get("kind") == "active" for event in events)
-                    return has_surface and is_active
+                    return surface_ready and is_active
 
                 wait_for(ready, f"The {surface} probe did not become ready and active")
 

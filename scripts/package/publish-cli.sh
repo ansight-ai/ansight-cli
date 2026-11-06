@@ -22,6 +22,7 @@ MACOS_CODESIGN_IDENTITY="${CODESIGN_IDENTITY-}"
 MACOS_CODESIGN_IDENTITY_IS_EXPLICIT="${CODESIGN_IDENTITY+x}"
 MACOS_BUNDLE_IDENTIFIER="${MACOS_BUNDLE_IDENTIFIER:-com.ansight-ai.cli}"
 MACOS_ENTITLEMENTS="${MACOS_ENTITLEMENTS:-${SCRIPT_DIR}/ansight-cli.entitlements.plist}"
+SIMULATOR_STYLUS_ENTITLEMENTS="${SCRIPT_DIR}/ansight-simulator-stylus.entitlements.plist"
 INCLUDE_NATIVE_LIBRARIES_FOR_SELF_EXTRACT="true"
 DOTNET_RESTORE_ARGUMENTS=()
 case "${SKIP_RESTORE:-false}" in
@@ -356,11 +357,14 @@ if [[ "${RID}" == osx-* ]]; then
       --sign "${MACOS_CODESIGN_IDENTITY}" \
       "${SIMULATOR_APP_ICON_HELPER}"
     remove_existing_code_signature "${SIMULATOR_STYLUS_HELPER}"
+    # The guest needs the simulator's DYLD root and system-library cache even
+    # when the distributed executable uses hardened runtime signing.
     /usr/bin/codesign \
       --force \
       --options runtime \
       --timestamp \
       --sign "${MACOS_CODESIGN_IDENTITY}" \
+      --entitlements "${SIMULATOR_STYLUS_ENTITLEMENTS}" \
       "${SIMULATOR_STYLUS_HELPER}"
     remove_existing_code_signature "${EXECUTABLE}"
     /usr/bin/codesign \
@@ -398,7 +402,8 @@ if [[ "${RID}" == osx-* ]]; then
       /usr/bin/codesign --force --sign - "${native_library}"
     done < <(/usr/bin/find "${OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
     /usr/bin/codesign --force --sign - "${SIMULATOR_APP_ICON_HELPER}"
-    /usr/bin/codesign --force --sign - "${SIMULATOR_STYLUS_HELPER}"
+    /usr/bin/codesign --force --sign - \
+      --entitlements "${SIMULATOR_STYLUS_ENTITLEMENTS}" "${SIMULATOR_STYLUS_HELPER}"
     /usr/bin/codesign --force --sign - "${EXECUTABLE}"
     /usr/bin/codesign --force --sign - "${TRAY_EXECUTABLE}"
     /usr/bin/codesign --force --sign - "${TRAY_APP}"
@@ -434,7 +439,7 @@ if [[ "${RID}" == osx-* ]]; then
     /usr/bin/codesign --verify --strict --verbose=2 "${native_library}"
   done < <(/usr/bin/find "${OUTPUT_DIR}" -maxdepth 1 -type f -name '*.dylib' -print)
   /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_APP_ICON_HELPER}"
-  /usr/bin/codesign --verify --strict --verbose=2 "${SIMULATOR_STYLUS_HELPER}"
+  /bin/bash "${SCRIPT_DIR}/verify-simulator-stylus-signature.sh" "${SIMULATOR_STYLUS_HELPER}"
   /usr/bin/codesign --verify --strict --verbose=2 "${EXECUTABLE}"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "${TRAY_APP}"
 fi

@@ -5,6 +5,8 @@ test_directory="$(cd "$(dirname "$0")" && pwd)"
 test_build_directory="$(mktemp -d "${TMPDIR:-/tmp}/ansight-hid-tests.XXXXXX")"
 trap 'rm -rf "$test_build_directory"' EXIT
 
+/bin/bash "$test_directory/../../../../scripts/package/test-simulator-stylus-signature.sh"
+
 xcrun --sdk macosx clang -dynamiclib -Wall -Wextra -Werror \
     -DANSIGHT_FRAMEWORK_FIXTURE_VERSION=26 "$test_directory/SimulatorKitFixture.c" \
     -o "$test_build_directory/legacy.dylib"
