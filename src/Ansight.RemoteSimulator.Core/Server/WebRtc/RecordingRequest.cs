@@ -9,4 +9,5 @@ internal sealed record RecordingRequest(
     DateTimeOffset? StartUtc,
     DateTimeOffset? EndUtc,
     int? MaximumLogCount,
-    int? MaximumMetricSampleCount);
+    int? MaximumMetricSampleCount,
+    string? BatchId = null);

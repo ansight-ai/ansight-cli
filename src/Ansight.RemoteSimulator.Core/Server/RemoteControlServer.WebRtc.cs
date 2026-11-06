@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Ansight.RemoteSimulator.Core.Annotations;
 using Ansight.RemoteSimulator.Core.AppInspection;
 using Ansight.RemoteSimulator.Core.Input;
 using Ansight.RemoteSimulator.Core.Server.WebRtc;
@@ -356,6 +357,37 @@ public sealed partial class RemoteControlServer
                     request.RequestId,
                     HttpStatusCode.Forbidden,
                     "Recording review requires the recordings.read scope.").ConfigureAwait(false);
+                return;
+            }
+
+            if (string.Equals(request.Operation, "annotation_frame", StringComparison.Ordinal))
+            {
+                var validBatchRequest = IsValidRecordingIdentifier(request.BatchId)
+                    && IsValidRecordingIdentifier(request.RecordingId)
+                    && IsValidRecordingIdentifier(request.FrameId);
+                if (!validBatchRequest)
+                {
+                    await SendRecordingFailureAsync(session, request.RequestId,
+                        HttpStatusCode.BadRequest, "An annotation batch, session and frame are required.")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                var frame = annotationSource is IRemoteAnnotationFrameSource annotationFrames
+                    ? await annotationFrames.GetBatchFrameAsync(
+                        session.DeviceUdid, request.BatchId!, request.RecordingId!, request.FrameId!)
+                        .ConfigureAwait(false)
+                    : null;
+                if (frame is null)
+                {
+                    await SendRecordingFailureAsync(session, request.RequestId,
+                        HttpStatusCode.NotFound, "This annotation frame has expired. Start a new annotation set.")
+                        .ConfigureAwait(false);
+                    return;
+                }
+
+                await SendRecordingResponseAsync(session, request.RequestId, HttpStatusCode.OK,
+                    frame.ContentType, frame.Content).ConfigureAwait(false);
                 return;
             }
 

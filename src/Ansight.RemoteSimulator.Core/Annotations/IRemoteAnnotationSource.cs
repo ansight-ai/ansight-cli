@@ -4,6 +4,8 @@ namespace Ansight.RemoteSimulator.Core.Annotations;
 
 public interface IRemoteAnnotationSource
 {
+    bool SupportsFreeDraw => false;
+
     Task<IReadOnlyList<RemoteAnnotationSession>> ListLiveSessionsAsync(
         CancellationToken cancellationToken = default);
 

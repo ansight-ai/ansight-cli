@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Ansight.RemoteSimulator.Core.AppInspection;
+using Ansight.RemoteSimulator.Core.Annotations;
+using Ansight.RemoteSimulator.Core.Devices;
 using Ansight.RemoteSimulator.Core.Input;
 using Ansight.RemoteSimulator.Core.Recording;
 using Ansight.RemoteSimulator.Core.Runtime;
@@ -15,6 +17,63 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 public sealed class RemoteControlServerRecordingTests
 {
     private const string SessionToken = "recording-test-token";
+
+    [Theory]
+    [InlineData(false, "batch-1", HttpStatusCode.Forbidden)]
+    [InlineData(true, "batch-1", HttpStatusCode.OK)]
+    [InlineData(true, "wrong-batch", HttpStatusCode.NotFound)]
+    [InlineData(true, "", HttpStatusCode.BadRequest)]
+    public async Task AnnotationFrame_DoesNotRequireRecordingServiceAndPreservesScopeAndBatchChecks(
+        bool grantRead,
+        string batchId,
+        HttpStatusCode expectedStatus)
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        var annotations = new FakeAnnotationFrameSource();
+        await using var server = CreateServer(null, factory, annotationSource: annotations);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var offerBody = JsonSerializer.Serialize(new
+        {
+            deviceUdid = "device-1",
+            framesPerSecond = 30,
+            type = "offer",
+            sdp = "v=0\r\n",
+            grantedScopes = grantRead ? new[] { "view", "recordings.read" } : ["view"]
+        });
+        using var offer = await client.PostAsync(Endpoint(server, "/api/webrtc/offer"),
+            new StringContent(offerBody, Encoding.UTF8, "application/json"));
+        Assert.True(offer.IsSuccessStatusCode, await offer.Content.ReadAsStringAsync());
+
+        var session = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        session.Receive(JsonSerializer.Serialize(new
+        {
+            kind = "recording_request",
+            requestId = "annotation-request",
+            operation = "annotation_frame",
+            recordingId = "live-session",
+            frameId = "frame-1",
+            batchId
+        }));
+        using var response = JsonDocument.Parse(await session.WaitForMessageAsync());
+
+        Assert.Equal((int)expectedStatus, response.RootElement.GetProperty("statusCode").GetInt32());
+        if (expectedStatus == HttpStatusCode.OK)
+        {
+            Assert.Equal("device-1", annotations.RequestedDevice);
+            Assert.Equal(new byte[] { 1, 2, 3 },
+                Convert.FromBase64String(response.RootElement.GetProperty("data").GetString()!));
+        }
+        else if (!grantRead)
+        {
+            Assert.Null(annotations.RequestedDevice);
+        }
+
+        var state = await client.GetFromJsonAsync<JsonElement>(Endpoint(server, "/api/state"));
+        Assert.True(state.GetProperty("supportsAnnotationFrames").GetBoolean());
+        Assert.False(state.GetProperty("supportsRecordingReview").GetBoolean());
+        Assert.False(state.GetProperty("supportsAgentSubmission").GetBoolean());
+    }
 
     [Fact]
     public async Task RecordingEndpoints_ListDescribeAndReturnFrameContent()
@@ -266,7 +325,8 @@ public sealed class RemoteControlServerRecordingTests
         IRemoteRecordingSource? recordingSource,
         ISimulatorWebRtcSessionFactory? webRtcSessionFactory = null,
         ISimulatorInputSink? inputSink = null,
-        IRemoteAppInspectionSource? appInspectionSource = null)
+        IRemoteAppInspectionSource? appInspectionSource = null,
+        IRemoteAnnotationSource? annotationSource = null)
         => new(
             new FakeRuntimeSource(),
             new FakeRemoteSimulatorFrameSource(),
@@ -275,7 +335,8 @@ public sealed class RemoteControlServerRecordingTests
             sessionToken: SessionToken,
             webRtcSessionFactory: webRtcSessionFactory,
             recordingSource: recordingSource,
-            appInspectionSource: appInspectionSource);
+            appInspectionSource: appInspectionSource,
+            annotationSource: annotationSource);
 
     private static FakeRemoteRecordingSource CreateMinimalRecordingSource()
     {
@@ -311,6 +372,42 @@ public sealed class RemoteControlServerRecordingTests
     {
         var separator = string.IsNullOrWhiteSpace(query) ? string.Empty : $"&{query}";
         return $"http://127.0.0.1:{server.Port}{path}?token={SessionToken}{separator}";
+    }
+
+    private sealed class FakeAnnotationFrameSource : IRemoteAnnotationSource, IRemoteAnnotationFrameSource
+    {
+        public string? RequestedDevice { get; private set; }
+
+        public Task<RemoteRecordingFrame?> GetBatchFrameAsync(
+            string deviceIdentifier, string batchId, string sessionId, string frameId,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedDevice = deviceIdentifier;
+            var matchesBatch = batchId == "batch-1"
+                && sessionId == "live-session"
+                && frameId == "frame-1";
+            return Task.FromResult<RemoteRecordingFrame?>(matchesBatch
+                ? new RemoteRecordingFrame("image/png", [1, 2, 3])
+                : null);
+        }
+
+        public Task<IReadOnlyList<RemoteAnnotationSession>> ListLiveSessionsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<RemoteAnnotationSession>>([]);
+        }
+
+        public Task<RemoteAnnotationResult> CreateAnnotationAsync(RemoteAnnotationRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<RemoteAnnotationResult> UpdateAnnotationAsync(RemoteAnnotationUpdateRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<RemoteOperationResult> DeleteAnnotationAsync(RemoteAnnotationDeleteRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<RemoteAnnotationBatchStartResult> StartAnnotationBatchAsync(RemoteAnnotationBatchStartRequest request,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeRuntimeSource : IRemoteRuntimeSource

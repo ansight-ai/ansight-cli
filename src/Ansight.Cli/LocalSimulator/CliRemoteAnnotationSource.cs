@@ -1,12 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host;
+using Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 using Ansight.RemoteSimulator.Core.Annotations;
 using Ansight.RemoteSimulator.Core.Devices;
+using Ansight.RemoteSimulator.Core.Recording;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
+internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemoteAnnotationFrameSource
 {
     private const string AnnotationSource = "simulator.remote.mobile";
     private const string AgentActionPropertyName = "ansight.agentAction";
@@ -22,6 +24,8 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
     }
+
+    public bool SupportsFreeDraw => true;
 
     public Task<IReadOnlyList<RemoteAnnotationSession>> ListLiveSessionsAsync(
         CancellationToken cancellationToken = default)
@@ -86,7 +90,8 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
             request.Comment,
             request.AgentAction,
             request.BatchId,
-            request.FrameId);
+            request.FrameId,
+            request.Strokes);
         return Task.FromResult(SaveAnnotation(update, existing));
     }
 
@@ -189,6 +194,70 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
             frame.CapturedAtUtc.ToUniversalTime()));
     }
 
+    public async Task<RemoteRecordingFrame?> GetBatchFrameAsync(
+        string deviceIdentifier,
+        string batchId,
+        string sessionId,
+        string frameId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = ResolveSession(deviceIdentifier);
+        if (session is null || !string.Equals(session.Snapshot.SessionId, sessionId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        lock (gate)
+        {
+            PruneStartedBatches();
+            var matchesBatch = startedBatches.TryGetValue(batchId, out var batch)
+                && string.Equals(batch.SessionId, sessionId, StringComparison.Ordinal)
+                && string.Equals(batch.FrameId, frameId, StringComparison.Ordinal);
+            if (!matchesBatch)
+            {
+                return null;
+            }
+        }
+
+        var frame = session.Snapshot.Images.FirstOrDefault(candidate => candidate.FrameId == frameId);
+        if (frame is null)
+        {
+            return null;
+        }
+
+        var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session.Snapshot, frame);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        byte[] content;
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            if (stream.Length is <= 0 or > 20 * 1024 * 1024)
+            {
+                return null;
+            }
+
+            content = new byte[(int)stream.Length];
+            await stream.ReadExactlyAsync(content, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            // Retained evidence may be pruned while the companion is fetching it.
+            return null;
+        }
+
+        var contentType = frame.Format.ToLowerInvariant() switch
+        {
+            "jpg" or "jpeg" or "image/jpeg" => "image/jpeg",
+            "webp" or "image/webp" => "image/webp",
+            _ => "image/png"
+        };
+        return new RemoteRecordingFrame(contentType, content);
+    }
+
     private RemoteAnnotationResult SaveAnnotation(
         RemoteAnnotationRequest request,
         SessionAnnotation? existing)
@@ -209,8 +278,9 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
 
         var batchId = NormalizeIdentifier(request.BatchId);
         var requestedFrameId = NormalizeIdentifier(request.FrameId);
-        if (request.BatchId is not null && batchId is null
-            || request.FrameId is not null && requestedFrameId is null)
+        var invalidBatchId = request.BatchId is not null && batchId is null;
+        var invalidFrameId = request.FrameId is not null && requestedFrameId is null;
+        if (invalidBatchId || invalidFrameId)
         {
             return new RemoteAnnotationResult(false, "The annotation batch or frame identifier is invalid.");
         }
@@ -221,16 +291,18 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
             lock (gate)
             {
                 PruneStartedBatches();
-                if (!startedBatches.TryGetValue(batchId, out var startedBatch)
+                var invalidBatch = !startedBatches.TryGetValue(batchId, out var startedBatch)
                     || !string.Equals(startedBatch.SessionId, session.Snapshot.SessionId, StringComparison.Ordinal)
-                    || !string.Equals(startedBatch.FrameId, requestedFrameId, StringComparison.Ordinal))
+                    || !string.Equals(startedBatch.FrameId, requestedFrameId, StringComparison.Ordinal);
+                if (invalidBatch)
                 {
                     return new RemoteAnnotationResult(
                         false,
                         "The annotation batch is no longer active or does not match its saved CLI host frame.");
                 }
+
                 frame = new AnnotationFrameReference(
-                    startedBatch.FrameId,
+                    startedBatch!.FrameId,
                     startedBatch.FrameCapturedAtUtc);
             }
         }
@@ -268,10 +340,16 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
                 "The annotation does not belong to this active batch and frame.");
         }
 
-        var kind = string.Equals(request.Kind, "point", StringComparison.OrdinalIgnoreCase)
-            ? SessionAnnotationGeometryKind.Point
-            : SessionAnnotationGeometryKind.Rectangle;
-        var bounds = NormalizeBounds(request, kind);
+        var shape = CliAnnotationGeometry.Create(request, frame.FrameId, frame.CapturedAtUtc, existing?.Geometry);
+        if (shape.Error is not null)
+        {
+            return new RemoteAnnotationResult(false, shape.Error);
+        }
+
+        var kind = string.Equals(request.Kind, "freeDraw", StringComparison.OrdinalIgnoreCase)
+            ? SessionAnnotationGeometryKind.FreeDraw
+            : shape.Geometry[0].Kind;
+        var bounds = shape.Bounds;
         var visualTreeSnapshot = session.Snapshot.VisualTreeSnapshots
             .OrderByDescending(candidate => string.Equals(
                 candidate.ScreenshotFrameId,
@@ -293,21 +371,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
             CustomData = BuildCustomData(request.AgentAction, batchId),
             Evidence = existing?.Evidence ?? [],
             HookFailures = existing?.HookFailures ?? [],
-            Geometry =
-            [
-                new SessionAnnotationGeometry
-                {
-                    GeometryId = existing?.Geometry.FirstOrDefault()?.GeometryId
-                                 ?? Guid.NewGuid().ToString("N"),
-                    FrameId = frame.FrameId,
-                    CapturedAtUtc = capturedAtUtc,
-                    Kind = kind,
-                    X = bounds.X,
-                    Y = bounds.Y,
-                    Width = kind == SessionAnnotationGeometryKind.Rectangle ? bounds.Width : null,
-                    Height = kind == SessionAnnotationGeometryKind.Rectangle ? bounds.Height : null
-                }
-            ],
+            Geometry = shape.Geometry,
             Target = new SessionAnnotationTarget
             {
                 Kind = "visualTreeRegion",
@@ -316,9 +380,12 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
                 VisualTreeSnapshotId = visualTreeSnapshot?.SnapshotId ?? string.Empty,
                 Type = "ScreenRegion",
                 ElementKind = kind.ToString(),
-                Label = kind == SessionAnnotationGeometryKind.Rectangle
-                    ? "Selected Screenshot Region"
-                    : "Selected Screenshot Point",
+                Label = kind switch
+                {
+                    SessionAnnotationGeometryKind.FreeDraw => "Screenshot Drawing",
+                    SessionAnnotationGeometryKind.Rectangle => "Selected Screenshot Region",
+                    _ => "Selected Screenshot Point"
+                },
                 NormalizedBounds = bounds
             }
         };
@@ -411,33 +478,6 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource
         }
 
         return string.Empty;
-    }
-
-    private static SessionAnnotationTargetBounds NormalizeBounds(
-        RemoteAnnotationRequest request,
-        SessionAnnotationGeometryKind kind)
-    {
-        if (kind == SessionAnnotationGeometryKind.Point)
-        {
-            const double pointSize = 0.018d;
-            return new SessionAnnotationTargetBounds
-            {
-                X = Math.Clamp(request.X - (pointSize / 2d), 0d, 1d - pointSize),
-                Y = Math.Clamp(request.Y - (pointSize / 2d), 0d, 1d - pointSize),
-                Width = pointSize,
-                Height = pointSize
-            };
-        }
-
-        var x = Math.Clamp(request.X, 0d, 1d);
-        var y = Math.Clamp(request.Y, 0d, 1d);
-        return new SessionAnnotationTargetBounds
-        {
-            X = x,
-            Y = y,
-            Width = Math.Clamp(request.Width.GetValueOrDefault(), 0d, 1d - x),
-            Height = Math.Clamp(request.Height.GetValueOrDefault(), 0d, 1d - y)
-        };
     }
 
     private static bool BelongsToBatch(SessionAnnotation annotation, string? batchId, string frameId)

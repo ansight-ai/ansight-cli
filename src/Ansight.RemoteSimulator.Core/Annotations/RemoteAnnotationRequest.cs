@@ -10,4 +10,5 @@ public sealed record RemoteAnnotationRequest(
     string Comment,
     string AgentAction,
     string? BatchId = null,
-    string? FrameId = null);
+    string? FrameId = null,
+    IReadOnlyList<RemoteAnnotationStroke>? Strokes = null);
