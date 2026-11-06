@@ -21,4 +21,11 @@ internal sealed record RemoteStateResponse(
     string InputBackend,
     string InputStatus,
     string VideoBackend,
-    string VideoStatus);
+    string VideoStatus,
+    bool SupportsDeviceTesting,
+    bool SupportsAnnotationFrames,
+    bool SupportsRecordingReview,
+    bool SupportsAgentTaskHistory,
+    bool SupportsAgentSubmission,
+    bool SupportsLiveFiles,
+    bool SupportsFreeDrawAnnotations);

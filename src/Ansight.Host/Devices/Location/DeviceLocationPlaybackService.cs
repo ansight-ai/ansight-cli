@@ -28,7 +28,8 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
 
     public async Task<DeviceLocationPlaybackStartResult> StartAsync(
         DeviceLocationPlaybackRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool replaceActive = true)
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateRequest(request);
@@ -47,6 +48,11 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
         try
         {
             ThrowIfDisposed();
+            if (!replaceActive && GetSnapshot().IsPlaying)
+            {
+                return new DeviceLocationPlaybackStartResult(false,
+                    "A location route is already playing. Stop it before starting another.", GetSnapshot());
+            }
             await StopActivePlaybackAsync().ConfigureAwait(false);
             var firstPoint = route.Points[0];
             var firstResult = await devices.SetLocationAsync(
@@ -97,12 +103,18 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
         }
     }
 
-    public async Task<OperationResult> StopAsync(CancellationToken cancellationToken = default)
+    public async Task<OperationResult> StopAsync(
+        CancellationToken cancellationToken = default,
+        string? expectedRunId = null)
     {
         await operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ThrowIfDisposed();
+            if (expectedRunId is not null && GetSnapshot().RunId != expectedRunId)
+            {
+                return OperationResult.Failure("The requested route is no longer the active playback.");
+            }
             var wasPlaying = GetSnapshot().IsPlaying;
             await StopActivePlaybackAsync().ConfigureAwait(false);
             return wasPlaying

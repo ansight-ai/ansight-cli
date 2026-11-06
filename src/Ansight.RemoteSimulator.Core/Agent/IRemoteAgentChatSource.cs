@@ -4,6 +4,8 @@ namespace Ansight.RemoteSimulator.Core.Agent;
 
 public interface IRemoteAgentChatSource
 {
+    bool SupportsSubmission => true;
+
     Task<RemoteAgentChatListResult> ListAgentChatsAsync(
         RemoteAgentChatListRequest request,
         CancellationToken cancellationToken = default);

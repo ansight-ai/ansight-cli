@@ -13,6 +13,59 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 
 public sealed class RemoteControlServerCompanionTests
 {
+    [Theory]
+    [InlineData("shake", "simulator-active", HttpStatusCode.OK, true)]
+    [InlineData("shake", "stopped", HttpStatusCode.NotFound, false)]
+    [InlineData("arbitrary-tool", "simulator-active", HttpStatusCode.BadRequest, false)]
+    [InlineData("network-reset", "stopped", HttpStatusCode.OK, true)]
+    [InlineData("app-restart", "simulator-active", HttpStatusCode.OK, true)]
+    [InlineData("permission-reset", "simulator-active", HttpStatusCode.OK, true)]
+    [InlineData("display-rotation", "simulator-active", HttpStatusCode.OK, true)]
+    [InlineData("push", "stopped", HttpStatusCode.NotFound, false)]
+    [InlineData("task-start", "simulator-active", HttpStatusCode.OK, true)]
+    [InlineData("task-status", "stopped", HttpStatusCode.OK, true)]
+    [InlineData("task-cancel", "stopped", HttpStatusCode.OK, true)]
+    [InlineData("task-start", "stopped", HttpStatusCode.NotFound, false)]
+    public async Task DeviceTesting_ValidatesActionAndTargetBeforeDispatch(
+        string action,
+        string deviceId,
+        HttpStatusCode expectedStatus,
+        bool shouldDispatch)
+    {
+        var testingSource = new FakeDeviceTestingSource();
+        await using var server = CreateServer(
+            new FakeDeviceLifecycleSource(), new FakeAnnotationSource(),
+            deviceTestingSource: testingSource);
+        await server.StartAsync();
+        using var client = new HttpClient();
+
+        using var response = await PostJsonAsync(client, Endpoint(server, "/api/device/testing"),
+            new RemoteDeviceTestingRequest(deviceId, action));
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+        Assert.Equal(shouldDispatch, testingSource.LastRequest is not null);
+    }
+
+    [Fact]
+    public async Task DeviceTesting_RequiresTokenAndAdvertisesHostSupport()
+    {
+        var testingSource = new FakeDeviceTestingSource();
+        await using var server = CreateServer(
+            new FakeDeviceLifecycleSource(), new FakeAnnotationSource(),
+            deviceTestingSource: testingSource);
+        await server.StartAsync();
+        using var client = new HttpClient();
+
+        using var unauthorized = await PostJsonAsync(client,
+            $"http://127.0.0.1:{server.Port}/api/device/testing",
+            new RemoteDeviceTestingRequest("simulator-active", "shake"));
+        var state = await client.GetFromJsonAsync<JsonObject>(Endpoint(server, "/api/state"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+        Assert.Null(testingSource.LastRequest);
+        Assert.True(state!["supportsDeviceTesting"]!.GetValue<bool>());
+    }
+
     [Fact]
     public async Task StartAsync_ExposesTokenizedLoopbackBaseUrlForOutboundBroker()
     {
@@ -258,7 +311,8 @@ public sealed class RemoteControlServerCompanionTests
         IRemoteAnnotationSource annotationSource,
         IRemoteAgentChatSource? agentChatSource = null,
         IRemoteDeviceLocationSource? deviceLocationSource = null,
-        IRemoteRuntimeSource? runtimeSource = null)
+        IRemoteRuntimeSource? runtimeSource = null,
+        IRemoteDeviceTestingSource? deviceTestingSource = null)
         => new(
             runtimeSource ?? new FakeRuntimeSource(),
             new FakeRemoteSimulatorFrameSource(),
@@ -268,7 +322,21 @@ public sealed class RemoteControlServerCompanionTests
             deviceLifecycleSource: lifecycleSource,
             annotationSource: annotationSource,
             agentChatSource: agentChatSource ?? new FakeAgentChatSource(),
-            deviceLocationSource: deviceLocationSource);
+            deviceLocationSource: deviceLocationSource,
+            deviceTestingSource: deviceTestingSource);
+
+    private sealed class FakeDeviceTestingSource : IRemoteDeviceTestingSource
+    {
+        public RemoteDeviceTestingRequest? LastRequest { get; private set; }
+
+        public Task<RemoteDeviceTestingResult> ExecuteAsync(
+            RemoteDeviceTestingRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(new RemoteDeviceTestingResult(true, "Delivered."));
+        }
+    }
 
     private static string Endpoint(RemoteControlServer server, string path)
         => $"http://127.0.0.1:{server.Port}{path}?token={SessionToken}";

@@ -80,7 +80,7 @@ public sealed partial class RemoteControlServer
 
         if (target.AbsolutePath is "/api/state" or "/api/location/set" or "/api/location/clear"
             or "/api/webrtc/offer" or "/api/frame" or "/api/input" or "/api/button"
-            or "/api/key" or "/api/text")
+            or "/api/key" or "/api/text" or "/api/device/testing")
         {
             await RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -113,7 +113,14 @@ public sealed partial class RemoteControlServer
                 inputSink.BackendName,
                 inputSink.Status,
                 webRtcSessionFactory?.BackendName ?? "adaptive-image-polling",
-                webRtcSessionFactory?.Status ?? "WebRTC is unavailable; image polling is enabled.");
+                webRtcSessionFactory?.Status ?? "WebRTC is unavailable; image polling is enabled.",
+                deviceTestingSource is not null,
+                annotationSource is IRemoteAnnotationFrameSource,
+                recordingSource is not null,
+                agentChatSource is not null,
+                agentChatSource?.SupportsSubmission == true,
+                appInspectionSource is not null,
+                annotationSource?.SupportsFreeDraw == true);
             await WriteJsonAsync(stream, HttpStatusCode.OK, response, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -149,6 +156,12 @@ public sealed partial class RemoteControlServer
                 result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict,
                 result.IsSuccess ? (object)result : new ErrorResponse(result.Message),
                 cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (request.Method == "POST" && target.AbsolutePath == "/api/device/testing")
+        {
+            await HandleDeviceTestingAsync(stream, request.Body, cancellationToken).ConfigureAwait(false);
             return;
         }
 

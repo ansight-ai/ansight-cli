@@ -41,6 +41,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     private readonly IRemoteAgentChatSource? agentChatSource;
     private readonly IRemoteAppInspectionSource? appInspectionSource;
     private readonly IRemoteDeviceLocationSource? deviceLocationSource;
+    private readonly IRemoteDeviceTestingSource? deviceTestingSource;
     private readonly bool allowUnauthenticatedLoopback;
     private readonly int requestedPort;
     private readonly string sessionToken;
@@ -63,7 +64,8 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         IRemoteAnnotationSource? annotationSource = null,
         IRemoteAgentChatSource? agentChatSource = null,
         IRemoteAppInspectionSource? appInspectionSource = null,
-        IRemoteDeviceLocationSource? deviceLocationSource = null)
+        IRemoteDeviceLocationSource? deviceLocationSource = null,
+        IRemoteDeviceTestingSource? deviceTestingSource = null)
         : this(
             new SimulatorRuntimeSource(tracker ?? throw new ArgumentNullException(nameof(tracker))),
             frameSource,
@@ -78,7 +80,8 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
             annotationSource,
             agentChatSource,
             appInspectionSource,
-            deviceLocationSource)
+            deviceLocationSource,
+            deviceTestingSource)
     {
     }
 
@@ -96,7 +99,8 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         IRemoteAnnotationSource? annotationSource = null,
         IRemoteAgentChatSource? agentChatSource = null,
         IRemoteAppInspectionSource? appInspectionSource = null,
-        IRemoteDeviceLocationSource? deviceLocationSource = null)
+        IRemoteDeviceLocationSource? deviceLocationSource = null,
+        IRemoteDeviceTestingSource? deviceTestingSource = null)
     {
         this.runtimeSource = runtimeSource ?? throw new ArgumentNullException(nameof(runtimeSource));
         this.frameSource = frameSource ?? throw new ArgumentNullException(nameof(frameSource));
@@ -117,6 +121,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         this.agentChatSource = agentChatSource;
         this.appInspectionSource = appInspectionSource;
         this.deviceLocationSource = deviceLocationSource;
+        this.deviceTestingSource = deviceTestingSource;
     }
 
     public bool IsRunning => listener is not null;

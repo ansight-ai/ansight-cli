@@ -21,6 +21,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
     private HeadlessHostDeviceDriver? deviceDriver;
     private RoutedSimulatorInputSink? inputSink;
     private RemoteControlServer? server;
+    private CliCompanionTestingSource? testingSource;
     private readonly IHostedSimulatorAccess? hostedAccess;
     private bool disposed;
 
@@ -78,6 +79,11 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             await hostedAccess.DisposeAsync().ConfigureAwait(false);
         }
         runtime.LocalSimulatorControl = null;
+
+        if (testingSource is not null)
+        {
+            await testingSource.DisposeAsync().ConfigureAwait(false);
+        }
 
         if (server is not null)
         {
@@ -209,6 +215,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         var lifecycleSource = new CliRemoteDeviceLifecycleSource(deviceDriver);
         var annotationSource = new CliRemoteAnnotationSource(runtime);
         var locationSource = new CliRemoteDeviceLocationSource(runtime.Devices, runtimeSource);
+        testingSource = new CliCompanionTestingSource(runtime, annotationSource);
 
         server = new RemoteControlServer(
             runtimeSource,
@@ -220,7 +227,9 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             allowUnauthenticatedLoopback: true,
             deviceLifecycleSource: lifecycleSource,
             annotationSource: annotationSource,
-            deviceLocationSource: locationSource);
+            agentChatSource: new CliRemoteAgentChatSource(runtime),
+            deviceLocationSource: locationSource,
+            deviceTestingSource: testingSource);
         await server.StartAsync(cancellationToken).ConfigureAwait(false);
         reportStatus($"Companion simulator host is ready on local port {server.Port}. {string.Join(' ', startupMessages)}");
 

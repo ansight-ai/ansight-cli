@@ -112,6 +112,10 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             physicalScreenshots.ConfigurePhysicalIosCapture(headlessDeviceDriver.CapturePhysicalIosScreenshotAsync);
         this.operationDispatcher.ConfigureUiAccessibilityDriver(headlessDeviceDriver);
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
+        CompanionDeviceTesting = new Ansight.Host.Devices.CompanionDeviceTestingService(
+            ShakeForCompanionAsync, NetworkConditioning,
+            routes: new Ansight.Host.Devices.CompanionRoutePlaybackService(DeviceLocationPlayback),
+            apps: new Ansight.Host.Devices.CompanionAppTestingService(Devices.ListAsync, hostRuntimeOptions));
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
         operationDispatcher.ConfigureDeviceMotionDriver(Devices);
         Identity = CreateIdentityInfo(hostIdentityStore.Current);
@@ -210,6 +214,10 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         Audio = new AudioService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
+        CompanionDeviceTesting = new Ansight.Host.Devices.CompanionDeviceTestingService(
+            ShakeForCompanionAsync, NetworkConditioning,
+            routes: new Ansight.Host.Devices.CompanionRoutePlaybackService(DeviceLocationPlayback),
+            apps: new Ansight.Host.Devices.CompanionAppTestingService(Devices.ListAsync, options));
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
         operationDispatcher.ConfigureDeviceMotionDriver(Devices);
         var hostIdentity = composition.Get<IIdentityStore>().Current;
@@ -291,6 +299,17 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public AudioService Audio { get; }
 
     public Ansight.Host.Devices.Network.NetworkConditioningService NetworkConditioning { get; }
+
+    internal Ansight.RemoteSimulator.Core.Devices.IRemoteDeviceTestingSource CompanionDeviceTesting { get; }
+
+    private async Task<RequestResult> ShakeForCompanionAsync(
+        System.Text.Json.Nodes.JsonObject arguments,
+        CancellationToken cancellationToken)
+    {
+        using var scope = ToolExecutionCancellation.Push(cancellationToken);
+        return await operationDispatcher.CallToolAsync("ansight_shake_device", arguments, "companion-shake")
+            .ConfigureAwait(false);
+    }
 
     public DeviceService Devices { get; }
 
