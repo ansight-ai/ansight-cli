@@ -13,7 +13,7 @@ internal static class RemoteControlHttpTransport
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static async Task<HttpRequestData?> ReadRequestAsync(
-        NetworkStream stream,
+        Stream stream,
         CancellationToken cancellationToken)
     {
         var rented = ArrayPool<byte>.Shared.Rent(MaximumHeaderBytes);
@@ -120,7 +120,7 @@ internal static class RemoteControlHttpTransport
     }
 
     public static Task WriteJsonAsync<T>(
-        NetworkStream stream,
+        Stream stream,
         HttpStatusCode statusCode,
         T value,
         CancellationToken cancellationToken)
@@ -133,7 +133,7 @@ internal static class RemoteControlHttpTransport
             "Cache-Control: no-store\r\n");
 
     public static Task WriteTextAsync(
-        NetworkStream stream,
+        Stream stream,
         HttpStatusCode statusCode,
         string value,
         string contentType,
@@ -141,7 +141,7 @@ internal static class RemoteControlHttpTransport
         => WriteResponseAsync(stream, statusCode, contentType, Encoding.UTF8.GetBytes(value), cancellationToken);
 
     public static async Task WriteResponseAsync(
-        NetworkStream stream,
+        Stream stream,
         HttpStatusCode statusCode,
         string contentType,
         byte[] body,
