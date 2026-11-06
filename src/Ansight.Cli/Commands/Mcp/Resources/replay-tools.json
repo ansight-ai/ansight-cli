@@ -154,6 +154,9 @@
             ],
             "additionalProperties": false
           }
+        },
+        "videoCount": {
+          "type": "number"
         }
       },
       "required": [
@@ -163,7 +166,8 @@
         "frameCount",
         "touchCount",
         "durationSeconds",
-        "markers"
+        "markers",
+        "videoCount"
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false
@@ -187,7 +191,7 @@
       },
       "openai/widgetAccessible": true,
       "openai/outputTemplate": "__RESOURCE_URI__",
-      "openai/toolInvocation/invoking": "Loading replay…",
+      "openai/toolInvocation/invoking": "Loading replay\u2026",
       "openai/toolInvocation/invoked": "Replay ready"
     }
   },
@@ -429,7 +433,7 @@
   {
     "name": "create_replay_annotation",
     "title": "Save Ansight annotation",
-    "description": "Save a new native Ansight point or rectangle annotation after the user explicitly submits the widget editor. Writes to the local recording through Ansight’s annotation endpoint. Cannot replace existing annotations.",
+    "description": "Save a new native Ansight point or rectangle annotation after the user explicitly submits the widget editor. Writes to the local recording through Ansight\u2019s annotation endpoint. Cannot replace existing annotations.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -526,6 +530,72 @@
     },
     "annotations": {
       "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "ui": {
+        "visibility": [
+          "app"
+        ]
+      },
+      "openai/widgetAccessible": true,
+      "openai/visibility": "private"
+    }
+  },
+  {
+    "name": "get_replay_video_chunk",
+    "title": "Load replay video",
+    "description": "Load a bounded chunk of a recorded video for the replay widget. Video bytes are UI-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "recordingId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,199}$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sessionId",
+        "recordingId",
+        "offset"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "recordingId": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sessionId",
+        "recordingId",
+        "offset"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false

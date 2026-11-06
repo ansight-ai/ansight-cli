@@ -8,7 +8,7 @@ using SkiaSharp;
 
 namespace Ansight.Cli.Commands.Mcp;
 
-internal sealed class ReplayBackend
+internal sealed partial class ReplayBackend
 {
     private readonly Func<string[], CancellationToken, Task<JsonObject>> run;
     private readonly HttpClient http;
@@ -101,8 +101,9 @@ internal sealed class ReplayBackend
             run(["session", "annotations", sessionId, "--limit", "10000"], token),
             run(["session", "touches", sessionId, "--limit", "10000"], token),
             run(["host", "status"], token));
-        var replay = MakeReplay(summary, evidence[0], evidence[1], evidence[2]);
         var host = Host(evidence[3]);
+        var recordings = await LoadRecordingsAsync(host, sessionId, token);
+        var replay = MakeReplay(summary, evidence[0], evidence[1], evidence[2], recordings);
         replay["fullReplayUrl"] = new UriBuilder(host) { Query = "sessionId=" + Uri.EscapeDataString(sessionId) }.Uri.ToString();
 
         if (replays.Count >= 12)
@@ -156,7 +157,7 @@ internal sealed class ReplayBackend
         });
     }
 
-    internal static JsonObject MakeReplay(JsonNode summary, JsonObject images, JsonObject annotations, JsonObject touches)
+    internal static JsonObject MakeReplay(JsonNode summary, JsonObject images, JsonObject annotations, JsonObject touches, JsonArray? recordings = null)
     {
         var frames = new JsonArray();
 
@@ -172,9 +173,11 @@ internal sealed class ReplayBackend
             });
         }
 
-        if (frames.Count == 0)
+        recordings ??= [];
+
+        if (frames.Count == 0 && recordings.Count == 0)
         {
-            throw new ArgumentException("This session has no recorded screenshots to replay.");
+            throw new ArgumentException("This session has no recorded screenshots or video to replay.");
         }
 
         if ((images["totalCount"]?.GetValue<int>() ?? frames.Count) > frames.Count || frames.Count > 10000)
@@ -199,8 +202,12 @@ internal sealed class ReplayBackend
             samples.Add(sample);
         }
 
-        var start = frames[0]!["timeMs"]!.GetValue<long>();
-        var end = Math.Max(frames[^1]!["timeMs"]!.GetValue<long>(),
+        var visualStarts = frames.Select(frame => frame!["timeMs"]!.GetValue<long>())
+            .Concat(recordings.Select(recording => recording!["startMs"]!.GetValue<long>()));
+        var visualEnds = frames.Select(frame => frame!["timeMs"]!.GetValue<long>())
+            .Concat(recordings.Select(recording => recording!["endMs"]!.GetValue<long>()));
+        var start = visualStarts.Min();
+        var end = Math.Max(visualEnds.Max(),
             DateTimeOffset.TryParse(Text(summary, "lastUpdatedUtc"), out var updated) ? updated.ToUnixTimeMilliseconds() : start);
 
         if (samples.Count > 0)
@@ -232,6 +239,7 @@ internal sealed class ReplayBackend
             ["startMs"] = start,
             ["endMs"] = end,
             ["frames"] = frames,
+            ["recordings"] = recordings.DeepClone(),
             ["markers"] = markers,
             ["touches"] = samples,
             ["annotations"] = Items(annotations).DeepClone(),

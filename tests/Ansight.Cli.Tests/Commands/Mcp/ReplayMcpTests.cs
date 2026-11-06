@@ -15,6 +15,10 @@ public sealed class ReplayMcpTests
             [{"annotationId":"marker-1","label":"Search result","startUtc":"2026-10-11T00:00:12Z"}]
             """)!.AsArray();
         public int Writes { get; private set; }
+        public JsonArray Recordings { get; } = [];
+        public byte[] VideoBytes { get; set; } = [0, 0, 0, 1, 2, 3];
+        public bool ReturnInvalidRange { get; set; }
+        public int VideoReads { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -29,6 +33,27 @@ public sealed class ReplayMcpTests
                 {
                     Content = new StringContent("{\"isSuccess\":true}", Encoding.UTF8, "application/json")
                 };
+            }
+
+            if (request.RequestUri.AbsolutePath.EndsWith("/capture-1", StringComparison.Ordinal))
+            {
+                return new(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(new JsonObject { ["videoRecordings"] = Recordings.DeepClone() }.ToJsonString(), Encoding.UTF8, "application/json")
+                };
+            }
+
+            if (request.RequestUri.AbsolutePath.Contains("/video/", StringComparison.Ordinal))
+            {
+                VideoReads++;
+                var range = Assert.Single(request.Headers.Range!.Ranges);
+                var start = (int)range.From!.Value;
+                var end = (int)range.To!.Value;
+                var content = new ByteArrayContent(VideoBytes[start..(end + 1)]);
+                content.Headers.ContentType = new("video/mp4");
+                content.Headers.ContentRange = new(start, end, VideoBytes.Length);
+
+                return new(ReturnInvalidRange ? HttpStatusCode.OK : HttpStatusCode.PartialContent) { Content = content };
             }
 
             return new(HttpStatusCode.OK)
@@ -69,8 +94,9 @@ public sealed class ReplayMcpTests
         Assert.Equal("frame-a", result["_meta"]!["frames"]![0]!["frameId"]!.GetValue<string>());
         Assert.Equal("http://127.0.0.1:47231/ansight/?sessionId=capture-1", result["_meta"]!["replay"]!["fullReplayUrl"]!.GetValue<string>());
         Assert.Equal(ReplayBackend.Time("2026-10-11T00:00:12Z"), result["_meta"]!["replay"]!["initialTimeMs"]!.GetValue<long>());
-        Assert.Equal(7, command.Tools().Count);
+        Assert.Equal(8, command.Tools().Count);
         Assert.Contains(command.ResourceUri, command.Tools().ToJsonString());
+        Assert.Equal("blob:", Assert.Single(command.Resource()["_meta"]!["ui"]!["csp"]!["resourceDomains"]!.AsArray())!.GetValue<string>());
 
         var read = await command.InvokeAsync("read_replay_annotation", Parse("""{"sessionId":"capture-1","annotationId":"marker-1"}"""), default);
         Assert.Equal("image", read["content"]![1]!["type"]!.GetValue<string>());
@@ -202,4 +228,84 @@ public sealed class ReplayMcpTests
     [InlineData("http://user:pass@localhost/")]
     [InlineData("file:///tmp/")]
     public void ReplayRejectsNonLocalHostUrls(string url) => Assert.Throws<ArgumentException>(() => ReplayBackend.LocalHost(url));
+
+    [Fact]
+    public async Task ReplayIncludesVideoTimingAndTransfersVideoOnlyInPrivateBoundedChunks()
+    {
+        using var handler = new RecordingHandler();
+        handler.VideoBytes = new byte[ReplayBackend.VideoChunkBytes + 3];
+        handler.Recordings.Add(Parse($$"""
+            {"recordingId":"video-1","startedUtc":"2026-10-11T00:00:05Z","durationUs":30000000,"width":840,"height":1280,"byteSize":{{handler.VideoBytes.Length}},"status":"completed"}
+            """));
+        using var http = new HttpClient(handler);
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(handler.Run, http));
+
+        var replay = await command.InvokeAsync("show_replay", Parse("""{"sessionId":"capture-1"}"""), default);
+
+        Assert.Null(replay["isError"]);
+        Assert.Equal(1, replay["structuredContent"]!["videoCount"]!.GetValue<int>());
+        Assert.Equal(ReplayBackend.Time("2026-10-11T00:00:05Z"), replay["_meta"]!["replay"]!["startMs"]!.GetValue<long>());
+        Assert.Equal(ReplayBackend.Time("2026-10-11T00:00:35Z"), replay["_meta"]!["replay"]!["endMs"]!.GetValue<long>());
+
+        var first = await command.InvokeAsync("get_replay_video_chunk", Parse("""{"sessionId":"capture-1","recordingId":"video-1","offset":0}"""), default);
+        var last = await command.InvokeAsync("get_replay_video_chunk", Parse($$"""{"sessionId":"capture-1","recordingId":"video-1","offset":{{ReplayBackend.VideoChunkBytes}}}"""), default);
+
+        Assert.Null(first["isError"]);
+        Assert.Null(last["isError"]);
+        Assert.Equal(ReplayBackend.VideoChunkBytes, Convert.FromBase64String(first["_meta"]!["videoChunk"]!["data"]!.GetValue<string>()).Length);
+        Assert.Equal(3, Convert.FromBase64String(last["_meta"]!["videoChunk"]!["data"]!.GetValue<string>()).Length);
+        Assert.DoesNotContain("data", first["structuredContent"]!.ToJsonString());
+        Assert.Empty(first["content"]!.AsArray());
+    }
+
+    [Theory]
+    [InlineData("foreign", 0)]
+    [InlineData("video-1", -1)]
+    [InlineData("video-1", 6)]
+    public async Task VideoRejectsForeignRecordingsAndOutOfBoundsOffsetsBeforeReadingBytes(string recordingId, long offset)
+    {
+        using var handler = new RecordingHandler();
+        handler.Recordings.Add(Parse("""{"recordingId":"video-1","startedUtc":"2026-10-11T00:00:05Z","durationUs":30000000,"width":840,"height":1280,"byteSize":6,"status":"completed"}"""));
+        using var http = new HttpClient(handler);
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(handler.Run, http));
+
+        var result = await command.InvokeAsync("get_replay_video_chunk", ReplayBackend.Json(new { sessionId = "capture-1", recordingId, offset }), default);
+
+        Assert.True(result["isError"]!.GetValue<bool>());
+        Assert.Equal(0, handler.VideoReads);
+    }
+
+    [Fact]
+    public async Task ReplaySupportsVideoWithoutRetainedScreenshots()
+    {
+        using var handler = new RecordingHandler();
+        handler.Recordings.Add(Parse("""{"recordingId":"video-1","startedUtc":"2026-10-11T00:00:05Z","durationUs":30000000,"width":840,"height":1280,"byteSize":6,"status":"completed"}"""));
+        using var http = new HttpClient(handler);
+
+        Task<JsonObject> Run(string[] args, CancellationToken token) => args[1] == "images"
+            ? Task.FromResult(Parse("""{"items":[]}"""))
+            : handler.Run(args, token);
+
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(Run, http));
+        var result = await command.InvokeAsync("show_replay", Parse("""{"sessionId":"capture-1"}"""), default);
+
+        Assert.Null(result["isError"]);
+        Assert.Equal(0, result["structuredContent"]!["frameCount"]!.GetValue<int>());
+        Assert.Equal(1, result["structuredContent"]!["videoCount"]!.GetValue<int>());
+        Assert.Empty(result["_meta"]!["frames"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task VideoRejectsAResponseThatDoesNotHonorTheRequestedRange()
+    {
+        using var handler = new RecordingHandler { ReturnInvalidRange = true };
+        handler.Recordings.Add(Parse("""{"recordingId":"video-1","startedUtc":"2026-10-11T00:00:05Z","durationUs":30000000,"width":840,"height":1280,"byteSize":6,"status":"completed"}"""));
+        using var http = new HttpClient(handler);
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(handler.Run, http));
+
+        var result = await command.InvokeAsync("get_replay_video_chunk", Parse("""{"sessionId":"capture-1","recordingId":"video-1","offset":0}"""), default);
+
+        Assert.True(result["isError"]!.GetValue<bool>());
+        Assert.Contains("unexpected video range", result["content"]![0]!["text"]!.GetValue<string>());
+    }
 }

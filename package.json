@@ -9,6 +9,6 @@
     "build:player": "dotnet msbuild build/player-assets.proj -verbosity:minimal"
   },
   "devDependencies": {
-    "@ansight/player": "file:vendor/ansight-player-0.1.27.tgz"
+    "@ansight/player": "file:vendor/ansight-player-0.1.28.tgz"
   }
 }

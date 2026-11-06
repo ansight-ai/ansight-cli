@@ -42,10 +42,10 @@ internal sealed class ReplayMcpCommand
         ["mimeType"] = "text/html;profile=mcp-app",
         ["text"] = html,
         ["_meta"] = JsonNode.Parse("""
-            {"ui":{"prefersBorder":true,"csp":{"connectDomains":[],"resourceDomains":[]}},
+            {"ui":{"prefersBorder":true,"csp":{"connectDomains":[],"resourceDomains":["blob:"]}},
              "openai/ui":{"availableDisplayModes":["inline","fullscreen"]},
              "openai/widgetDescription":"An Ansight recording with a timeline scrubber, recorded touch overlays, native annotations and full detail replay link.",
-             "openai/widgetPrefersBorder":true,"openai/widgetCSP":{"connect_domains":[],"resource_domains":[]}}
+             "openai/widgetPrefersBorder":true,"openai/widgetCSP":{"connect_domains":[],"resource_domains":["blob:"]}}
             """)
     };
 
@@ -78,6 +78,16 @@ internal sealed class ReplayMcpCommand
                     sessionId,
                     frameIds = ids
                 }), new JsonObject { ["frames"] = await backend.FramesAsync(sessionId, ids, token) });
+            }
+
+            if (name == "get_replay_video_chunk")
+            {
+                var recordingId = Id(Text(input, "recordingId"));
+                var offset = input["offset"]!.GetValue<long>();
+                var chunk = await backend.VideoChunkAsync(sessionId, recordingId, offset, token);
+
+                return Result(Json(new { sessionId, recordingId, offset }),
+                    new JsonObject { ["videoChunk"] = chunk });
             }
 
             if (name == "create_replay_annotation")
@@ -115,6 +125,11 @@ internal sealed class ReplayMcpCommand
                     frameId = Text(FrameAt(replay, Time(Text(annotation, "startUtc"))), "frameId");
                 }
 
+                if (frameId.Length == 0)
+                {
+                    throw new ArgumentException("This annotation has no retained screenshot. Open the full replay to inspect its video.");
+                }
+
                 var frames = await backend.FramesAsync(sessionId, [frameId], token);
                 var details = new JsonObject { ["sessionId"] = sessionId, ["annotation"] = annotation.DeepClone() };
                 var result = Result(details, message: details.ToJsonString());
@@ -145,8 +160,11 @@ internal sealed class ReplayMcpCommand
             var time = (selected?["timeMs"] ?? replay["startMs"])!.GetValue<long>();
             replay["initialTimeMs"] = time;
 
-            var initial = await backend.FramesAsync(sessionId, [Text(FrameAt(replay, time), "frameId")], token);
+            var initialFrame = FrameAt(replay, time);
+            var initial = initialFrame is null ? new JsonArray()
+                : await backend.FramesAsync(sessionId, [Text(initialFrame, "frameId")], token);
             var count = replay["frames"]!.AsArray().Count;
+            var videoCount = replay["recordings"]!.AsArray().Count;
             var touchCount = replay["touches"]!.AsArray().Count;
 
             return Result(Json(new
@@ -155,12 +173,13 @@ internal sealed class ReplayMcpCommand
                 title = Text(replay, "title"),
                 viewerBuild = ViewerBuild,
                 frameCount = count,
+                videoCount,
                 touchCount,
                 durationSeconds = (replay["endMs"]!.GetValue<long>() - replay["startMs"]!.GetValue<long>()) / 1000d,
                 markers = markers.Select(marker => new { id = Text(marker, "id"), label = Text(marker, "label"), capturedAtUtc = Text(marker, "capturedAtUtc") })
             }),
                 new JsonObject { ["replay"] = replay, ["frames"] = initial },
-                $"Ansight replay: {count} screenshots, {touchCount} touch samples and {markers.Count} markers. Use the timeline or Open full replay for all details.");
+                $"Ansight replay: {videoCount} videos, {count} screenshots, {touchCount} touch samples and {markers.Count} markers. Use the timeline or Open full replay for all details.");
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -168,8 +187,8 @@ internal sealed class ReplayMcpCommand
         }
     }
 
-    private static JsonNode FrameAt(JsonObject replay, long time) => replay["frames"]!.AsArray()
-        .LastOrDefault(frame => frame!["timeMs"]!.GetValue<long>() <= time) ?? replay["frames"]![0]!;
+    private static JsonNode? FrameAt(JsonObject replay, long time) => replay["frames"]!.AsArray()
+        .LastOrDefault(frame => frame!["timeMs"]!.GetValue<long>() <= time) ?? replay["frames"]!.AsArray().FirstOrDefault();
 
     private static JsonObject Result(JsonObject structured, JsonObject? metadata = null, string? message = null)
     {

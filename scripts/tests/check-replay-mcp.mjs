@@ -36,7 +36,8 @@ try {
   assert.equal(hello.serverInfo.name, 'ansight');
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const tools = (await request('tools/list')).tools;
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 8);
+  assert.deepEqual(tools.find(tool => tool.name === 'get_replay_video_chunk')._meta.ui.visibility, ['app']);
   const openTool = tools.find(tool => tool.name === 'open_replay_in_browser');
   assert.deepEqual(openTool._meta.ui.visibility, ['app']);
   assert.equal(openTool.annotations.readOnlyHint, false);
@@ -45,6 +46,8 @@ try {
   const resource = await request('resources/read', { uri: resourceUri });
   assert.ok(resource.contents[0].text.includes('touch-overlay'));
   assert.ok(resource.contents[0].text.includes('Replay timeline'));
+  assert.ok(resource.contents[0].text.includes('Recorded app video'));
+  assert.ok(resource.contents[0].text.includes('Play replay'));
   assert.ok(resource.contents[0].text.includes('Open full replay'));
   assert.ok(!resource.contents[0].text.includes('Show recorded touches'));
   assert.ok(!resource.contents[0].text.includes('Annotate screenshot'));
@@ -56,7 +59,16 @@ try {
   const listed = await call('list_replays', { search: sessionId });
   assert.ok(listed.structuredContent.sessions.some(item => item.sessionId === sessionId));
   const result = await call('show_replay', { sessionId });
-  assert.ok(result._meta.frames[0].dataUrl.startsWith('data:image/'));
+  if (result.structuredContent.frameCount) assert.ok(result._meta.frames[0].dataUrl.startsWith('data:image/'));
+  assert.equal(result.structuredContent.videoCount, result._meta.replay.recordings.length);
+  for (const recording of result._meta.replay.recordings) {
+    if (recording.byteSize > 128 * 1024 * 1024) continue;
+    const offset = Math.max(0, recording.byteSize - 17);
+    const result = await call('get_replay_video_chunk', { sessionId, recordingId: recording.recordingId, offset });
+    assert.equal(result._meta.videoChunk.offset, offset);
+    assert.equal(Buffer.from(result._meta.videoChunk.data, 'base64').length, Math.min(17, recording.byteSize));
+    assert.equal(result.structuredContent.data, undefined);
+  }
   assert.equal(result.structuredContent.touchCount, result._meta.replay.touches.length);
   assert.ok(resourceUri.includes(result.structuredContent.viewerBuild));
   const full = new URL(result._meta.replay.fullReplayUrl);
@@ -81,7 +93,8 @@ try {
     assert.ok(read.content.some(item => item.type === 'image' && item.data.length > 0));
   }
   console.log(JSON.stringify({ verified: true, server: hello.serverInfo, sessionId,
-    frames: result.structuredContent.frameCount, scrubbedFrames: batches.reduce((sum, count) => sum + count, 0), touches: result.structuredContent.touchCount,
+    frames: result.structuredContent.frameCount, videos: result.structuredContent.videoCount,
+    scrubbedFrames: batches.reduce((sum, count) => sum + count, 0), touches: result.structuredContent.touchCount,
     annotations: result.structuredContent.markers.length, resourceUri }, null, 2));
 } finally {
   child.stdin.end();
