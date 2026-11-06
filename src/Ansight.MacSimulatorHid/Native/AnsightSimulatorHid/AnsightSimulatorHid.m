@@ -7,6 +7,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <dlfcn.h>
 #import <mach/mach_time.h>
+#import <mach/mach.h>
 #import <math.h>
 #import <malloc/malloc.h>
 #import <objc/message.h>
@@ -170,6 +171,7 @@ static const IndigoHIDTarget AnsightMainScreenButtonTarget = 0x33;
                       phase:(AnsightSimulatorButtonPhase)phase
                       error:(NSError **)error;
 - (BOOL)sendShakeToDevice:(NSString *)deviceUdid error:(NSError **)error;
+- (BOOL)sendOrientation:(int)orientation toDevice:(NSString *)deviceUdid error:(NSError **)error;
 - (BOOL)sendKeyToDevice:(NSString *)deviceUdid
                usageCode:(uint32_t)usageCode
                     phase:(AnsightSimulatorKeyPhase)phase
@@ -1455,6 +1457,52 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     return device;
 }
 
+// Purple orientation wire format follows Meta idb's SimulatorPurpleHID / GSEvent.h.
+// See THIRD-PARTY-NOTICES.md. Keep the lookup scoped to the selected device.
+- (BOOL)sendOrientation:(int)orientation toDevice:(NSString *)deviceUdid error:(NSError **)error
+{
+    @synchronized (self)
+    {
+        id device = [self deviceForUdid:deviceUdid error:error];
+        if (device == nil)
+        {
+            return NO;
+        }
+        SEL selector = sel_registerName("lookup:error:");
+        if (![device respondsToSelector:selector])
+        {
+            if (error != NULL)
+            {
+                *error = CreateError(26, @"Simulator rotation is unavailable.");
+            }
+            return NO;
+        }
+        mach_port_t port = ((mach_port_t (*)(id, SEL, id, NSError **))objc_msgSend)(
+            device, selector, @"PurpleWorkspacePort", error);
+        if (port == MACH_PORT_NULL)
+        {
+            return NO;
+        }
+        uint32_t message[28] = {0};
+        mach_msg_header_t *header = (mach_msg_header_t *)message;
+        header->msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+        header->msgh_size = 108;
+        header->msgh_remote_port = port;
+        header->msgh_id = 123;
+        message[6] = 50 | 0x20000;
+        message[18] = 4;
+        message[19] = (uint32_t)orientation;
+        kern_return_t result = mach_msg(header, MACH_SEND_MSG | MACH_SEND_TIMEOUT,
+            header->msgh_size, 0, MACH_PORT_NULL, 2000, MACH_PORT_NULL);
+        mach_port_deallocate(mach_task_self(), port);
+        if (result != KERN_SUCCESS && error != NULL)
+        {
+            *error = CreateError(27, [NSString stringWithFormat:@"Rotation delivery failed: %s", mach_error_string(result)]);
+        }
+        return result == KERN_SUCCESS;
+    }
+}
+
 - (BOOL)sendShakeToDevice:(NSString *)deviceUdid error:(NSError **)error
 {
     @synchronized (self)
@@ -2031,6 +2079,32 @@ bool AnsightSimulatorHidSessionSendButton(
                                                   button:button
                                                    phase:phase
                                                    error:&error];
+        if (!success)
+        {
+            CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);
+        }
+        return success;
+    }
+}
+
+bool AnsightSimulatorHidSessionSendOrientation(
+    AnsightSimulatorHidSessionRef session, const char *deviceUdid, int orientation,
+    char *errorBuffer, size_t errorBufferCapacity)
+{
+    @autoreleasepool
+    {
+        BOOL invalidRequest = session == NULL
+            || deviceUdid == NULL
+            || orientation < 1
+            || orientation > 4;
+        if (invalidRequest)
+        {
+            CopyError(@"A valid simulator and orientation are required.", errorBuffer, errorBufferCapacity);
+            return false;
+        }
+        AnsightSimulatorHidSession *value = (__bridge AnsightSimulatorHidSession *)session;
+        NSError *error = nil;
+        BOOL success = [value sendOrientation:orientation toDevice:[NSString stringWithUTF8String:deviceUdid] error:&error];
         if (!success)
         {
             CopyError(error.localizedDescription, errorBuffer, errorBufferCapacity);

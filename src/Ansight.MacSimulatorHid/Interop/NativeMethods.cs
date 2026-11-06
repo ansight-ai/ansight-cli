@@ -80,6 +80,15 @@ internal static class NativeMethods
         byte[] errorBuffer,
         nuint errorBufferCapacity);
 
+    [DllImport(Library, EntryPoint = "AnsightSimulatorHidSessionSendOrientation")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static extern bool SessionSendOrientation(
+        SessionHandle session,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string deviceUdid,
+        int orientation,
+        byte[] errorBuffer,
+        nuint errorBufferCapacity);
+
     [DllImport(Library, EntryPoint = "AnsightSimulatorHidSessionSendShake")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static extern bool SessionSendShake(

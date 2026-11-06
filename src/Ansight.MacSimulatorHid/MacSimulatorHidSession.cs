@@ -125,6 +125,22 @@ public sealed class MacSimulatorHidSession : IDisposable
         }
     }
 
+    public void SendOrientation(string deviceUdid, int orientation)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+        if (orientation is < 1 or > 4)
+        {
+            throw new ArgumentOutOfRangeException(nameof(orientation));
+        }
+
+        var errorBuffer = new byte[ErrorBufferSize];
+        if (!NativeMethods.SessionSendOrientation(handle, deviceUdid, orientation, errorBuffer, (nuint)errorBuffer.Length))
+        {
+            throw new MacSimulatorHidException(ReadError(errorBuffer, "Simulator rotation failed."));
+        }
+    }
+
     public void SendShake(string deviceUdid)
     {
         ObjectDisposedException.ThrowIf(disposed, this);

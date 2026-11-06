@@ -103,6 +103,10 @@ ANSIGHT_SIMULATOR_HID_EXPORT bool AnsightSimulatorHidSessionSendButton(
     char *errorBuffer,
     size_t errorBufferCapacity);
 
+ANSIGHT_SIMULATOR_HID_EXPORT bool AnsightSimulatorHidSessionSendOrientation(
+    AnsightSimulatorHidSessionRef session, const char *deviceUdid, int orientation,
+    char *errorBuffer, size_t errorBufferCapacity);
+
 /// Posts the Simulator's UIKit shake gesture to one booted device.
 ANSIGHT_SIMULATOR_HID_EXPORT bool AnsightSimulatorHidSessionSendShake(
     AnsightSimulatorHidSessionRef session,

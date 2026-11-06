@@ -38,6 +38,8 @@ SOFTWARE.
 The DTUHID guest XPC transport uses protocol and connection details from
 [Meta idb](https://github.com/meta/idb), including `SimulatorXPCConnection.swift`,
 `SimulatorDTUHIDConnection.swift`, `DTUHIDModels.swift`, and transport selection.
+Orientation delivery uses the Purple message format and transport described in
+`SimulatorPurpleHID.swift`, `SimulatorPurpleHIDTransport.swift`, and `GSEvent.h`.
 
 MIT License
 
