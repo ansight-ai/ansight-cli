@@ -28,13 +28,10 @@ internal static class WorkspaceReadmeTemplateArtifacts
             ?? throw new InvalidOperationException(
                 $"Embedded workspace README template '{assetName}' was not found.");
         using var stream = assembly.GetManifestResourceStream(resourceName)
-                           ?? throw new InvalidOperationException(
-                               $"Embedded workspace README template '{resourceName}' could not be opened.");
+            ?? throw new InvalidOperationException(
+                $"Embedded workspace README template '{resourceName}' could not be opened.");
         using var reader = new StreamReader(stream);
+
         return reader.ReadToEnd();
     }
 }
-
-internal sealed record WorkspaceReadmeTemplate(
-    string RelativeDirectoryPath,
-    string Content);

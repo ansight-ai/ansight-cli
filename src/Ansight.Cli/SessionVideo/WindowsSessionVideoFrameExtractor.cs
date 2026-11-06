@@ -15,6 +15,7 @@ internal sealed class WindowsSessionVideoFrameExtractor : ISessionVideoFrameExtr
         var clip = await MediaClip.CreateFromFileAsync(file).AsTask(cancellationToken).ConfigureAwait(false);
         var composition = new MediaComposition();
         composition.Clips.Add(clip);
+
         using var thumbnail = await composition.GetThumbnailAsync(position, 1024, 0, VideoFramePrecision.NearestFrame)
             .AsTask(cancellationToken).ConfigureAwait(false);
         using var input = thumbnail.AsStreamForRead();

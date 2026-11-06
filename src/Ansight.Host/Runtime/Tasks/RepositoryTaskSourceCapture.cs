@@ -10,13 +10,26 @@ internal sealed class RepositoryTaskSourceCapture
 
     public bool TryRead(JsonObject message)
     {
-        if (message["type"]?.GetValue<string>() != "source") return false;
+        if (message["type"]?.GetValue<string>() != "source")
+        {
+            return false;
+        }
+
         if (message["module"] is JsonObject module)
         {
             var snapshot = module.Deserialize<RepositoryTaskSourceModule>(JsonUtil.Compact);
-            if (snapshot is not null) modules.Add(snapshot);
+
+            if (snapshot is not null)
+            {
+                modules.Add(snapshot);
+            }
         }
-        if (message["error"] is JsonValue error) captureError = error.GetValue<string>();
+
+        if (message["error"] is JsonValue error)
+        {
+            captureError = error.GetValue<string>();
+        }
+
         return true;
     }
 

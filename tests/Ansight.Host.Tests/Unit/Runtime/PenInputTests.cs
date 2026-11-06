@@ -8,14 +8,21 @@ public sealed class PenInputTests
 {
     private static JsonObject Sample(int time, string phase, double x = .5, double pressure = 0) => new()
     {
-        ["offsetMs"] = time, ["phase"] = phase, ["x"] = x, ["y"] = .5, ["pressure"] = pressure
+        ["offsetMs"] = time,
+        ["phase"] = phase,
+        ["x"] = x,
+        ["y"] = .5,
+        ["pressure"] = pressure
     };
 
     [Fact]
     public void CompleteContactAndHoverPreserveValues()
     {
         var down = Sample(50, "down", pressure: .7);
-        down["altitudeRadians"] = .4; down["azimuthRadians"] = 2; down["rollRadians"] = -3;
+        down["altitudeRadians"] = .4;
+        down["azimuthRadians"] = 2;
+        down["rollRadians"] = -3;
+
         var parsed = LiveStylusTool.ParseSamples(new JsonArray(Sample(0, "hoverEnter"), down,
             Sample(100, "move", .6, .9), Sample(200, "up"), Sample(250, "hoverExit")));
         Assert.Equal(5, parsed.Count);
@@ -47,10 +54,12 @@ public sealed class PenInputTests
     {
         var root = Path.Combine(Path.GetTempPath(), "ansight-pen-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+
         try
         {
             var document = new JsonObject { ["schema"] = "ansight.pen-input/v1", ["samples"] = new JsonArray(Sample(0, "down"), Sample(100, "up")) };
             await File.WriteAllTextAsync(Path.Combine(root, "sample.pen.json"), document.ToJsonString());
+
             using var scope = PenInputScope.Push(root);
             var loaded = await PenInputFile.ReadAsync("sample.pen.json", CancellationToken.None);
             Assert.Equal(2, LiveStylusTool.ParseSamples(loaded["samples"]!.AsArray()).Count);
@@ -59,6 +68,9 @@ public sealed class PenInputTests
             document["schema"] = "ansight.pen-input/v2";
             Assert.Throws<ArgumentException>(() => PenInputFile.Parse(System.Text.Encoding.UTF8.GetBytes(document.ToJsonString())));
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 }

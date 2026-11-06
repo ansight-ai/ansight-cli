@@ -12,11 +12,11 @@ internal static class AppToolPayloadNormalizer
 
     public static bool IsVisualTreeTool(string toolId)
         => string.Equals(toolId, VisualTreeContract.MauiToolId, StringComparison.Ordinal)
-           || string.Equals(toolId, VisualTreeContract.ReactShadowToolId, StringComparison.Ordinal)
-           || string.Equals(toolId, VisualTreeContract.ReactComponentToolId, StringComparison.Ordinal)
-           || string.Equals(toolId, VisualTreeContract.FlutterToolId, StringComparison.Ordinal)
-           || string.Equals(toolId, VisualTreeContract.DomToolId, StringComparison.Ordinal)
-           || string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal);
+            || string.Equals(toolId, VisualTreeContract.ReactShadowToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.ReactComponentToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.FlutterToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.DomToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal);
 
     public static JsonObject ApplyHostToolDefaults(
         string toolId,
@@ -74,12 +74,14 @@ internal static class AppToolPayloadNormalizer
         JsonArray artifacts)
     {
         var normalizedPayload = payload?.DeepClone();
+
         if (normalizedPayload is not JsonObject payloadObject)
         {
             return normalizedPayload;
         }
 
         NormalizeEmbeddedPayload(snapshot, payloadObject, toolId, artifacts);
+
         return payloadObject;
     }
 
@@ -89,6 +91,7 @@ internal static class AppToolPayloadNormalizer
         JsonArray artifacts)
     {
         var normalizedPayload = payload?.DeepClone();
+
         if (normalizedPayload is not null)
         {
             NormalizeEmbeddedPayload(snapshot, normalizedPayload, defaultToolId: null, artifacts);
@@ -112,6 +115,7 @@ internal static class AppToolPayloadNormalizer
                     NormalizeEmbeddedPayload(snapshot, item, defaultToolId: null, artifacts);
                 }
             }
+
             return;
         }
 
@@ -121,6 +125,7 @@ internal static class AppToolPayloadNormalizer
         }
 
         var toolId = payloadObject["toolId"]?.GetValue<string>() ?? defaultToolId;
+
         if (!string.IsNullOrWhiteSpace(toolId)
             && payloadObject["result"] is JsonObject result)
         {
@@ -162,6 +167,7 @@ internal static class AppToolPayloadNormalizer
         JsonArray artifacts)
     {
         var streamedArtifactPath = screenshotResult["artifactPath"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(streamedArtifactPath) || !File.Exists(streamedArtifactPath))
         {
             return;
@@ -183,6 +189,7 @@ internal static class AppToolPayloadNormalizer
         JsonArray artifacts)
     {
         var streamedArtifactPath = artifactResult["artifactPath"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(streamedArtifactPath) || !File.Exists(streamedArtifactPath))
         {
             return;
@@ -210,6 +217,7 @@ internal static class AppToolPayloadNormalizer
     private static string ResolveScreenshotMimeType(JsonObject screenshotResult)
     {
         var format = screenshotResult["format"]?.GetValue<string>() ?? "png";
+
         return string.Equals(format, "jpeg", StringComparison.OrdinalIgnoreCase)
             ? "image/jpeg"
             : "image/png";
@@ -252,7 +260,7 @@ internal static class AppToolPayloadNormalizer
         var format = visualTreeResult["format"]?.GetValue<string>();
         var platform = visualTreeResult["platform"]?.GetValue<string>();
         var capturedAtUtc = visualTreeResult["capturedAtUtc"]?.DeepClone()
-                            ?? JsonValue.Create(DateTimeOffset.UtcNow);
+            ?? JsonValue.Create(DateTimeOffset.UtcNow);
         var rootScope = visualTreeResult["rootScope"]?.GetValue<string>();
         var screenshot = visualTreeResult["screenshot"]?.DeepClone();
         var root = visualTreeResult["root"] as JsonObject;
@@ -275,6 +283,7 @@ internal static class AppToolPayloadNormalizer
         visualTreeResult["rootScope"] = VisualTreeContract.NormalizeRootScope(rootScope, toolId);
         visualTreeResult["artifactPath"] = artifactPath;
         visualTreeResult["artifactKind"] = "visual_tree";
+
         if (screenshot is not null)
         {
             visualTreeResult["screenshot"] = screenshot;
@@ -322,6 +331,7 @@ internal static class AppToolPayloadNormalizer
         var fileName = $"{suffix}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}.json";
         var artifactPath = Path.Combine(artifactDirectory, fileName);
         File.WriteAllText(artifactPath, JsonSerializer.Serialize(json, JsonUtil.Pretty));
+
         return artifactPath;
     }
 
@@ -336,6 +346,7 @@ internal static class AppToolPayloadNormalizer
             sanitizedAppId,
             sanitizedSessionId);
         Directory.CreateDirectory(artifactDirectory);
+
         return artifactDirectory;
     }
 
@@ -348,6 +359,7 @@ internal static class AppToolPayloadNormalizer
 
         var invalidCharacters = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(value.Length);
+
         foreach (var character in value.Trim())
         {
             builder.Append(invalidCharacters.Contains(character) ? '_' : character);

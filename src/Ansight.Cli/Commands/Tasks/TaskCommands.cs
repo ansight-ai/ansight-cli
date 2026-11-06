@@ -18,6 +18,7 @@ internal static class TaskCommands
         }
 
         var action = arguments.RequirePositional(1, "task action").ToLowerInvariant();
+
         if (action == "run")
         {
             arguments.EnsurePositionalCount(
@@ -32,6 +33,7 @@ internal static class TaskCommands
             options,
             start: false,
             cancellationToken).ConfigureAwait(false);
+
         return action switch
         {
             "list" => List(lease.Runtime, arguments, output),
@@ -58,6 +60,7 @@ internal static class TaskCommands
         arguments.EnsurePositionalCount(
             2,
             "ansight task list --app-id <app-id> [--repository <path>]");
+
         var appId = arguments.RequireOption("app-id");
         var repositoryPath = ResolveRepositoryPath(runtime, arguments, appId);
         var catalog = runtime.InspectRepositoryTasks(appId, repositoryPath);
@@ -69,8 +72,9 @@ internal static class TaskCommands
                     Environment.NewLine,
                     catalog.Tasks.Select(task =>
                         $"{task.TaskId}\t{task.Title}\t{task.Description}"
-                        + (task.Enabled ? string.Empty : "\tdisabled")))
-                  + RenderWarnings(catalog.Warnings));
+                            + (task.Enabled ? string.Empty : "\tdisabled")))
+                    + RenderWarnings(catalog.Warnings));
+
         return catalog.Warnings.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -83,7 +87,9 @@ internal static class TaskCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight task run <task-id> --app-id <app-id> [options]");
+
         var appId = arguments.RequireOption("app-id");
+
         return RepositoryTaskExecutionCommand.RunAsync(
             runtime,
             appId,
@@ -103,35 +109,42 @@ internal static class TaskCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight task extract <session-id> --start <timestamp|offset> --end <timestamp|offset> [--format ansight|test|maestro|appium] [--workspace <path>] [--title <title>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             output.WriteError("session_not_found", $"Session '{sessionId}' was not found.", CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
         var startUtc = ParseTimelinePosition(arguments.RequireOption("start"), snapshot, "start");
         var endUtc = ParseTimelinePosition(arguments.RequireOption("end"), snapshot, "end");
         var title = arguments.GetOption("title")
-                    ?? snapshot.Name
-                    ?? $"Recorded {snapshot.AppId} workflow";
+            ?? snapshot.Name
+            ?? $"Recorded {snapshot.AppId} workflow";
         var format = arguments.GetOption("format")?.Trim().ToLowerInvariant() ?? "ansight";
+
         if (format is not ("ansight" or "test" or "maestro" or "appium"))
         {
             throw new CliUsageException("--format must be 'ansight', 'test', 'maestro', or 'appium'.");
         }
+
         if (format != "test" && (arguments.GetOptions("assertion").Count > 0 || arguments.GetOption("validation") is not null))
         {
             throw new CliUsageException("--assertion and --validation require --format test.");
         }
+
         if (format != "test" && arguments.GetOptions("task-section").Count > 0)
         {
             throw new CliUsageException("--task-section requires --format test.");
         }
 
         var selectedTaskSections = arguments.GetOptions("task-section");
+
         if (format == "test" && arguments.HasFlag("ai") && selectedTaskSections.Count == 0)
         {
             selectedTaskSections = snapshot.Annotations
@@ -160,17 +173,17 @@ internal static class TaskCommands
             : null;
         var workspacePath = Path.GetFullPath(
             arguments.GetOption("workspace")
-            ?? arguments.GetOption("repository")
-            ?? Environment.CurrentDirectory);
+                ?? arguments.GetOption("repository")
+                ?? Environment.CurrentDirectory);
         var outputPath = Path.GetFullPath(
             arguments.GetOption("output")
-            ?? (format switch
-            {
-                "maestro" => Path.Combine(workspacePath, ".maestro", $"{maestro!.SuggestedName}.yaml"),
-                "appium" => Path.Combine(workspacePath, "appium", $"{appium!.SuggestedName}.test.mjs"),
-                "test" => Path.Combine(workspacePath, "ansight", "tests", $"{test!.SuggestedName}.yaml"),
-                _ => Path.Combine(workspacePath, "ansight", "tasks", $"{extraction!.SuggestedName}.ts")
-            }));
+                ?? (format switch
+                {
+                    "maestro" => Path.Combine(workspacePath, ".maestro", $"{maestro!.SuggestedName}.yaml"),
+                    "appium" => Path.Combine(workspacePath, "appium", $"{appium!.SuggestedName}.test.mjs"),
+                    "test" => Path.Combine(workspacePath, "ansight", "tests", $"{test!.SuggestedName}.yaml"),
+                    _ => Path.Combine(workspacePath, "ansight", "tasks", $"{extraction!.SuggestedName}.ts")
+                }));
 
         if (File.Exists(outputPath) && !arguments.HasFlag("force") && !arguments.HasFlag("overwrite"))
         {
@@ -179,6 +192,7 @@ internal static class TaskCommands
         }
 
         string? refinementModel = null;
+
         if (arguments.HasFlag("ai"))
         {
             if (maestro is not null)
@@ -194,7 +208,10 @@ internal static class TaskCommands
                     arguments.GetOption("model") ?? string.Empty,
                     workspacePath,
                     cancellationToken).ConfigureAwait(false);
-                maestro = maestro with { Source = refinement.Source };
+                maestro = maestro with
+                {
+                    Source = refinement.Source
+                };
                 refinementModel = refinement.Model;
             }
             else if (appium is not null)
@@ -202,7 +219,10 @@ internal static class TaskCommands
                 var refinement = await ExternalScriptRefiner.RefineAsync(runtime, snapshot, startUtc, endUtc, title,
                     appium.Source, "appium", arguments.GetOption("reasoning") ?? AgentReasoningModes.Fast,
                     arguments.GetOption("model"), workspacePath, cancellationToken).ConfigureAwait(false);
-                appium = appium with { Source = refinement.Source };
+                appium = appium with
+                {
+                    Source = refinement.Source
+                };
                 refinementModel = refinement.Model;
             }
             else if (test is not null)
@@ -225,17 +245,20 @@ internal static class TaskCommands
                 throw new CliUsageException("--ai requires --format maestro, --format appium, or --format test.");
             }
         }
+
         var directoryPath = Path.GetDirectoryName(outputPath)
-                            ?? throw new IOException($"Unable to resolve the parent directory for '{outputPath}'.");
+            ?? throw new IOException($"Unable to resolve the parent directory for '{outputPath}'.");
         Directory.CreateDirectory(directoryPath);
+
         var temporaryPath = Path.Combine(directoryPath, $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
+
         try
         {
             await File.WriteAllTextAsync(
-                    temporaryPath,
-                    maestro?.Source ?? appium?.Source ?? test?.Source ?? extraction!.Source,
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                    cancellationToken)
+                temporaryPath,
+                maestro?.Source ?? appium?.Source ?? test?.Source ?? extraction!.Source,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken)
                 .ConfigureAwait(false);
             File.Move(temporaryPath, outputPath, overwrite: true);
         }
@@ -259,11 +282,12 @@ internal static class TaskCommands
                     maestro,
                     refinementModel),
                 () => $"Generated {maestro.GeneratedActionCount:N0} Maestro action(s).{Environment.NewLine}Flow: {outputPath}"
-                      + (maestro.Diagnostics.Count == 0
-                          ? string.Empty
-                          : Environment.NewLine + string.Join(
-                              Environment.NewLine,
-                              maestro.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+                    + (maestro.Diagnostics.Count == 0
+                        ? string.Empty
+                        : Environment.NewLine + string.Join(
+                            Environment.NewLine,
+                            maestro.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+
             return CliExitCodes.Success;
         }
 
@@ -279,11 +303,12 @@ internal static class TaskCommands
                     appium,
                     refinementModel),
                 () => $"Generated {appium.GeneratedActionCount:N0} Appium action(s).{Environment.NewLine}Script: {outputPath}"
-                      + (appium.Diagnostics.Count == 0
-                          ? string.Empty
-                          : Environment.NewLine + string.Join(
-                              Environment.NewLine,
-                              appium.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+                    + (appium.Diagnostics.Count == 0
+                        ? string.Empty
+                        : Environment.NewLine + string.Join(
+                            Environment.NewLine,
+                            appium.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+
             return CliExitCodes.Success;
         }
 
@@ -298,11 +323,12 @@ internal static class TaskCommands
                     outputPath,
                     test),
                 () => $"Generated {test.GeneratedActionCount:N0} recorded step(s).{Environment.NewLine}Test: {outputPath}"
-                      + (test.Diagnostics.Count == 0
-                          ? string.Empty
-                          : Environment.NewLine + string.Join(
-                              Environment.NewLine,
-                              test.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+                    + (test.Diagnostics.Count == 0
+                        ? string.Empty
+                        : Environment.NewLine + string.Join(
+                            Environment.NewLine,
+                            test.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+
             return CliExitCodes.Success;
         }
 
@@ -316,11 +342,12 @@ internal static class TaskCommands
         output.Write(
             result,
             () => $"{extraction!.Summary}{Environment.NewLine}Task: {outputPath}"
-                  + (extraction.Diagnostics.Count == 0
-                      ? string.Empty
-                      : Environment.NewLine + string.Join(
-                          Environment.NewLine,
-                          extraction.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+                + (extraction.Diagnostics.Count == 0
+                    ? string.Empty
+                    : Environment.NewLine + string.Join(
+                        Environment.NewLine,
+                        extraction.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"))));
+
         return CliExitCodes.Success;
     }
 
@@ -330,15 +357,16 @@ internal static class TaskCommands
         string optionName)
     {
         if (DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var timestamp))
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var timestamp))
         {
             return timestamp.ToUniversalTime();
         }
 
         var normalized = value.Trim();
+
         if (normalized.StartsWith('+'))
         {
             normalized = normalized[1..];
@@ -361,14 +389,14 @@ internal static class TaskCommands
         string appId)
         => Path.GetFullPath(
             arguments.GetOption("repository")
-            ?? runtime.Apps.Get(appId)?.CodebasePath
-            ?? Environment.CurrentDirectory);
+                ?? runtime.Apps.Get(appId)?.CodebasePath
+                ?? Environment.CurrentDirectory);
 
     private static string RenderWarnings(IReadOnlyList<string> warnings)
         => warnings.Count == 0
             ? string.Empty
             : Environment.NewLine
-              + string.Join(Environment.NewLine, warnings.Select(warning => $"Warning: {warning}"));
+                + string.Join(Environment.NewLine, warnings.Select(warning => $"Warning: {warning}"));
 
     private static string BuildHelp()
         => """
@@ -416,37 +444,3 @@ internal static class TaskCommands
              `ansight repo tasks` and `ansight repo task run` remain supported
            """;
 }
-
-internal sealed record TimelineTaskExtractionOutput(
-    string Schema,
-    string SessionId,
-    DateTimeOffset StartUtc,
-    DateTimeOffset EndUtc,
-    string FilePath,
-    TimelineTaskExtraction Extraction);
-
-internal sealed record MaestroFlowExtractionOutput(
-    string Schema,
-    string SessionId,
-    DateTimeOffset StartUtc,
-    DateTimeOffset EndUtc,
-    string FilePath,
-    MaestroFlowExtraction Extraction,
-    string? Model);
-
-internal sealed record AppiumScriptExtractionOutput(
-    string Schema,
-    string SessionId,
-    DateTimeOffset StartUtc,
-    DateTimeOffset EndUtc,
-    string FilePath,
-    AppiumScriptExtraction Extraction,
-    string? Model = null);
-
-internal sealed record WorkspaceTestExtractionOutput(
-    string Schema,
-    string SessionId,
-    DateTimeOffset StartUtc,
-    DateTimeOffset EndUtc,
-    string FilePath,
-    WorkspaceTestExtraction Extraction);

@@ -18,6 +18,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ["workspacePath"] = new JsonObject { ["type"] = "string" }
             }
         };
+
         var dispatcher = new RecordingOperationDispatcher(tool);
         var gateway = new ToolGateway(dispatcher);
         var definition = Assert.Single(gateway.BuildOpenAiToolDefinitions().OfType<JsonObject>());
@@ -36,7 +37,8 @@ public sealed partial class SimulatorAgentToolGatewayTests
             ["reference"] = new JsonObject { ["frameId"] = "before" },
             ["criteria"] = new JsonArray(new JsonObject
             {
-                ["id"] = "closed", ["description"] = "The editor is closed."
+                ["id"] = "closed",
+                ["description"] = "The editor is closed."
             })
         };
         var result = await gateway.ExecuteAsync("ansight_evaluate_screenshot", arguments,
@@ -51,6 +53,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.True(JsonNode.DeepEquals(arguments["reference"], dispatcher.LastArguments["reference"]));
 
         arguments["reference"] = new JsonObject { ["workspacePath"] = "references/other.png" };
+
         var rejected = await gateway.ExecuteAsync("ansight_evaluate_screenshot", arguments,
             "selected-session", "reject", CancellationToken.None);
         Assert.True(rejected.IsError);
@@ -58,6 +61,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
 
         var catalog = new AgentToolCatalog(new JsonArray(definition.DeepClone()));
         Assert.True(catalog.IsDeferred("ansight_evaluate_screenshot"));
+
         var loaded = catalog.Load(new JsonObject { ["bundle"] = "evidence" });
         Assert.False(loaded.Result.IsError);
         Assert.False(catalog.IsDeferred("ansight_evaluate_screenshot"));

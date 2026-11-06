@@ -48,6 +48,7 @@ public sealed class SessionTrimOperationTests
         var appToolBridge = new TestAppToolBridge();
         var sessionId = runtimeState.CreateSession("com.example.live", "Live Client", IPAddress.Loopback, null, null);
         appToolBridge.Connect(sessionId);
+
         var catalog = CreateToolCatalog(runtimeState, environment, appToolBridge);
 
         var response = await catalog.HandleToolsCallAsync(
@@ -74,6 +75,7 @@ public sealed class SessionTrimOperationTests
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
         var importResult = ImportTimelineSession(runtimeState, "operation-management-001", startedAtUtc);
         Assert.True(importResult.IsSuccess);
+
         var sessionId = importResult.ImportedSession!.SessionId;
 
         var storageResponse = await catalog.HandleToolsCallAsync(
@@ -166,7 +168,9 @@ public sealed class SessionTrimOperationTests
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var catalog = CreateToolCatalog(runtimeState, environment);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var importResult = ImportTimelineSession(runtimeState, "operation-trim-remove-001", startedAtUtc);
         Assert.True(importResult.IsSuccess);
 
@@ -202,7 +206,9 @@ public sealed class SessionTrimOperationTests
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var catalog = CreateToolCatalog(runtimeState, environment);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var importResult = ImportTimelineSession(runtimeState, "operation-trim-keep-001", startedAtUtc);
         Assert.True(importResult.IsSuccess);
 
@@ -240,6 +246,7 @@ public sealed class SessionTrimOperationTests
         TestAppToolBridge? appToolBridge = null)
     {
         appToolBridge ??= new TestAppToolBridge();
+
         return new ToolCatalog(
             runtimeState,
             environment.ApplicationPaths,
@@ -257,6 +264,7 @@ public sealed class SessionTrimOperationTests
         DateTimeOffset startedAtUtc)
     {
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         return runtimeState.ImportSessionSnapshot(
             new AppSessionSnapshot
             {
@@ -278,8 +286,7 @@ public sealed class SessionTrimOperationTests
                         StartedUtc = At(21),
                         CompletedUtc = At(22),
                         Success = true
-                    }
-                ],
+                    }                ],
                 Logs =
                 [
                     CreateLog(At(5), "evt-005"),
@@ -302,6 +309,7 @@ public sealed class SessionTrimOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
@@ -341,8 +349,12 @@ public sealed class SessionTrimOperationTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public void Connect(string sessionId)
@@ -385,7 +397,7 @@ public sealed class SessionTrimOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache
@@ -406,6 +418,5 @@ public sealed class SessionTrimOperationTests
 
         public bool Remove(string configId)
             => false;
-
     }
 }

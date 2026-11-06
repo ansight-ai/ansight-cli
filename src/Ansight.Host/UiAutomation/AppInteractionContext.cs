@@ -27,17 +27,28 @@ internal sealed class AppInteractionContext : IAppInteractionContext
         AppInteractionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         using var operation = activity?.Begin("interaction." + request.Command, "interaction", SessionId, requestId: request.Id);
+
         try
         {
             var result = await ExecuteCoreAsync(request, cancellationToken).ConfigureAwait(false);
             operation?.AddEvidence(result.Screenshot?.FrameId);
             operation?.Complete(result.InputSucceeded == true ? "succeeded" : result.Succeeded ? "succeeded" : "failed",
                 result.Screenshot is null ? "unavailable" : result.Screenshot.Settling?.Status == "timed_out" ? "unsettled" : "captured");
+
             return result;
         }
-        catch (OperationCanceledException) { operation?.Complete("cancelled"); throw; }
-        catch (Exception exception) { operation?.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+        catch (OperationCanceledException)
+        {
+            operation?.Complete("cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            operation?.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name);
+            throw;
+        }
     }
 
     private async Task<AppInteractionResult> ExecuteCoreAsync(
@@ -46,21 +57,31 @@ internal sealed class AppInteractionContext : IAppInteractionContext
     {
         ArgumentNullException.ThrowIfNull(request);
         request.Validate();
+
         if (request.Command is "batch" or "exit")
+        {
             throw new ArgumentException("batch and exit are connection commands, not individual app actions.");
+        }
+
         await actionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             backend.EnsureConnected();
+
             var timer = Stopwatch.StartNew();
+
             if (request.Command == "tasks")
             {
                 var catalog = backend.ListTasks();
+
                 return new("ansight.app-interaction/v1", request.Id, request.Command, SessionId,
                     true, null, null, "Tasks available to the connected app.", null, latestScreenshot,
                     new(0, 0, timer.Elapsed.TotalMilliseconds), TaskCatalog: catalog, Ui: backend.Ui);
             }
+
             // A failed capture never permits another blind action. Recover automatically.
+
             if ((latestScreenshot is null || latestScreenshot.Settling?.Status == "timed_out") && request.Command != "snapshot")
             {
                 try
@@ -73,6 +94,7 @@ internal sealed class AppInteractionContext : IAppInteractionContext
                     return Finish(request, null, null, null, "evidence_unavailable",
                         $"Automatic screenshot capture failed; no input was sent. {exception.Message}", 0, timer);
                 }
+
                 if (latestScreenshot is null || latestScreenshot.Settling?.Status == "timed_out")
                 {
                     return Finish(request, null, null, latestScreenshot,
@@ -86,28 +108,43 @@ internal sealed class AppInteractionContext : IAppInteractionContext
             RepositoryTaskRunResult? task = null;
             string? executionError = null;
             var inputMs = 0d;
+
             if (request.Command != "snapshot")
             {
                 var inputTimer = Stopwatch.StartNew();
+
                 try
                 {
                     if (request.Command == "task")
+                    {
                         task = await backend.RunTaskAsync(request.TaskId!, request.Input, cancellationToken).ConfigureAwait(false);
+                    }
                     else
+                    {
                         input = await backend.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
                     // Input may have partially completed. Still capture its resulting state.
-                    if (request.Command == "task") executionError = exception.Message;
-                    else input = UiInputResult.Failure(exception.Message);
+                    if (request.Command == "task")
+                    {
+                        executionError = exception.Message;
+                    }
+                    else
+                    {
+                        input = UiInputResult.Failure(exception.Message);
+                    }
                 }
+
                 inputMs = inputTimer.Elapsed.TotalMilliseconds;
             }
 
             latestScreenshot = null;
+
             var captureTimer = Stopwatch.StartNew();
             string? captureError = null;
+
             try
             {
                 latestScreenshot = await backend.CaptureAsync(
@@ -121,8 +158,8 @@ internal sealed class AppInteractionContext : IAppInteractionContext
             return Finish(request, input, previous, latestScreenshot,
                 latestScreenshot is null ? "evidence_unavailable"
                     : executionError is not null || task is { Status: not RepositoryTaskRunStatus.Passed } ? "task_failed"
-                    : input?.IsSuccess == false ? "input_failed"
-                    : latestScreenshot.Settling?.Status == "timed_out" ? "ui_unsettled" : null,
+                        : input?.IsSuccess == false ? "input_failed"
+                            : latestScreenshot.Settling?.Status == "timed_out" ? "ui_unsettled" : null,
                 latestScreenshot is null
                     ? $"Automatic post-action screenshot capture failed. The command may have completed; do not blindly retry. {captureError}".Trim()
                     : latestScreenshot.Settling?.Status == "timed_out"
@@ -159,7 +196,7 @@ internal sealed class AppInteractionContext : IAppInteractionContext
             new AppInteractionTiming(inputMs, captureMs ?? timer.Elapsed.TotalMilliseconds, timer.Elapsed.TotalMilliseconds), task,
             Ui: screenshot is null ? null : backend.Ui);
         backend.Record(result);
+
         return result;
     }
-
 }

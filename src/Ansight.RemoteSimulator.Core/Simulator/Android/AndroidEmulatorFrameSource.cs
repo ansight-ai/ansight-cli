@@ -22,9 +22,11 @@ public sealed class AndroidEmulatorFrameSource : ISimulatorFrameSource, IDisposa
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
         await captureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             byte[] content;
+
             if (controller is not null)
             {
                 try
@@ -69,12 +71,12 @@ public sealed class AndroidEmulatorFrameSource : ISimulatorFrameSource, IDisposa
 
     private static bool IsPng(byte[] content)
         => content.Length >= 8
-           && content[0] == 0x89
-           && content[1] == 0x50
-           && content[2] == 0x4E
-           && content[3] == 0x47
-           && content[4] == 0x0D
-           && content[5] == 0x0A
-           && content[6] == 0x1A
-           && content[7] == 0x0A;
+            && content[0] == 0x89
+            && content[1] == 0x50
+            && content[2] == 0x4E
+            && content[3] == 0x47
+            && content[4] == 0x0D
+            && content[5] == 0x0A
+            && content[6] == 0x1A
+            && content[7] == 0x0A;
 }

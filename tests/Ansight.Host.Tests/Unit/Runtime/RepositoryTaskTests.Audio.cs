@@ -19,7 +19,8 @@ public sealed partial class RepositoryTaskTests
                 ? RequestResult.ToolResult(new JsonObject { ["available"] = true }, isError: false)
                 : RequestResult.ToolResult(new JsonObject
                 {
-                    ["code"] = "accessibility-permission-required", ["message"] = message,
+                    ["code"] = "accessibility-permission-required",
+                    ["message"] = message,
                     ["deliveryStarted"] = false
                 }, isError: true)));
 
@@ -50,14 +51,17 @@ public sealed partial class RepositoryTaskTests
               await ansight.tasks.run({ taskId: 'map.child' });
             }
             """;
+
         using var repository = CreateRepository(parent);
         File.WriteAllText(Path.Combine(repository.RootPath, "ansight", "tasks", "map", "child.ts"), CreateAudioModule());
+
         var router = CreateConfiguredRouter(repository.RootPath);
         router.ConfigureHostToolRegistry(new OperationRegistry([
             OperationRegistration.TaskSessionBound(new StubHostTool("ansight_get_audio_capabilities")),
             OperationRegistration.TaskSessionBound(new StubHostTool("ansight_inject_audio"))
         ]));
         router.ConfigureToolExecutor((_, _, _, _) => throw new Xunit.Sdk.XunitException("Audio provider must not run."));
+
         var task = Assert.Single(router.Load(repository.RootPath, "com.example.app").Tasks,
             candidate => candidate.TaskId == "map.validate");
         var logs = new List<string>();
@@ -87,6 +91,7 @@ public sealed partial class RepositoryTaskTests
               throw new Error('Audio API did not reject');
             }
             """;
+
         using var repository = CreateRepository(module);
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var logs = new List<string>();
@@ -98,10 +103,12 @@ public sealed partial class RepositoryTaskTests
             },
             CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
+
         var rejectedCall = Assert.Single(result.ToolCalls);
         Assert.Equal(toolName, rejectedCall.ToolName);
         Assert.True(rejectedCall.IsError);
         Assert.Contains(AudioExecutionPolicy.ParallelErrorCode, rejectedCall.Message);
+
         var log = Assert.Single(logs);
         Assert.Contains("parallel-batch", log);
         Assert.Contains("audio-test", log);
@@ -115,8 +122,10 @@ public sealed partial class RepositoryTaskTests
         using var repository = CreateRepository(CreateAudioModule());
         Directory.CreateDirectory(Path.Combine(repository.RootPath, "fixtures"));
         File.WriteAllText(Path.Combine(repository.RootPath, "fixtures", "quote.wav"), "fixture identity");
+
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         Assert.Empty(task.DeclaredHostTools);
+
         var calls = new List<string>();
         var executor = CreateAudioExecutor((toolName, arguments, _) =>
         {
@@ -127,12 +136,17 @@ public sealed partial class RepositoryTaskTests
             Assert.Null(arguments["bundleIdentifier"]);
             Assert.Equal(repository.RootPath, AudioFixtureScope.CurrentRepositoryRoot);
             Assert.True(ToolExecutionCancellation.Current.CanBeCanceled);
+
             if (toolName == "ansight_get_audio_capabilities")
+            {
                 return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["available"] = true }, isError: false));
+            }
 
             Assert.Equal("fixtures/quote.wav", arguments["file"]!.GetValue<string>());
+
             var fixturePath = Path.Combine(AudioFixtureScope.CurrentRepositoryRoot!, arguments["file"]!.GetValue<string>());
             Assert.Equal("fixture identity", File.ReadAllText(fixturePath));
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["status"] = "completed" }, isError: false));
         });
         using var outerScope = AudioFixtureScope.Push(Path.GetTempPath());
@@ -154,17 +168,29 @@ public sealed partial class RepositoryTaskTests
     {
         using var repository = CreateRepository(CreateAudioModule());
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
-        if (useTaskDeadline) task = task with { Timeout = TimeSpan.FromSeconds(1) };
+
+        if (useTaskDeadline)
+        {
+            task = task with
+            {
+                Timeout = TimeSpan.FromSeconds(1)
+            };
+        }
+
         using var cancellation = new CancellationTokenSource();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var executor = CreateAudioExecutor(async (toolName, _, _) =>
         {
             if (toolName == "ansight_get_audio_capabilities")
+            {
                 return RequestResult.ToolResult(new JsonObject { ["available"] = true }, isError: false);
+            }
+
             var token = ToolExecutionCancellation.Current;
             Assert.True(token.CanBeCanceled);
             entered.SetResult();
+
             try
             {
                 await Task.Delay(Timeout.Infinite, token);
@@ -181,7 +207,11 @@ public sealed partial class RepositoryTaskTests
             new RepositoryTaskExecutionRequest("run-audio", task, "session-audio", new JsonObject(), "test-audio"),
             cancellation.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        if (!useTaskDeadline) cancellation.Cancel();
+
+        if (!useTaskDeadline)
+        {
+            cancellation.Cancel();
+        }
 
         var result = await execution.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(stopped.Task.IsCompletedSuccessfully, "Task returned before audio cleanup finished.");

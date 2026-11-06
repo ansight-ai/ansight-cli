@@ -1,23 +1,5 @@
 namespace Ansight.Host.Runtime.NativeProfiling;
 
-internal sealed record ProcessSampleAdapterContext(
-    string CapturePath,
-    int ProcessId,
-    TimeSpan Duration,
-    int IntervalMilliseconds,
-    Action<string> Log);
-
-internal interface IProcessSampleCaptureAdapter
-{
-    string Engine { get; }
-
-    Task<NativeProfileToolchain> GetToolchainAsync(CancellationToken cancellationToken);
-
-    Task<NativeProfileAdapterCaptureResult> CaptureAsync(
-        ProcessSampleAdapterContext context,
-        CancellationToken cancellationToken);
-}
-
 internal sealed class ProcessSampleCaptureAdapter : IProcessSampleCaptureAdapter
 {
     internal const string ArtifactKind = "sample-call-graph";
@@ -38,12 +20,14 @@ internal sealed class ProcessSampleCaptureAdapter : IProcessSampleCaptureAdapter
     public Task<NativeProfileToolchain> GetToolchainAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var isAvailable = OperatingSystem.IsMacOS() && File.Exists(sampleToolPath);
         var message = isAvailable
             ? "macOS process stack sampling is available."
             : OperatingSystem.IsMacOS()
                 ? $"The macOS sample tool was not found at '{sampleToolPath}'."
                 : "Process stack sampling requires macOS and /usr/bin/sample.";
+
         return Task.FromResult(new NativeProfileToolchain(
             NativeProfilePlatforms.Process,
             Engine,
@@ -59,11 +43,13 @@ internal sealed class ProcessSampleCaptureAdapter : IProcessSampleCaptureAdapter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
         var outputPath = Path.Combine(context.CapturePath, "raw", "sample.txt");
         var durationSeconds = checked((int)Math.Ceiling(context.Duration.TotalSeconds));
         context.Log(
             $"Sampling process {context.ProcessId} for {durationSeconds} seconds "
-            + $"at {context.IntervalMilliseconds} ms intervals.");
+                + $"at {context.IntervalMilliseconds} ms intervals.");
+
         var result = await processRunner.RunAsync(
             new NativeProfilingProcessRequest(
                 sampleToolPath,
@@ -78,6 +64,7 @@ internal sealed class ProcessSampleCaptureAdapter : IProcessSampleCaptureAdapter
                 Timeout: context.Duration + TimeSpan.FromSeconds(15)),
             context.Log,
             cancellationToken).ConfigureAwait(false);
+
         if (result.TimedOut)
         {
             throw new TimeoutException(
@@ -89,7 +76,7 @@ internal sealed class ProcessSampleCaptureAdapter : IProcessSampleCaptureAdapter
             var detail = FirstNonEmpty(result.StandardError, result.StandardOutput);
             throw new InvalidOperationException(
                 "The macOS sample capture failed"
-                + (detail is null ? $" with exit code {result.ExitCode}." : $": {detail}"));
+                    + (detail is null ? $" with exit code {result.ExitCode}." : $": {detail}"));
         }
 
         if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)

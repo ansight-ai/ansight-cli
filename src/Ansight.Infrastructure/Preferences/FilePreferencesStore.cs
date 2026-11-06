@@ -24,6 +24,7 @@ public sealed class FilePreferencesStore : IPreferencesStore
         };
 
         var parent = Path.GetDirectoryName(filePath);
+
         if (!string.IsNullOrWhiteSpace(parent) && !Directory.Exists(parent))
         {
             Directory.CreateDirectory(parent);
@@ -64,6 +65,7 @@ public sealed class FilePreferencesStore : IPreferencesStore
             try
             {
                 var typed = value.Deserialize<T>(jsonOptions);
+
                 return typed is null ? defaultValue : typed;
             }
             catch (JsonException)
@@ -130,8 +132,10 @@ public sealed class FilePreferencesStore : IPreferencesStore
             }
 
             previousValue = DeserializeObject(existing);
+
             var nextValues = new Dictionary<string, JsonElement>(values, values.Comparer);
             removed = nextValues.Remove(key);
+
             if (removed)
             {
                 PersistToDisk(filePath, nextValues, jsonOptions);
@@ -172,6 +176,7 @@ public sealed class FilePreferencesStore : IPreferencesStore
         }
 
         var content = File.ReadAllText(filePath);
+
         if (string.IsNullOrWhiteSpace(content))
         {
             return new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -180,6 +185,7 @@ public sealed class FilePreferencesStore : IPreferencesStore
         try
         {
             var deserialized = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(content, options);
+
             return deserialized ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         }
         catch (JsonException)
@@ -192,6 +198,7 @@ public sealed class FilePreferencesStore : IPreferencesStore
     {
         var json = JsonSerializer.Serialize(values, options);
         var parentPath = Path.GetDirectoryName(filePath);
+
         if (!string.IsNullOrWhiteSpace(parentPath))
         {
             Directory.CreateDirectory(parentPath);

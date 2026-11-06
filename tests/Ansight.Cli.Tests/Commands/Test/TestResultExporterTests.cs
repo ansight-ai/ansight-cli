@@ -14,16 +14,22 @@ public sealed class TestResultExporterTests
             "map smoke/test",
             "run-123");
 
-        TestResultExporter.Save(resultPath, new { schema = "ansight.test/v1", exitCode = 10 });
+        TestResultExporter.Save(resultPath, new
+        {
+            schema = "ansight.test/v1",
+            exitCode = 10
+        });
 
         Assert.StartsWith(
             Path.Combine(directory.Path, "data", "workspace-test-results"),
             resultPath,
             StringComparison.Ordinal);
         Assert.EndsWith("-map-smoke-test-run-123.json", resultPath, StringComparison.Ordinal);
+
         using var document = JsonDocument.Parse(File.ReadAllText(resultPath));
         Assert.Equal("ansight.test/v1", document.RootElement.GetProperty("schema").GetString());
         Assert.Equal(10, document.RootElement.GetProperty("exitCode").GetInt32());
+
         if (!OperatingSystem.IsWindows())
         {
             Assert.Equal(
@@ -51,6 +57,7 @@ public sealed class TestResultExporterTests
     {
         using var directory = TestDirectory.Create();
         string? latestPath = null;
+
         for (var index = 0; index < 102; index++)
         {
             latestPath = TestResultExporter.CreatePath(
@@ -58,7 +65,10 @@ public sealed class TestResultExporterTests
                 requestedPath: null,
                 "generated",
                 $"run-{index:D3}");
-            TestResultExporter.Save(latestPath, new { index }, pruneGeneratedResults: true);
+            TestResultExporter.Save(latestPath, new
+            {
+                index
+            }, pruneGeneratedResults: true);
         }
 
         var resultDirectory = Path.Combine(directory.Path, "data", "workspace-test-results");

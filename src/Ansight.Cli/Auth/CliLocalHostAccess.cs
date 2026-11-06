@@ -13,6 +13,7 @@ internal sealed class CliLocalHostAccess
         get
         {
             var current = Volatile.Read(ref state);
+
             return current.Lease is { IsDenied: true } lease
                 ? new HostAccessState(lease.Failure)
                 : current;
@@ -28,8 +29,13 @@ internal sealed class CliLocalHostAccess
 
     public void RequestRetry()
     {
-        try { retry.Release(); }
-        catch (SemaphoreFullException) { }
+        try
+        {
+            retry.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+        }
     }
 
     public async Task WaitForRetryAsync(TimeProvider timeProvider, CancellationToken cancellationToken)
@@ -43,10 +49,15 @@ internal sealed class CliLocalHostAccess
         var requested = retry.WaitAsync(wait.Token);
         await Task.WhenAny(delay, requested).ConfigureAwait(false);
         await wait.CancelAsync().ConfigureAwait(false);
-        try { await Task.WhenAll(delay, requested).ConfigureAwait(false); }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+
+        try
+        {
+            await Task.WhenAll(delay, requested).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
     }
 }
-
-internal sealed record HostAccessState(AccessDecision Decision, Uri? ExplorerUrl = null, CliAccessLease? Lease = null);

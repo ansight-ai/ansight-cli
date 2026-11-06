@@ -26,7 +26,9 @@ internal sealed class FakeAndroidEmulatorClient : IAndroidEmulatorClient
         CancellationToken cancellationToken = default)
     {
         Commands.Add(arguments.ToArray());
+
         var key = string.Join(' ', arguments);
+
         return Task.FromResult(Responses.TryGetValue(key, out var result)
             ? result
             : new AdbCommandResult(0, string.Empty, string.Empty));
@@ -40,13 +42,11 @@ internal sealed class FakeAndroidEmulatorClient : IAndroidEmulatorClient
         StandardInputCommands.Add(new RecordedAdbStandardInputCommand(
             arguments.ToArray(),
             standardInput));
+
         var key = string.Join(' ', arguments);
+
         return Task.FromResult(Responses.TryGetValue(key, out var result)
             ? result
             : new AdbCommandResult(0, string.Empty, string.Empty));
     }
 }
-
-internal sealed record RecordedAdbStandardInputCommand(
-    IReadOnlyList<string> Arguments,
-    string StandardInput);

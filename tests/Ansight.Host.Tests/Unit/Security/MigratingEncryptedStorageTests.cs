@@ -8,6 +8,7 @@ public sealed class MigratingEncryptedStorageTests
         var primary = new InMemoryEncryptedStorage();
         var fallback = new InMemoryEncryptedStorage();
         fallback.Set("profile", "legacy");
+
         var storage = new MigratingEncryptedStorage(primary, fallback);
 
         Assert.Equal("legacy", storage.Get("profile"));
@@ -21,6 +22,7 @@ public sealed class MigratingEncryptedStorageTests
         var primary = new InMemoryEncryptedStorage();
         var fallback = new InMemoryEncryptedStorage();
         fallback.Set("profile", "legacy");
+
         var storage = new MigratingEncryptedStorage(primary, fallback);
 
         storage.Set("profile", "shared");
@@ -36,6 +38,7 @@ public sealed class MigratingEncryptedStorageTests
         var fallback = new InMemoryEncryptedStorage();
         primary.Set("profile", "shared");
         fallback.Set("profile", "legacy");
+
         var storage = new MigratingEncryptedStorage(primary, fallback);
 
         Assert.Equal("shared", storage.Get("profile"));
@@ -48,6 +51,7 @@ public sealed class MigratingEncryptedStorageTests
         var fallback = new InMemoryEncryptedStorage();
         primary.Set("profile", "shared");
         fallback.Set("profile", "legacy");
+
         var storage = new MigratingEncryptedStorage(primary, fallback);
 
         storage.Remove("profile");

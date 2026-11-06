@@ -39,12 +39,14 @@ internal sealed class GetVisualTreeSnapshotTool : Operation
 
         var snapshotId = NormalizeOptionalString(arguments?["snapshotId"]?.GetValue<string>());
         var visualTree = ResolveVisualTree(snapshot!, snapshotId, timestampUtc?.ToUniversalTime());
+
         if (visualTree is null)
         {
             return Task.FromResult(ToolError($"Session '{snapshot!.SessionId}' has no matching visual tree snapshot."));
         }
 
         var payload = PayloadJson.BuildSessionVisualTreeSnapshotPayload(snapshot!, visualTree);
+
         if (payload["payload"] is JsonObject visualTreePayload)
         {
             payload["payload"] = VisualTreePayloadPruner.Prune(visualTreePayload, maxDepth);
@@ -68,7 +70,7 @@ internal sealed class GetVisualTreeSnapshotTool : Operation
         if (snapshotId is not null)
         {
             return snapshot.VisualTreeSnapshots.FirstOrDefault(candidate =>
-                string.Equals(candidate.SnapshotId, snapshotId, StringComparison.Ordinal));
+                        string.Equals(candidate.SnapshotId, snapshotId, StringComparison.Ordinal));
         }
 
         if (timestampUtc.HasValue)

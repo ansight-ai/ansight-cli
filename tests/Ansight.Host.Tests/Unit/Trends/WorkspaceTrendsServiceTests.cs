@@ -15,6 +15,7 @@ public sealed class WorkspaceTrendsServiceTests
             "com.example.app",
             "Example",
             workspacePath)).IsSuccess);
+
         var store = new WorkspaceTrendsHistoryStore(environment.ApplicationPaths);
         var version1First = HistoricalContext("evaluation-v1-1", "com.example.app", "1.0", 1);
         var version1Second = HistoricalContext("evaluation-v1-2", "com.example.app", "1.0", 2);
@@ -35,8 +36,10 @@ public sealed class WorkspaceTrendsServiceTests
         Assert.Equal(1, rebuilt.RemovedHistoryResultCount);
         Assert.Equal(2, rebuilt.RebuiltHistoryResultCount);
         Assert.Empty(rebuilt.SkippedApps);
+
         var history = store.LoadHistory("com.example.app", null, 20);
         Assert.Contains(history, entry => entry.AppVersion == "1.0" && entry.DefinitionHash == "old-rule");
+
         var version2 = history
             .Where(static entry => entry.AppVersion == "2.0")
             .OrderBy(static entry => entry.EvaluatedAtUtc)
@@ -54,6 +57,7 @@ public sealed class WorkspaceTrendsServiceTests
         using var environment = new TestSupport.TestEnvironment();
         using var runtime = environment.CreateRuntime();
         var store = new WorkspaceTrendsHistoryStore(environment.ApplicationPaths);
+
         foreach (var appId in new[] { "com.example.first", "com.example.second" })
         {
             var workspacePath = CreateTrendsWorkspace(environment.RootPath, appId);
@@ -61,6 +65,7 @@ public sealed class WorkspaceTrendsServiceTests
                 appId,
                 appId,
                 workspacePath)).IsSuccess);
+
             var context = HistoricalContext($"evaluation-{appId}", appId, null, 1);
             store.SaveMetrics(context, [HistoricalCheck(100)]);
             store.SaveHistoryDecision(context, OldHistoryDecision(null), isBreach: false);
@@ -173,8 +178,14 @@ public sealed class WorkspaceTrendsServiceTests
     [Fact]
     public void CreateSeriesKey_UsesOnlyConfiguredDimensions()
     {
-        var first = RunContext() with { BuildNumber = "200" };
-        var second = RunContext() with { BuildNumber = "201" };
+        var first = RunContext() with
+        {
+            BuildNumber = "200"
+        };
+        var second = RunContext() with
+        {
+            BuildNumber = "201"
+        };
 
         Assert.Equal(
             WorkspaceTrendsService.CreateSeriesKey(first, ["platform", "deviceModel"]),
@@ -263,6 +274,7 @@ public sealed class WorkspaceTrendsServiceTests
               }]
             }
             """);
+
         return workspacePath;
     }
 

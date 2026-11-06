@@ -41,6 +41,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
             ["--find", "xctrace"],
             TimeSpan.FromSeconds(15),
             cancellationToken).ConfigureAwait(false);
+
         if (!findResult.IsSuccess || string.IsNullOrWhiteSpace(findResult.StandardOutput))
         {
             return new NativeProfileToolchain(
@@ -61,6 +62,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
             ["xcodebuild", "-version"],
             TimeSpan.FromSeconds(15),
             cancellationToken).ConfigureAwait(false);
+
         return new NativeProfileToolchain(
             Platform,
             Engine,
@@ -78,6 +80,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
         var template = context.Preset switch
         {
             NativeProfilePresets.Launch => "App Launch",
@@ -90,6 +93,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
         var tracePath = Path.Combine(context.CapturePath, "raw", "capture.trace");
         var tocPath = Path.Combine(context.CapturePath, "derived", "instruments-toc.xml");
         context.Log($"Starting Instruments template '{template}' on '{context.DeviceId}'.");
+
         var captureResult = await processRunner.RunAsync(
             new NativeProfilingProcessRequest(
                 context.CaptureToolPath,
@@ -114,6 +118,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
             context.Log,
             cancellationToken).ConfigureAwait(false);
         EnsureSuccess("record the Instruments trace", captureResult, allowInterrupted: true);
+
         if (!Directory.Exists(tracePath))
         {
             throw new InvalidOperationException(
@@ -121,6 +126,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
         }
 
         context.Log("Validating and exporting the Instruments table of contents.");
+
         var exportResult = await processRunner.RunAsync(
             new NativeProfilingProcessRequest(
                 context.CaptureToolPath,
@@ -137,6 +143,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
             context.Log,
             cancellationToken).ConfigureAwait(false);
         EnsureSuccess("export the Instruments table of contents", exportResult);
+
         if (!File.Exists(tocPath) || new FileInfo(tocPath).Length == 0)
         {
             throw new InvalidOperationException(
@@ -177,6 +184,7 @@ internal sealed class InstrumentsProfileCaptureAdapter : INativeProfileCaptureAd
         var output = string.IsNullOrWhiteSpace(result.StandardOutput)
             ? result.StandardError
             : result.StandardOutput;
+
         return result.IsSuccess && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
     }
 

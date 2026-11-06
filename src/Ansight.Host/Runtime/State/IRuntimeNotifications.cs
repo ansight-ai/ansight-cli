@@ -15,6 +15,8 @@ internal interface IRuntimeNotifications
     string ServerStatusText { get; }
 
     void SetServerStatus(bool isRunning, string message);
+
     void LogHost(string message);
+
     void PublishRuntimeEvent(RuntimeEvent runtimeEvent);
 }

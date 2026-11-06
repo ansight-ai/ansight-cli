@@ -71,6 +71,7 @@ public sealed class SessionJpegWireProtocolTests
         BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(20, 4), height);
         BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(24, 4), bytes.Length);
         bytes.CopyTo(payload.AsSpan(28));
+
         return payload;
     }
 }

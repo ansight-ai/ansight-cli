@@ -23,6 +23,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     public void Invoke_DispatchesNamedHandlerAndProvidesPiiTools()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -37,6 +38,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
               return { ...log, message: pii.redact(log.message) };
             }
             """);
+
         using var executor = new JavaScriptSessionSanitizerExecutor(modulePath, runtime.ExecutablePath);
 
         var result = executor.Invoke(
@@ -59,6 +61,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     public void Invoke_MissingScreenshotHandlerRedactsAll()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -67,6 +70,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
         using var directory = new TemporaryDirectory();
         var modulePath = Path.Combine(directory.RootPath, "sanitizer.ts");
         File.WriteAllText(modulePath, "export function sanitizeLog(log) { return log; }");
+
         using var executor = new JavaScriptSessionSanitizerExecutor(modulePath, runtime.ExecutablePath);
 
         var result = executor.Invoke(
@@ -82,6 +86,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     public void Invoke_ProvidesShareOperationContext()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -100,6 +105,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
               };
             }
             """);
+
         using var executor = new JavaScriptSessionSanitizerExecutor(modulePath, runtime.ExecutablePath);
 
         var result = executor.Invoke(
@@ -128,6 +134,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     public void Invoke_HandlerFailureAbortsSanitization()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -138,6 +145,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
         File.WriteAllText(
             modulePath,
             "export function sanitizeLog() { throw new Error('do not export'); }");
+
         using var executor = new JavaScriptSessionSanitizerExecutor(modulePath, runtime.ExecutablePath);
 
         var exception = Assert.Throws<InvalidDataException>(() => executor.Invoke(
@@ -151,6 +159,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     public void Invoke_OversizedResponseReportsActualAndAllowedSizes()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -161,6 +170,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
         File.WriteAllText(
             modulePath,
             "export function sanitizeLog(log) { return { ...log, value: 'x'.repeat(4 * 1024 * 1024) }; }");
+
         using var executor = new JavaScriptSessionSanitizerExecutor(modulePath, runtime.ExecutablePath);
 
         var exception = Assert.Throws<InvalidDataException>(() => executor.Invoke(
@@ -178,7 +188,7 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     {
         var blocks = TesseractSessionScreenshotOcrScanner.ParseTsv(
             "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-            + "5\t1\t1\t1\t1\t1\t12\t24\t80\t18\t96.5\tperson@example.com\n");
+                + "5\t1\t1\t1\t1\t1\t12\t24\t80\t18\t96.5\tperson@example.com\n");
 
         var block = Assert.Single(blocks);
         Assert.Equal("person@example.com", block.Text);
@@ -191,8 +201,8 @@ public sealed class JavaScriptSessionSanitizerExecutorTests
     {
         var blocks = TesseractSessionScreenshotOcrScanner.ParseTsv(
             "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
-            + "5\t1\t1\t1\t1\t1\t10\t20\t30\t12\t95\tMap\n"
-            + "5\t1\t1\t1\t1\t2\t60\t20\t40\t12\t96\tCrags\n");
+                + "5\t1\t1\t1\t1\t1\t10\t20\t30\t12\t95\tMap\n"
+                + "5\t1\t1\t1\t1\t2\t60\t20\t40\t12\t96\tCrags\n");
 
         Assert.Collection(
             blocks,

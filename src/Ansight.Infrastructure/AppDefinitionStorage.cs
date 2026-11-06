@@ -5,6 +5,7 @@ public static class AppDefinitionStorage
     public static string GetDirectoryPath(string applicationDataPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationDataPath);
+
         return Path.Combine(applicationDataPath, "apps");
     }
 
@@ -14,9 +15,10 @@ public static class AppDefinitionStorage
         PrivateStorageDirectory.Ensure(appsPath);
 
         foreach (var sourcePath in Directory.EnumerateFiles(
-                     applicationDataPath, "*.ans.json", SearchOption.TopDirectoryOnly))
+            applicationDataPath, "*.ans.json", SearchOption.TopDirectoryOnly))
         {
             var destinationPath = Path.Combine(appsPath, Path.GetFileName(sourcePath));
+
             try
             {
                 // Keep both files when a name already exists in the new location.

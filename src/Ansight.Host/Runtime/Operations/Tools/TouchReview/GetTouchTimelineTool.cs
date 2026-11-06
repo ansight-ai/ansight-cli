@@ -57,6 +57,7 @@ internal sealed class GetTouchTimelineTool : Operation
     {
         var properties = SessionReviewToolSchemas.TouchFilterProperties();
         properties["bucketCount"] = ToolSchema.Integer("Number of timeline buckets. Defaults to 24, max 200.", nullable: true);
+
         return properties;
     }
 }

@@ -111,6 +111,7 @@ public sealed class AppToolPayloadNormalizerTests
             if (!string.IsNullOrWhiteSpace(artifactPath))
             {
                 var artifactDirectory = Path.GetDirectoryName(artifactPath);
+
                 if (!string.IsNullOrWhiteSpace(artifactDirectory) && Directory.Exists(artifactDirectory))
                 {
                     Directory.Delete(artifactDirectory, recursive: true);
@@ -158,6 +159,7 @@ public sealed class AppToolPayloadNormalizerTests
 
             Assert.Equal("log", result["artifactKind"]?.GetValue<string>());
             Assert.Equal("text/plain", result["mimeType"]?.GetValue<string>());
+
             var artifact = Assert.Single(artifacts.OfType<JsonObject>());
             Assert.Equal("log", artifact["kind"]?.GetValue<string>());
             Assert.Equal(artifactPath, artifact["path"]?.GetValue<string>());
@@ -167,6 +169,7 @@ public sealed class AppToolPayloadNormalizerTests
         finally
         {
             var artifactDirectory = Path.GetDirectoryName(artifactPath);
+
             if (!string.IsNullOrWhiteSpace(artifactDirectory) && Directory.Exists(artifactDirectory))
             {
                 Directory.Delete(artifactDirectory, recursive: true);
@@ -191,12 +194,14 @@ public sealed class AppToolPayloadNormalizerTests
 
         var artifactPath = Path.Combine(artifactDirectory, fileName);
         File.WriteAllBytes(artifactPath, [1, 2, 3, 4]);
+
         return artifactPath;
     }
 
     private static AppSessionSnapshot CreateSnapshot()
     {
         var id = Guid.NewGuid().ToString("N");
+
         return new AppSessionSnapshot
         {
             SessionId = $"session-{id}",

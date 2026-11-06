@@ -29,6 +29,7 @@ public sealed partial class SessionCaptureStoreTests
             imageFrame);
         Directory.CreateDirectory(Path.GetDirectoryName(sourceImagePath)!);
         File.WriteAllBytes(sourceImagePath, [1, 2, 3, 4, 5]);
+
         var appIcon = new SessionAppIcon
         {
             FileName = "app-icon.png",
@@ -128,8 +129,7 @@ public sealed partial class SessionCaptureStoreTests
                     CompletedUtc = updatedUtc,
                     Success = true,
                     FinalResponse = "Looks good."
-                }
-            ],
+                }            ],
             Images =
             [
                 imageFrame
@@ -146,7 +146,7 @@ public sealed partial class SessionCaptureStoreTests
                     Status = "resolved",
                     Source = "sdk.annotatedFeedback",
                     CaptureGroupId = "capture-group-001",
-                    CustomData = new JsonObject { ["flow"] = "onboarding" },
+                    CustomData = new JsonObject {["flow"] = "onboarding" },
                     Evidence =
                     [
                         new SessionAnnotationEvidence
@@ -156,8 +156,7 @@ public sealed partial class SessionCaptureStoreTests
                             Status = "captured",
                             CapturedAtUtc = imageFrame.CapturedAtUtc,
                             SizeBytes = imageFrame.ByteCount
-                        }
-                    ],
+                        }                    ],
                     HookFailures = ["ExampleHook: unavailable"],
                     Geometry =
                     [
@@ -173,10 +172,8 @@ public sealed partial class SessionCaptureStoreTests
                             Height = 0.18,
                             StrokeColor = "#FFFF3B30",
                             StrokeWidth = 3
-                        }
-                    ]
-                }
-            ],
+                        }                    ]
+                }            ],
             AgentTaskLinks =
             [
                 new SessionAgentTaskLink
@@ -197,8 +194,7 @@ public sealed partial class SessionCaptureStoreTests
                     StatusMessage = "Accepted.",
                     CreatedAtUtc = updatedUtc,
                     UpdatedAtUtc = updatedUtc
-                }
-            ],
+                }            ],
             ApplicationEvents =
             [
                 new SessionApplicationEvent(
@@ -244,16 +240,14 @@ public sealed partial class SessionCaptureStoreTests
                             ["label"] = "Continue"
                         }
                     }
-                }
-            ],
+                }            ],
             Logs =
             [
                 new LogEntry(createdUtc, "Hello from host")
                 {
                     Source = "Host",
                     Tag = "Test"
-                }
-            ],
+                }            ],
             MetricChannels =
             [
                 new SessionMetricChannel
@@ -261,8 +255,7 @@ public sealed partial class SessionCaptureStoreTests
                     ChannelId = 1,
                     Name = "FPS",
                     ColorHex = "#00FF00"
-                }
-            ],
+                }            ],
             Metrics =
             [
                 new SessionMetricSample
@@ -276,17 +269,18 @@ public sealed partial class SessionCaptureStoreTests
                     ChannelId = 1,
                     Value = 58,
                     CapturedAtUtc = createdUtc.AddSeconds(2)
-                }
-            ]
+                }            ]
         };
 
         store.Save(snapshot);
+
         var imagesDocumentPath = Path.Combine(
             sessionCapturesRootPath,
             "com.example.testapp",
             "session-001",
             "images.json");
         Assert.DoesNotContain("\"filePath\"", File.ReadAllText(imagesDocumentPath), StringComparison.OrdinalIgnoreCase);
+
         var visualTreesDirectoryPath = Path.Combine(
             sessionCapturesRootPath,
             "com.example.testapp",
@@ -299,10 +293,12 @@ public sealed partial class SessionCaptureStoreTests
             "com.example.testapp",
             "session-001",
             "visual-trees.json")));
+
         using (var visualTreeDocument = JsonDocument.Parse(File.ReadAllText(visualTreeFilePath)))
         {
             var root = visualTreeDocument.RootElement;
             Assert.Equal("ansight.session-visual-tree-snapshot.v2", root.GetProperty("schema").GetString());
+
             var header = root.GetProperty("header");
             Assert.Equal("visual-tree-001", header.GetProperty("snapshotId").GetString());
             Assert.Equal("maui", header.GetProperty("visualTreeKind").GetString());
@@ -323,6 +319,7 @@ public sealed partial class SessionCaptureStoreTests
         Assert.Single(summary.Images);
         Assert.NotNull(summary.AppIcon);
         Assert.Single(summary.Annotations);
+
         var summaryTaskLink = Assert.Single(summary.AgentTaskLinks);
         Assert.Equal("thread-001", summaryTaskLink.ProviderTaskId);
         Assert.Equal("Fix the annotated onboarding crash.", summaryTaskLink.SubmittedPrompt);
@@ -344,6 +341,7 @@ public sealed partial class SessionCaptureStoreTests
 
         var loadedSuccessfully = store.TryLoad(snapshot.SessionId, out var loadedSnapshot);
         Assert.True(loadedSuccessfully);
+
         var loaded = loadedSnapshot;
 
         Assert.NotNull(loaded);
@@ -363,6 +361,7 @@ public sealed partial class SessionCaptureStoreTests
         Assert.Equal("app-icon.png", loaded.AppIcon!.FileName);
         Assert.Equal("map.query_state", loaded.AppToolCatalog?.ToolCatalog["tools"]?[0]?["id"]?.GetValue<string>());
         Assert.Equal("map.exports", loaded.AppToolCatalog?.ArtifactCatalog?["result"]?["providers"]?[0]?["id"]?.GetValue<string>());
+
         var loadedAnnotation = Assert.Single(loaded.Annotations);
         Assert.Equal("Launch crash", loadedAnnotation.Label);
         Assert.Equal("App crashed after the onboarding CTA was tapped.", loadedAnnotation.Notes);
@@ -371,11 +370,13 @@ public sealed partial class SessionCaptureStoreTests
         Assert.Equal("onboarding", loadedAnnotation.CustomData?["flow"]?.GetValue<string>());
         Assert.Single(loadedAnnotation.Evidence);
         Assert.Equal(["ExampleHook: unavailable"], loadedAnnotation.HookFailures);
+
         var loadedGeometry = Assert.Single(loadedAnnotation.Geometry);
         Assert.Equal(imageFrame.FrameId, loadedGeometry.FrameId);
         Assert.Equal(SessionAnnotationGeometryKind.Rectangle, loadedGeometry.Kind);
         Assert.Equal("#FFFF3B30", loadedGeometry.StrokeColor);
         Assert.Equal(3d, loadedGeometry.StrokeWidth);
+
         var loadedTaskLink = Assert.Single(loaded.AgentTaskLinks);
         Assert.Equal("task-link-001", loadedTaskLink.LinkId);
         Assert.Equal("turn-001", loadedTaskLink.ProviderTurnId);
@@ -389,12 +390,14 @@ public sealed partial class SessionCaptureStoreTests
         Assert.Equal(1, loaded.TotalImageCount);
         Assert.Equal(1, loaded.TotalMetricChannelCount);
         Assert.Equal(2, loaded.TotalMetricSampleCount);
+
         var loadedApplicationEvent = Assert.Single(loaded.ApplicationEvents);
         Assert.Equal("auth.login.started", loadedApplicationEvent.Label);
         Assert.Equal((byte)4, loadedApplicationEvent.ChannelId);
         Assert.Equal(1, loaded.TotalApplicationEventCount);
         Assert.Single(loaded.Images);
         Assert.Single(loaded.Analyses);
+
         var loadedVisualTree = Assert.Single(loaded.VisualTreeSnapshots);
         Assert.Equal("visual-tree-001", loadedVisualTree.SnapshotId);
         Assert.Equal("maui", loadedVisualTree.VisualTreeKind);

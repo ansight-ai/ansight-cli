@@ -22,6 +22,7 @@ public sealed partial class RepositoryTaskTests
               await app.clipboard.clear();
             }
             """);
+
         var names = new List<string>();
         string? clipboard = null;
         var executor = CreateExecutor((toolName, arguments, _) =>
@@ -29,19 +30,30 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("ansight_call_app_tool", toolName);
             Assert.Equal("session-clipboard", arguments["sessionId"]?.GetValue<string>());
             Assert.Null(arguments["arguments"]?["sessionId"]);
+
             var id = arguments["toolId"]!.GetValue<string>();
             names.Add(id);
+
             JsonObject payload;
+
             switch (id)
             {
                 case "clipboard.set_text":
                     clipboard = arguments["arguments"]?["text"]?.GetValue<string>();
                     payload = new JsonObject { ["updated"] = true };
                     break;
-                case "clipboard.get_text": payload = new JsonObject { ["text"] = clipboard, ["hasText"] = clipboard is not null }; break;
-                case "clipboard.has_text": payload = new JsonObject { ["hasText"] = clipboard is not null }; break;
-                default: clipboard = null; payload = new JsonObject { ["cleared"] = true }; break;
+                case "clipboard.get_text":
+                    payload = new JsonObject { ["text"] = clipboard, ["hasText"] = clipboard is not null };
+                    break;
+                case "clipboard.has_text":
+                    payload = new JsonObject { ["hasText"] = clipboard is not null };
+                    break;
+                default:
+                    clipboard = null;
+                    payload = new JsonObject { ["cleared"] = true };
+                    break;
             }
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject
             {
                 ["responseType"] = "tool.result",
@@ -50,7 +62,10 @@ public sealed partial class RepositoryTaskTests
             }, isError: false));
         });
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest(
-            "clipboard-run", task, "session-clipboard", new JsonObject(), "clipboard") { CaptureTrace = true }, CancellationToken.None);
+            "clipboard-run", task, "session-clipboard", new JsonObject(), "clipboard")
+        {
+            CaptureTrace = true
+        }, CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
         Assert.Equal(new[] { "clipboard.set_text", "clipboard.get_text", "clipboard.has_text", "clipboard.clear" }, names);
         Assert.Null(clipboard);
@@ -66,6 +81,7 @@ public sealed partial class RepositoryTaskTests
         var arguments = new JsonObject { ["toolId"] = 123 };
         Assert.Contains("123", RepositoryTaskCallTrace.CaptureArguments("ansight_call_app_tool", arguments).Content);
         Assert.Equal("\"error\"", RepositoryTaskCallTrace.CaptureResult(JsonValue.Create("error"), "clipboard.get_text").Content);
+
         var result = new JsonObject { ["payload"] = "error" };
         Assert.Contains("error", RepositoryTaskCallTrace.CaptureResult(result, "clipboard.get_text").Content);
     }
@@ -78,6 +94,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal("clipboard.has_text", suite["hasText"]);
         Assert.Equal("clipboard.set_text", suite["setText"]);
         Assert.Equal("clipboard.clear", suite["clear"]);
+
         var types = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
         Assert.Contains("readonly clipboard: TaskClipboardContext", types);
         Assert.Contains("Promise<AppToolCallResult<ClipboardTextResult>>", types);

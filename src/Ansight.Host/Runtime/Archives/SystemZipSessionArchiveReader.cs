@@ -23,6 +23,7 @@ internal sealed class SystemZipSessionArchiveReader : ISessionArchiveReader
     public ISessionArchiveEntry? GetEntry(string path)
     {
         var entry = archive.GetEntry(path);
+
         return entry is null ? null : new SystemZipSessionArchiveEntry(entry);
     }
 
@@ -34,8 +35,15 @@ internal sealed class SystemZipSessionArchiveReader : ISessionArchiveReader
         }
     }
 
-    private sealed class SystemZipSessionArchiveEntry(ZipArchiveEntry entry) : ISessionArchiveEntry
+    private sealed class SystemZipSessionArchiveEntry : ISessionArchiveEntry
     {
+        private readonly ZipArchiveEntry entry;
+
+        public SystemZipSessionArchiveEntry(ZipArchiveEntry entry)
+        {
+            this.entry = entry;
+        }
+
         public string Name => entry.Name;
         public string FullName => entry.FullName;
         public long Length => entry.Length;

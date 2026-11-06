@@ -19,6 +19,7 @@ public sealed class MacSessionVideoEncoderTests
         using var directory = TestDirectory.Create();
         var archiveFilePath = Path.Combine(directory.Path, "session.zip");
         CreateArchive(archiveFilePath, format);
+
         var createdUtc = new DateTimeOffset(2026, 8, 31, 1, 2, 3, TimeSpan.Zero);
         var session = new AppSessionSnapshot
         {
@@ -49,6 +50,7 @@ public sealed class MacSessionVideoEncoderTests
 
         Assert.True(result.ContainsVideo);
         Assert.Contains(progress, item => item.Total == 3 && item.Completed == 3);
+
         using var archive = ZipFile.OpenRead(result.ArchiveFilePath);
         var videoEntry = Assert.IsType<ZipArchiveEntry>(archive.GetEntry(SessionArchiveVideoTransformer.VideoEntryPath));
         Assert.True(videoEntry.Length > 0);
@@ -78,6 +80,7 @@ public sealed class MacSessionVideoEncoderTests
     private static void CreateImageEntry(ZipArchive archive, string entryPath, SKColor color, string format)
     {
         using var bitmap = new SKBitmap(new SKImageInfo(64, 64, SKColorType.Bgra8888, SKAlphaType.Premul));
+
         using (var canvas = new SKCanvas(bitmap))
         {
             canvas.Clear(color);

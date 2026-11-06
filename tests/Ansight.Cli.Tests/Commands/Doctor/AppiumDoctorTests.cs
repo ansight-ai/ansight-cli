@@ -95,12 +95,20 @@ public sealed class AppiumDoctorTests
         Assert.Equal(0, handler.RequestCount);
     }
 
-    private sealed class StubHttpMessageHandler(
-        HttpStatusCode statusCode,
-        string content) : HttpMessageHandler
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
-        public Uri? LastRequestUri { get; private set; }
+        private readonly HttpStatusCode statusCode;
+        private readonly string content;
 
+        public StubHttpMessageHandler(
+            HttpStatusCode statusCode,
+            string content)
+        {
+            this.statusCode = statusCode;
+            this.content = content;
+        }
+
+        public Uri? LastRequestUri { get; private set; }
         public int RequestCount { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(
@@ -109,6 +117,7 @@ public sealed class AppiumDoctorTests
         {
             LastRequestUri = request.RequestUri;
             RequestCount++;
+
             return Task.FromResult(new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(content, Encoding.UTF8, "application/json")

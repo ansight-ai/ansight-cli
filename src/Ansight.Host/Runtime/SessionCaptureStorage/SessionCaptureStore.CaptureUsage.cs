@@ -1,4 +1,4 @@
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 
 namespace Ansight.Host.Runtime.SessionCaptureStorage;
 
@@ -15,6 +15,7 @@ internal sealed partial class SessionCaptureStore
     private DateTimeOffset? FirstCaptureEvidenceUtc(AppSessionSnapshot snapshot, string summaryPath, DateTimeOffset savedUtc)
     {
         var key = LocalCaptureUsage.CaptureKey(snapshot.SessionId, snapshot.CreatedUtc);
+
         if (!localCaptureRegistrations.GetOrAdd(key, _ => captureUsage.IsRegistered(snapshot.SessionId, snapshot.CreatedUtc)))
         {
             return null;
@@ -26,6 +27,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         first = SessionSnapshotReader.TryLoadDocument<SessionCaptureSummaryDocument>(summaryPath)?.Session.FirstCaptureEvidenceUtc;
+
         if (first is null && LocalSessionCaptureAnalytics.HasCapturedEvidence(snapshot))
         {
             first = savedUtc;
@@ -47,6 +49,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var key = LocalCaptureUsage.CaptureKey(summary.SessionId, summary.CreatedUtc);
+
         if (queuedCaptureReceipts.ContainsKey(key))
         {
             return;
@@ -64,6 +67,7 @@ internal sealed partial class SessionCaptureStore
         try
         {
             var registrations = captureUsage.RegisteredCaptureKeys();
+
             if (registrations.Count == 0)
             {
                 return;
@@ -72,18 +76,21 @@ internal sealed partial class SessionCaptureStore
             foreach (var snapshot in LoadSummaries())
             {
                 var key = LocalCaptureUsage.CaptureKey(snapshot.SessionId, snapshot.CreatedUtc);
+
                 if (!registrations.Contains(key))
                 {
                     continue;
                 }
 
                 localCaptureRegistrations[key] = true;
+
                 if (!TryGetSummaryFilePath(snapshot.SessionId, reloadIndex: false, out var path))
                 {
                     continue;
                 }
 
                 var summary = SessionSnapshotReader.TryLoadDocument<SessionCaptureSummaryDocument>(path)?.Session;
+
                 if (summary is not null)
                 {
                     RecordCaptureEvidence(summary);

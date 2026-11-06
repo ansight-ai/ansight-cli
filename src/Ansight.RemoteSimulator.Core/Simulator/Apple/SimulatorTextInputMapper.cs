@@ -5,7 +5,9 @@ public static class SimulatorTextInputMapper
     public static IReadOnlyList<SimulatorTextKeyStroke> Map(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
+
         var strokes = new List<SimulatorTextKeyStroke>(text.Length);
+
         foreach (var character in text)
         {
             if (!TryMap(character, out var stroke))
@@ -26,24 +28,28 @@ public static class SimulatorTextInputMapper
         if (character is >= 'a' and <= 'z')
         {
             stroke = new SimulatorTextKeyStroke((uint)(4 + character - 'a'), false);
+
             return true;
         }
 
         if (character is >= 'A' and <= 'Z')
         {
             stroke = new SimulatorTextKeyStroke((uint)(4 + character - 'A'), true);
+
             return true;
         }
 
         if (character is >= '1' and <= '9')
         {
             stroke = new SimulatorTextKeyStroke((uint)(30 + character - '1'), false);
+
             return true;
         }
 
         if (character == '0')
         {
             stroke = new SimulatorTextKeyStroke(39, false);
+
             return true;
         }
 
@@ -53,6 +59,7 @@ public static class SimulatorTextInputMapper
         }
 
         stroke = default;
+
         return false;
     }
 
@@ -97,6 +104,7 @@ public static class SimulatorTextInputMapper
             ')' => new SimulatorTextKeyStroke(39, true),
             _ => default,
         };
+
         return stroke.UsageCode != 0;
     }
 }

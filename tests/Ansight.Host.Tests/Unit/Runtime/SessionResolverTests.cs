@@ -85,6 +85,7 @@ public sealed partial class SessionResolverTests
             IPAddress.Loopback,
             configId: null,
             processSessionId: null);
+
         var resolver = new SessionResolver(runtimeState, new DisconnectedAppToolBridge());
 
         var resolved = resolver.TryResolveWaitableSession(
@@ -112,15 +113,27 @@ public sealed partial class SessionResolverTests
             sessionId,
             profile: null,
             profileJson: $"{{\"device\":{{\"nativeDeviceId\":\"{deviceId}\"}}}}");
+
         return sessionId;
     }
 
-    private sealed class ConnectedAppToolBridge(params string[] sessionIds) : IAppToolBridge
+    private sealed class ConnectedAppToolBridge : IAppToolBridge
     {
+        private readonly string[] sessionIds;
+
+        public ConnectedAppToolBridge(params string[] sessionIds)
+        {
+            this.sessionIds = sessionIds;
+        }
+
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds()
@@ -151,8 +164,12 @@ public sealed partial class SessionResolverTests
     {
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds()

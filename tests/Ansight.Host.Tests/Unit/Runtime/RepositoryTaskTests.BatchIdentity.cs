@@ -44,6 +44,7 @@ public sealed partial class RepositoryTaskTests
               };
             };
             """);
+
         var router = CreateConfiguredRouter(repository.RootPath);
         var task = Assert.Single(router.Load(repository.RootPath, "com.example.app").Tasks,
             candidate => candidate.TaskId == "map.validate");
@@ -55,6 +56,7 @@ public sealed partial class RepositoryTaskTests
             "batch-test", CancellationToken.None, context: context, batchRunId: batchRunId);
 
         Assert.True(result.Status == RepositoryTaskRunStatus.Passed, result.Message);
+
         var expectedBatchRunId = batchRunId ?? contextBatchRunId;
         Assert.Equal(expectedBatchRunId, result.Output?["batchRunId"]?.GetValue<string>());
         Assert.Equal(expectedBatchRunId, result.Output?["child"]?["batchRunId"]?.GetValue<string>());

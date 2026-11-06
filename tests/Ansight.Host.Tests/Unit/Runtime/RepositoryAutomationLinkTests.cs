@@ -22,6 +22,7 @@ public sealed class RepositoryAutomationLinkTests
               return null;
             }
             """);
+
         await using var runtime = environment.CreateRuntime(enableRepositoryAutomations: true);
         await runtime.StartAsync();
 
@@ -31,6 +32,7 @@ public sealed class RepositoryAutomationLinkTests
             environment.RootPath));
 
         Assert.True(linked.IsSuccess);
+
         var connection = runtime.RepositoryAutomations.Inspect("com.example.app", environment.RootPath);
         Assert.True(connection.IsConnected, string.Join(Environment.NewLine, connection.Warnings));
         Assert.Single(runtime.RepositoryAutomations.GetTriggers());

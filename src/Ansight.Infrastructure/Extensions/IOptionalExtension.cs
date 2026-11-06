@@ -5,8 +5,3 @@ public interface IOptionalExtension : IDisposable
 {
     object GetService(Type contract);
 }
-
-public interface ILoadedExtensionServices
-{
-    object? TryGetLoadedService(Type contract);
-}

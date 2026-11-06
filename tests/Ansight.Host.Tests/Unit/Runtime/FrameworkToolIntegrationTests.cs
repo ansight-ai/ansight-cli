@@ -206,6 +206,7 @@ public sealed class FrameworkToolIntegrationTests
         var bridge = new CyclicMauiVisualTreeAppToolBridge(mauiContainsCycle: false);
         var router = new UiInputRouter();
         router.ConfigureAccessibility(new StaticAccessibilityDriver(CreateDeviceAccessibilityTree()));
+
         using var target = router.BeginTargetScope("session-001", "simulator-001");
         var session = CreateLiveSession();
         var selector = LiveUiSelector.Parse(new JsonObject
@@ -236,6 +237,7 @@ public sealed class FrameworkToolIntegrationTests
         var bridge = new CyclicMauiVisualTreeAppToolBridge(mauiContainsCycle: false);
         var router = new UiInputRouter();
         router.ConfigureAccessibility(new StaticAccessibilityDriver(CreateDeviceAccessibilityTree()));
+
         using var target = router.BeginTargetScope("session-001", "simulator-001");
         var selector = LiveUiSelector.Parse(new JsonObject
         {
@@ -266,6 +268,7 @@ public sealed class FrameworkToolIntegrationTests
         var bridge = new CyclicMauiVisualTreeAppToolBridge(mauiContainsCycle: false);
         var router = new UiInputRouter();
         router.ConfigureAccessibility(new StaticAccessibilityDriver(CreateModalDeviceAccessibilityTree()));
+
         using var target = router.BeginTargetScope("session-001", "simulator-001");
         var selector = LiveUiSelector.Parse(new JsonObject
         {
@@ -350,6 +353,7 @@ public sealed class FrameworkToolIntegrationTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var capture = Assert.IsType<LiveUiTreeCapture>(result.Capture);
         Assert.Equal(
             [RemoteAppToolIds.MauiGetVisualTree, RemoteAppToolIds.UiGetVisualTree],
@@ -405,6 +409,7 @@ public sealed class FrameworkToolIntegrationTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var capture = Assert.IsType<LiveUiTreeCapture>(result.Capture);
         Assert.Equal(
             [RemoteAppToolIds.MauiGetVisualTree, RemoteAppToolIds.UiGetVisualTree],
@@ -450,6 +455,7 @@ public sealed class FrameworkToolIntegrationTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var capture = Assert.IsType<LiveUiTreeCapture>(result.Capture);
         Assert.Equal(
             [RemoteAppToolIds.MauiGetVisualTree, RemoteAppToolIds.UiGetVisualTree],
@@ -546,6 +552,7 @@ public sealed class FrameworkToolIntegrationTests
         var selection = FindLiveUiTool.FindSemanticMatches(hiddenParent, registry, selector);
 
         Assert.Empty(selection.StrictMatches);
+
         var diagnosticMatch = Assert.Single(selection.ResolutionMatches);
         Assert.True(selection.VisibilityRelaxed);
         Assert.False(LiveUiNodeQuery.IsEffectivelyVisible(diagnosticMatch));
@@ -1069,7 +1076,10 @@ public sealed class FrameworkToolIntegrationTests
         Assert.Equal(0.42, point.X);
         Assert.Equal(0.73, point.Y);
         Assert.Same(match, resolvedMatch);
-        Assert.False((result with { Matches = [match, match] }).TryGetUniqueTapPoint(out _, out _));
+        Assert.False((result with
+        {
+            Matches = [match, match]
+        }).TryGetUniqueTapPoint(out _, out _));
     }
 
     [Fact]
@@ -1398,9 +1408,11 @@ public sealed class FrameworkToolIntegrationTests
     public void LiveUiActionResponse_InlinesFinalScreenshotWhenRequested()
     {
         var artifactPath = Path.GetTempFileName();
+
         try
         {
             File.WriteAllBytes(artifactPath, [1, 2, 3, 4]);
+
             var result = LiveUiActionResponse.Build(
                 new JsonObject
                 {
@@ -1499,6 +1511,7 @@ public sealed class FrameworkToolIntegrationTests
             }
         };
         payload["root"] = root;
+
         var registry = VisualTreeTypeRegistry.FromPayload(payload);
         var matches = LiveUiNodeQuery.Find(
             root,
@@ -1648,6 +1661,7 @@ public sealed class FrameworkToolIntegrationTests
     public void LiveUiTapPoint_RejectsIncompleteOrOutOfBoundsPoint(double? screenX, double? screenY)
     {
         var arguments = new JsonObject();
+
         if (screenX.HasValue)
         {
             arguments["screenX"] = screenX.Value;
@@ -1739,11 +1753,13 @@ public sealed class FrameworkToolIntegrationTests
         Assert.NotNull(observation);
         Assert.Equal(original, visualTree.ToJsonString());
         Assert.Null(observation["nodes"]);
+
         var nodes = Assert.IsType<JsonArray>(observation["root"]?["children"]);
         var search = Assert.Single(nodes.OfType<JsonObject>(), node =>
             node["automationId"]?.GetValue<string>() == "map-search-text-filter");
         Assert.Equal("textbox", search["role"]?.GetValue<string>());
         Assert.Equal("search", search["id"]?.GetValue<string>());
+
         var bounds = Assert.IsType<JsonArray>(search["bounds"]);
         Assert.Equal(4, bounds.Count);
         Assert.Equal(64, bounds[0]?.GetValue<double>());
@@ -1933,8 +1949,10 @@ public sealed class FrameworkToolIntegrationTests
     {
         var directory = Path.Combine(Path.GetTempPath(), $"ansight-screenshot-diff-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
+
         var baselinePath = Path.Combine(directory, "baseline.png");
         var currentPath = Path.Combine(directory, "current.png");
+
         try
         {
             WriteBitmap(baselinePath, SKColors.Black, changedPixel: null);
@@ -1987,8 +2005,7 @@ public sealed class FrameworkToolIntegrationTests
                 {
                     EventId = "ui-action-001",
                     Source = "Ansight UI Automation"
-                }
-            ],
+                }            ],
             MetricChannels = [],
             Metrics = []
         };
@@ -2023,6 +2040,7 @@ public sealed class FrameworkToolIntegrationTests
     private static JsonObject CreateCatalog(params string[] toolIds)
     {
         var tools = new JsonArray();
+
         foreach (var toolId in toolIds)
         {
             tools.Add(new JsonObject
@@ -2053,12 +2071,14 @@ public sealed class FrameworkToolIntegrationTests
     {
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
-
         public string? LastToolId { get; private set; }
-
         public JsonObject? LastArguments { get; private set; }
 
         public IReadOnlyList<string> GetConnectedSessionIds()
@@ -2095,6 +2115,7 @@ public sealed class FrameworkToolIntegrationTests
         {
             LastToolId = toolId;
             LastArguments = arguments?.DeepClone() as JsonObject;
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess(
                 "Visual tree returned.",
                 new ToolProtocolEnvelope
@@ -2146,10 +2167,13 @@ public sealed class FrameworkToolIntegrationTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
-
         public List<string> CalledToolIds { get; } = [];
 
         public IReadOnlyList<string> GetConnectedSessionIds()
@@ -2187,9 +2211,11 @@ public sealed class FrameworkToolIntegrationTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             CalledToolIds.Add(toolId);
+
             var result = string.Equals(toolId, RemoteAppToolIds.MauiGetVisualTree, StringComparison.Ordinal)
                 ? CreateMauiTree()
                 : CreateNativeTree();
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess(
                 "Visual tree returned.",
                 new ToolProtocolEnvelope
@@ -2296,16 +2322,23 @@ public sealed class FrameworkToolIntegrationTests
             };
     }
 
-    private sealed class StaticAccessibilityDriver(JsonObject payload) : IUiAccessibilityDriver
+    private sealed class StaticAccessibilityDriver : IUiAccessibilityDriver
     {
+        private readonly JsonObject payload;
+
+        public StaticAccessibilityDriver(JsonObject payload)
+        {
+            this.payload = payload;
+        }
+
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(
             UiAccessibilityRequest request,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new UiAccessibilityResult(
-                true,
-                "test-device-accessibility",
-                "Captured.",
-                payload.DeepClone().AsObject()));
+                    => Task.FromResult(new UiAccessibilityResult(
+                        true,
+                        "test-device-accessibility",
+                        "Captured.",
+                        payload.DeepClone().AsObject()));
     }
 
     private static AppSessionSnapshot CreateLiveSession()
@@ -2359,6 +2392,7 @@ public sealed class FrameworkToolIntegrationTests
     {
         using var bitmap = new SKBitmap(2, 2);
         bitmap.Erase(background);
+
         if (changedPixel.HasValue)
         {
             bitmap.SetPixel(0, 0, changedPixel.Value);

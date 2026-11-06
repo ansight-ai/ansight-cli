@@ -16,6 +16,7 @@ internal static class TouchTargetResolver
         errorMessage = null;
 
         var touchId = NormalizeOptionalString(arguments?["touchId"]?.GetValue<string>());
+
         if (touchId is not null)
         {
             for (var index = 0; index < touches.Count; index++)
@@ -24,11 +25,13 @@ internal static class TouchTargetResolver
                 {
                     targetIndex = index;
                     targetSelector = "touchId";
+
                     return true;
                 }
             }
 
             errorMessage = $"No touch with id '{touchId}' was found.";
+
             return false;
         }
 
@@ -42,11 +45,13 @@ internal static class TouchTargetResolver
             if (touchIndex.Value < 0 || touchIndex.Value >= touches.Count)
             {
                 errorMessage = $"touchIndex must be between 0 and {touches.Count - 1}.";
+
                 return false;
             }
 
             targetIndex = touchIndex.Value;
             targetSelector = "touchIndex";
+
             return true;
         }
 
@@ -58,11 +63,13 @@ internal static class TouchTargetResolver
         if (!timestampUtc.HasValue)
         {
             errorMessage = "One of touchId, touchIndex, or timestampUtc is required.";
+
             return false;
         }
 
         targetIndex = ResolveNearestTouchIndex(touches, timestampUtc.Value.ToUniversalTime());
         targetSelector = "timestampUtc";
+
         return targetIndex >= 0;
     }
 
@@ -81,12 +88,15 @@ internal static class TouchTargetResolver
 
         var gestures = TouchGestureSegmenter.BuildGestureSegments(touches, TimeSpan.FromMilliseconds(TouchReviewDefaults.DefaultGestureGapMilliseconds));
         var gestureId = NormalizeOptionalString(arguments?["gestureId"]?.GetValue<string>());
+
         if (gestureId is not null)
         {
             var gesture = gestures.FirstOrDefault(candidate => string.Equals(candidate.GestureId, gestureId, StringComparison.Ordinal));
+
             if (gesture is null)
             {
                 errorMessage = $"No gesture with id '{gestureId}' was found.";
+
                 return false;
             }
 
@@ -97,6 +107,7 @@ internal static class TouchTargetResolver
                 ["kind"] = "gesture",
                 ["gesture"] = TouchReviewPayloads.BuildGesturePayload(gesture, includeTouches: false)
             };
+
             return true;
         }
 
@@ -111,6 +122,7 @@ internal static class TouchTargetResolver
                 ["targetSelector"] = targetSelector,
                 ["touch"] = TouchReviewPayloads.BuildTouchPayload(touch, targetIndex, isTarget: true)
             };
+
             return true;
         }
 
@@ -122,6 +134,7 @@ internal static class TouchTargetResolver
         if (!timestampUtc.HasValue)
         {
             errorMessage = "One of gestureId, touchId, touchIndex, or timestampUtc is required.";
+
             return false;
         }
 
@@ -132,6 +145,7 @@ internal static class TouchTargetResolver
             ["kind"] = "timestamp",
             ["timestampUtc"] = targetStartUtc
         };
+
         return true;
     }
 
@@ -139,9 +153,11 @@ internal static class TouchTargetResolver
     {
         var nearestIndex = -1;
         var nearestDistance = TimeSpan.MaxValue;
+
         for (var index = 0; index < touches.Count; index++)
         {
             var distance = (touches[index].CapturedAtUtc - timestampUtc).Duration();
+
             if (distance < nearestDistance)
             {
                 nearestIndex = index;

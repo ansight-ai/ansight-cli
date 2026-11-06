@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 
@@ -44,7 +44,6 @@ public class LogFileWriter : IDisposable
             }
         }
     }
-
     public string LogFilePath { get; }
 
     public LogFileWriter(string logFilePath)

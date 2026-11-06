@@ -25,7 +25,7 @@ public sealed class SessionLogStreamsTests
         var logs = new[]
         {
             new LogEntry(timestamp, "sdk"),
-            new LogEntry(timestamp, "native") { StreamId = SessionLogStreamIds.AndroidLogcat }
+            new LogEntry(timestamp, "native") {StreamId = SessionLogStreamIds.AndroidLogcat }
         };
 
         var streams = SessionLogStreams.Normalize(Array.Empty<SessionLogStream>(), logs);
@@ -47,14 +47,14 @@ public sealed class SessionLogStreamsTests
                 StreamId = SessionLogStreamIds.AnsightSdk,
                 Kind = SessionLogStreamKinds.AnsightSdk,
                 DisplayName = "Ansight SDK",
-                Entries = new[] { new LogEntry(later, "sdk") }
+                Entries = new[] {new LogEntry(later, "sdk") }
             },
             new SessionLogStream
             {
                 StreamId = SessionLogStreamIds.AndroidLogcat,
                 Kind = SessionLogStreamKinds.AndroidLogcat,
                 DisplayName = "Android Logcat",
-                Entries = new[] { new LogEntry(earlier, "native") }
+                Entries = new[] {new LogEntry(earlier, "native") }
             }
         };
 
@@ -72,6 +72,7 @@ public sealed class SessionLogStreamsTests
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         SessionLogBatchEventArgs? emittedBatch = null;
         runtimeState.SessionLogsAdded += (_, batch) => emittedBatch = batch;
+
         var sessionId = runtimeState.CreateSession("com.example.app", "Client", IPAddress.Loopback, null, null);
         runtimeState.EnsureSessionLogStream(sessionId, new SessionLogStream
         {
@@ -91,6 +92,7 @@ public sealed class SessionLogStreamsTests
 
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot));
         Assert.NotNull(snapshot);
+
         var stream = Assert.Single(snapshot!.LogStreams, value => value.StreamId == SessionLogStreamIds.AndroidLogcat);
         Assert.Equal(SessionLogStreamStatuses.Active, stream.Status);
         Assert.Equal("native", Assert.Single(stream.Entries).Message);
@@ -237,6 +239,7 @@ public sealed class SessionLogStreamsTests
             })
             .ToArray();
         state.Logs.AddRange(entries);
+
         var stream = new SessionLogStreamState
         {
             StreamId = SessionLogStreamIds.AnsightSdk,
@@ -283,7 +286,7 @@ public sealed class SessionLogStreamsTests
                 DisplayName = "Apple Unified Log",
                 Status = SessionLogStreamStatuses.Completed,
                 StatusMessage = "Session ended.",
-                Metadata = new Dictionary<string, string> { ["deviceUdid"] = "SIM-001" },
+                Metadata = new Dictionary<string, string> {["deviceUdid"] = "SIM-001" },
                 Entries = new[]
                 {
                     new LogEntry(DateTimeOffset.Parse("2026-07-14T03:04:05Z"), "native")
@@ -295,16 +298,19 @@ public sealed class SessionLogStreamsTests
         };
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         using var storage = new MemoryStream();
+
         using (var archive = new ZipArchive(storage, ZipArchiveMode.Create, leaveOpen: true))
         {
             SessionLogStreamArchiveCodec.Write(archive, streams, DateTimeOffset.UtcNow, options);
         }
 
         storage.Position = 0;
+
         using var readArchive = new ZipArchive(storage, ZipArchiveMode.Read);
         var restored = SessionLogStreamArchiveCodec.TryRead(readArchive, options);
 
         Assert.NotNull(restored);
+
         var stream = Assert.Single(restored!);
         Assert.Equal(SessionLogStreamIds.AppleUnifiedLog, stream.StreamId);
         Assert.Equal("SIM-001", stream.Metadata["deviceUdid"]);

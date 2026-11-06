@@ -34,6 +34,7 @@ public sealed class CliVersionCommandTests
             json: true);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         using var document = JsonDocument.Parse(result.StandardOutput);
         Assert.Equal(
             Path.GetFullPath(dataDirectory),
@@ -41,6 +42,7 @@ public sealed class CliVersionCommandTests
         Assert.Equal(
             Environment.ProcessPath ?? "unavailable",
             document.RootElement.GetProperty("executablePath").GetString());
+
         var baseline = document.RootElement.GetProperty("dependencyBaseline");
         Assert.Equal("embedded", baseline.GetProperty("status").GetString());
         Assert.Matches("^[a-f0-9]{64}$", baseline.GetProperty("sha256").GetString()!);
@@ -59,6 +61,7 @@ public sealed class CliVersionCommandTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(
             exitCode,
             standardOutput.ToString(),

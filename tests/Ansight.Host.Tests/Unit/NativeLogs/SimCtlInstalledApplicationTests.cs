@@ -114,6 +114,7 @@ public sealed class SimCtlInstalledApplicationTests
             CancellationToken cancellationToken = default)
         {
             Arguments = arguments.ToArray();
+
             return Task.FromResult(result);
         }
     }

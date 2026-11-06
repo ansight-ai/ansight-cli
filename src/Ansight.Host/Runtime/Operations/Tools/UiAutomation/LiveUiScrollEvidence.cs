@@ -22,12 +22,14 @@ internal sealed record LiveUiScrollEvidence(
         var canEnrich = capture.ToolId != "ui.get_visual_tree"
             && automationId is not null
             && capture.Session.CaptureSource != "device";
+
         if (!canEnrich)
         {
             return original;
         }
 
         var observation = LiveUiScrollObservation.Compare(capture, capture, target, selector);
+
         if (capture.ToolId == LiveUiTreeCapture.DeviceAccessibilityToolId
             && observation["status"]?.GetValue<string>() != "unknown")
         {
@@ -43,6 +45,7 @@ internal sealed record LiveUiScrollEvidence(
         var result = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
             capture.Session, bridge, inputRouter, operationName, correlationId,
             nativeSelector, cancellationToken).ConfigureAwait(false);
+
         if (result.Capture is not { } native || native.ToolId == capture.ToolId)
         {
             return original;
@@ -52,6 +55,7 @@ internal sealed record LiveUiScrollEvidence(
         var matchesOriginalTarget = matches.Count == 1
             && SameVisibleArea(target!, capture.Viewport, matches[0], native.Viewport)
             && LiveUiScrollObservation.Compare(native, native, matches[0], nativeSelector)["status"]?.GetValue<string>() != "unknown";
+
         if (!matchesOriginalTarget)
         {
             return original;
@@ -70,6 +74,7 @@ internal sealed record LiveUiScrollEvidence(
             || firstViewport.Height <= 0
             || secondViewport.Width <= 0
             || secondViewport.Height <= 0;
+
         if (missingGeometry)
         {
             return false;
@@ -77,6 +82,7 @@ internal sealed record LiveUiScrollEvidence(
 
         var firstBounds = LiveUiNodeQuery.ReadBounds(first.Node);
         var secondBounds = LiveUiNodeQuery.ReadBounds(second.Node);
+
         if (firstBounds is null || secondBounds is null)
         {
             return false;
@@ -86,6 +92,7 @@ internal sealed record LiveUiScrollEvidence(
             && Math.Abs((firstBounds.Y - firstViewport.Y) / firstViewport.Height - (secondBounds.Y - secondViewport.Y) / secondViewport.Height) <= 0.02
             && Math.Abs(firstBounds.Width / firstViewport.Width - secondBounds.Width / secondViewport.Width) <= 0.02
             && Math.Abs(firstBounds.Height / firstViewport.Height - secondBounds.Height / secondViewport.Height) <= 0.02;
+
         return sameArea;
     }
 }

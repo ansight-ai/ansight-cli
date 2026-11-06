@@ -64,6 +64,7 @@ internal sealed class GetGestureSegmentsTool : Operation
         var properties = SessionReviewToolSchemas.TouchFilterProperties();
         properties["gestureGapMs"] = ToolSchema.Integer("Maximum gap between touches for the same pointer before starting a new gesture. Defaults to 700, max 10000.", nullable: true);
         properties["limit"] = ToolSchema.Integer("Maximum number of gestures to return. Defaults to 500, max 5000.", nullable: true);
+
         return properties;
     }
 }

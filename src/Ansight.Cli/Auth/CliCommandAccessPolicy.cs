@@ -1,18 +1,11 @@
 namespace Ansight.Cli.Auth;
 
-internal enum CliAccessClass
-{
-    Bootstrap,
-    ResidentHost,
-    Cloud,
-    Runner
-}
-
 internal static class CliCommandAccessPolicy
 {
     public static CliAccessClass Classify(CliArguments arguments, bool runnerConfigured = false)
     {
         var parts = arguments.Positionals;
+
         if (parts.Count == 0 || CliCommandHelp.IsRequested(arguments))
         {
             return CliAccessClass.Bootstrap;
@@ -20,10 +13,12 @@ internal static class CliCommandAccessPolicy
 
         var command = parts[0].ToLowerInvariant();
         var action = parts.Count > 1 ? parts[1].ToLowerInvariant() : string.Empty;
+
         if (command == "host" && action == "run")
         {
             return CliAccessClass.ResidentHost;
         }
+
         if (command is "help" or "version" or "info" or "update" or "upgrade"
             or "doctor" or "capabilities" or "analytics" or "config" or "settings" or "setup"
             or "license" or "licenses" or "licence" or "licences" or "notice" or "notices"
@@ -48,6 +43,7 @@ internal static class CliCommandAccessPolicy
         if (runnerConfigured)
         {
             var operation = parts.Count > 2 ? parts[2].ToLowerInvariant() : string.Empty;
+
             if (command == "cloud"
                 && (action is "build" or "workspace" && operation is "upload" or "get" or "list"
                     || action == "trends" && operation is "upload" or "sync"
@@ -59,6 +55,7 @@ internal static class CliCommandAccessPolicy
             {
                 return CliAccessClass.Runner;
             }
+
             if ((command is "runner" or "runners")
                 && (action is "machines" or "list" or "jobs" or "submit" or "enqueue" or "cancel"))
             {
@@ -69,15 +66,18 @@ internal static class CliCommandAccessPolicy
         // Local summaries use the host's retained evidence and its AI gateway, just
         // like app/test execution. Opening a second runtime would contend for the
         // resident host's storage lock. Scoped runner keys were handled above.
-        if (IsLocalSessionSummary(arguments)) return CliAccessClass.Bootstrap;
+        if (IsLocalSessionSummary(arguments))
+        {
+            return CliAccessClass.Bootstrap;
+        }
 
         // Cloud operations require identity; local tools and unknown commands never
         // require a subscription. Unknown commands reach the normal usage validation.
         if (command == "cloud" && action is "team" or "teams" or "app" or "apps"
-                or "app-graph" or "app-graphs" or "trends" or "test" or "tests"
-                or "key" or "keys" or "runner-key" or "runner-keys"
-                or "session" or "sessions" or "attachment" or "attachments"
-                or "analysis" or "analyses" or "build" or "workspace"
+            or "app-graph" or "app-graphs" or "trends" or "test" or "tests"
+            or "key" or "keys" or "runner-key" or "runner-keys"
+            or "session" or "sessions" or "attachment" or "attachments"
+            or "analysis" or "analyses" or "build" or "workspace"
             || command is "session" or "sessions" && action is "share" or "share-batch"
                 or "summary" or "summarize" or "summarise"
                 or "summary-local" or "summarize-local" or "summarise-local"
@@ -88,7 +88,9 @@ internal static class CliCommandAccessPolicy
                 && arguments.GetOption("graph-store")?.Trim().ToLowerInvariant() is "hosted" or "server" or "cloud"
             || command is "runner" or "runners" && action is "setup" or "register" or "revoke" or "unregister"
                 or "machines" or "list" or "jobs" or "submit" or "enqueue" or "cancel" or "secret" or "secrets")
+        {
             return CliAccessClass.Cloud;
+        }
 
         return CliAccessClass.Bootstrap;
     }
@@ -97,9 +99,15 @@ internal static class CliCommandAccessPolicy
     internal static bool UsesAiGateway(CliArguments arguments)
     {
         var parts = arguments.Positionals;
-        if (parts.Count < 2) return false;
+
+        if (parts.Count < 2)
+        {
+            return false;
+        }
+
         var command = parts[0].ToLowerInvariant();
         var action = parts[1].ToLowerInvariant();
+
         return command == "app" && action is "execute" or "learn"
             || command is "app-graph" or "app-graphs" && action is "explore" or "run"
             || command is "test" or "tests" && action is "run" or "run-all" or "run-inline" or "retry-metering"
@@ -110,21 +118,31 @@ internal static class CliCommandAccessPolicy
 
     private static bool IsLocalSessionSummary(CliArguments arguments)
         => arguments.Positionals.Count >= 2
-           && arguments.Positionals[0].ToLowerInvariant() is "session" or "sessions"
-           && (arguments.Positionals[1].ToLowerInvariant() is "summary-local" or "summarize-local" or "summarise-local"
-               || arguments.HasFlag("local") && arguments.Positionals[1].ToLowerInvariant() is "summary" or "summarize" or "summarise");
+            && arguments.Positionals[0].ToLowerInvariant() is "session" or "sessions"
+            && (arguments.Positionals[1].ToLowerInvariant() is "summary-local" or "summarize-local" or "summarise-local"
+                || arguments.HasFlag("local") && arguments.Positionals[1].ToLowerInvariant() is "summary" or "summarize" or "summarise");
 
     internal static bool UsesRequestScopedRunnerCredentials(CliArguments arguments)
     {
-        if (UsesAiGateway(arguments)) return true;
+        if (UsesAiGateway(arguments))
+        {
+            return true;
+        }
+
         if (UsesResidentHostCloudUpload(arguments))
         {
             return Classify(arguments, runnerConfigured: true) == CliAccessClass.Runner;
         }
 
         var parts = arguments.Positionals;
-        if (parts.Count < 2) return false;
+
+        if (parts.Count < 2)
+        {
+            return false;
+        }
+
         var command = parts[0].ToLowerInvariant();
+
         return (command is "session" or "sessions" || command == "cloud" && parts[1].ToLowerInvariant() is "analysis" or "analyses")
             && Classify(arguments, runnerConfigured: true) == CliAccessClass.Runner;
     }
@@ -132,6 +150,7 @@ internal static class CliCommandAccessPolicy
     internal static bool UsesResidentHostCloudUpload(CliArguments arguments)
     {
         var parts = arguments.Positionals;
+
         if (parts.Count < 2)
         {
             return false;
@@ -139,6 +158,7 @@ internal static class CliCommandAccessPolicy
 
         var command = parts[0].ToLowerInvariant();
         var resource = parts[1].ToLowerInvariant();
+
         if (command is "session" or "sessions")
         {
             return resource is "share" or "share-batch";
@@ -150,6 +170,7 @@ internal static class CliCommandAccessPolicy
         }
 
         var action = parts[2].ToLowerInvariant();
+
         return resource switch
         {
             "test" or "tests" => action is "upload" or "sync" or "import",
@@ -160,6 +181,6 @@ internal static class CliCommandAccessPolicy
 
     public static bool HasRunnerCredentials
         => !string.IsNullOrWhiteSpace(Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.ApiKey)
-           || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY"))
-           || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_API_KEY"));
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY"))
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_API_KEY"));
 }

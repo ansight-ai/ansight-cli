@@ -27,6 +27,7 @@ public sealed class SessionTelemetryAnalysisCommandsTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal("ansight.session-metrics/v1", payload["schema"]!.GetValue<string>());
         Assert.Equal(4, payload["samples"]!.AsArray().Count);
+
         var activity = runtime.Activity.Read(session.SessionId).Records.Last();
         Assert.Equal("session.telemetry", activity.Operation);
         Assert.Equal("succeeded", activity.Outcome);
@@ -48,6 +49,7 @@ public sealed class SessionTelemetryAnalysisCommandsTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(string.Empty, result.StandardError);
         Assert.Equal("ansight.session-telemetry-analysis/v1", payload["schema"]!.GetValue<string>());
+
         var activity = runtime.Activity.Read(session.SessionId).Records.Last();
         Assert.Equal("session.telemetry", activity.Operation);
         Assert.Equal("succeeded", activity.Outcome);
@@ -110,6 +112,7 @@ public sealed class SessionTelemetryAnalysisCommandsTests
         var storagePath = Path.Combine(baseFolderPath, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,
@@ -132,6 +135,7 @@ public sealed class SessionTelemetryAnalysisCommandsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(exitCode, standardOutput.ToString(), standardError.ToString());
     }
 
@@ -167,19 +171,23 @@ public sealed class SessionTelemetryAnalysisCommandsTests
             TotalMetricChannelCount = 2,
             TotalMetricSampleCount = 4
         };
+
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using var sessionStream = sessionEntry.Open();
-            await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                SavedAtUtc = DateTimeOffset.UtcNow,
-                Session = snapshot
-            }, protocolJson);
+                var sessionEntry = archive.CreateEntry("session.json");
+                await using var sessionStream = sessionEntry.Open();
+                await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
+                {
+                    SavedAtUtc = DateTimeOffset.UtcNow,
+                    Session = snapshot
+                }, protocolJson);
+            }
         }
 
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
+
         return Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
     }
 

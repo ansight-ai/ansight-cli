@@ -56,7 +56,7 @@ public static class RepositoryTaskTargets
                 DevicePlatforms.Android,
                 StringComparison.OrdinalIgnoreCase),
             _ => string.Equals(platform, DevicePlatforms.Ios, StringComparison.OrdinalIgnoreCase)
-                 || string.Equals(platform, DevicePlatforms.Android, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(platform, DevicePlatforms.Android, StringComparison.OrdinalIgnoreCase)
         };
     }
 
@@ -69,6 +69,7 @@ public static class RepositoryTaskTargets
 
         var supportsIos = frameworks.Any(framework => FrameworkSupportsPlatform(framework, DevicePlatforms.Ios));
         var supportsAndroid = frameworks.Any(framework => FrameworkSupportsPlatform(framework, DevicePlatforms.Android));
+
         return (supportsIos, supportsAndroid) switch
         {
             (true, false) => DevicePlatforms.Ios,
@@ -82,15 +83,15 @@ public static class RepositoryTaskTargets
         IEnumerable<string> detectedFrameworks,
         string? platform = null)
         => supportedFrameworks.Count == 0
-           || (supportedFrameworks.Contains(DotNetIos, StringComparer.OrdinalIgnoreCase)
-               && string.Equals(platform, DevicePlatforms.Ios, StringComparison.OrdinalIgnoreCase))
-           || (supportedFrameworks.Contains(DotNetAndroid, StringComparer.OrdinalIgnoreCase)
-               && string.Equals(platform, DevicePlatforms.Android, StringComparison.OrdinalIgnoreCase))
-           || detectedFrameworks
-               .Select(NormalizeDetectedFramework)
-               .Any(framework => supportedFrameworks.Contains(
-                   framework,
-                   StringComparer.OrdinalIgnoreCase));
+            || (supportedFrameworks.Contains(DotNetIos, StringComparer.OrdinalIgnoreCase)
+                && string.Equals(platform, DevicePlatforms.Ios, StringComparison.OrdinalIgnoreCase))
+            || (supportedFrameworks.Contains(DotNetAndroid, StringComparer.OrdinalIgnoreCase)
+                && string.Equals(platform, DevicePlatforms.Android, StringComparison.OrdinalIgnoreCase))
+            || detectedFrameworks
+                .Select(NormalizeDetectedFramework)
+                .Any(framework => supportedFrameworks.Contains(
+                    framework,
+                    StringComparer.OrdinalIgnoreCase));
 
     public static string NormalizeDetectedFramework(string framework)
         => string.Equals(framework, "maui", StringComparison.OrdinalIgnoreCase)

@@ -37,6 +37,7 @@ public sealed partial class SessionCaptureStoreTests
                 TotalEntryCount = Math.Max(0, totalLogCount - 2)
             }
         };
+
         return new AppSessionSnapshot
         {
             SessionId = "session-log-tail",

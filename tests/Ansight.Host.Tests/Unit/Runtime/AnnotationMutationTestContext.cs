@@ -21,6 +21,7 @@ internal sealed class AnnotationMutationTestContext : IDisposable
         get
         {
             Assert.True(State.TryGetSessionSnapshot(SessionId, out var snapshot));
+
             return snapshot!;
         }
     }
@@ -32,6 +33,7 @@ internal sealed class AnnotationMutationTestContext : IDisposable
     {
         var frame = await State.AddSessionEvidenceImageAsync(SessionId, capturedAt, "png", 1000, 500, 100, new byte[] { 1, 2, 3 });
         Assert.NotNull(frame);
+
         return frame!;
     }
 

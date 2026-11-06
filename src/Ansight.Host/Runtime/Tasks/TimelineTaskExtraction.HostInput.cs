@@ -13,10 +13,17 @@ public static partial class TimelineTaskExtractor
             .Where(action => action.StartedAtUtc <= endUtc && action.CompletedAtUtc >= startUtc)
             .DistinctBy(action => action.ActionId)
             .OrderBy(action => action.StartedAtUtc).ThenBy(action => action.CompletedAtUtc).ToArray();
+
         foreach (var action in inputs.Where(action => action.Status != "succeeded"))
+        {
             diagnostics.Add($"Host input {action.Kind} ({action.ActionId}) was {action.Status}; it was not generated. Review the resulting app state.");
+        }
+
         foreach (var action in inputs.Where(action => action.StartedAtUtc < startUtc || action.CompletedAtUtc > endUtc))
+        {
             diagnostics.Add($"Host input {action.Kind} ({action.ActionId}) crosses the selected range boundary; expand the range to include the complete action.");
+        }
+
         return inputs;
     }
 
@@ -28,8 +35,13 @@ public static partial class TimelineTaskExtractor
         {
             // Values come only from retained, redacted trees; partial delivery is never a complete action.
             if (input.Status != "succeeded" || input.Kind == "type"
-                || input.StartedAtUtc < startUtc || input.CompletedAtUtc > endUtc) continue;
+                || input.StartedAtUtc < startUtc || input.CompletedAtUtc > endUtc)
+            {
+                continue;
+            }
+
             SelectorCandidate? selected = null;
+
             if (input.Kind is "tap" or "longPress")
             {
                 if (input.NormalizedX is not { } x || input.NormalizedY is not { } y
@@ -38,6 +50,7 @@ public static partial class TimelineTaskExtractor
                     diagnostics.Add($"Host {input.Kind} {input.ActionId} has no valid viewport point; it was not generated.");
                     continue;
                 }
+
                 var linkedTrees = snapshot.VisualTreeSnapshots
                     .Where(tree => input.EvidenceActionId is not null && tree.ActionId == input.EvidenceActionId
                         && tree.CapturedAtUtc <= input.StartedAtUtc).ToArray();
@@ -46,23 +59,31 @@ public static partial class TimelineTaskExtractor
                         && input.StartedAtUtc - tree.CapturedAtUtc <= targetWindow)
                     .OrderByDescending(tree => tree.CapturedAtUtc).Take(1).ToArray();
                 selected = trees.SelectMany(tree => TapTargetMatcher.FindVisualTreeTapTargetCandidates(
-                        snapshot, tree, new NormalizedPoint(x, y)))
+                    snapshot, tree, new NormalizedPoint(x, y)))
                     .Select(TryCreateSelectorCandidate).OfType<SelectorCandidate>()
                     .OrderByDescending(candidate => candidate.Score).ThenBy(candidate => candidate.Key, StringComparer.Ordinal)
                     .FirstOrDefault();
+
                 if (selected is null)
                 {
                     diagnostics.Add($"Host {input.Kind} {input.ActionId} has no stable recorded UI selector; "
                         + (coordinateFallback ? "replay uses its recorded viewport point." : "it was not generated."));
-                    if (!coordinateFallback) continue;
+
+                    if (!coordinateFallback)
+                    {
+                        continue;
+                    }
                 }
             }
+
             var duration = input.DurationMilliseconds ?? (long)(input.CompletedAtUtc - input.StartedAtUtc).TotalMilliseconds;
+
             if (input.Kind == "longPress" && duration is < UiLongPressRequest.MinimumDurationMilliseconds or > UiLongPressRequest.MaximumDurationMilliseconds)
             {
                 diagnostics.Add($"Host long press {input.ActionId} has an unsupported hold duration; it was not generated.");
                 continue;
             }
+
             actions.Add(new GeneratedTaskAction(input.Kind, selected?.Selector,
                 duration, null, null,
                 selected?.Description ?? (input.Kind is "tap" or "longPress" ? "recorded viewport point"
@@ -76,20 +97,31 @@ public static partial class TimelineTaskExtractor
         ISet<string> matchedInputs)
     {
         if (gesture.Kind is not ("tap" or "longPress" or "incomplete") || gesture.PointerIds.Count != 1
-            || TouchReviewGeometry.NormalizeTouchAction(gesture.Touches[^1].Action) == "cancel") return false;
+            || TouchReviewGeometry.NormalizeTouchAction(gesture.Touches[^1].Action) == "cancel")
+        {
+            return false;
+        }
+
         var point = TouchReviewGeometry.ResolveGesturePoint(gesture);
-        if (!point.HasValue) return false;
+
+        if (!point.HasValue)
+        {
+            return false;
+        }
+
         // Match at most one SDK gesture to each delivery attempt. Failed attempts remain review items. Time alone is not enough:
+
         // preserve other taps, drags and cancelled gestures even inside the same interval.
         var match = inputs.Where(input => input.Kind is "tap" or "longPress" && (gesture.Kind == input.Kind || gesture.Kind == "incomplete"
-                    || input.Kind == "longPress" && gesture.Kind == "tap")
-                && !matchedInputs.Contains(input.ActionId)
-                && input.NormalizedX.HasValue && input.NormalizedY.HasValue
-                && gesture.StartUtc >= input.StartedAtUtc.AddMilliseconds(-50)
-                && gesture.EndUtc <= input.CompletedAtUtc.AddMilliseconds(50)
-                && Math.Abs(point.Value.X - input.NormalizedX.Value) <= 0.01
-                && Math.Abs(point.Value.Y - input.NormalizedY.Value) <= 0.01)
+            || input.Kind == "longPress" && gesture.Kind == "tap")
+            && !matchedInputs.Contains(input.ActionId)
+            && input.NormalizedX.HasValue && input.NormalizedY.HasValue
+            && gesture.StartUtc >= input.StartedAtUtc.AddMilliseconds(-50)
+            && gesture.EndUtc <= input.CompletedAtUtc.AddMilliseconds(50)
+            && Math.Abs(point.Value.X - input.NormalizedX.Value) <= 0.01
+            && Math.Abs(point.Value.Y - input.NormalizedY.Value) <= 0.01)
             .OrderBy(input => Math.Abs((gesture.StartUtc - input.StartedAtUtc).TotalMilliseconds)).FirstOrDefault();
+
         return match is not null && matchedInputs.Add(match.ActionId);
     }
 }

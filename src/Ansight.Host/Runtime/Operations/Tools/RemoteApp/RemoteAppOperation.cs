@@ -23,6 +23,7 @@ internal abstract class RemoteAppOperation : Operation
             arguments,
             ToolExecutionCancellation.Current,
             new AppToolBridgeRequestContext("host-operation", "ansight_list_app_tools", correlationId));
+
         if (!response.Success || response.Envelope is null)
         {
             return RequestResult.ToolResult(
@@ -74,14 +75,17 @@ internal abstract class RemoteAppOperation : Operation
         }
 
         var toolId = arguments?["toolId"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(toolId))
         {
             return ToolError("toolId is required.");
         }
 
         if (!appToolBridge.IsSessionConnected(snapshot!.SessionId))
+        {
             return RequestResult.ToolResult(ExecutionCapabilities.Unavailable("app.tool:" + toolId,
                 new JsonObject { ["executionMode"] = snapshot.CaptureSource ?? "sdk" }, "No SDK app-tool provider is connected."), isError: true);
+        }
 
         var forwardedArguments = AppToolPayloadNormalizer.ApplyHostToolDefaults(
             toolId,
@@ -98,6 +102,7 @@ internal abstract class RemoteAppOperation : Operation
             after,
             ToolExecutionCancellation.Current,
             new AppToolBridgeRequestContext(requestSource, operationName, correlationId));
+
         if (!response.Success || response.Envelope is null)
         {
             return RequestResult.ToolResult(
@@ -117,6 +122,7 @@ internal abstract class RemoteAppOperation : Operation
 
         var isError = string.Equals(response.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal);
         PersistedVisualTreeResult? persistedVisualTree = null;
+
         if (!isError
             && AppToolPayloadNormalizer.IsVisualTreeTool(toolId)
             && response.Envelope.Payload is JsonObject responsePayload
@@ -144,6 +150,7 @@ internal abstract class RemoteAppOperation : Operation
             ["responseType"] = response.Envelope.Type,
             ["payload"] = normalizedPayload
         };
+
         if (appliedDefaults is not null)
         {
             structuredContent["appliedHostDefaults"] = appliedDefaults;
@@ -183,9 +190,11 @@ internal abstract class RemoteAppOperation : Operation
         }
 
         var batchCalls = new List<AppToolBatchCall>(calls.Count);
+
         foreach (var call in calls.OfType<JsonObject>())
         {
             var toolId = call["toolId"]?.GetValue<string>();
+
             if (string.IsNullOrWhiteSpace(toolId))
             {
                 return ToolError("Every batched call requires toolId.");
@@ -209,6 +218,7 @@ internal abstract class RemoteAppOperation : Operation
             arguments?["continueOnError"]?.GetValue<bool>() ?? false,
             ToolExecutionCancellation.Current,
             new AppToolBridgeRequestContext("host-operation", "ansight_call_app_tools", correlationId));
+
         if (!response.Success || response.Envelope is null)
         {
             return RequestResult.ToolResult(new JsonObject
@@ -231,13 +241,15 @@ internal abstract class RemoteAppOperation : Operation
             ["responseType"] = response.Envelope.Type,
             ["payload"] = normalizedPayload
         };
+
         if (artifacts.Count > 0)
         {
             structuredContent["artifacts"] = artifacts;
         }
 
         var isError = string.Equals(response.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal)
-                      || normalizedPayload?["success"]?.GetValue<bool>() == false;
+            || normalizedPayload?["success"]?.GetValue<bool>() == false;
+
         return RequestResult.ToolResult(structuredContent, isError);
     }
 
@@ -250,6 +262,7 @@ internal abstract class RemoteAppOperation : Operation
 
         AppFilePushRequest request;
         JsonObject forwardedArguments;
+
         try
         {
             request = AppFilePush.CreateRequest(arguments);
@@ -277,6 +290,7 @@ internal abstract class RemoteAppOperation : Operation
             after: null,
             ToolExecutionCancellation.Current,
             new AppToolBridgeRequestContext("host-operation", "ansight_push_file_to_app", correlationId));
+
         if (!response.Success || response.Envelope is null)
         {
             return RequestResult.ToolResult(

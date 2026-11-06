@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 
 namespace Ansight.Infrastructure.Utilities;
@@ -21,6 +21,7 @@ public static class Base64Helper
         }
 
         var bytes = Convert.FromBase64String(value);
+
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -37,6 +38,7 @@ public static class Base64Helper
         }
 
         var bytes = Encoding.UTF8.GetBytes(value);
+
         return Convert.ToBase64String(bytes);
     }
 
@@ -65,5 +67,4 @@ public static class Base64Helper
 
         return Convert.ToBase64String(value);
     }
-
 }

@@ -15,28 +15,36 @@ public sealed class PermissionOperationTests
         var bridge = new TestAppToolBridge();
         var sessionId = state.CreateSession("com.example.app", "Example", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null, """{"device":{"nativeDeviceId":"physical-iphone"}}""");
+
         var router = new DevicePermissionsRouter();
         router.Configure(new NativePermissionService(_ => Task.FromResult(new DeviceInventory([], [
             new DeviceDescriptor("physical-iphone", "iPhone", "ios", "26", "Connected", true, true, "physical")
         ], [])), new NoCommands(), new RuntimeOptions()));
+
         var catalog = new ToolCatalog(state, environment.ApplicationPaths,
             new KnownAppStore(environment.ApplicationPaths), new EmptyPairingConfigService(), new EmptyPairingConfigCache(),
             bridge, null, new SessionResolver(state, bridge), devicePermissionsRouter: router);
         var names = catalog.BuildToolsListResult()["tools"]!.AsArray().OfType<JsonObject>().Select(tool => tool["name"]!.GetValue<string>()).ToHashSet();
+
         foreach (var suffix in new[] { "", "_ios", "_android" })
+        {
             foreach (var action in new[] { "grant", "revoke", "query" })
             {
                 var name = $"ansight_{action}{suffix}_permission";
                 Assert.Contains(name, names);
                 Assert.True(DeviceExecutionTools.IsSupported(name));
             }
+        }
+
         Assert.Contains("ansight_reset_ios_permission", names);
+
         var response = await catalog.HandleToolsCallAsync(new JsonObject
         {
             ["name"] = "ansight_query_permission",
             ["arguments"] = new JsonObject { ["sessionId"] = sessionId, ["permission"] = "photos" }
         });
         Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+
         var payload = response.Payload["structuredContent"]!;
         Assert.Equal("unsupported", payload["status"]!.GetValue<string>());
         Assert.Equal("com.example.app", payload["bundleIdentifier"]!.GetValue<string>());
@@ -48,16 +56,21 @@ public sealed class PermissionOperationTests
     private sealed class NoCommands : IDeviceCommandRunner
     {
         public Task<DeviceCommandResult> RunAsync(string executable, IReadOnlyList<string> arguments, CancellationToken cancellationToken, int maximumBytes = 1_048_576)
-            => throw new InvalidOperationException("Unsupported targets must not run native commands.");
+                => throw new InvalidOperationException("Unsupported targets must not run native commands.");
     }
+
     private sealed class TestAppToolBridge : IAppToolBridge
     {
         public HashSet<string> ConnectedSessionIds { get; } = new(StringComparer.Ordinal);
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => ConnectedSessionIds.ToArray();
@@ -85,15 +98,23 @@ public sealed class PermissionOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache
     {
-        public void Add(PairingConfig config) { }
-        public void Add(CachedPairingConfig config) { }
+        public void Add(PairingConfig config)
+        {
+        }
+
+        public void Add(CachedPairingConfig config)
+        {
+        }
+
         public IReadOnlyList<CachedPairingConfig> GetSnapshot() => [];
+
         public CachedPairingConfig? Find(string configId) => null;
+
         public bool Remove(string configId) => false;
     }
 }

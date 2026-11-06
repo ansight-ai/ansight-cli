@@ -53,15 +53,18 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
         {
             return ToolError(resolutionError);
         }
+
         var session = snapshot!;
 
         var condition = LiveUiToolSchemas.ReadString(arguments, "condition")?.ToLowerInvariant() ?? "visible";
+
         if (condition is not ("visible" or "hidden" or "stable"))
         {
             return ToolError("condition must be visible, hidden, or stable.");
         }
 
         var selector = LiveUiSelector.Parse(arguments);
+
         if (condition != "stable" && !selector.HasCriteria)
         {
             return ToolError("A stable UI selector is required for visible or hidden waits.");
@@ -85,6 +88,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
         while (stopwatch.ElapsedMilliseconds <= timeoutMs)
         {
             attempts++;
+
             var capturedStableTarget = false;
             var captureResult = condition == "stable" && stableUsesNativeTree
                 ? await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
@@ -105,6 +109,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                     ToolExecutionCancellation.Current,
                     allowCached: false);
             var primaryEvidenceSource = stableUsesNativeTree ? "visualTree" : "accessibility";
+
             if (captureResult.IsSuccess && captureResult.Capture is { } capture)
             {
                 latestError = null;
@@ -113,7 +118,9 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                 latestMatches = selector.HasCriteria
                     ? OrderMatches(capture, selector)
                     : [];
+
                 var visibleMatches = SelectVisibleMatches(latestMatches, selector);
+
                 if (condition == "visible" && visibleMatches.Count > 0)
                 {
                     return BuildSuccess(
@@ -130,15 +137,16 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                 if (condition == "stable")
                 {
                     capturedStableTarget = !selector.HasCriteria
-                                           || selector.IsAvailable(latestMatches.Count);
+                        || selector.IsAvailable(latestMatches.Count);
+
                     if (ObserveStableSample(
-                            capture,
-                            selector,
-                            latestMatches,
-                            requiredStableSamples,
-                            ref stableSamples,
-                            ref previousHash,
-                            ref finalHash))
+                        capture,
+                        selector,
+                        latestMatches,
+                        requiredStableSamples,
+                        ref stableSamples,
+                        ref previousHash,
+                        ref finalHash))
                     {
                         return BuildSuccess(
                             condition,
@@ -155,6 +163,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             else
             {
                 latestError = captureResult.Message;
+
                 if (condition != "stable" || stableUsesNativeTree)
                 {
                     stableSamples = 0;
@@ -178,7 +187,9 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                         correlationId,
                         ToolExecutionCancellation.Current, externalScreenshots: externalScreenshots);
                 }
+
                 var selectedOcrMatches = selector.ApplyIndex(latestOcrResult.Matches);
+
                 if (selectedOcrMatches.Count > 0)
                 {
                     if (condition == "visible")
@@ -195,9 +206,10 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                 else if (stopwatch.ElapsedMilliseconds >= nextNativeVisualTreeAtMilliseconds)
                 {
                     nextNativeVisualTreeAtMilliseconds = stopwatch.ElapsedMilliseconds
-                                                         + Math.Max(
-                                                             MinimumNativeVisualTreeIntervalMilliseconds,
-                                                             pollIntervalMs * 4L);
+                        + Math.Max(
+                            MinimumNativeVisualTreeIntervalMilliseconds,
+                            pollIntervalMs * 4L);
+
                     var nativeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                         session,
                         appToolBridge,
@@ -206,13 +218,16 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                         correlationId,
                         selector,
                         ToolExecutionCancellation.Current);
+
                     if (nativeResult.Capture is { } nativeCapture)
                     {
                         latestError = null;
                         latestCapture = nativeCapture;
                         PersistTimelineTree(nativeCapture);
                         latestMatches = OrderMatches(nativeCapture, selector);
+
                         var visibleNativeMatches = SelectVisibleMatches(latestMatches, selector);
+
                         if (condition == "visible" && visibleNativeMatches.Count > 0)
                         {
                             return BuildSuccess(
@@ -258,13 +273,14 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                 }
             }
             else if (condition == "stable"
-                     && !capturedStableTarget
-                     && stopwatch.ElapsedMilliseconds >= nextNativeVisualTreeAtMilliseconds)
+                && !capturedStableTarget
+                && stopwatch.ElapsedMilliseconds >= nextNativeVisualTreeAtMilliseconds)
             {
                 nextNativeVisualTreeAtMilliseconds = stopwatch.ElapsedMilliseconds
-                                                     + Math.Max(
-                                                         MinimumNativeVisualTreeIntervalMilliseconds,
-                                                         pollIntervalMs * 4L);
+                    + Math.Max(
+                        MinimumNativeVisualTreeIntervalMilliseconds,
+                        pollIntervalMs * 4L);
+
                 var nativeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                     session,
                     appToolBridge,
@@ -273,6 +289,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                     correlationId,
                     selector,
                     ToolExecutionCancellation.Current);
+
                 if (nativeResult.Capture is { } nativeCapture)
                 {
                     stableUsesNativeTree = true;
@@ -282,14 +299,15 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
                     latestMatches = selector.HasCriteria
                         ? OrderMatches(nativeCapture, selector)
                         : [];
+
                     if (ObserveStableSample(
-                            nativeCapture,
-                            selector,
-                            latestMatches,
-                            requiredStableSamples,
-                            ref stableSamples,
-                            ref previousHash,
-                            ref finalHash))
+                        nativeCapture,
+                        selector,
+                        latestMatches,
+                        requiredStableSamples,
+                        ref stableSamples,
+                        ref previousHash,
+                        ref finalHash))
                     {
                         return BuildSuccess(
                             condition,
@@ -311,6 +329,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             }
 
             var remainingMs = timeoutMs - stopwatch.ElapsedMilliseconds;
+
             if (remainingMs <= 0)
             {
                 break;
@@ -341,11 +360,13 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             ["treeHash"] = finalHash,
             ["message"] = selector.DescribeFailure(latestError ?? $"Timed out waiting for UI condition '{condition}'.")
         };
+
         if (latestCapture is not null)
         {
             payload["capturedAtUtc"] = latestCapture.CapturedAtUtc;
             payload["matches"] = new JsonArray(reportedMatches.Take(20).Select(LiveUiNodeQuery.ToResultJson).ToArray());
         }
+
         payload["ocr"] = latestOcrResult.ToJson();
 
         return RequestResult.ToolResult(payload, isError: true);
@@ -382,10 +403,12 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
         var stableNode = selector.HasCriteria
             ? selector.Select(matches)?.Node
             : capture.Root;
+
         if (stableNode is null)
         {
             stableSamples = 0;
             previousHash = null;
+
             return false;
         }
 
@@ -394,6 +417,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
             ? stableSamples + 1
             : 1;
         previousHash = finalHash;
+
         return stableSamples >= requiredStableSamples;
     }
 
@@ -437,6 +461,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
         long elapsedMs)
     {
         var matches = selector.ApplyIndex(ocrResult.Matches);
+
         return RequestResult.ToolResult(
             new JsonObject
             {
@@ -471,6 +496,7 @@ internal sealed class WaitForLiveUiTool : RemoteAppOperation
     private static string ComputeHash(JsonObject node)
     {
         var bytes = Encoding.UTF8.GetBytes(node.ToJsonString());
+
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 }

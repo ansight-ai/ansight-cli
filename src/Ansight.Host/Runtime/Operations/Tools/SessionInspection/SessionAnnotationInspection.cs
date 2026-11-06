@@ -78,6 +78,7 @@ internal static class SessionAnnotationInspection
         }
 
         var label = NormalizeOptionalString(arguments?["label"]?.GetValue<string>());
+
         if (label is null)
         {
             return ToolError("label is required.");
@@ -91,6 +92,7 @@ internal static class SessionAnnotationInspection
 
         var source = NormalizeOptionalString(arguments?["source"]?.GetValue<string>()) ?? OperationDefaults.DefaultInjectedAnnotationSource;
         var annotationStartUtc = (startUtc ?? ResolveDefaultAnnotationStartUtc(snapshot!)).ToUniversalTime();
+
         if (!SessionAnnotationArgumentReader.TryReadGeometries(arguments, annotationStartUtc, out var geometries, out errorMessage)
             || !SessionAnnotationArgumentReader.TryReadTarget(arguments, source, out var target, out errorMessage))
         {
@@ -110,6 +112,7 @@ internal static class SessionAnnotationInspection
             Target = target
         };
         var result = runtimeState.UpsertSessionAnnotation(snapshot!.SessionId, annotation);
+
         if (!result.IsSuccess)
         {
             return ToolError(result.Message);
@@ -141,26 +144,29 @@ internal static class SessionAnnotationInspection
     public static bool MatchesAnnotationTimeRange(SessionAnnotation annotation, DateTimeOffset? startUtc, DateTimeOffset? endUtc)
     {
         var effectiveEndUtc = annotation.EndUtc ?? annotation.StartUtc;
+
         return (!startUtc.HasValue || effectiveEndUtc >= startUtc.Value)
-               && (!endUtc.HasValue || annotation.StartUtc <= endUtc.Value);
+            && (!endUtc.HasValue || annotation.StartUtc <= endUtc.Value);
     }
 
     private static bool MatchesAnnotationPoint(SessionAnnotation annotation, DateTimeOffset targetUtc)
     {
         var effectiveEndUtc = annotation.EndUtc ?? annotation.StartUtc;
+
         return annotation.StartUtc <= targetUtc && effectiveEndUtc >= targetUtc;
     }
 
     private static bool MatchesAnnotationLabel(SessionAnnotation annotation, string labelQuery)
     {
         return annotation.Label.Contains(labelQuery, StringComparison.OrdinalIgnoreCase)
-               || (!string.IsNullOrWhiteSpace(annotation.Notes)
-                   && annotation.Notes.Contains(labelQuery, StringComparison.OrdinalIgnoreCase));
+            || (!string.IsNullOrWhiteSpace(annotation.Notes)
+                && annotation.Notes.Contains(labelQuery, StringComparison.OrdinalIgnoreCase));
     }
 
     private static DateTimeOffset ResolveDefaultAnnotationStartUtc(AppSessionSnapshot snapshot)
     {
         var lastUpdatedUtc = snapshot.LastUpdatedUtc.ToUniversalTime();
+
         return lastUpdatedUtc > DateTimeOffset.MinValue
             ? lastUpdatedUtc
             : DateTimeOffset.UtcNow;

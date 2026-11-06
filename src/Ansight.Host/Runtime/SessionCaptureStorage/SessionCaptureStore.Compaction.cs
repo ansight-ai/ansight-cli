@@ -14,20 +14,22 @@ internal sealed partial class SessionCaptureStore
     {
         var cutoffUtc = nowUtc.ToUniversalTime().AddDays(-Math.Max(1, compactionAgeDays));
         string[] sessionIds;
+
         lock (indexGate)
         {
             RefreshIndexIfStale();
             sessionIds = summaryBySessionId?.Values
                 .Where(summary => !IsRecordingStatus(summary.Status)
-                                  && protectedSessionIds?.Contains(summary.SessionId) != true
-                                  && filePathBySessionId?.TryGetValue(summary.SessionId, out var summaryFilePath) == true
-                                  && SessionCaptureArchiveCodec.IsSessionPastCompactionCutoff(summary, summaryFilePath, cutoffUtc))
+                    && protectedSessionIds?.Contains(summary.SessionId) != true
+                    && filePathBySessionId?.TryGetValue(summary.SessionId, out var summaryFilePath) == true
+                    && SessionCaptureArchiveCodec.IsSessionPastCompactionCutoff(summary, summaryFilePath, cutoffUtc))
                 .OrderBy(summary => summary.LastUpdatedUtc)
                 .Select(summary => summary.SessionId)
                 .ToArray() ?? [];
         }
 
         var compactedCount = 0;
+
         foreach (var sessionId in sessionIds)
         {
             if (TryCompactSession(sessionId, cutoffUtc, protectedSessionIds))
@@ -50,6 +52,7 @@ internal sealed partial class SessionCaptureStore
             {
                 string? summaryFilePath;
                 SessionCaptureSummary? summary;
+
                 lock (indexGate)
                 {
                     EnsureIndex();
@@ -67,6 +70,7 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 var sessionDirectoryPath = Path.GetDirectoryName(summaryFilePath);
+
                 if (string.IsNullOrWhiteSpace(sessionDirectoryPath)
                     || !Directory.Exists(sessionDirectoryPath))
                 {
@@ -76,6 +80,7 @@ internal sealed partial class SessionCaptureStore
                 var archiveFilePath = SessionCaptureArchiveCodec.GetSessionArchivePath(sessionDirectoryPath);
                 var temporaryArchiveFilePath = $"{archiveFilePath}.{Guid.NewGuid():N}.tmp";
                 var archivePublished = false;
+
                 try
                 {
                     ZipFile.CreateFromDirectory(
@@ -85,6 +90,7 @@ internal sealed partial class SessionCaptureStore
                         includeBaseDirectory: false);
 
                     var archivedSummary = SessionCaptureArchiveCodec.TryLoadSessionArchiveSummary(temporaryArchiveFilePath);
+
                     if (archivedSummary is null
                         || !string.Equals(archivedSummary.SessionId, sessionId, StringComparison.Ordinal))
                     {
@@ -101,6 +107,7 @@ internal sealed partial class SessionCaptureStore
                         archivedSummary,
                         archiveSizeBytes);
                     var capturesWriteUtc = TouchCapturesIndex();
+
                     lock (indexGate)
                     {
                         EnsureIndex();
@@ -142,18 +149,21 @@ internal sealed partial class SessionCaptureStore
     {
         var resolvedSummaryFilePath = string.Empty;
         var expanded = false;
+
         try
         {
             expanded = RunWithSessionPersistenceLock(sessionId, () =>
             {
                 var sessionDirectoryPath = SessionCaptureArchiveCodec.GetSessionDirectoryPathFromArchivePath(archiveFilePath);
                 var targetSummaryFilePath = Path.Combine(sessionDirectoryPath, SessionSummaryFileName);
+
                 if (File.Exists(targetSummaryFilePath))
                 {
                     SessionCaptureArchiveCodec.ResetSessionCompactionAge(sessionDirectoryPath, DateTimeOffset.UtcNow);
                     TryDeleteFile(archiveFilePath);
                     resolvedSummaryFilePath = targetSummaryFilePath;
                     UpdateExpandedSessionIndex(sessionId, targetSummaryFilePath);
+
                     return true;
                 }
 
@@ -163,11 +173,14 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 var temporaryDirectoryPath = $"{sessionDirectoryPath}{SessionCacheExpansionDirectoryMarker}{Guid.NewGuid():N}.tmp";
+
                 try
                 {
                     ZipFile.ExtractToDirectory(archiveFilePath, temporaryDirectoryPath);
+
                     var temporarySummaryFilePath = Path.Combine(temporaryDirectoryPath, SessionSummaryFileName);
                     var summary = SessionSnapshotReader.TryLoadDocument<SessionCaptureSummaryDocument>(temporarySummaryFilePath)?.Session;
+
                     if (summary is null
                         || !string.Equals(summary.SessionId, sessionId, StringComparison.Ordinal))
                     {
@@ -179,6 +192,7 @@ internal sealed partial class SessionCaptureStore
                     TryDeleteFile(archiveFilePath);
                     resolvedSummaryFilePath = targetSummaryFilePath;
                     UpdateExpandedSessionIndex(sessionId, targetSummaryFilePath);
+
                     return true;
                 }
                 finally
@@ -193,6 +207,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         summaryFilePath = resolvedSummaryFilePath;
+
         return expanded;
     }
 
@@ -201,6 +216,7 @@ internal sealed partial class SessionCaptureStore
         string summaryFilePath)
     {
         var summary = SessionSnapshotReader.TryLoadDocument<SessionCaptureSummaryDocument>(summaryFilePath)?.Session;
+
         if (summary is null)
         {
             return;
@@ -210,12 +226,14 @@ internal sealed partial class SessionCaptureStore
         var sessionDirectoryPath = Path.GetDirectoryName(summaryFilePath) ?? string.Empty;
         var cacheSizeBytes = GetDirectorySize(sessionDirectoryPath);
         var capturesWriteUtc = TouchCapturesIndex();
+
         lock (indexGate)
         {
             EnsureIndex();
             archivePathBySessionId!.Remove(sessionId);
             filePathBySessionId![sessionId] = summaryFilePath;
             summaryBySessionId![sessionId] = summary;
+
             if (summarySnapshot is not null)
             {
                 summarySnapshotBySessionId![sessionId] = summarySnapshot;
@@ -225,5 +243,4 @@ internal sealed partial class SessionCaptureStore
             lastObservedCapturesWriteUtc = capturesWriteUtc;
         }
     }
-
 }

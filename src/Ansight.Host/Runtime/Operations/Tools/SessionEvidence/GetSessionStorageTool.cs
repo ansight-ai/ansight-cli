@@ -29,6 +29,7 @@ internal sealed class GetSessionStorageTool : Operation
 
         var hasCacheSize = runtimeState.TryGetSessionCacheSizeBytes(snapshot!.SessionId, out var cacheSizeBytes);
         var fileBreakdown = BuildFileBreakdownPayload(snapshot);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -53,6 +54,7 @@ internal sealed class GetSessionStorageTool : Operation
         var screenshotBytes = 0L;
         var screenshotFileCount = 0;
         var missingScreenshotFileCount = 0;
+
         foreach (var frame in snapshot.Images)
         {
             var filePath = SessionImageArtifactPath.ResolveCapturedImagePath(
@@ -60,6 +62,7 @@ internal sealed class GetSessionStorageTool : Operation
                 snapshot.AppId,
                 snapshot.SessionId,
                 frame);
+
             if (!TryGetFileSize(filePath, out var fileSizeBytes))
             {
                 missingScreenshotFileCount++;
@@ -72,6 +75,7 @@ internal sealed class GetSessionStorageTool : Operation
 
         var appIconBytes = 0L;
         var hasAppIconFile = false;
+
         if (snapshot.AppIcon is not null)
         {
             var appIconPath = SessionAppIconArtifactPath.ResolveSessionIconPath(
@@ -85,6 +89,7 @@ internal sealed class GetSessionStorageTool : Operation
         var artifactsRootPath = Path.Combine(sessionDirectoryPath, "artifacts");
         var artifactFiles = CountDirectoryFiles(artifactsRootPath);
         var sessionDirectoryFiles = CountDirectoryFiles(sessionDirectoryPath);
+
         return new JsonObject
         {
             ["sessionDirectoryPath"] = sessionDirectoryPath,
@@ -106,6 +111,7 @@ internal sealed class GetSessionStorageTool : Operation
     private static bool TryGetFileSize(string filePath, out long fileSizeBytes)
     {
         fileSizeBytes = 0;
+
         try
         {
             if (!File.Exists(filePath))
@@ -114,6 +120,7 @@ internal sealed class GetSessionStorageTool : Operation
             }
 
             fileSizeBytes = new FileInfo(filePath).Length;
+
             return true;
         }
         catch (IOException)
@@ -135,6 +142,7 @@ internal sealed class GetSessionStorageTool : Operation
 
         long sizeBytes = 0;
         var fileCount = 0;
+
         try
         {
             foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))

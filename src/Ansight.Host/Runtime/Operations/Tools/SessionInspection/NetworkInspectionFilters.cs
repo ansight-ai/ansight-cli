@@ -11,6 +11,7 @@ internal sealed class NetworkInspectionFilters
     {
         StartUtc = NetworkInspectionArguments.ReadTimestamp(arguments, "startUtc");
         EndUtc = NetworkInspectionArguments.ReadTimestamp(arguments, "endUtc");
+
         if (StartUtc > EndUtc)
         {
             throw new ArgumentException("endUtc must be greater than or equal to startUtc.");
@@ -35,12 +36,12 @@ internal sealed class NetworkInspectionFilters
 
     public bool Matches(SessionNetworkRequest request)
         => (!StartUtc.HasValue || request.StartedAtUtc >= StartUtc.Value)
-           && (!EndUtc.HasValue || request.StartedAtUtc <= EndUtc.Value)
-           && (Methods.Length == 0 || Methods.Contains(request.Method, StringComparer.OrdinalIgnoreCase))
-           && (Statuses.Length == 0 || Statuses.Any(status => SessionNetworkRequestFilter.MatchesStatus(request, status)))
-           && (Host is null || SessionNetworkRequestFilter.MatchesHost(request.Url, Host))
-           && (Query is null || SessionNetworkRequestFilter.MatchesQuery(request, Query))
-           && (!FailedOnly || SessionNetworkRequestFilter.IsFailed(request));
+            && (!EndUtc.HasValue || request.StartedAtUtc <= EndUtc.Value)
+            && (Methods.Length == 0 || Methods.Contains(request.Method, StringComparer.OrdinalIgnoreCase))
+            && (Statuses.Length == 0 || Statuses.Any(status => SessionNetworkRequestFilter.MatchesStatus(request, status)))
+            && (Host is null || SessionNetworkRequestFilter.MatchesHost(request.Url, Host))
+            && (Query is null || SessionNetworkRequestFilter.MatchesQuery(request, Query))
+            && (!FailedOnly || SessionNetworkRequestFilter.IsFailed(request));
 
     public JsonObject ToJson() => new()
     {
@@ -58,6 +59,7 @@ internal sealed class NetworkInspectionFilters
     {
         // Omitted filters inherit the snapshot. Supplied filters must mean the same thing.
         var effective = ToJson();
+
         foreach (var name in names)
         {
             if (arguments?.ContainsKey(name) == true)

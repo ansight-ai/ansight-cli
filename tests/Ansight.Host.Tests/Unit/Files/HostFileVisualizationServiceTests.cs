@@ -78,6 +78,7 @@ public sealed class HostFileVisualizationServiceTests
         using var environment = new TestEnvironment();
         var filePath = Path.Combine(environment.RootPath, $"recording{extension}");
         const long sizeBytes = 10 * 1024 * 1024 + 1;
+
         await using (var stream = File.Create(filePath))
         {
             stream.SetLength(sizeBytes);
@@ -140,6 +141,7 @@ public sealed class HostFileVisualizationServiceTests
         using var environment = new TestEnvironment();
         await using var runtime = environment.CreateRuntime();
         var filePath = Path.Combine(environment.RootPath, "large.txt");
+
         await using (var stream = File.Create(filePath))
         {
             stream.SetLength(previewBytes + 1L);
@@ -186,7 +188,7 @@ public sealed class HostFileVisualizationServiceTests
     public async Task InspectLocalFileAsync_ConvertsBinaryPropertyListToXml()
     {
         const string binaryPropertyListBase64 =
-            "YnBsaXN0MDDUAQIDBAUGBwpUbmFtZVdlbmFibGVkWHZlcnNpb25zVXJhdGlvV0Fuc2lnaHQJoggJEAEQAiM/+AAAAAAAAAgRFh4nLTU2OTs9AAAAAAAAAQEAAAAAAAAACwAAAAAAAAAAAAAAAAAAAEY=";
+                "YnBsaXN0MDDUAQIDBAUGBwpUbmFtZVdlbmFibGVkWHZlcnNpb25zVXJhdGlvV0Fuc2lnaHQJoggJEAEQAiM/+AAAAAAAAAgRFh4nLTU2OTs9AAAAAAAAAQEAAAAAAAAACwAAAAAAAAAAAAAAAAAAAEY=";
         using var environment = new TestEnvironment();
         await using var runtime = environment.CreateRuntime();
         var filePath = Path.Combine(environment.RootPath, "settings.plist");
@@ -210,12 +212,15 @@ public sealed class HostFileVisualizationServiceTests
             : new SQLitePCL.SQLite3Provider_sqlite3();
         SQLitePCL.raw.SetProvider(provider);
         SQLitePCL.raw.FreezeProvider();
+
         using var environment = new TestEnvironment();
         await using var runtime = environment.CreateRuntime();
         var filePath = Path.Combine(environment.RootPath, "items.sqlite");
+
         await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={filePath}"))
         {
             await connection.OpenAsync();
+
             await using var command = connection.CreateCommand();
             command.CommandText = "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT); INSERT INTO items (name) VALUES ('one'), ('two');";
             await command.ExecuteNonQueryAsync();

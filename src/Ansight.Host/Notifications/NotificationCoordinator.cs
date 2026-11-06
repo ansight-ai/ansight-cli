@@ -9,7 +9,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal const string SessionCacheCleanupNotificationIdentifier = "session-cache-auto-cleaned";
     internal const string CompanionAccessReminderIdentifier = "companion-access-still-enabled";
     internal const string DeferCompanionAccessReminderActionIdentifier = "defer-companion-access-reminder";
-    internal static readonly TimeSpan CompanionAccessReminderInterval = TimeSpan.FromDays(14);
+    internal static readonly TimeSpan companionAccessReminderInterval = TimeSpan.FromDays(14);
 
     private readonly object gate = new();
     private readonly RuntimeCoordinator hostRuntime;
@@ -50,12 +50,16 @@ public sealed class NotificationCoordinator : IDisposable
         try
         {
             await notificationSink.InitializeAsync(cancellationToken).ConfigureAwait(false);
+
             foreach (var snapshot in hostRuntime.Sessions.GetSummaries())
             {
                 SeedSnapshot(snapshot);
             }
 
-            if (hostRuntime.ActiveCompanion is { } companion) SeedCompanionConnections(companion.GetConnections());
+            if (hostRuntime.ActiveCompanion is { } companion)
+            {
+                SeedCompanionConnections(companion.GetConnections());
+            }
 
             hostRuntime.PairingEventOccurred += RuntimeOnPairingEventOccurred;
             hostRuntime.TrendsEventOccurred += RuntimeOnTrendsEventOccurred;
@@ -64,13 +68,17 @@ public sealed class NotificationCoordinator : IDisposable
             hostRuntime.SessionUpdated += RuntimeOnSessionUpdated;
             hostRuntime.SessionDeleted += RuntimeOnSessionDeleted;
             hostRuntime.SessionCacheMaintenanceCompleted += RuntimeOnSessionCacheMaintenanceCompleted;
+
             if (hostRuntime.ActiveCompanion is { } activeCompanion)
             {
                 activeCompanion.ConnectionsChanged += CompanionOnConnectionsChanged;
                 activeCompanion.AccessStatusChanged += CompanionOnAccessStatusChanged;
                 HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
             }
-            else HandleCompanionAccessStatusChanged(new CompanionAccessStatus(CompanionAccessMode.Disabled, false, false, "Inactive", 0));
+            else
+            {
+                HandleCompanionAccessStatusChanged(new CompanionAccessStatus(CompanionAccessMode.Disabled, false, false, "Inactive", 0));
+            }
         }
         catch
         {
@@ -94,6 +102,7 @@ public sealed class NotificationCoordinator : IDisposable
         {
             var gettingStarted = new Ansight.Host.Explorer.GettingStartedStore(hostRuntime.ApplicationPaths.ApplicationDataPath);
             var state = gettingStarted.Read();
+
             if (!state.NotificationSent && !state.Opened && !state.Skipped
                 && hostRuntime.Sessions.GetSummaries().Count == 0)
             {
@@ -103,6 +112,7 @@ public sealed class NotificationCoordinator : IDisposable
                     "Your local player is ready. Open it to connect your app and capture your first session."),
                     cancellationToken).ConfigureAwait(false);
                 gettingStarted.Update(current => current with { NotificationSent = true });
+
                 return;
             }
         }
@@ -120,6 +130,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandlePairingEvent(RuntimePairingEvent pairingEvent)
     {
         ArgumentNullException.ThrowIfNull(pairingEvent);
+
         if (disposed)
         {
             return;
@@ -139,6 +150,7 @@ public sealed class NotificationCoordinator : IDisposable
                     "App session connection refused",
                     $"{rejectedAppLabel} was refused: {reason}",
                     string.IsNullOrWhiteSpace(pairingEvent.SessionId) ? null : pairingEvent.SessionId));
+
             return;
         }
 
@@ -161,6 +173,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleTrendsEvent(RuntimeTrendsEvent trendsEvent)
     {
         ArgumentNullException.ThrowIfNull(trendsEvent);
+
         if (disposed || trendsEvent.Kind != RuntimeTrendsEventKind.RegressionDetected)
         {
             return;
@@ -190,6 +203,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleSessionTransferEvent(RuntimeSessionTransferEvent sessionTransferEvent)
     {
         ArgumentNullException.ThrowIfNull(sessionTransferEvent);
+
         if (disposed)
         {
             return;
@@ -215,6 +229,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleSessionUpdated(AppSessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         if (disposed)
         {
             return;
@@ -229,6 +244,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleSessionCaptureEvent(RuntimeSessionCaptureEvent captureEvent)
     {
         ArgumentNullException.ThrowIfNull(captureEvent);
+
         if (disposed || captureEvent.Kind != RuntimeSessionCaptureEventKind.Started
             || !hostRuntime.Sessions.TryGetSnapshot(captureEvent.SessionId, out var snapshot)
             || snapshot?.CaptureSource != WorkspaceExecutionModes.Device)
@@ -238,7 +254,10 @@ public sealed class NotificationCoordinator : IDisposable
 
         lock (gate)
         {
-            if (!recordingSessionIds.Add(captureEvent.SessionId)) return;
+            if (!recordingSessionIds.Add(captureEvent.SessionId))
+            {
+                return;
+            }
         }
 
         PublishNotification(new Notification(
@@ -251,6 +270,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleSessionDeleted(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         lock (gate)
         {
             recordingSessionIds.Remove(sessionId);
@@ -260,6 +280,7 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleSessionCacheMaintenanceCompleted(SessionCacheMaintenanceResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
+
         if (disposed || !hostRuntime.UserPreferences.SessionAutoCleanupEnabled)
         {
             return;
@@ -278,12 +299,14 @@ public sealed class NotificationCoordinator : IDisposable
             if (!result.IsApproachingLimit)
             {
                 sessionCacheWarningSent = false;
+
                 return;
             }
 
             if (sessionCacheWarningSent || result.DeletedSessionCount > 0)
             {
                 sessionCacheWarningSent = true;
+
                 return;
             }
 
@@ -304,12 +327,14 @@ public sealed class NotificationCoordinator : IDisposable
         IReadOnlyList<CompanionConnection> connections)
     {
         ArgumentNullException.ThrowIfNull(connections);
+
         if (disposed)
         {
             return;
         }
 
         CompanionConnection[] newConnections;
+
         lock (gate)
         {
             newConnections = connections
@@ -335,12 +360,14 @@ public sealed class NotificationCoordinator : IDisposable
     internal void HandleCompanionAccessStatusChanged(CompanionAccessStatus accessStatus)
     {
         ArgumentNullException.ThrowIfNull(accessStatus);
+
         if (disposed)
         {
             return;
         }
 
         var shouldSchedule = accessStatus.Mode == CompanionAccessMode.Always;
+
         lock (gate)
         {
             if (companionAccessReminderScheduled == shouldSchedule)
@@ -354,6 +381,7 @@ public sealed class NotificationCoordinator : IDisposable
         if (!shouldSchedule)
         {
             RemoveNotification(CompanionAccessReminderIdentifier);
+
             return;
         }
 
@@ -363,13 +391,13 @@ public sealed class NotificationCoordinator : IDisposable
                 "Companion access is still enabled",
                 "Always-on companion access lets signed-in companion apps connect to this machine. Turn it off when you no longer need it.",
                 Schedule: new NotificationSchedule(
-                    CompanionAccessReminderInterval,
-                    CompanionAccessReminderInterval,
+                    companionAccessReminderInterval,
+                    companionAccessReminderInterval,
                     PreserveExisting: true),
                 Action: new NotificationAction(
                     DeferCompanionAccessReminderActionIdentifier,
                     "Remind me in 2 weeks",
-                    CompanionAccessReminderInterval)));
+                    companionAccessReminderInterval)));
     }
 
     private void RuntimeOnPairingEventOccurred(object? sender, RuntimePairingEvent pairingEvent)
@@ -399,15 +427,27 @@ public sealed class NotificationCoordinator : IDisposable
     {
         _ = sender;
         _ = eventArgs;
-        if (hostRuntime.ActiveCompanion is { } companion) HandleCompanionConnectionsChanged(companion.GetConnections());
-        if (hostRuntime.ActiveCompanion is { } activeCompanion) HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+
+        if (hostRuntime.ActiveCompanion is { } companion)
+        {
+            HandleCompanionConnectionsChanged(companion.GetConnections());
+        }
+
+        if (hostRuntime.ActiveCompanion is { } activeCompanion)
+        {
+            HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+        }
     }
 
     private void CompanionOnAccessStatusChanged(object? sender, EventArgs eventArgs)
     {
         _ = sender;
         _ = eventArgs;
-        if (hostRuntime.ActiveCompanion is { } activeCompanion) HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+
+        if (hostRuntime.ActiveCompanion is { } activeCompanion)
+        {
+            HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+        }
     }
 
     private void SeedSnapshot(AppSessionSnapshot snapshot)
@@ -504,6 +544,7 @@ public sealed class NotificationCoordinator : IDisposable
     private string ResolveAppLabel(string appId, string clientName)
     {
         var app = hostRuntime.Apps.Get(appId);
+
         if (app is not null && !string.IsNullOrWhiteSpace(app.Name))
         {
             return app.Name.Trim();
@@ -532,6 +573,7 @@ public sealed class NotificationCoordinator : IDisposable
     private static bool ShouldNotifyAnalysis(SessionAnalysisRecord analysis, out string agentName)
     {
         agentName = string.Empty;
+
         if (analysis.CompletedUtc is null)
         {
             return false;
@@ -540,6 +582,7 @@ public sealed class NotificationCoordinator : IDisposable
         agentName = string.IsNullOrWhiteSpace(analysis.AgentId)
             ? "AI"
             : analysis.AgentId.Trim();
+
         return true;
     }
 
@@ -558,6 +601,7 @@ public sealed class NotificationCoordinator : IDisposable
         hostRuntime.SessionUpdated -= RuntimeOnSessionUpdated;
         hostRuntime.SessionDeleted -= RuntimeOnSessionDeleted;
         hostRuntime.SessionCacheMaintenanceCompleted -= RuntimeOnSessionCacheMaintenanceCompleted;
+
         if (hostRuntime.ActiveCompanion is { } companion)
         {
             companion.ConnectionsChanged -= CompanionOnConnectionsChanged;

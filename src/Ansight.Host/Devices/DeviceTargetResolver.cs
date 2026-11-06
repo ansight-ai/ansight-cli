@@ -2,31 +2,51 @@ using Ansight.Adb;
 
 namespace Ansight.Host.Devices;
 
-internal sealed class DeviceTargetResolver(
-    Func<CancellationToken, Task<DeviceInventory>> listDevices,
-    Func<CancellationToken, Task<IReadOnlyList<AdbDevice>>> listAndroidDevices,
-    TimeProvider? timeProvider = null)
+internal sealed class DeviceTargetResolver
 {
+    private readonly Func<CancellationToken, Task<DeviceInventory>> listDevices;
+    private readonly Func<CancellationToken, Task<IReadOnlyList<AdbDevice>>> listAndroidDevices;
     private static readonly TimeSpan cacheDuration = TimeSpan.FromSeconds(2);
-    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
-    private readonly Lock gate = new();
-    private readonly Dictionary<string, CacheEntry> cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly TimeProvider clock;
+    private readonly Lock gate;
+    private readonly Dictionary<string, CacheEntry> cache;
+
+    public DeviceTargetResolver(
+        Func<CancellationToken, Task<DeviceInventory>> listDevices,
+        Func<CancellationToken, Task<IReadOnlyList<AdbDevice>>> listAndroidDevices,
+        TimeProvider? timeProvider = null)
+    {
+        this.listDevices = listDevices;
+        this.listAndroidDevices = listAndroidDevices;
+        this.clock = timeProvider ?? TimeProvider.System;
+        this.gate = new();
+        this.cache = new(StringComparer.OrdinalIgnoreCase);
+    }
 
     public async Task<DeviceDescriptor?> ResolveAsync(string identifier, CancellationToken cancellationToken)
     {
         var key = identifier?.Trim() ?? string.Empty;
-        if (key.Length == 0) return null;
+
+        if (key.Length == 0)
+        {
+            return null;
+        }
 
         CacheEntry? cached;
+
         lock (gate)
         {
             cache.TryGetValue(key, out cached);
+
             if (cached is not null && clock.GetUtcNow() - cached.CapturedAtUtc <= cacheDuration)
+            {
                 return cached.Device;
+            }
         }
 
         DeviceDescriptor? resolved;
         var knownAndroid = cached?.Device.Platform == DevicePlatforms.Android;
+
         if (knownAndroid)
         {
             // UIAutomator often outlasts the cache. Recheck the known ADB serial without
@@ -34,6 +54,7 @@ internal sealed class DeviceTargetResolver(
             var connected = await listAndroidDevices(cancellationToken).ConfigureAwait(false);
             var device = connected.FirstOrDefault(candidate => string.Equals(
                 candidate.Serial, cached!.Device.Identifier, StringComparison.OrdinalIgnoreCase));
+
             if (device is null && cached!.Device.IsVirtual
                 && !string.Equals(key, cached.Device.Identifier, StringComparison.OrdinalIgnoreCase))
             {
@@ -61,10 +82,15 @@ internal sealed class DeviceTargetResolver(
             // Retain a known serial through disconnect/reconnect, but do not cache an
             // unstarted AVD name: its runtime serial is not known until it boots.
             if (resolved is not null && (resolved.IsBooted || knownAndroid))
+            {
                 cache[key] = new CacheEntry(clock.GetUtcNow(), resolved);
+            }
             else
+            {
                 cache.Remove(key);
+            }
         }
+
         return resolved;
     }
 
@@ -72,12 +98,17 @@ internal sealed class DeviceTargetResolver(
     {
         var exact = inventory.Devices.FirstOrDefault(device => string.Equals(
             device.Identifier, key, StringComparison.OrdinalIgnoreCase));
-        if (exact is not null) return exact;
+
+        if (exact is not null)
+        {
+            return exact;
+        }
 
         var matches = inventory.Devices.Where(device => device.IsBooted
-                && device.Platform == DevicePlatforms.Android && device.IsVirtual
-                && string.Equals(device.Name, key, StringComparison.OrdinalIgnoreCase))
+            && device.Platform == DevicePlatforms.Android && device.IsVirtual
+            && string.Equals(device.Name, key, StringComparison.OrdinalIgnoreCase))
             .Take(2).ToArray();
+
         return matches.Length == 1 ? matches[0] : null;
     }
 

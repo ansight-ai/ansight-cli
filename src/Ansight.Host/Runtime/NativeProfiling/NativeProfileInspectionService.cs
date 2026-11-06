@@ -28,7 +28,9 @@ internal sealed partial class NativeProfileInspectionService
     public NativeProfileArtifactLocation? GetArtifact(string captureId, string? artifactKind = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var normalizedCaptureId = captureId.Trim();
+
         if (!captureStore.TryLoadManifest(normalizedCaptureId, out var manifest)
             || manifest is null)
         {
@@ -41,6 +43,7 @@ internal sealed partial class NativeProfileInspectionService
                 candidate.Kind,
                 artifactKind.Trim(),
                 StringComparison.Ordinal));
+
         if (artifact is null
             || !captureStore.TryResolveArtifactPath(manifest, artifact.Kind, out var path)
             || path is null)
@@ -60,7 +63,9 @@ internal sealed partial class NativeProfileInspectionService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var normalizedCaptureId = captureId.Trim();
+
         if (!captureStore.TryLoadManifest(normalizedCaptureId, out var manifest)
             || manifest is null)
         {
@@ -81,8 +86,10 @@ internal sealed partial class NativeProfileInspectionService
             .Where(artifact => !resolvedArtifactKinds.Contains(artifact.Kind))
             .Select(artifact =>
                 $"Artifact '{artifact.Kind}' is listed in the manifest but is missing or outside the capture directory."));
+
         InstrumentsTocInspection? instruments = null;
         PerfettoCaptureInspection? perfetto = null;
+
         if (string.Equals(manifest.Platform, NativeProfilePlatforms.Ios, StringComparison.Ordinal))
         {
             try
@@ -105,6 +112,7 @@ internal sealed partial class NativeProfileInspectionService
         double? captureElapsedSeconds = manifest.StartedUtc is not null && manifest.CompletedUtc is not null
             ? Math.Max(0, (manifest.CompletedUtc.Value - manifest.StartedUtc.Value).TotalSeconds)
             : null;
+
         return new NativeProfileCaptureInspection(
             AnalyzerVersion,
             manifest.CaptureId,
@@ -125,7 +133,9 @@ internal sealed partial class NativeProfileInspectionService
     public InstrumentsTocInspection InspectInstrumentsToc(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var normalizedCaptureId = captureId.Trim();
+
         if (!captureStore.TryLoadManifest(normalizedCaptureId, out var manifest)
             || manifest is null
             || !string.Equals(manifest.Platform, NativeProfilePlatforms.Ios, StringComparison.Ordinal))
@@ -134,9 +144,9 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         if (!captureStore.TryResolveArtifactPath(
-                manifest,
-                InstrumentsProfileCaptureAdapter.TableOfContentsArtifactKind,
-                out var tocPath)
+            manifest,
+            InstrumentsProfileCaptureAdapter.TableOfContentsArtifactKind,
+            out var tocPath)
             || tocPath is null)
         {
             throw new InvalidOperationException(
@@ -181,6 +191,7 @@ internal sealed partial class NativeProfileInspectionService
         CancellationToken cancellationToken = default)
     {
         var path = ResolveTraceProcessorPath();
+
         if (path is null)
         {
             return new NativeProfileInspectionToolchain(
@@ -200,6 +211,7 @@ internal sealed partial class NativeProfileInspectionService
                     TimeSpan.FromSeconds(15)),
                 outputReceived: null,
                 cancellationToken).ConfigureAwait(false);
+
             return new NativeProfileInspectionToolchain(
                 result.IsSuccess,
                 path,
@@ -226,6 +238,7 @@ internal sealed partial class NativeProfileInspectionService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
         ValidateSql(sql);
+
         if (maximumRows is < 1 or > 10_000)
         {
             throw new ArgumentOutOfRangeException(
@@ -234,6 +247,7 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         var normalizedCaptureId = captureId.Trim();
+
         if (!captureStore.TryLoadManifest(normalizedCaptureId, out var manifest)
             || manifest is null
             || !string.Equals(manifest.Platform, NativeProfilePlatforms.Android, StringComparison.Ordinal))
@@ -242,9 +256,9 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         if (!captureStore.TryResolveArtifactPath(
-                manifest,
-                PerfettoProfileCaptureAdapter.TraceArtifactKind,
-                out var tracePath)
+            manifest,
+            PerfettoProfileCaptureAdapter.TraceArtifactKind,
+            out var tracePath)
             || tracePath is null)
         {
             throw new InvalidOperationException(
@@ -252,6 +266,7 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         var toolchain = await GetPerfettoToolchainAsync(cancellationToken).ConfigureAwait(false);
+
         if (!toolchain.IsAvailable || toolchain.ToolPath is null)
         {
             throw new InvalidOperationException(toolchain.Message);
@@ -267,6 +282,7 @@ internal sealed partial class NativeProfileInspectionService
                 TimeSpan.FromSeconds(90)),
             outputReceived: null,
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             var detail = ReadOutput(result);
@@ -279,6 +295,7 @@ internal sealed partial class NativeProfileInspectionService
         var table = PerfettoCsvParser.Parse(result.StandardOutput);
         var wasTruncated = table.Rows.Count > maximumRows;
         var rows = table.Rows.Take(maximumRows).ToArray();
+
         return new PerfettoQueryInspection(
             normalizedCaptureId,
             toolchain,
@@ -297,13 +314,15 @@ internal sealed partial class NativeProfileInspectionService
         string? configPath = null;
         IReadOnlyList<string> dataSources = [];
         int? configuredDurationMilliseconds = null;
+
         if (captureStore.TryResolveArtifactPath(
-                manifest,
-                PerfettoProfileCaptureAdapter.ConfigArtifactKind,
-                out var resolvedConfigPath)
+            manifest,
+            PerfettoProfileCaptureAdapter.ConfigArtifactKind,
+            out var resolvedConfigPath)
             && resolvedConfigPath is not null)
         {
             configPath = resolvedConfigPath;
+
             var config = await File.ReadAllTextAsync(configPath, cancellationToken).ConfigureAwait(false);
             dataSources = DataSourceNameRegex().Matches(config)
                 .Cast<Match>()
@@ -312,7 +331,9 @@ internal sealed partial class NativeProfileInspectionService
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
+
             var durationMatch = DurationMillisecondsRegex().Match(config);
+
             if (durationMatch.Success
                 && int.TryParse(
                     durationMatch.Groups["duration"].Value,
@@ -330,6 +351,7 @@ internal sealed partial class NativeProfileInspectionService
 
         var toolchain = await GetPerfettoToolchainAsync(cancellationToken).ConfigureAwait(false);
         PerfettoQueryInspection? traceOverview = null;
+
         if (toolchain.IsAvailable)
         {
             try
@@ -375,7 +397,7 @@ internal sealed partial class NativeProfileInspectionService
         NativeProfileArtifact artifact)
     {
         return captureStore.TryResolveArtifactPath(manifest, artifact.Kind, out var path)
-               && path is not null
+            && path is not null
             ? new NativeProfileArtifactLocation(manifest.CaptureId, manifest.Platform, path, artifact)
             : null;
     }
@@ -388,20 +410,22 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         var environmentOverride = Environment.GetEnvironmentVariable("ANSIGHT_TRACE_PROCESSOR_PATH");
+
         if (!string.IsNullOrWhiteSpace(environmentOverride))
         {
             return ResolveConfiguredExecutable(environmentOverride.Trim());
         }
 
         var executableNames = OperatingSystem.IsWindows()
-            ? new[] { "trace_processor.exe", "trace_processor_shell.exe", "trace_processor", "trace_processor_shell" }
-            : new[] { "trace_processor", "trace_processor_shell" };
+            ? new[] { "trace_processor.exe", "trace_processor_shell.exe", "trace_processor", "trace_processor_shell" } : new[] { "trace_processor", "trace_processor_shell" };
+
         foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var executableName in executableNames)
             {
                 var candidate = Path.Combine(directory.Trim('"'), executableName);
+
                 if (File.Exists(candidate))
                 {
                     return Path.GetFullPath(candidate);
@@ -415,6 +439,7 @@ internal sealed partial class NativeProfileInspectionService
     private static string? ResolveConfiguredExecutable(string configuredPath)
     {
         var expandedPath = Environment.ExpandEnvironmentVariables(configuredPath.Trim().Trim('"'));
+
         if (File.Exists(expandedPath))
         {
             return Path.GetFullPath(expandedPath);
@@ -426,8 +451,8 @@ internal sealed partial class NativeProfileInspectionService
         }
 
         var executableNames = OperatingSystem.IsWindows()
-            ? new[] { "trace_processor.exe", "trace_processor_shell.exe", "trace_processor", "trace_processor_shell" }
-            : new[] { "trace_processor", "trace_processor_shell" };
+            ? new[] { "trace_processor.exe", "trace_processor_shell.exe", "trace_processor", "trace_processor_shell" } : new[] { "trace_processor", "trace_processor_shell" };
+
         return executableNames
             .Select(name => Path.Combine(expandedPath, name))
             .Where(File.Exists)
@@ -438,6 +463,7 @@ internal sealed partial class NativeProfileInspectionService
     private static void ValidateSql(string sql)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
         if (sql.Length > MaximumSqlLength)
         {
             throw new ArgumentException(
@@ -448,6 +474,7 @@ internal sealed partial class NativeProfileInspectionService
         var validationText = SqlStringOrCommentRegex().Replace(sql, " ");
         var statements = validationText
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         if (statements.Length != 1)
         {
             throw new ArgumentException(
@@ -460,6 +487,7 @@ internal sealed partial class NativeProfileInspectionService
             .Groups["token"]
             .Value
             .ToUpperInvariant();
+
         if (firstToken is not ("SELECT" or "WITH"))
         {
             throw new ArgumentException(
@@ -483,21 +511,23 @@ internal sealed partial class NativeProfileInspectionService
             XmlResolver = null
         };
         using var reader = XmlReader.Create(path, settings);
+
         return XDocument.Load(reader, LoadOptions.None);
     }
 
     private static string? ReadSchemaName(XElement element)
         => ReadAttribute(element, "schema")
-           ?? ReadAttribute(element, "name")
-           ?? ReadAttribute(element, "id");
+            ?? ReadAttribute(element, "name")
+            ?? ReadAttribute(element, "id");
 
     private static InstrumentsProcessInspection? CreateProcessInspection(XElement element)
     {
         var processId = ReadAttribute(element, "pid") ?? ReadAttribute(element, "process-id");
         var name = ReadAttribute(element, "name")
-                   ?? ReadAttribute(element, "process-name")
-                   ?? ReadAttribute(element, "label");
+            ?? ReadAttribute(element, "process-name")
+            ?? ReadAttribute(element, "label");
         var path = ReadAttribute(element, "path");
+
         return processId is null && name is null && path is null
             ? null
             : new InstrumentsProcessInspection(processId, name, path);
@@ -519,12 +549,14 @@ internal sealed partial class NativeProfileInspectionService
         var output = string.IsNullOrWhiteSpace(result.StandardOutput)
             ? result.StandardError
             : result.StandardOutput;
+
         return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
     }
 
     private static string NormalizeEnum<T>(T value) where T : struct, Enum
     {
         var text = value.ToString();
+
         return text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
     }
 
@@ -542,178 +574,4 @@ internal sealed partial class NativeProfileInspectionService
 
     [GeneratedRegex(@"\b(ATTACH|DETACH|CREATE|DROP|INSERT|UPDATE|DELETE|REPLACE|ALTER|VACUUM|REINDEX)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SqlMutationKeywordRegex();
-}
-
-internal sealed record NativeProfileArtifactLocation(
-    string CaptureId,
-    string Platform,
-    string Path,
-    NativeProfileArtifact Artifact);
-
-internal sealed record NativeProfileCaptureInspection(
-    string AnalyzerVersion,
-    string CaptureId,
-    string Platform,
-    string Engine,
-    string Preset,
-    string State,
-    int RequestedDurationSeconds,
-    double? CaptureElapsedSeconds,
-    string CaptureDirectoryPath,
-    NativeProfileArtifactLocation? AuthoritativeArtifact,
-    IReadOnlyList<NativeProfileArtifactLocation> Artifacts,
-    InstrumentsTocInspection? Instruments,
-    PerfettoCaptureInspection? Perfetto,
-    IReadOnlyList<string> Warnings);
-
-internal sealed record InstrumentsTocInspection(
-    string Path,
-    string RootElement,
-    int RunCount,
-    int TableCount,
-    IReadOnlyList<InstrumentsSchemaInspection> Schemas,
-    IReadOnlyList<InstrumentsProcessInspection> Processes);
-
-internal sealed record InstrumentsSchemaInspection(string Schema, int Occurrences);
-
-internal sealed record InstrumentsProcessInspection(string? ProcessId, string? Name, string? Path);
-
-internal sealed record NativeProfileInspectionToolchain(
-    bool IsAvailable,
-    string? ToolPath,
-    string? Version,
-    string Message);
-
-internal sealed record PerfettoCaptureInspection(
-    string? ConfigPath,
-    int? ConfiguredDurationMilliseconds,
-    IReadOnlyList<string> DataSources,
-    NativeProfileInspectionToolchain Toolchain,
-    PerfettoQueryInspection? TraceOverview,
-    IReadOnlyList<string> Warnings);
-
-internal sealed record PerfettoQueryInspection(
-    string CaptureId,
-    NativeProfileInspectionToolchain Toolchain,
-    string Sql,
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    bool WasTruncated,
-    int RowCount);
-
-internal sealed record PerfettoCsvTable(
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string?>> Rows);
-
-internal static class PerfettoCsvParser
-{
-    public static PerfettoCsvTable Parse(string csv)
-    {
-        if (string.IsNullOrWhiteSpace(csv))
-        {
-            return new PerfettoCsvTable([], []);
-        }
-
-        var records = ParseRecords(csv);
-        if (records.Count == 0)
-        {
-            return new PerfettoCsvTable([], []);
-        }
-
-        var columns = records[0].Select(static value => value ?? string.Empty).ToArray();
-        var rows = records.Skip(1)
-            .Where(record => record.Count > 1 || !string.IsNullOrEmpty(record[0]))
-            .Select(record => (IReadOnlyList<string?>)NormalizeRecord(record, columns.Length))
-            .ToArray();
-        return new PerfettoCsvTable(columns, rows);
-    }
-
-    private static IReadOnlyList<List<string?>> ParseRecords(string csv)
-    {
-        var records = new List<List<string?>>();
-        var record = new List<string?>();
-        var field = new StringBuilder();
-        var inQuotes = false;
-        for (var index = 0; index < csv.Length; index++)
-        {
-            var character = csv[index];
-            if (inQuotes)
-            {
-                if (character == '"')
-                {
-                    if (index + 1 < csv.Length && csv[index + 1] == '"')
-                    {
-                        field.Append('"');
-                        index++;
-                    }
-                    else
-                    {
-                        inQuotes = false;
-                    }
-                }
-                else
-                {
-                    field.Append(character);
-                }
-
-                continue;
-            }
-
-            switch (character)
-            {
-                case '"' when field.Length == 0:
-                    inQuotes = true;
-                    break;
-                case ',':
-                    record.Add(field.ToString());
-                    field.Clear();
-                    break;
-                case '\r':
-                    if (index + 1 < csv.Length && csv[index + 1] == '\n')
-                    {
-                        index++;
-                    }
-
-                    CompleteRecord(records, record, field);
-                    break;
-                case '\n':
-                    CompleteRecord(records, record, field);
-                    break;
-                default:
-                    field.Append(character);
-                    break;
-            }
-        }
-
-        if (field.Length > 0 || record.Count > 0)
-        {
-            CompleteRecord(records, record, field);
-        }
-
-        return records;
-    }
-
-    private static void CompleteRecord(
-        ICollection<List<string?>> records,
-        List<string?> record,
-        StringBuilder field)
-    {
-        record.Add(field.ToString());
-        records.Add([.. record]);
-        record.Clear();
-        field.Clear();
-    }
-
-    private static IReadOnlyList<string?> NormalizeRecord(IReadOnlyList<string?> record, int columnCount)
-    {
-        var normalized = new string?[columnCount];
-        for (var index = 0; index < normalized.Length && index < record.Count; index++)
-        {
-            normalized[index] = string.Equals(record[index], "[NULL]", StringComparison.Ordinal)
-                ? null
-                : record[index];
-        }
-
-        return normalized;
-    }
 }

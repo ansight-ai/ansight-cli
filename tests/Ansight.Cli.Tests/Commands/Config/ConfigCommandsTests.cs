@@ -46,6 +46,7 @@ public sealed class ConfigCommandsTests
             new LocalSettingsStore(dataDirectory).ExplorerPath);
 
         standardOutput.GetStringBuilder().Clear();
+
         var getExitCode = ConfigCommands.Run(
             CliArguments.Parse(["config", "get", "explorer-path", "--json", "--data-dir", dataDirectory]),
             new CliOutput(true, standardOutput, standardError));
@@ -58,6 +59,7 @@ public sealed class ConfigCommandsTests
             document.RootElement.GetProperty("setting").GetProperty("value").GetString());
 
         standardOutput.GetStringBuilder().Clear();
+
         var unsetExitCode = ConfigCommands.Run(
             CliArguments.Parse(["config", "unset", "explorer-path", "--data-dir", dataDirectory]),
             new CliOutput(false, standardOutput, standardError));
@@ -101,6 +103,7 @@ public sealed class ConfigCommandsTests
         Assert.Equal(47231, new LocalSettingsStore(dataDirectory).ExplorerPort);
 
         standardOutput.GetStringBuilder().Clear();
+
         var getExitCode = ConfigCommands.Run(
             CliArguments.Parse(["config", "get", "explorer-port", "--json", "--data-dir", dataDirectory]),
             new CliOutput(true, standardOutput, standardError));
@@ -118,6 +121,7 @@ public sealed class ConfigCommandsTests
             setting => setting.GetProperty("name").GetString() == "explorer-path");
 
         standardOutput.GetStringBuilder().Clear();
+
         var unsetExitCode = ConfigCommands.Run(
             CliArguments.Parse(["config", "unset", "explorer-port", "--data-dir", dataDirectory]),
             new CliOutput(false, standardOutput, standardError));

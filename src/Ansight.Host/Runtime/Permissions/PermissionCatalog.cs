@@ -5,19 +5,31 @@ internal static class PermissionCatalog
     // Shared names describe the closest native resource; the result exposes the exact mapping.
     public static readonly IReadOnlyDictionary<string, string> Ios = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["camera"] = "camera", ["microphone"] = "microphone", ["contacts"] = "contacts",
-        ["calendar"] = "calendar", ["photos"] = "photos", ["location"] = "location",
-        ["locationAlways"] = "location-always", ["mediaLibrary"] = "media-library",
-        ["motion"] = "motion", ["notifications"] = "notifications"
+        ["camera"] = "camera",
+        ["microphone"] = "microphone",
+        ["contacts"] = "contacts",
+        ["calendar"] = "calendar",
+        ["photos"] = "photos",
+        ["location"] = "location",
+        ["locationAlways"] = "location-always",
+        ["mediaLibrary"] = "media-library",
+        ["motion"] = "motion",
+        ["notifications"] = "notifications"
     };
 
     public static readonly IReadOnlyDictionary<string, string> TccServices = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["camera"] = "kTCCServiceCamera", ["microphone"] = "kTCCServiceMicrophone",
-        ["contacts"] = "kTCCServiceAddressBook", ["contacts-limited"] = "kTCCServiceContactsLimited",
-        ["calendar"] = "kTCCServiceCalendar", ["photos"] = "kTCCServicePhotos",
-        ["photos-add"] = "kTCCServicePhotosAdd", ["media-library"] = "kTCCServiceMediaLibrary",
-        ["motion"] = "kTCCServiceMotion", ["reminders"] = "kTCCServiceReminders", ["siri"] = "kTCCServiceSiri"
+        ["camera"] = "kTCCServiceCamera",
+        ["microphone"] = "kTCCServiceMicrophone",
+        ["contacts"] = "kTCCServiceAddressBook",
+        ["contacts-limited"] = "kTCCServiceContactsLimited",
+        ["calendar"] = "kTCCServiceCalendar",
+        ["photos"] = "kTCCServicePhotos",
+        ["photos-add"] = "kTCCServicePhotosAdd",
+        ["media-library"] = "kTCCServiceMediaLibrary",
+        ["motion"] = "kTCCServiceMotion",
+        ["reminders"] = "kTCCServiceReminders",
+        ["siri"] = "kTCCServiceSiri"
     };
 
     public static string[] Android(string permission, int apiLevel, int targetSdk) => permission switch
@@ -38,10 +50,3 @@ internal static class PermissionCatalog
         _ => []
     };
 }
-
-internal sealed record NativePermissionState(string Permission, string Status);
-
-internal sealed record PermissionResult(
-    string Operation, string Permission, string Platform, string DeviceId, string BundleIdentifier,
-    bool Supported, bool IsSuccess, string Status, string Backend, string? Message,
-    IReadOnlyList<NativePermissionState> NativePermissions);

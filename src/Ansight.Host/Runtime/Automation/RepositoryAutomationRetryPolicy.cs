@@ -21,6 +21,7 @@ internal sealed record RepositoryAutomationRetryPolicy(
 
         var exponent = Math.Max(0, nextAttemptNumber - 2);
         var delayMilliseconds = InitialDelay.TotalMilliseconds * Math.Pow(BackoffMultiplier, exponent);
+
         return TimeSpan.FromMilliseconds(Math.Min(delayMilliseconds, MaximumDelay.TotalMilliseconds));
     }
 }

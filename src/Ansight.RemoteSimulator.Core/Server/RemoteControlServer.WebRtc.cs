@@ -29,6 +29,7 @@ public sealed partial class RemoteControlServer
         }
 
         var bearerToken = authorization["Bearer ".Length..].Trim();
+
         if (string.IsNullOrWhiteSpace(bearerToken))
         {
             return false;
@@ -37,12 +38,13 @@ public sealed partial class RemoteControlServer
         var result = await accessAuthorizer!
             .AuthorizeAsync(bearerToken, cancellationToken)
             .ConfigureAwait(false);
+
         return result.IsAuthorized;
     }
 
     private static bool IsLoopback(TcpClient client)
         => client.Client.RemoteEndPoint is IPEndPoint remoteEndPoint
-           && IPAddress.IsLoopback(remoteEndPoint.Address);
+            && IPAddress.IsLoopback(remoteEndPoint.Address);
 
     private async Task<OfferResponse> CreateWebRtcAnswerAsync(
         string deviceUdid,
@@ -57,12 +59,14 @@ public sealed partial class RemoteControlServer
             message => DeliverWebRtcInputAsync(sessionId, message));
         EventHandler<WebRtcInputMessageEventArgs>? inputHandler = null;
         inputHandler = (_, args) => inputDispatcher.Enqueue(args.Message);
+
         var registration = new SessionRegistration(
             session,
             inputHandler,
             inputDispatcher,
             grantedScopes);
         session.InputReceived += inputHandler;
+
         if (!webRtcSessions.TryAdd(sessionId, registration))
         {
             session.InputReceived -= inputHandler;
@@ -76,6 +80,7 @@ public sealed partial class RemoteControlServer
             var answer = await session
                 .CreateAnswerAsync(browserOffer, cancellationToken)
                 .ConfigureAwait(false);
+
             return new OfferResponse(
                 sessionId,
                 answer.Type,
@@ -106,12 +111,15 @@ public sealed partial class RemoteControlServer
             }
 
             using var document = JsonDocument.Parse(message);
+
             if (document.RootElement.TryGetProperty("kind", out var kind)
                 && string.Equals(kind.GetString(), "companion_presence", StringComparison.Ordinal))
             {
                 ApplyCompanionPresence(sessionId, registration, document.RootElement);
+
                 return;
             }
+
             if (document.RootElement.TryGetProperty("kind", out kind)
                 && string.Equals(kind.GetString(), "recording_request", StringComparison.Ordinal))
             {
@@ -119,8 +127,10 @@ public sealed partial class RemoteControlServer
                     registration.Session,
                     registration.GrantedScopes,
                     document.RootElement).ConfigureAwait(false);
+
                 return;
             }
+
             if (document.RootElement.TryGetProperty("kind", out kind)
                 && string.Equals(kind.GetString(), "inspection_request", StringComparison.Ordinal))
             {
@@ -128,12 +138,15 @@ public sealed partial class RemoteControlServer
                     registration.Session,
                     registration.GrantedScopes,
                     document.RootElement).ConfigureAwait(false);
+
                 return;
             }
+
             if (document.RootElement.TryGetProperty("button", out _))
             {
-                var buttonEvent = document.RootElement.Deserialize<RemoteButtonEvent>(JsonOptions)
-                    ?.NormalizeAndValidate();
+                var buttonEvent = document.RootElement.Deserialize<RemoteButtonEvent>(jsonOptions)
+                                ?.NormalizeAndValidate();
+
                 if (buttonEvent is null
                     || !IsMatchingBootedDevice(buttonEvent.DeviceUdid, registration.Session.DeviceUdid))
                 {
@@ -141,13 +154,15 @@ public sealed partial class RemoteControlServer
                 }
 
                 await inputSink.SendButtonAsync(buttonEvent).ConfigureAwait(false);
+
                 return;
             }
 
             if (document.RootElement.TryGetProperty("usageCode", out _))
             {
-                var keyEvent = document.RootElement.Deserialize<RemoteKeyEvent>(JsonOptions)
-                    ?.NormalizeAndValidate();
+                var keyEvent = document.RootElement.Deserialize<RemoteKeyEvent>(jsonOptions)
+                                ?.NormalizeAndValidate();
+
                 if (keyEvent is null
                     || !IsMatchingBootedDevice(keyEvent.DeviceUdid, registration.Session.DeviceUdid))
                 {
@@ -155,13 +170,15 @@ public sealed partial class RemoteControlServer
                 }
 
                 await inputSink.SendKeyAsync(keyEvent).ConfigureAwait(false);
+
                 return;
             }
 
             if (document.RootElement.TryGetProperty("text", out _))
             {
-                var textEvent = document.RootElement.Deserialize<RemoteTextEvent>(JsonOptions)
-                    ?.NormalizeAndValidate();
+                var textEvent = document.RootElement.Deserialize<RemoteTextEvent>(jsonOptions)
+                                ?.NormalizeAndValidate();
+
                 if (textEvent is null
                     || !IsMatchingBootedDevice(textEvent.DeviceUdid, registration.Session.DeviceUdid))
                 {
@@ -169,11 +186,13 @@ public sealed partial class RemoteControlServer
                 }
 
                 await inputSink.SendTextAsync(textEvent).ConfigureAwait(false);
+
                 return;
             }
 
-            var pointerEvent = document.RootElement.Deserialize<RemotePointerEvent>(JsonOptions)
+            var pointerEvent = document.RootElement.Deserialize<RemotePointerEvent>(jsonOptions)
                 ?.NormalizeAndValidate();
+
             if (pointerEvent is null
                 || !IsMatchingBootedDevice(pointerEvent.DeviceUdid, registration.Session.DeviceUdid))
             {
@@ -194,7 +213,8 @@ public sealed partial class RemoteControlServer
         IReadOnlySet<string> grantedScopes,
         JsonElement payload)
     {
-        var request = payload.Deserialize<InspectionRequest>(JsonOptions);
+        var request = payload.Deserialize<InspectionRequest>(jsonOptions);
+
         if (request is null
             || string.IsNullOrWhiteSpace(request.RequestId)
             || request.RequestId.Length > 128)
@@ -209,6 +229,7 @@ public sealed partial class RemoteControlServer
                 request.RequestId,
                 HttpStatusCode.Forbidden,
                 "Live app inspection requires the inspect.read scope.").ConfigureAwait(false);
+
             return;
         }
 
@@ -219,6 +240,7 @@ public sealed partial class RemoteControlServer
                 request.RequestId,
                 HttpStatusCode.ServiceUnavailable,
                 "Live app inspection is unavailable on this host.").ConfigureAwait(false);
+
             return;
         }
 
@@ -231,6 +253,7 @@ public sealed partial class RemoteControlServer
                     request.Operation,
                     request.SessionId,
                     request.Arguments)).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 await SendInspectionFailureAsync(
@@ -238,6 +261,7 @@ public sealed partial class RemoteControlServer
                     request.RequestId,
                     result.StatusCode,
                     result.Error ?? "The Ansight host rejected the inspection request.").ConfigureAwait(false);
+
                 return;
             }
 
@@ -272,12 +296,14 @@ public sealed partial class RemoteControlServer
                 requestId,
                 HttpStatusCode.RequestEntityTooLarge,
                 "The inspection response is too large for remote review.").ConfigureAwait(false);
+
             return;
         }
 
         var chunkCount = Math.Max(
             1,
             (int)Math.Ceiling(content.Length / (double)RecordingResponseChunkBytes));
+
         for (var chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
         {
             var offset = chunkIndex * RecordingResponseChunkBytes;
@@ -295,7 +321,8 @@ public sealed partial class RemoteControlServer
                     chunkCount,
                     data,
                     null),
-                JsonOptions);
+                jsonOptions);
+
             if (!await SendDataChannelMessageAsync(session, message).ConfigureAwait(false))
             {
                 return;
@@ -319,7 +346,7 @@ public sealed partial class RemoteControlServer
                 0,
                 string.Empty,
                 error),
-            JsonOptions);
+            jsonOptions);
         await SendDataChannelMessageAsync(session, message).ConfigureAwait(false);
     }
 
@@ -328,7 +355,8 @@ public sealed partial class RemoteControlServer
         IReadOnlySet<string> grantedScopes,
         JsonElement payload)
     {
-        var request = payload.Deserialize<RecordingRequest>(JsonOptions);
+        var request = payload.Deserialize<RecordingRequest>(jsonOptions);
+
         if (request is null
             || string.IsNullOrWhiteSpace(request.RequestId)
             || request.RequestId.Length > 128)
@@ -347,6 +375,7 @@ public sealed partial class RemoteControlServer
                     HttpStatusCode.OK,
                     liveFrame.ContentType,
                     liveFrame.Content).ConfigureAwait(false);
+
                 return;
             }
 
@@ -357,6 +386,7 @@ public sealed partial class RemoteControlServer
                     request.RequestId,
                     HttpStatusCode.Forbidden,
                     "Recording review requires the recordings.read scope.").ConfigureAwait(false);
+
                 return;
             }
 
@@ -365,11 +395,13 @@ public sealed partial class RemoteControlServer
                 var validBatchRequest = IsValidRecordingIdentifier(request.BatchId)
                     && IsValidRecordingIdentifier(request.RecordingId)
                     && IsValidRecordingIdentifier(request.FrameId);
+
                 if (!validBatchRequest)
                 {
                     await SendRecordingFailureAsync(session, request.RequestId,
                         HttpStatusCode.BadRequest, "An annotation batch, session and frame are required.")
                         .ConfigureAwait(false);
+
                     return;
                 }
 
@@ -378,16 +410,19 @@ public sealed partial class RemoteControlServer
                         session.DeviceUdid, request.BatchId!, request.RecordingId!, request.FrameId!)
                         .ConfigureAwait(false)
                     : null;
+
                 if (frame is null)
                 {
                     await SendRecordingFailureAsync(session, request.RequestId,
                         HttpStatusCode.NotFound, "This annotation frame has expired. Start a new annotation set.")
                         .ConfigureAwait(false);
+
                     return;
                 }
 
                 await SendRecordingResponseAsync(session, request.RequestId, HttpStatusCode.OK,
                     frame.ContentType, frame.Content).ConfigureAwait(false);
+
                 return;
             }
 
@@ -398,119 +433,137 @@ public sealed partial class RemoteControlServer
                     request.RequestId,
                     HttpStatusCode.ServiceUnavailable,
                     "Recording review is unavailable on this host.").ConfigureAwait(false);
+
                 return;
             }
 
             switch (request.Operation)
             {
                 case "list":
-                {
-                    var recordings = await recordingSource.ListAsync().ConfigureAwait(false);
-                    await SendRecordingResponseAsync(
-                        session,
-                        request.RequestId,
-                        HttpStatusCode.OK,
-                        "application/json",
-                        JsonSerializer.SerializeToUtf8Bytes(recordings, JsonOptions)).ConfigureAwait(false);
-                    return;
-                }
+                    {
+                        var recordings = await recordingSource.ListAsync().ConfigureAwait(false);
+                        await SendRecordingResponseAsync(
+                            session,
+                            request.RequestId,
+                            HttpStatusCode.OK,
+                            "application/json",
+                            JsonSerializer.SerializeToUtf8Bytes(recordings, jsonOptions)).ConfigureAwait(false);
+
+                        return;
+                    }
                 case "details" when IsValidRecordingIdentifier(request.RecordingId):
-                {
-                    var details = await recordingSource
-                        .GetAsync(request.RecordingId!)
-                        .ConfigureAwait(false);
-                    if (details is null)
                     {
-                        await SendRecordingFailureAsync(
+                        var details = await recordingSource
+                            .GetAsync(request.RecordingId!)
+                            .ConfigureAwait(false);
+
+                        if (details is null)
+                        {
+                            await SendRecordingFailureAsync(
+                                session,
+                                request.RequestId,
+                                HttpStatusCode.NotFound,
+                                "The recording was not found.").ConfigureAwait(false);
+
+                            return;
+                        }
+
+                        await SendRecordingResponseAsync(
                             session,
                             request.RequestId,
-                            HttpStatusCode.NotFound,
-                            "The recording was not found.").ConfigureAwait(false);
+                            HttpStatusCode.OK,
+                            "application/json",
+                            JsonSerializer.SerializeToUtf8Bytes(details, jsonOptions)).ConfigureAwait(false);
+
                         return;
                     }
-                    await SendRecordingResponseAsync(
-                        session,
-                        request.RequestId,
-                        HttpStatusCode.OK,
-                        "application/json",
-                        JsonSerializer.SerializeToUtf8Bytes(details, JsonOptions)).ConfigureAwait(false);
-                    return;
-                }
                 case "frame" when IsValidRecordingIdentifier(request.RecordingId)
-                                  && IsValidRecordingIdentifier(request.FrameId):
-                {
-                    var frame = await recordingSource
-                        .GetFrameAsync(request.RecordingId!, request.FrameId!)
-                        .ConfigureAwait(false);
-                    if (frame is null)
+                    && IsValidRecordingIdentifier(request.FrameId):
                     {
-                        await SendRecordingFailureAsync(
+                        var frame = await recordingSource
+                            .GetFrameAsync(request.RecordingId!, request.FrameId!)
+                            .ConfigureAwait(false);
+
+                        if (frame is null)
+                        {
+                            await SendRecordingFailureAsync(
+                                session,
+                                request.RequestId,
+                                HttpStatusCode.NotFound,
+                                "The recording frame was not found.").ConfigureAwait(false);
+
+                            return;
+                        }
+
+                        await SendRecordingResponseAsync(
                             session,
                             request.RequestId,
-                            HttpStatusCode.NotFound,
-                            "The recording frame was not found.").ConfigureAwait(false);
+                            HttpStatusCode.OK,
+                            frame.ContentType,
+                            frame.Content).ConfigureAwait(false);
+
                         return;
                     }
-                    await SendRecordingResponseAsync(
-                        session,
-                        request.RequestId,
-                        HttpStatusCode.OK,
-                        frame.ContentType,
-                        frame.Content).ConfigureAwait(false);
-                    return;
-                }
                 case "icon" when IsValidRecordingIdentifier(request.RecordingId):
-                {
-                    var icon = await recordingSource
-                        .GetAppIconAsync(request.RecordingId!)
-                        .ConfigureAwait(false);
-                    if (icon is null)
                     {
-                        await SendRecordingFailureAsync(
+                        var icon = await recordingSource
+                            .GetAppIconAsync(request.RecordingId!)
+                            .ConfigureAwait(false);
+
+                        if (icon is null)
+                        {
+                            await SendRecordingFailureAsync(
+                                session,
+                                request.RequestId,
+                                HttpStatusCode.NotFound,
+                                "The recording app icon was not found.").ConfigureAwait(false);
+
+                            return;
+                        }
+
+                        await SendRecordingResponseAsync(
                             session,
                             request.RequestId,
-                            HttpStatusCode.NotFound,
-                            "The recording app icon was not found.").ConfigureAwait(false);
+                            HttpStatusCode.OK,
+                            icon.ContentType,
+                            icon.Content).ConfigureAwait(false);
+
                         return;
                     }
-                    await SendRecordingResponseAsync(
-                        session,
-                        request.RequestId,
-                        HttpStatusCode.OK,
-                        icon.ContentType,
-                        icon.Content).ConfigureAwait(false);
-                    return;
-                }
                 case "evidence" when IsValidRecordingIdentifier(request.RecordingId)
-                                     && request.StartUtc.HasValue
-                                     && request.EndUtc.HasValue
-                                     && request.EndUtc.Value >= request.StartUtc.Value:
-                {
-                    var evidence = await recordingSource
-                        .GetEvidenceAsync(
+                    && request.StartUtc.HasValue
+                    && request.EndUtc.HasValue
+                    && request.EndUtc.Value >= request.StartUtc.Value:
+                    {
+                        var evidence = await recordingSource
+                            .GetEvidenceAsync(
                             request.RecordingId!,
                             request.StartUtc.Value,
                             request.EndUtc.Value,
                             Math.Clamp(request.MaximumLogCount ?? 250, 1, 1_000),
                             Math.Clamp(request.MaximumMetricSampleCount ?? 2_000, 1, 10_000))
-                        .ConfigureAwait(false);
-                    if (evidence is null)
-                    {
-                        await SendRecordingFailureAsync(
+                            .ConfigureAwait(false);
+
+                        if (evidence is null)
+                        {
+                            await SendRecordingFailureAsync(
+                                session,
+                                request.RequestId,
+                                HttpStatusCode.NotFound,
+                                "The recording was not found.").ConfigureAwait(false);
+
+                            return;
+                        }
+
+                        await SendRecordingResponseAsync(
                             session,
                             request.RequestId,
-                            HttpStatusCode.NotFound,
-                            "The recording was not found.").ConfigureAwait(false);
+                            HttpStatusCode.OK,
+                            "application/json",
+                            JsonSerializer.SerializeToUtf8Bytes(evidence, jsonOptions)).ConfigureAwait(false);
+
                         return;
                     }
-                    await SendRecordingResponseAsync(
-                        session,
-                        request.RequestId,
-                        HttpStatusCode.OK,
-                        "application/json",
-                        JsonSerializer.SerializeToUtf8Bytes(evidence, JsonOptions)).ConfigureAwait(false);
-                    return;
-                }
                 default:
                     await SendRecordingFailureAsync(
                         session,
@@ -544,12 +597,14 @@ public sealed partial class RemoteControlServer
                 requestId,
                 HttpStatusCode.RequestEntityTooLarge,
                 "The recording response is too large for remote review.").ConfigureAwait(false);
+
             return;
         }
 
         var chunkCount = Math.Max(
             1,
             (int)Math.Ceiling(content.Length / (double)RecordingResponseChunkBytes));
+
         for (var chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
         {
             var offset = chunkIndex * RecordingResponseChunkBytes;
@@ -567,7 +622,8 @@ public sealed partial class RemoteControlServer
                     chunkCount,
                     data,
                     null),
-                JsonOptions);
+                jsonOptions);
+
             if (!await SendDataChannelMessageAsync(session, message).ConfigureAwait(false))
             {
                 return;
@@ -591,7 +647,7 @@ public sealed partial class RemoteControlServer
                 0,
                 string.Empty,
                 error),
-            JsonOptions);
+            jsonOptions);
         await SendDataChannelMessageAsync(session, message).ConfigureAwait(false);
     }
 
@@ -600,14 +656,17 @@ public sealed partial class RemoteControlServer
         string message)
     {
         var cancellationToken = serverCancellation?.Token ?? CancellationToken.None;
+
         for (var attempt = 0; attempt < 500 && !cancellationToken.IsCancellationRequested; attempt++)
         {
             if (session.TrySendMessage(message))
             {
                 return true;
             }
+
             await Task.Delay(10, cancellationToken).ConfigureAwait(false);
         }
+
         return false;
     }
 
@@ -641,6 +700,7 @@ public sealed partial class RemoteControlServer
         }
 
         registration.Session.InputReceived -= registration.InputHandler;
+
         try
         {
             await registration.InputDispatcher.DisposeAsync().ConfigureAwait(false);
@@ -660,13 +720,15 @@ public sealed partial class RemoteControlServer
         SessionRegistration registration,
         JsonElement payload)
     {
-        var device = payload.Deserialize<CompanionPresenceMessage>(JsonOptions)?.Normalize();
+        var device = payload.Deserialize<CompanionPresenceMessage>(jsonOptions)?.Normalize();
+
         if (device is null)
         {
             return;
         }
 
         var current = registration;
+
         while (true)
         {
             var updated = current with
@@ -674,12 +736,14 @@ public sealed partial class RemoteControlServer
                 CompanionDevice = device,
                 ConnectedAtUtc = current.ConnectedAtUtc ?? DateTimeOffset.UtcNow
             };
+
             if (webRtcSessions.TryUpdate(sessionId, updated, current))
             {
                 if (current.CompanionDevice != device)
                 {
                     CompanionConnectionsChanged?.Invoke(this, EventArgs.Empty);
                 }
+
                 return;
             }
 
@@ -694,8 +758,9 @@ public sealed partial class RemoteControlServer
     {
         var expectedBytes = Encoding.UTF8.GetBytes(sessionToken);
         var suppliedBytes = Encoding.UTF8.GetBytes(suppliedToken);
+
         return expectedBytes.Length == suppliedBytes.Length
-               && CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes);
+            && CryptographicOperations.FixedTimeEquals(expectedBytes, suppliedBytes);
     }
 
     private static string CreateSessionToken()

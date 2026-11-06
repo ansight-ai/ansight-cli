@@ -11,7 +11,7 @@ internal sealed record CoreDeviceDescriptor(
 {
     public bool IsIos
         => Platform.Contains("ios", StringComparison.OrdinalIgnoreCase)
-           || ProductType.StartsWith("iPhone", StringComparison.OrdinalIgnoreCase)
-           || ProductType.StartsWith("iPad", StringComparison.OrdinalIgnoreCase)
-           || ProductType.StartsWith("iPod", StringComparison.OrdinalIgnoreCase);
+            || ProductType.StartsWith("iPhone", StringComparison.OrdinalIgnoreCase)
+            || ProductType.StartsWith("iPad", StringComparison.OrdinalIgnoreCase)
+            || ProductType.StartsWith("iPod", StringComparison.OrdinalIgnoreCase);
 }

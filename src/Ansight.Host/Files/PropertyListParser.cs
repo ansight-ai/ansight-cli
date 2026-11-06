@@ -12,7 +12,7 @@ internal static class PropertyListParser
     private const int MaximumDepth = 128;
     private const int MaximumNodes = 8_000;
     private const int MaximumValueLength = 2_000;
-    private static readonly DateTimeOffset AppleReferenceDate =
+    private static readonly DateTimeOffset appleReferenceDate =
         new(2001, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     public static PropertyListPreview Parse(ReadOnlyMemory<byte> data)
@@ -34,6 +34,7 @@ internal static class PropertyListParser
         var sourceText = isBinary
             ? document.ToString(SaveOptions.None)
             : document.ToString(SaveOptions.DisableFormatting);
+
         return new PropertyListPreview(
             sourceText,
             isBinary ? "binary plist" : "XML plist",
@@ -50,6 +51,7 @@ internal static class PropertyListParser
             MaxCharactersInDocument = Math.Max(data.Length * 4L, 1_024L)
         });
         var document = XDocument.Load(reader, LoadOptions.None);
+
         if (document.Root is not { Name.LocalName: "plist" } plist)
         {
             throw new InvalidDataException("The XML document does not contain a plist root element.");
@@ -57,12 +59,14 @@ internal static class PropertyListParser
 
         var valueElement = plist.Elements().FirstOrDefault()
             ?? throw new InvalidDataException("The property list does not contain a root value.");
+
         return ReadXmlValue(valueElement, depth: 0);
     }
 
     private static PropertyListValue ReadXmlValue(XElement element, int depth)
     {
         EnsureDepth(depth);
+
         return element.Name.LocalName switch
         {
             "dict" => ReadXmlDictionary(element, depth + 1),
@@ -90,22 +94,26 @@ internal static class PropertyListParser
     private static PropertyListValue ReadXmlDictionary(XElement element, int depth)
     {
         var children = element.Elements().ToArray();
+
         if (children.Length % 2 != 0)
         {
             throw new InvalidDataException("A property-list dictionary has a key without a value.");
         }
 
         var entries = new List<PropertyListEntry>(children.Length / 2);
+
         for (var index = 0; index < children.Length; index += 2)
         {
             if (children[index].Name.LocalName != "key")
             {
                 throw new InvalidDataException("A property-list dictionary entry does not begin with a key.");
             }
+
             entries.Add(new PropertyListEntry(
                 children[index].Value,
                 ReadXmlValue(children[index + 1], depth)));
         }
+
         return new PropertyListValue("dictionary", null, entries);
     }
 
@@ -150,6 +158,7 @@ internal static class PropertyListParser
         }
 
         var children = new List<FileStructuredNode>();
+
         foreach (var entry in value.Entries)
         {
             if (context.IsAtLimit)
@@ -162,6 +171,7 @@ internal static class PropertyListParser
                 context.MarkTruncated();
                 break;
             }
+
             children.Add(BuildStructuredNode(entry.Name, entry.Value, context));
         }
 
@@ -171,6 +181,7 @@ internal static class PropertyListParser
             "array" or "set" => $"{value.Entries.Count:N0} items",
             _ => TrimValue(value.Value)
         };
+
         return new FileStructuredNode(name, value.Kind, summary, children);
     }
 
@@ -181,8 +192,7 @@ internal static class PropertyListParser
         => string.Concat(value.Where(static character => !char.IsWhiteSpace(character)));
 
     private static string? TrimValue(string? value)
-        => value is { Length: > MaximumValueLength }
-            ? $"{value[..MaximumValueLength]}…"
+        => value is { Length: > MaximumValueLength } ? $"{value[..MaximumValueLength]}…"
             : value;
 
     private static void EnsureDepth(int depth)
@@ -213,9 +223,12 @@ internal static class PropertyListParser
             if (IsAtLimit)
             {
                 IsTruncated = true;
+
                 return false;
             }
+
             nodeCount++;
+
             return true;
         }
 
@@ -238,6 +251,7 @@ internal static class PropertyListParser
         public BinaryPropertyListReader(ReadOnlyMemory<byte> data)
         {
             this.data = data;
+
             if (data.Length < 40 || !data.Span.StartsWith("bplist00"u8))
             {
                 throw new InvalidDataException("The binary property-list header is invalid.");
@@ -249,6 +263,7 @@ internal static class PropertyListParser
             objectCount = BinaryPrimitives.ReadUInt64BigEndian(trailer[8..16]);
             topObject = BinaryPrimitives.ReadUInt64BigEndian(trailer[16..24]);
             offsetTableOffset = BinaryPrimitives.ReadUInt64BigEndian(trailer[24..32]);
+
             if (offsetSize is < 1 or > 8
                 || objectReferenceSize is < 1 or > 8
                 || objectCount == 0
@@ -267,6 +282,7 @@ internal static class PropertyListParser
         private PropertyListValue ReadObject(ulong objectIndex, int depth)
         {
             EnsureDepth(depth);
+
             if (objectIndex >= objectCount || !activeObjects.Add(objectIndex))
             {
                 throw new InvalidDataException("The binary property list contains an invalid object graph.");
@@ -278,6 +294,7 @@ internal static class PropertyListParser
                 var marker = ReadByte(offset);
                 var type = marker >> 4;
                 var info = (byte)(marker & 0x0f);
+
                 return type switch
                 {
                     0x0 => ReadSimple(info),
@@ -315,6 +332,7 @@ internal static class PropertyListParser
             var byteCount = 1 << info;
             var bytes = ReadBytes(contentOffset, byteCount);
             var integer = new BigInteger(bytes, isUnsigned: false, isBigEndian: true);
+
             return Scalar("integer", integer.ToString(CultureInfo.InvariantCulture));
         }
 
@@ -328,6 +346,7 @@ internal static class PropertyListParser
                 8 => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(bytes)),
                 _ => throw new InvalidDataException("The binary property list contains an unsupported real value.")
             };
+
             return Scalar("real", value.ToString("R", CultureInfo.InvariantCulture));
         }
 
@@ -337,22 +356,26 @@ internal static class PropertyListParser
             {
                 throw new InvalidDataException("The binary property list contains an invalid date value.");
             }
+
             var seconds = BitConverter.Int64BitsToDouble(
                 BinaryPrimitives.ReadInt64BigEndian(ReadBytes(contentOffset, 8)));
+
             return Scalar(
                 "date",
-                AppleReferenceDate.AddSeconds(seconds).ToString("O", CultureInfo.InvariantCulture));
+                appleReferenceDate.AddSeconds(seconds).ToString("O", CultureInfo.InvariantCulture));
         }
 
         private PropertyListValue ReadData(ulong contentOffset, byte info)
         {
             var length = ReadLength(contentOffset, info, out var valueOffset);
+
             return Scalar("data", Convert.ToBase64String(ReadBytes(valueOffset, length)));
         }
 
         private PropertyListValue ReadAsciiString(ulong contentOffset, byte info)
         {
             var length = ReadLength(contentOffset, info, out var valueOffset);
+
             return Scalar("string", Encoding.ASCII.GetString(ReadBytes(valueOffset, length)));
         }
 
@@ -360,12 +383,14 @@ internal static class PropertyListParser
         {
             var characterCount = ReadLength(contentOffset, info, out var valueOffset);
             var byteCount = checked(characterCount * 2);
+
             return Scalar("string", Encoding.BigEndianUnicode.GetString(ReadBytes(valueOffset, byteCount)));
         }
 
         private PropertyListValue ReadUid(ulong contentOffset, byte info)
         {
             var byteCount = info + 1;
+
             return Scalar(
                 "uid",
                 ReadUnsigned(ReadBytes(contentOffset, byteCount)).ToString(CultureInfo.InvariantCulture));
@@ -379,6 +404,7 @@ internal static class PropertyListParser
         {
             var count = ReadLength(contentOffset, info, out var referencesOffset);
             var entries = new List<PropertyListEntry>(count);
+
             for (var index = 0; index < count; index++)
             {
                 var objectIndex = ReadUnsigned(ReadBytes(
@@ -388,6 +414,7 @@ internal static class PropertyListParser
                     $"[{index}]",
                     ReadObject(objectIndex, depth)));
             }
+
             return new PropertyListValue(kind, null, entries);
         }
 
@@ -396,6 +423,7 @@ internal static class PropertyListParser
             var count = ReadLength(contentOffset, info, out var referencesOffset);
             var valuesOffset = referencesOffset + checked((ulong)(count * objectReferenceSize));
             var entries = new List<PropertyListEntry>(count);
+
             for (var index = 0; index < count; index++)
             {
                 var keyIndex = ReadUnsigned(ReadBytes(
@@ -405,14 +433,17 @@ internal static class PropertyListParser
                     valuesOffset + checked((ulong)(index * objectReferenceSize)),
                     objectReferenceSize));
                 var key = ReadObject(keyIndex, depth);
+
                 if (key.Kind != "string")
                 {
                     throw new InvalidDataException("A binary property-list dictionary key is not a string.");
                 }
+
                 entries.Add(new PropertyListEntry(
                     key.Value ?? string.Empty,
                     ReadObject(valueIndex, depth)));
             }
+
             return new PropertyListValue("dictionary", null, entries);
         }
 
@@ -421,25 +452,33 @@ internal static class PropertyListParser
             if (info < 0x0f)
             {
                 valueOffset = contentOffset;
+
                 return info;
             }
 
             var marker = ReadByte(contentOffset);
+
             if ((marker >> 4) != 0x1)
             {
                 throw new InvalidDataException("A binary property-list length is not encoded as an integer.");
             }
+
             var byteCount = 1 << (marker & 0x0f);
+
             if (byteCount > 8)
             {
                 throw new InvalidDataException("A binary property-list object is too large to preview.");
             }
+
             var length = ReadUnsigned(ReadBytes(contentOffset + 1, byteCount));
+
             if (length > int.MaxValue)
             {
                 throw new InvalidDataException("A binary property-list object is too large to preview.");
             }
+
             valueOffset = contentOffset + 1 + (ulong)byteCount;
+
             return (int)length;
         }
 
@@ -454,6 +493,7 @@ internal static class PropertyListParser
             {
                 throw new InvalidDataException("The binary property list contains an out-of-range offset.");
             }
+
             return data.Span[(int)offset];
         }
 
@@ -463,6 +503,7 @@ internal static class PropertyListParser
             {
                 throw new InvalidDataException("The binary property list contains out-of-range data.");
             }
+
             return data.Span.Slice((int)offset, count);
         }
 
@@ -472,11 +513,14 @@ internal static class PropertyListParser
             {
                 throw new InvalidDataException("The binary property list contains an invalid integer width.");
             }
+
             ulong value = 0;
+
             foreach (var item in bytes)
             {
                 value = (value << 8) | item;
             }
+
             return value;
         }
     }

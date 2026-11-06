@@ -12,15 +12,16 @@ internal static class SessionCaptureFileSystem
     internal static void WriteJsonAtomic<T>(string filePath, T value, JsonSerializerOptions options)
     {
         var tempFilePath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+
         try
         {
             using (var stream = new FileStream(
-                       tempFilePath,
-                       FileMode.CreateNew,
-                       FileAccess.Write,
-                       FileShare.None,
-                       bufferSize: 64 * 1024,
-                       FileOptions.SequentialScan))
+                tempFilePath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 64 * 1024,
+                FileOptions.SequentialScan))
             {
                 JsonSerializer.Serialize(stream, value, options);
             }
@@ -73,7 +74,6 @@ internal static class SessionCaptureFileSystem
                 Header = SessionVisualTreeSnapshotHeader.Create(snapshot),
                 Snapshot = snapshot
             });
-
     }
 
     internal static string GetVisualTreeSnapshotFilePath(string visualTreesDirectoryPath, DateTimeOffset capturedAtUtc)
@@ -137,22 +137,26 @@ internal static class SessionCaptureFileSystem
     internal static string BuildArtifactSnapshotFileName(SessionArtifactSnapshot snapshot)
     {
         var timestamp = snapshot.CapturedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd'T'HH-mm-ss.fffffff'Z'", CultureInfo.InvariantCulture);
+
         return $"{timestamp}-{FileNameUtil.Sanitize(snapshot.SnapshotId)}.json";
     }
 
     internal static PersistedSnapshotDocumentCollectionState LoadPersistedVisualTreeSnapshotDocumentState(string directoryPath)
     {
         var state = new PersistedSnapshotDocumentCollectionState();
+
         if (!Directory.Exists(directoryPath))
         {
             return state;
         }
 
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
-                     .OrderBy(filePath => filePath, StringComparer.Ordinal))
+            .OrderBy(filePath => filePath, StringComparer.Ordinal))
         {
             state.FilePaths.Add(filePath);
+
             var document = SessionSnapshotReader.TryLoadDocument<SessionVisualTreeSnapshotDocument>(filePath);
+
             if (document?.Snapshot is not { } snapshot
                 || !string.Equals(document.Schema, SessionVisualTreeSnapshotDocument.SchemaName, StringComparison.Ordinal)
                 || string.IsNullOrWhiteSpace(snapshot.SnapshotId))
@@ -169,17 +173,20 @@ internal static class SessionCaptureFileSystem
     internal static PersistedSnapshotDocumentCollectionState LoadPersistedArtifactSnapshotDocumentState(string directoryPath)
     {
         var state = new PersistedSnapshotDocumentCollectionState();
+
         if (!Directory.Exists(directoryPath))
         {
             return state;
         }
 
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
-                     .OrderBy(filePath => filePath, StringComparer.Ordinal))
+            .OrderBy(filePath => filePath, StringComparer.Ordinal))
         {
             state.FilePaths.Add(filePath);
+
             var snapshot = SessionSnapshotReader.TryLoadDocument<SessionArtifactSnapshotDocument>(filePath)?.Snapshot
-                           ?? SessionSnapshotReader.TryLoadDocument<SessionArtifactSnapshot>(filePath);
+                ?? SessionSnapshotReader.TryLoadDocument<SessionArtifactSnapshot>(filePath);
+
             if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.SnapshotId))
             {
                 continue;
@@ -231,19 +238,22 @@ internal static class SessionCaptureFileSystem
         var seenSnapshotIds = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var snapshot in snapshots
-                     .OrderBy(capturedAtUtcSelector)
-                     .ThenBy(snapshotIdSelector, StringComparer.Ordinal))
+            .OrderBy(capturedAtUtcSelector)
+            .ThenBy(snapshotIdSelector, StringComparer.Ordinal))
         {
             var snapshotId = snapshotIdSelector(snapshot);
+
             if (!seenSnapshotIds.Add(snapshotId))
             {
                 continue;
             }
 
             persistedState.DocumentsBySnapshotId.TryGetValue(snapshotId, out var existing);
+
             var fingerprint = ReferenceEquals(existing?.PersistedSource, snapshot)
                 ? existing.ContentFingerprint
                 : ComputeSnapshotContentFingerprint(snapshot);
+
             if (existing is not null
                 && string.Equals(existing.ContentFingerprint, fingerprint, StringComparison.Ordinal))
             {
@@ -285,6 +295,7 @@ internal static class SessionCaptureFileSystem
         }
 
         persistedState.DocumentsBySnapshotId.Clear();
+
         foreach (var entry in updatedDocumentsBySnapshotId)
         {
             persistedState.DocumentsBySnapshotId.Add(entry.Key, entry.Value);
@@ -310,10 +321,12 @@ internal static class SessionCaptureFileSystem
         var directoryPath = Path.GetDirectoryName(preferredFilePath)!;
         var baseName = Path.GetFileNameWithoutExtension(preferredFilePath);
         var sanitizedSnapshotId = FileNameUtil.Sanitize(snapshotId);
+
         for (var suffix = 1; ; suffix++)
         {
             var suffixText = suffix == 1 ? string.Empty : $"-{suffix}";
             var candidatePath = Path.Combine(directoryPath, $"{baseName}-{sanitizedSnapshotId}{suffixText}.json");
+
             if (!expectedFilePaths.Contains(candidatePath)
                 && (!ownerByFilePath.TryGetValue(candidatePath, out ownerSnapshotId)
                     || string.Equals(ownerSnapshotId, snapshotId, StringComparison.Ordinal)))
@@ -326,6 +339,7 @@ internal static class SessionCaptureFileSystem
     internal static string ComputeSnapshotContentFingerprint<TSnapshot>(TSnapshot snapshot)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonUtil.Compact);
+
         return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
@@ -339,9 +353,11 @@ internal static class SessionCaptureFileSystem
         }
 
         Directory.CreateDirectory(layout.ArtifactsDirectoryPath);
+
         foreach (var (relativePath, bytes) in artifactBytesByRelativePath)
         {
             var normalizedRelativePath = NormalizeArchiveRelativePath(relativePath);
+
             if (string.IsNullOrWhiteSpace(normalizedRelativePath))
             {
                 continue;
@@ -349,6 +365,7 @@ internal static class SessionCaptureFileSystem
 
             var destinationPath = Path.GetFullPath(Path.Combine(layout.ArtifactsDirectoryPath, normalizedRelativePath));
             var artifactsRootPath = Path.GetFullPath(layout.ArtifactsDirectoryPath);
+
             if (!destinationPath.StartsWith(artifactsRootPath + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                 && !string.Equals(destinationPath, artifactsRootPath, StringComparison.Ordinal))
             {
@@ -389,6 +406,7 @@ internal static class SessionCaptureFileSystem
             .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(segment => segment != "." && segment != "..")
             .ToArray();
+
         return segments.Length == 0 ? string.Empty : Path.Combine(segments);
     }
 
@@ -425,6 +443,7 @@ internal static class SessionCaptureFileSystem
         }
 
         long size = 0;
+
         try
         {
             foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
@@ -473,6 +492,7 @@ internal static class SessionCaptureFileSystem
         try
         {
             using var document = JsonDocument.Parse(json);
+
             return JsonSerializer.Serialize(document.RootElement, JsonUtil.Compact);
         }
         catch
@@ -484,6 +504,7 @@ internal static class SessionCaptureFileSystem
     internal static bool TryDecodeApplicationIcon(DeviceApplicationIconProfile? icon, out byte[] bytes)
     {
         bytes = Array.Empty<byte>();
+
         if (string.IsNullOrWhiteSpace(icon?.DataBase64))
         {
             return false;
@@ -492,11 +513,13 @@ internal static class SessionCaptureFileSystem
         try
         {
             bytes = Convert.FromBase64String(icon.DataBase64.Trim());
+
             return bytes.Length > 0;
         }
         catch
         {
             bytes = Array.Empty<byte>();
+
             return false;
         }
     }
@@ -504,6 +527,7 @@ internal static class SessionCaptureFileSystem
     internal static string ResolveApplicationIconFormat(DeviceApplicationIconProfile? icon)
     {
         var format = icon?.Format;
+
         if (!string.IsNullOrWhiteSpace(format))
         {
             if (format.Contains('/', StringComparison.Ordinal))
@@ -536,5 +560,4 @@ internal static class SessionCaptureFileSystem
             _ => "image/png"
         };
     }
-
 }

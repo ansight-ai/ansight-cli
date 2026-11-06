@@ -38,6 +38,7 @@ public sealed class IosSimulatorHidCapabilityTests
             developerDirectory =>
             {
                 probeCalled = true;
+
                 return new MacSimulatorHidCompatibility(
                     true,
                     "available",

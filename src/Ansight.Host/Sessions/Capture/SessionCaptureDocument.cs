@@ -13,11 +13,5 @@ internal sealed class SessionCaptureDocument
 
     public static bool IsSupportedSchema(string? schema)
         => string.Equals(schema, LegacySchemaName, StringComparison.Ordinal)
-           || string.Equals(schema, SchemaName, StringComparison.Ordinal);
-}
-
-internal sealed class SessionVisualTreeSnapshotIndexEntry
-{
-    public required string EntryPath { get; init; }
-    public required SessionVisualTreeSnapshotHeader Header { get; init; }
+            || string.Equals(schema, SchemaName, StringComparison.Ordinal);
 }

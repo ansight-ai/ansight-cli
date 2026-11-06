@@ -13,12 +13,19 @@ public sealed class IosAudioRouteRecoveryTests : IDisposable
     public async Task ConfirmedMismatchRestartsOnceOnNextMatchingLaunchAndSurvivesHostRecreation()
     {
         new IosAudioRouteRecovery(directory).Record(target);
+
         var recovery = new IosAudioRouteRecovery(directory);
         var restarts = 0;
 
         Assert.True(await recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
             _ => Task.FromResult<DateTimeOffset?>(DateTimeOffset.UtcNow.AddHours(-1)),
-            _ => { restarts++; return Task.CompletedTask; }, CancellationToken.None));
+            _ =>
+            {
+                restarts++;
+
+                return Task.CompletedTask;
+            }
+, CancellationToken.None));
         Assert.False(await recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
             _ => throw new Exception("Completed recovery must not inspect or restart again."),
             _ => throw new Exception("Completed recovery must not restart again."), CancellationToken.None));
@@ -29,7 +36,9 @@ public sealed class IosAudioRouteRecoveryTests : IDisposable
     public async Task HealthyOrUnrelatedLaunchDoesNotRestart()
     {
         var recovery = new IosAudioRouteRecovery(directory);
+
         Task<DateTimeOffset?> UnexpectedProbe(CancellationToken _) => throw new Exception("Unrelated launch inspected recovery.");
+
         Task UnexpectedRestart(CancellationToken _) => throw new Exception("Unrelated launch restarted a simulator.");
 
         Assert.False(await recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
@@ -56,11 +65,18 @@ public sealed class IosAudioRouteRecoveryTests : IDisposable
     {
         var recovery = new IosAudioRouteRecovery(directory);
         recovery.Record(target);
+
         using var cancellation = new CancellationTokenSource();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
             _ => Task.FromResult<DateTimeOffset?>(null),
-            _ => { cancellation.Cancel(); return Task.CompletedTask; }, cancellation.Token));
+            _ =>
+            {
+                cancellation.Cancel();
+
+                return Task.CompletedTask;
+            }
+, cancellation.Token));
 
         Assert.True(await recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
             _ => Task.FromResult<DateTimeOffset?>(null), _ => Task.CompletedTask, CancellationToken.None));
@@ -82,6 +98,7 @@ public sealed class IosAudioRouteRecoveryTests : IDisposable
     {
         var recovery = new IosAudioRouteRecovery(directory);
         recovery.Record(target);
+
         using (AudioRouteLease.Acquire("ios:simulator-audio-route"))
         {
             var error = await Assert.ThrowsAsync<AudioInjectionException>(() => recovery.RecoverBeforeLaunchAsync(
@@ -89,12 +106,16 @@ public sealed class IosAudioRouteRecoveryTests : IDisposable
                 _ => throw new Exception("Must not restart while route is busy."), CancellationToken.None));
             Assert.Equal("audio-route-busy", error.Code);
         }
+
         Assert.True(await recovery.RecoverBeforeLaunchAsync(target.DeviceId, target.AppId,
             _ => Task.FromResult<DateTimeOffset?>(null), _ => Task.CompletedTask, CancellationToken.None));
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        if (Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 }

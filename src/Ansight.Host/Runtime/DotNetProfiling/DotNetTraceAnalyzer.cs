@@ -22,6 +22,7 @@ internal sealed class DotNetTraceAnalyzer
         }
 
         selection ??= TraceSelectionWindow.EntireTrace;
+
         var traceLogPath = GetOrCreateTraceLog(tracePath);
         var builder = new AnalysisBuilder(selection, hotspotLimit, callTreeDepth, callTreeChildLimit);
         using var traceLog = new TraceLog(traceLogPath);
@@ -34,6 +35,7 @@ internal sealed class DotNetTraceAnalyzer
         source.Clr.MethodJittingStarted += builder.ObserveJit;
         source.Clr.ExceptionStart += builder.ObserveException;
         source.Process();
+
         return builder.Build();
     }
 
@@ -44,7 +46,9 @@ internal sealed class DotNetTraceAnalyzer
             ? Path.GetDirectoryName(tracePath) ?? Environment.CurrentDirectory
             : Path.Combine(capturePath, "derived");
         Directory.CreateDirectory(derivedPath);
+
         var traceLogPath = Path.Combine(derivedPath, "runtime.etlx");
+
         lock (conversionGate)
         {
             if (!File.Exists(traceLogPath)
@@ -97,9 +101,9 @@ internal sealed class DotNetTraceAnalyzer
         public void ObserveEvent(TraceEvent traceEvent)
         {
             if (!selection.Includes(
-                    traceEvent.TimeStampRelativeMSec,
-                    traceEvent.ProcessID,
-                    traceEvent.ThreadID))
+                traceEvent.TimeStampRelativeMSec,
+                traceEvent.ProcessID,
+                traceEvent.ThreadID))
             {
                 return;
             }
@@ -113,19 +117,22 @@ internal sealed class DotNetTraceAnalyzer
             minimumTimestamp = Math.Min(minimumTimestamp, traceEvent.TimeStampRelativeMSec);
             maximumTimestamp = Math.Max(maximumTimestamp, traceEvent.TimeStampRelativeMSec);
             processIds.Add(traceEvent.ProcessID);
+
             var processThread = new ProcessThreadKey(traceEvent.ProcessID, traceEvent.ThreadID);
             threadIds.Add(processThread);
             Increment(providerEventCounts, traceEvent.ProviderName ?? "unknown");
             Increment(eventNameCounts, $"{traceEvent.ProviderName ?? "unknown"}/{traceEvent.EventName}");
+
             var eventName = traceEvent.EventName;
+
             if (string.Equals(
-                    traceEvent.ProviderName,
-                    DotNetStartupMarker.ProviderName,
-                    StringComparison.Ordinal)
+                traceEvent.ProviderName,
+                DotNetStartupMarker.ProviderName,
+                StringComparison.Ordinal)
                 && (string.Equals(
-                        eventName,
-                        DotNetStartupMarker.EventName,
-                        StringComparison.Ordinal)
+                    eventName,
+                    DotNetStartupMarker.EventName,
+                    StringComparison.Ordinal)
                     || string.Equals(
                         eventName,
                         DotNetStartupMarker.ManagedModuleInitializedEventName,
@@ -140,9 +147,9 @@ internal sealed class DotNetTraceAnalyzer
             }
 
             if (string.Equals(
-                    traceEvent.ProviderName,
-                    "Microsoft-Windows-DotNETRuntime",
-                    StringComparison.Ordinal)
+                traceEvent.ProviderName,
+                "Microsoft-Windows-DotNETRuntime",
+                StringComparison.Ordinal)
                 && traceEvent.EventName.Contains("JittingStarted", StringComparison.OrdinalIgnoreCase))
             {
                 ObserveDynamicJit(traceEvent);
@@ -152,9 +159,9 @@ internal sealed class DotNetTraceAnalyzer
         public void ObserveSampleEvent(TraceEvent traceEvent)
         {
             if (!selection.Includes(
-                    traceEvent.TimeStampRelativeMSec,
-                    traceEvent.ProcessID,
-                    traceEvent.ThreadID))
+                traceEvent.TimeStampRelativeMSec,
+                traceEvent.ProcessID,
+                traceEvent.ThreadID))
             {
                 return;
             }
@@ -163,6 +170,7 @@ internal sealed class DotNetTraceAnalyzer
             minimumTimestamp = Math.Min(minimumTimestamp, traceEvent.TimeStampRelativeMSec);
             maximumTimestamp = Math.Max(maximumTimestamp, traceEvent.TimeStampRelativeMSec);
             processIds.Add(traceEvent.ProcessID);
+
             var processThread = new ProcessThreadKey(traceEvent.ProcessID, traceEvent.ThreadID);
             threadIds.Add(processThread);
             Increment(providerEventCounts, SampleProfilerProviderName);
@@ -193,6 +201,7 @@ internal sealed class DotNetTraceAnalyzer
             }
 
             var key = new GcKey(traceData.ProcessID, traceData.Count);
+
             if (!gcStarts.Remove(key, out var start))
             {
                 return;
@@ -238,6 +247,7 @@ internal sealed class DotNetTraceAnalyzer
             var key = new ExceptionKey(
                 NormalizeName(traceData.ExceptionType, "unknown exception"),
                 string.IsNullOrWhiteSpace(traceData.ExceptionMessage) ? null : traceData.ExceptionMessage);
+
             if (!exceptions.TryGetValue(key, out var observation))
             {
                 observation = new ExceptionObservation(traceData.TimeStampRelativeMSec);
@@ -319,6 +329,7 @@ internal sealed class DotNetTraceAnalyzer
                 orderedJittedMethods.Length,
                 exceptionGroups.Sum(group => group.Count),
                 Percentage(symbolicatedSampleCount, sampleCount));
+
             return new ParsedTraceAnalysis(
                 overview,
                 hotspots,
@@ -345,6 +356,7 @@ internal sealed class DotNetTraceAnalyzer
         {
             var methodNamespace = traceEvent.PayloadByName("MethodNamespace")?.ToString();
             var methodName = traceEvent.PayloadByName("MethodName")?.ToString();
+
             if (string.IsNullOrWhiteSpace(methodName))
             {
                 return;
@@ -368,6 +380,7 @@ internal sealed class DotNetTraceAnalyzer
         private void ObserveSample(TraceEvent traceEvent, ProcessThreadKey processThread)
         {
             sampleCount++;
+
             if (!threadSamples.TryGetValue(processThread, out var thread))
             {
                 thread = new ThreadSamples(traceEvent.ProcessName, threadName: null);
@@ -375,15 +388,19 @@ internal sealed class DotNetTraceAnalyzer
             }
 
             thread.SampleCount++;
+
             var frames = ReadFrames(traceEvent.CallStack());
+
             if (frames.Count == 0)
             {
                 IncrementMethod("[unsymbolicated]", module: null, exclusive: true);
                 callTree.Observe([new StackFrame("[unsymbolicated]", null)]);
+
                 return;
             }
 
             symbolicatedSampleCount++;
+
             for (var index = 0; index < frames.Count; index++)
             {
                 var frame = frames[index];
@@ -402,6 +419,7 @@ internal sealed class DotNetTraceAnalyzer
             }
 
             samples.Inclusive++;
+
             if (exclusive)
             {
                 samples.Exclusive++;
@@ -411,6 +429,7 @@ internal sealed class DotNetTraceAnalyzer
         private static IReadOnlyList<StackFrame> ReadFrames(TraceCallStack? callStack)
         {
             var leafToRoot = new List<StackFrame>();
+
             for (var current = callStack; current is not null; current = current.Caller)
             {
                 var methodName = NormalizeName(current.CodeAddress.FullMethodName, current.CodeAddress.ToString());
@@ -422,6 +441,7 @@ internal sealed class DotNetTraceAnalyzer
             }
 
             leafToRoot.Reverse();
+
             return leafToRoot;
         }
 
@@ -449,18 +469,19 @@ internal sealed class DotNetTraceAnalyzer
         }
 
         public string Name { get; }
-
         public string? Module { get; }
-
         public int SampleCount { get; private set; }
 
         public void Observe(IReadOnlyList<StackFrame> frames)
         {
             SampleCount++;
+
             var current = this;
+
             foreach (var frame in frames)
             {
                 var key = new FrameKey(frame.Method, frame.Module);
+
                 if (!current.children.TryGetValue(key, out var child))
                 {
                     child = new CallTreeBuilder(frame.Method, frame.Module);
@@ -482,6 +503,7 @@ internal sealed class DotNetTraceAnalyzer
                     .Take(childLimit)
                     .Select(child => child.Build(remainingDepth - 1, childLimit))
                     .ToArray();
+
             return new ParsedCallTreeNode(Name, Module, SampleCount, builtChildren);
         }
     }
@@ -494,9 +516,7 @@ internal sealed class DotNetTraceAnalyzer
         }
 
         public string? Module { get; }
-
         public int Exclusive { get; set; }
-
         public int Inclusive { get; set; }
     }
 
@@ -509,9 +529,7 @@ internal sealed class DotNetTraceAnalyzer
         }
 
         public string? ProcessName { get; }
-
         public string? ThreadName { get; }
-
         public int SampleCount { get; set; }
     }
 
@@ -524,9 +542,7 @@ internal sealed class DotNetTraceAnalyzer
         }
 
         public int Count { get; private set; }
-
         public double FirstTimestampMilliseconds { get; }
-
         public double LastTimestampMilliseconds { get; private set; }
 
         public void Observe(double timestampMilliseconds)

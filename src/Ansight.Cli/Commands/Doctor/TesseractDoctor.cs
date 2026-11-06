@@ -14,13 +14,14 @@ internal static class TesseractDoctor
         CancellationToken cancellationToken)
     {
         string? executablePath;
+
         try
         {
             executablePath = ResolveExecutablePath(configuredExecutablePath, inheritedPath);
         }
         catch (Exception exception) when (exception is ArgumentException
-                                           or NotSupportedException
-                                           or PathTooLongException)
+            or NotSupportedException
+            or PathTooLongException)
         {
             return new DoctorCheck(
                 "tool.tesseract",
@@ -34,6 +35,7 @@ internal static class TesseractDoctor
         if (executablePath is null)
         {
             var configured = !string.IsNullOrWhiteSpace(configuredExecutablePath);
+
             return new DoctorCheck(
                 "tool.tesseract",
                 configured ? "configured-path-missing" : "unavailable",
@@ -57,6 +59,7 @@ internal static class TesseractDoctor
             }
         };
         process.StartInfo.ArgumentList.Add("--version");
+
         try
         {
             if (!process.Start())
@@ -65,7 +68,7 @@ internal static class TesseractDoctor
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or System.ComponentModel.Win32Exception)
+            or System.ComponentModel.Win32Exception)
         {
             return Failure(executablePath, exception.Message);
         }
@@ -74,6 +77,7 @@ internal static class TesseractDoctor
         var standardErrorTask = process.StandardError.ReadToEndAsync();
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(versionTimeout);
+
         try
         {
             await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
@@ -82,6 +86,7 @@ internal static class TesseractDoctor
         {
             TryKill(process);
             await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+
             return Failure(
                 executablePath,
                 $"Tesseract did not report its version within {versionTimeout.TotalSeconds:0} seconds.",
@@ -95,15 +100,18 @@ internal static class TesseractDoctor
 
         var standardOutput = await standardOutputTask.ConfigureAwait(false);
         var standardError = await standardErrorTask.ConfigureAwait(false);
+
         if (process.ExitCode != 0)
         {
             var detail = FirstLine(standardError)
-                         ?? FirstLine(standardOutput)
-                         ?? $"Tesseract exited with code {process.ExitCode}.";
+                ?? FirstLine(standardOutput)
+                ?? $"Tesseract exited with code {process.ExitCode}.";
+
             return Failure(executablePath, detail);
         }
 
         var version = ParseVersion(standardOutput) ?? ParseVersion(standardError);
+
         return new DoctorCheck(
             "tool.tesseract",
             "available",
@@ -121,12 +129,14 @@ internal static class TesseractDoctor
     internal static string? ParseVersion(string? output)
     {
         var line = FirstLine(output);
+
         if (line is null)
         {
             return null;
         }
 
         const string prefix = "tesseract ";
+
         return line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
             ? line[prefix.Length..].Trim()
             : line;
@@ -137,14 +147,17 @@ internal static class TesseractDoctor
         if (!string.IsNullOrWhiteSpace(configuredExecutablePath))
         {
             var absolutePath = Path.GetFullPath(configuredExecutablePath.Trim());
+
             return File.Exists(absolutePath) ? absolutePath : null;
         }
 
         var executableName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
+
         foreach (var directoryPath in (inheritedPath ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var candidate = Path.Combine(directoryPath.Trim('"'), executableName);
+
             if (File.Exists(candidate))
             {
                 return Path.GetFullPath(candidate);
@@ -170,13 +183,14 @@ internal static class TesseractDoctor
             : OperatingSystem.IsWindows()
                 ? "Install Tesseract OCR, for example with 'winget install UB-Mannheim.TesseractOCR'"
                 : "Install the 'tesseract-ocr' package with your system package manager";
+
         return $"Tesseract was not found. {installation}, or set {ExecutablePathEnvironmentVariable} to its executable. Screenshot sanitizers will redact whole frames when no other text evidence is available.";
     }
 
     private static string? FirstLine(string? value)
         => value?
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
+                .FirstOrDefault();
 
     private static void TryKill(Process process)
     {

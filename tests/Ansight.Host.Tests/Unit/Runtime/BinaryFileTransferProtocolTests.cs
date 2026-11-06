@@ -57,6 +57,7 @@ public sealed class BinaryFileTransferProtocolTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44, 8), offsetBytes);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52, 4), payload.Length);
         payload.CopyTo(frame, BinaryFileTransferProtocol.HeaderSize);
+
         return frame;
     }
 }

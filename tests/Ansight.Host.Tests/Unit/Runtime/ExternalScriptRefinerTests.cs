@@ -17,6 +17,7 @@ public sealed class ExternalScriptRefinerTests
         using var runtime = environment.CreateRuntime();
         var snapshot = CreateSnapshot();
         WriteScreenshots(runtime, snapshot);
+
         var valid = format == "maestro"
             ? $"appId: {AppId}\n---\n- tapOn: Continue\n- assertVisible: Done\n"
             : AppiumScriptExtractor.Extract(snapshot, start, start.AddSeconds(10), "Continue").Source;
@@ -33,9 +34,11 @@ public sealed class ExternalScriptRefinerTests
         Assert.Equal(valid.Trim() + "\n", result.Source);
         Assert.Equal("test-model", result.Model);
         Assert.Equal(2, gateway.Transport.Requests.Count);
+
         var firstRequest = gateway.Transport.Requests[0];
         var content = firstRequest["input"]![0]!["content"]!.AsArray();
         Assert.Equal(2, content.OfType<JsonObject>().Count(item => item["type"]?.GetValue<string>() == "input_image"));
+
         var prompt = content[0]!["text"]!.GetValue<string>();
         Assert.Contains("first-control", prompt);
         Assert.Contains("last-control", prompt);
@@ -47,6 +50,7 @@ public sealed class ExternalScriptRefinerTests
         Assert.Contains(progress, message => message.Contains("Repairing"));
         Assert.Equal(AgentReasoningModes.Balanced, gateway.Request!.Reasoning);
         Assert.False(string.IsNullOrWhiteSpace(gateway.Request.Model));
+
         var completion = Assert.Single(gateway.Completions);
         Assert.Equal("succeeded", completion.Status);
         Assert.Equal(2, completion.ModelPassCount);
@@ -63,6 +67,7 @@ public sealed class ExternalScriptRefinerTests
             runtime, CreateSnapshot(), start, start.AddSeconds(10), "Continue", "seed", "maestro",
             AgentReasoningModes.Fast, null, environment.RootPath, CancellationToken.None));
         Assert.Equal(3, gateway.Transport.Requests.Count);
+
         var completion = Assert.Single(gateway.Completions);
         Assert.Equal("failed", completion.Status);
         Assert.Equal(3, completion.ModelPassCount);
@@ -118,32 +123,49 @@ public sealed class ExternalScriptRefinerTests
 
     private static AppSessionSnapshot CreateSnapshot() => new()
     {
-        SessionId = "external-extraction", AppId = AppId, ClientName = "Example", RemoteAddress = "127.0.0.1",
-        CreatedUtc = start, LastUpdatedUtc = start.AddSeconds(20), ConfigId = null, Status = "Closed", IsHistorical = true,
-        MetricChannels = [], Metrics = [],
+        SessionId = "external-extraction",
+        AppId = AppId,
+        ClientName = "Example",
+        RemoteAddress = "127.0.0.1",
+        CreatedUtc = start,
+        LastUpdatedUtc = start.AddSeconds(20),
+        ConfigId = null,
+        Status = "Closed",
+        IsHistorical = true,
+        MetricChannels = [],
+        Metrics = [],
         Images = new[] { 1, 9, 15 }.Select(second => new SessionImageFrame
         {
-            FrameId = $"frame-{second}", CapturedAtUtc = start.AddSeconds(second), Format = "png",
-            Width = 4, Height = 4, Quality = 100, ByteCount = 1
+            FrameId = $"frame-{second}",
+            CapturedAtUtc = start.AddSeconds(second),
+            Format = "png",
+            Width = 4,
+            Height = 4,
+            Quality = 100,
+            ByteCount = 1
         }).ToArray(),
         VisualTreeSnapshots = new[] { "first-control", "last-control", "outside-control" }.Select((id, index) => new SessionVisualTreeSnapshot
         {
-            SnapshotId = id, CapturedAtUtc = start.AddSeconds(index == 0 ? 1 : index == 1 ? 9 : 15), Source = "test", NodeCount = 1,
+            SnapshotId = id,
+            CapturedAtUtc = start.AddSeconds(index == 0 ? 1 : index == 1 ? 9 : 15),
+            Source = "test",
+            NodeCount = 1,
             Payload = new JsonObject { ["root"] = new JsonObject { ["automationId"] = id, ["label"] = id, ["type"] = "Button" } }
         }).ToArray(),
         Annotations =
         [
-            new SessionAnnotation { AnnotationId = "inside", StartUtc = start.AddSeconds(2), EndUtc = start.AddSeconds(8), Label = "Confirm checkout" },
-            new SessionAnnotation { AnnotationId = "outside", StartUtc = start.AddSeconds(12), EndUtc = start.AddSeconds(15), Label = "Outside annotation" }
-        ]
+            new SessionAnnotation {AnnotationId = "inside", StartUtc = start.AddSeconds(2), EndUtc = start.AddSeconds(8), Label = "Confirm checkout" },
+            new SessionAnnotation {AnnotationId = "outside", StartUtc = start.AddSeconds(12), EndUtc = start.AddSeconds(15), Label = "Outside annotation" }        ]
     };
 
     private static void WriteScreenshots(RuntimeCoordinator runtime, AppSessionSnapshot snapshot)
     {
         using var bitmap = new SKBitmap(4, 4);
         bitmap.Erase(SKColors.White);
+
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+
         foreach (var frame in snapshot.Images)
         {
             var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, snapshot, frame);
@@ -152,43 +174,75 @@ public sealed class ExternalScriptRefinerTests
         }
     }
 
-    private sealed class Gateway(params string[] sources) : IWorkspaceTestRunGateway
+    private sealed class Gateway : IWorkspaceTestRunGateway
     {
-        public Transport Transport { get; } = new(sources);
+        public Gateway(params string[] sources)
+        {
+            this.Transport = new(sources);
+            this.Completions = [];
+        }
+
+        public Transport Transport { get; }
         public WorkspaceTestRunPreparationRequest? Request { get; private set; }
-        public List<WorkspaceTestRunMeterCompletion> Completions { get; } = [];
+        public List<WorkspaceTestRunMeterCompletion> Completions { get; }
+
         public Task<WorkspaceTestRunPreparation> PrepareAsync(WorkspaceTestRunPreparationRequest request, CancellationToken cancellationToken = default)
         {
             Request = request;
+
             return Task.FromResult(WorkspaceTestRunPreparation.WithTransport(Transport, Guid.NewGuid(), null, Guid.NewGuid(), "Test"));
         }
+
         public Task<WorkspaceTestRunMeterResult> CompleteAsync(WorkspaceTestRunMeterCompletion completion, CancellationToken cancellationToken = default)
         {
             Completions.Add(completion);
+
             return Task.FromResult(WorkspaceTestRunMeterResult.Success());
         }
     }
 
-    private sealed class Transport(string[] sources) : IModelExecutionTransport
+    private sealed class Transport : IModelExecutionTransport
     {
+        private readonly string[] sources;
+
+        public Transport(string[] sources)
+        {
+            this.sources = sources;
+        }
+
         public string Description => "Test transport";
         public bool SupportsWebSockets => false;
         public string AccessKey { get; set; } = "test-key";
         public bool CancelRequest { get; set; }
         public List<JsonObject> Requests { get; } = [];
+
         public ValueTask<string> ResolveAccessKeyAsync(CancellationToken cancellationToken) => ValueTask.FromResult(AccessKey);
+
         public string DescribeFailure(int statusCode, string responseContent) => responseContent;
+
         public async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject());
-            if (CancelRequest) throw new OperationCanceledException();
+
+            if (CancelRequest)
+            {
+                throw new OperationCanceledException();
+            }
+
             var source = sources[Math.Min(Requests.Count - 1, sources.Length - 1)];
             var response = new
             {
-                id = $"response-{Requests.Count}", model = "test-model",
+                id = $"response-{Requests.Count}",
+                model = "test-model",
                 output = new[] { new { type = "message", content = new[] { new { type = "output_text", text = source } } } },
-                usage = new { input_tokens = 10, output_tokens = 5, total_tokens = 15 }
+                usage = new
+                {
+                    input_tokens = 10,
+                    output_tokens = 5,
+                    total_tokens = 15
+                }
             };
+
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(response)) };
         }
     }

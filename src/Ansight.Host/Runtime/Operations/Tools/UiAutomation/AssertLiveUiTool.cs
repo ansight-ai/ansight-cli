@@ -40,6 +40,7 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
         }
 
         var selector = LiveUiSelector.Parse(arguments);
+
         if (!selector.HasCriteria)
         {
             return ToolError("At least one stable UI selector is required.");
@@ -53,6 +54,7 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
             correlationId,
             selector,
             ToolExecutionCancellation.Current);
+
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -65,13 +67,14 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
             capture.Viewport);
         var expectedCount = ReadNullableInteger(arguments, "expectedCount");
         var expectedExists = ReadNullableBoolean(arguments, "exists")
-                             ?? expectedCount != 0;
+            ?? expectedCount != 0;
         var selected = selector.Select(matches);
         var failures = new JsonArray();
 
         var selectedExists = selector.IndexSpecified
             ? selector.IsAvailable(matches.Count)
             : matches.Count > 0;
+
         if (expectedExists != selectedExists)
         {
             failures.Add(selector.IndexSpecified
@@ -102,6 +105,7 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
 
         var passed = failures.Count == 0;
         var actionId = LiveUiToolSchemas.ReadString(arguments, "actionId");
+
         if (actionId is not null)
         {
             runtimeState.AddSessionLog(
@@ -139,9 +143,9 @@ internal sealed class AssertLiveUiTool : RemoteAppOperation
 
     private static bool HasSelectedAssertions(JsonObject? arguments)
         => arguments?["expectedText"] is not null
-           || arguments?["expectedValue"] is not null
-           || arguments?["expectedVisible"] is not null
-           || arguments?["expectedEnabled"] is not null;
+            || arguments?["expectedValue"] is not null
+            || arguments?["expectedVisible"] is not null
+            || arguments?["expectedEnabled"] is not null;
 
     private static void AssertString(JsonArray failures, string name, string? actual, string? expected)
     {

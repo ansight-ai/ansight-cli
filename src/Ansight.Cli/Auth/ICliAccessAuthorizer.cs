@@ -4,13 +4,3 @@ internal interface ICliAccessAuthorizer
 {
     Task<AccessDecision> CheckAsync(CancellationToken cancellationToken);
 }
-
-internal interface ICliLocalAccessProbe
-{
-    Task<AccessDecision?> CheckLocalAsync(string? expectedUserId, CancellationToken cancellationToken);
-}
-
-internal interface ICliAccountAccessAuthorizer : ICliAccessAuthorizer
-{
-    IDisposable BeginAccountScope(string expectedUserId);
-}

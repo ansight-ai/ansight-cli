@@ -21,7 +21,9 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var sessionId = request.SessionId?.Trim() ?? string.Empty;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return Failure(sessionId, "Session ID is required.");
@@ -33,10 +35,13 @@ public sealed class SessionReplayService : IAsyncDisposable
         }
 
         await startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             ThrowIfDisposed();
+
             var serverKey = CreateSessionServerKey(sessionId);
+
             lock (serverGate)
             {
                 if (servers.TryGetValue(serverKey, out var existing))
@@ -47,12 +52,14 @@ public sealed class SessionReplayService : IAsyncDisposable
 
             var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
                 .ConfigureAwait(false);
+
             if (snapshot is null)
             {
                 return Failure(sessionId, $"Session '{sessionId}' was not found.");
             }
 
             ExplorerServer server;
+
             try
             {
                 server = ExplorerServer.Start(
@@ -63,8 +70,8 @@ public sealed class SessionReplayService : IAsyncDisposable
                     requestedPort: request.Port);
             }
             catch (Exception exception) when (exception is HttpListenerException
-                                               or IOException
-                                               or InvalidOperationException)
+                or IOException
+                or InvalidOperationException)
             {
                 return Failure(sessionId, $"Unable to start the local replay server: {exception.Message}");
             }
@@ -75,6 +82,7 @@ public sealed class SessionReplayService : IAsyncDisposable
             }
 
             _ = ObserveCompletionAsync(serverKey, server);
+
             return Success(server, wasAlreadyRunning: false);
         }
         finally
@@ -88,12 +96,14 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (request.Port is < 0 or > IPEndPoint.MaxPort)
         {
             return ExplorerFailure("Port must be zero or a value between 1 and 65535.");
         }
 
         string? requestedPath;
+
         try
         {
             requestedPath = ExplorerServer.NormalizeRequestedPath(request.UrlPath);
@@ -106,6 +116,7 @@ public sealed class SessionReplayService : IAsyncDisposable
         var initialSessionId = string.IsNullOrWhiteSpace(request.InitialSessionId)
             ? null
             : request.InitialSessionId.Trim();
+
         if (initialSessionId is not null
             && await runtime.Sessions.LoadSnapshotAsync(initialSessionId, null, cancellationToken).ConfigureAwait(false) is null)
         {
@@ -113,9 +124,11 @@ public sealed class SessionReplayService : IAsyncDisposable
         }
 
         await startLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             ThrowIfDisposed();
+
             lock (serverGate)
             {
                 if (servers.TryGetValue(ExplorerServerKey, out var existing))
@@ -140,6 +153,7 @@ public sealed class SessionReplayService : IAsyncDisposable
             }
 
             ExplorerServer server;
+
             try
             {
                 server = ExplorerServer.Start(
@@ -151,8 +165,8 @@ public sealed class SessionReplayService : IAsyncDisposable
                     requestedPath: requestedPath);
             }
             catch (Exception exception) when (exception is HttpListenerException
-                                               or IOException
-                                               or InvalidOperationException)
+                or IOException
+                or InvalidOperationException)
             {
                 return ExplorerFailure($"Unable to start the local session explorer: {exception.Message}");
             }
@@ -163,6 +177,7 @@ public sealed class SessionReplayService : IAsyncDisposable
             }
 
             _ = ObserveCompletionAsync(ExplorerServerKey, server);
+
             return ExplorerSuccess(server, wasAlreadyRunning: false);
         }
         finally
@@ -176,9 +191,11 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         var serverKey = CreateSessionServerKey(normalizedSessionId);
         ExplorerServer? server;
+
         lock (serverGate)
         {
             servers.Remove(serverKey, out server);
@@ -191,6 +208,7 @@ public sealed class SessionReplayService : IAsyncDisposable
 
         await server.StopAsync(cancellationToken).ConfigureAwait(false);
         await server.DisposeAsync().ConfigureAwait(false);
+
         return OperationResult.Success($"Stopped the local replay for session '{normalizedSessionId}'.");
     }
 
@@ -206,7 +224,9 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         ExplorerServer? server;
+
         lock (serverGate)
         {
             servers.TryGetValue(CreateSessionServerKey(sessionId.Trim()), out server);
@@ -224,6 +244,7 @@ public sealed class SessionReplayService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         ExplorerServer[] activeServers;
+
         lock (serverGate)
         {
             if (disposed)
@@ -237,6 +258,7 @@ public sealed class SessionReplayService : IAsyncDisposable
         }
 
         runtime.SessionDeleted -= HandleSessionDeleted;
+
         foreach (var server in activeServers)
         {
             await server.DisposeAsync().ConfigureAwait(false);
@@ -272,7 +294,9 @@ public sealed class SessionReplayService : IAsyncDisposable
     private async Task StopDeletedSessionReplayAsync(string sessionId)
     {
         await Task.Yield();
+
         ExplorerServer? server;
+
         lock (serverGate)
         {
             servers.TryGetValue(CreateSessionServerKey(sessionId), out server);
@@ -294,6 +318,7 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         ExplorerServer? server;
+
         lock (serverGate)
         {
             servers.Remove(serverKey, out server);
@@ -306,6 +331,7 @@ public sealed class SessionReplayService : IAsyncDisposable
 
         await server.StopAsync(cancellationToken).ConfigureAwait(false);
         await server.DisposeAsync().ConfigureAwait(false);
+
         return OperationResult.Success(successMessage);
     }
 
@@ -314,6 +340,7 @@ public sealed class SessionReplayService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         ExplorerServer? server;
+
         lock (serverGate)
         {
             servers.TryGetValue(serverKey, out server);

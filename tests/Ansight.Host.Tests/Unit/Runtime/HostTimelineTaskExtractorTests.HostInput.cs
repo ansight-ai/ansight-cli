@@ -14,8 +14,7 @@ public sealed partial class HostTimelineTaskExtractorTests
     {
         var start = DateTimeOffset.Parse("2026-10-18T00:00:00Z");
         var touches = Enumerable.Range(1, 3).SelectMany(i => complete
-            ? new[] { CreateTouch("down", start.AddSeconds(i), .5, .5), CreateTouch("up", start.AddSeconds(i + .05), .5, .5) }
-            : new[] { CreateTouch("down", start.AddSeconds(i), .5, .5) }).ToArray();
+            ? new[] { CreateTouch("down", start.AddSeconds(i), .5, .5), CreateTouch("up", start.AddSeconds(i + .05), .5, .5) } : new[] { CreateTouch("down", start.AddSeconds(i), .5, .5) }).ToArray();
         var events = Enumerable.Range(1, 3).Select(i => new HostInputAction($"tap-{i}", "tap",
             start.AddSeconds(i), start.AddSeconds(i + .1), "succeeded", NormalizedX: .5, NormalizedY: .5).ToEvent()).ToArray();
         var snapshot = CreateSnapshot(start, touches,
@@ -69,6 +68,7 @@ public sealed partial class HostTimelineTaskExtractorTests
         Assert.Contains("ansight.keyboard.press({ key: \"Enter\" })", result.Source);
         Assert.Contains("ansight.keyboard.submit()", result.Source);
         Assert.DoesNotContain("clear", result.ReplayInstructions.Last());
+
         var test = WorkspaceTestExtractor.Extract(snapshot, start, start.AddSeconds(4), "Submit search", ["Results appear"]);
         Assert.Contains("submit action", test.Source);
     }
@@ -79,8 +79,15 @@ public sealed partial class HostTimelineTaskExtractorTests
     [InlineData("  query\n")]
     public void ActualValuesIncludingEmptyOrPlaceholderMatchingTextRemainDistinct(string value)
     {
-        var node = new JsonObject { ["label"] = "Search products…", ["visual"] = new JsonObject
-            { ["text"] = "Search products…", ["value"] = value } };
+        var node = new JsonObject
+        {
+            ["label"] = "Search products…",
+            ["visual"] = new JsonObject
+            {
+                ["text"] = "Search products…",
+                ["value"] = value
+            }
+        };
         Assert.Equal(value, LiveUiNodeQuery.ReadValue(node));
         node["visual"]!.AsObject().Remove("value");
         Assert.Null(LiveUiNodeQuery.ReadValue(node));

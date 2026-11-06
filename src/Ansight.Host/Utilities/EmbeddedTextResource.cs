@@ -15,6 +15,7 @@ internal static partial class EmbeddedTextResource
     public static string Read(string relativePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+
         return resources.GetOrAdd(
             relativePath,
             static path => new Lazy<string>(() => ReadCore(path))).Value;
@@ -28,6 +29,7 @@ internal static partial class EmbeddedTextResource
         var resourceNames = assembly.GetManifestResourceNames()
             .Where(name => name.EndsWith(suffix, StringComparison.Ordinal))
             .ToArray();
+
         if (resourceNames.Length == 0)
         {
             throw new InvalidOperationException(
@@ -41,9 +43,10 @@ internal static partial class EmbeddedTextResource
         }
 
         using var stream = assembly.GetManifestResourceStream(resourceNames[0])
-                           ?? throw new InvalidOperationException(
-                               $"The embedded text resource '{relativePath}' could not be opened.");
+            ?? throw new InvalidOperationException(
+                $"The embedded text resource '{relativePath}' could not be opened.");
         using var reader = new StreamReader(stream);
+
         return reader.ReadToEnd();
     }
 
@@ -52,6 +55,7 @@ internal static partial class EmbeddedTextResource
         IReadOnlyDictionary<string, string> values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
         return RenderCore(relativePath, Read(relativePath), values);
     }
 
@@ -59,13 +63,14 @@ internal static partial class EmbeddedTextResource
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
+
         return resourceSections
             .GetOrAdd(
-                relativePath,
-                static _ => new ConcurrentDictionary<string, string>(StringComparer.Ordinal))
+            relativePath,
+            static _ => new ConcurrentDictionary<string, string>(StringComparer.Ordinal))
             .GetOrAdd(
-                sectionName,
-                name => ReadSectionCore(relativePath, name));
+            sectionName,
+            name => ReadSectionCore(relativePath, name));
     }
 
     public static string RenderSection(
@@ -74,6 +79,7 @@ internal static partial class EmbeddedTextResource
         IReadOnlyDictionary<string, string> values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
         return RenderCore(
             $"{relativePath}#{sectionName}",
             ReadSection(relativePath, sectionName),
@@ -85,6 +91,7 @@ internal static partial class EmbeddedTextResource
         var content = Read(relativePath);
         var startMarker = $"<!-- template:{sectionName} -->";
         var startIndex = content.IndexOf(startMarker, StringComparison.Ordinal);
+
         if (startIndex < 0)
         {
             throw new InvalidOperationException(
@@ -92,6 +99,7 @@ internal static partial class EmbeddedTextResource
         }
 
         startIndex += startMarker.Length;
+
         if (content.AsSpan(startIndex).StartsWith("\r\n", StringComparison.Ordinal))
         {
             startIndex += 2;
@@ -102,6 +110,7 @@ internal static partial class EmbeddedTextResource
         }
 
         var endIndex = content.IndexOf(TemplateEndMarker, startIndex, StringComparison.Ordinal);
+
         if (endIndex < 0)
         {
             throw new InvalidOperationException(
@@ -118,6 +127,7 @@ internal static partial class EmbeddedTextResource
         => PlaceholderPattern().Replace(template, match =>
         {
             var name = match.Groups[1].Value;
+
             return values.TryGetValue(name, out var value)
                 ? value
                 : throw new InvalidOperationException(

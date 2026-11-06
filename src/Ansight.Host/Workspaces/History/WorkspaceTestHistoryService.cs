@@ -36,22 +36,22 @@ public sealed partial class WorkspaceTestHistoryService
         var normalizedBatchRunId = string.IsNullOrWhiteSpace(batchRunId) ? null : batchRunId.Trim();
         var batches = batchAuditStore.List()
             .Where(entry => normalizedWorkspacePath is null
-                            || AreSamePath(entry.Audit.WorkspacePath, normalizedWorkspacePath))
+                || AreSamePath(entry.Audit.WorkspacePath, normalizedWorkspacePath))
             .Where(entry => normalizedAppId is null
-                            || entry.Audit.Tests.Any(test => string.Equals(
-                                test.AppId,
-                                normalizedAppId,
-                                StringComparison.OrdinalIgnoreCase)))
+                || entry.Audit.Tests.Any(test => string.Equals(
+                    test.AppId,
+                    normalizedAppId,
+                    StringComparison.OrdinalIgnoreCase)))
             .Where(entry => normalizedSessionId is null
-                            || entry.Audit.Tests.Any(test => string.Equals(
-                                test.SessionId,
-                                normalizedSessionId,
-                                StringComparison.Ordinal)))
+                || entry.Audit.Tests.Any(test => string.Equals(
+                    test.SessionId,
+                    normalizedSessionId,
+                    StringComparison.Ordinal)))
             .Where(entry => normalizedBatchRunId is null
-                            || string.Equals(
-                                entry.Audit.BatchRunId,
-                                normalizedBatchRunId,
-                                StringComparison.OrdinalIgnoreCase))
+                || string.Equals(
+                    entry.Audit.BatchRunId,
+                    normalizedBatchRunId,
+                    StringComparison.OrdinalIgnoreCase))
             .Select(entry => normalizedAppId is null
                 ? entry
                 : FilterBatchHistoryEntry(entry, normalizedAppId))
@@ -60,32 +60,32 @@ public sealed partial class WorkspaceTestHistoryService
         var workspacePathsByAppId = runtime.Apps.List()
             .Where(static app => !string.IsNullOrWhiteSpace(app.CodebasePath))
             .ToDictionary(
-                static app => app.AppId,
-                static app => app.CodebasePath!,
-                StringComparer.OrdinalIgnoreCase);
+            static app => app.AppId,
+            static app => app.CodebasePath!,
+            StringComparer.OrdinalIgnoreCase);
         var catalogsByWorkspacePath = new Dictionary<string, WorkspaceTestCatalogResult?>(
             OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal);
         var runs = simulatorAgent.ListRunHistory()
             .Where(entry => normalizedAppId is null
-                            || string.Equals(
-                                entry.Audit.AppId,
-                                normalizedAppId,
-                                StringComparison.OrdinalIgnoreCase))
+                || string.Equals(
+                    entry.Audit.AppId,
+                    normalizedAppId,
+                    StringComparison.OrdinalIgnoreCase))
             .Where(entry => normalizedWorkspacePath is null
-                            || entry.Audit.WorkspacePath is { } runWorkspacePath
-                            && AreSamePath(runWorkspacePath, normalizedWorkspacePath))
+                || entry.Audit.WorkspacePath is { } runWorkspacePath
+                    && AreSamePath(runWorkspacePath, normalizedWorkspacePath))
             .Where(entry => normalizedSessionId is null
-                            || string.Equals(
-                                entry.Audit.SessionId,
-                                normalizedSessionId,
-                                StringComparison.Ordinal))
+                || string.Equals(
+                    entry.Audit.SessionId,
+                    normalizedSessionId,
+                    StringComparison.Ordinal))
             .Where(entry => normalizedBatchRunId is null
-                            || string.Equals(
-                                entry.Audit.BatchRunId,
-                                normalizedBatchRunId,
-                                StringComparison.OrdinalIgnoreCase))
+                || string.Equals(
+                    entry.Audit.BatchRunId,
+                    normalizedBatchRunId,
+                    StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(static entry => entry.Audit.StartedUtc)
             .Take(limit)
             .Select(entry => CreateRunHistorySummary(
@@ -95,6 +95,7 @@ public sealed partial class WorkspaceTestHistoryService
                     workspacePathsByAppId,
                     catalogsByWorkspacePath)))
             .ToArray();
+
         return new WorkspaceTestHistoryResult(
             batchAuditStore.HistoryDirectoryPath,
             batches,
@@ -106,6 +107,7 @@ public sealed partial class WorkspaceTestHistoryService
         string? appId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
         var normalizedRunId = runId.Trim();
         var normalizedAppId = string.IsNullOrWhiteSpace(appId) ? null : appId.Trim();
         var batches = batchAuditStore.List();
@@ -114,6 +116,7 @@ public sealed partial class WorkspaceTestHistoryService
             normalizedRunId,
             StringComparison.OrdinalIgnoreCase));
         var runHistory = simulatorAgent.ListRunHistory();
+
         if (batch is not null)
         {
             if (normalizedAppId is not null
@@ -135,32 +138,34 @@ public sealed partial class WorkspaceTestHistoryService
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var childRuns = runHistory
                 .Where(entry => (childRunIds.Contains(entry.Audit.RunId)
-                                 || string.Equals(
-                                     entry.Audit.BatchRunId,
-                                     normalizedRunId,
-                                     StringComparison.OrdinalIgnoreCase))
-                                && (normalizedAppId is null
-                                    || string.Equals(
-                                        entry.Audit.AppId,
-                                        normalizedAppId,
-                                        StringComparison.OrdinalIgnoreCase)))
+                    || string.Equals(
+                        entry.Audit.BatchRunId,
+                        normalizedRunId,
+                        StringComparison.OrdinalIgnoreCase))
+                    && (normalizedAppId is null
+                        || string.Equals(
+                            entry.Audit.AppId,
+                            normalizedAppId,
+                            StringComparison.OrdinalIgnoreCase)))
                 .OrderBy(static entry => entry.Audit.StartedUtc)
                 .ToArray();
+
             return new WorkspaceTestHistoryInspection(normalizedRunId, filteredBatch, childRuns);
         }
 
         var correlatedRuns = runHistory
             .Where(entry => string.Equals(
-                                entry.Audit.BatchRunId,
-                                normalizedRunId,
-                                StringComparison.OrdinalIgnoreCase)
-                            && (normalizedAppId is null
-                                || string.Equals(
-                                    entry.Audit.AppId,
-                                    normalizedAppId,
-                                    StringComparison.OrdinalIgnoreCase)))
+                entry.Audit.BatchRunId,
+                normalizedRunId,
+                StringComparison.OrdinalIgnoreCase)
+                && (normalizedAppId is null
+                    || string.Equals(
+                        entry.Audit.AppId,
+                        normalizedAppId,
+                        StringComparison.OrdinalIgnoreCase)))
             .OrderBy(static entry => entry.Audit.StartedUtc)
             .ToArray();
+
         if (correlatedRuns.Length > 0)
         {
             return new WorkspaceTestHistoryInspection(normalizedRunId, null, correlatedRuns);
@@ -171,11 +176,12 @@ public sealed partial class WorkspaceTestHistoryService
                 entry.Audit.RunId,
                 normalizedRunId,
                 StringComparison.OrdinalIgnoreCase)
-            && (normalizedAppId is null
-                || string.Equals(
-                    entry.Audit.AppId,
-                    normalizedAppId,
-                    StringComparison.OrdinalIgnoreCase)));
+                && (normalizedAppId is null
+                    || string.Equals(
+                        entry.Audit.AppId,
+                        normalizedAppId,
+                        StringComparison.OrdinalIgnoreCase)));
+
         if (run is null)
         {
             return null;
@@ -187,6 +193,7 @@ public sealed partial class WorkspaceTestHistoryService
                 entry.Audit.BatchRunId,
                 run.Audit.BatchRunId,
                 StringComparison.OrdinalIgnoreCase));
+
         if (parentBatch is not null && normalizedAppId is not null)
         {
             parentBatch = FilterBatchHistoryEntry(parentBatch, normalizedAppId);
@@ -202,11 +209,13 @@ public sealed partial class WorkspaceTestHistoryService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
+
         var inspection = Inspect(runId, appId);
         var run = inspection?.Runs.FirstOrDefault(entry => string.Equals(
             entry.Audit.RunId,
             runId.Trim(),
             StringComparison.OrdinalIgnoreCase));
+
         if (run is null)
         {
             return null;
@@ -222,6 +231,7 @@ public sealed partial class WorkspaceTestHistoryService
             .Where(static path => !string.IsNullOrWhiteSpace(path))
             .Select(static path => path!.Replace('\\', '/').TrimStart('/'))
             .ToHashSet(StringComparer.Ordinal);
+
         if (!allowedPaths.Contains(normalizedRelativePath)
             || Path.IsPathRooted(relativePath)
             || normalizedRelativePath.Split('/').Any(static segment => segment is "" or "." or ".."))
@@ -230,6 +240,7 @@ public sealed partial class WorkspaceTestHistoryService
         }
 
         var auditDirectoryPath = Path.GetDirectoryName(run.FilePath);
+
         if (string.IsNullOrWhiteSpace(auditDirectoryPath))
         {
             return null;
@@ -239,9 +250,10 @@ public sealed partial class WorkspaceTestHistoryService
             auditDirectoryPath,
             normalizedRelativePath.Replace('/', Path.DirectorySeparatorChar)));
         var relativeToAuditDirectory = Path.GetRelativePath(auditDirectoryPath, resolvedPath);
+
         return relativeToAuditDirectory.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-               || string.Equals(relativeToAuditDirectory, "..", StringComparison.Ordinal)
-               || !File.Exists(resolvedPath)
+            || string.Equals(relativeToAuditDirectory, "..", StringComparison.Ordinal)
+            || !File.Exists(resolvedPath)
             ? null
             : resolvedPath;
     }
@@ -252,6 +264,7 @@ public sealed partial class WorkspaceTestHistoryService
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
         var tests = entry.Audit.Tests
             .Where(test => string.Equals(
@@ -264,9 +277,10 @@ public sealed partial class WorkspaceTestHistoryService
         var message = status == WorkspaceTestHistoryStatuses.Running
             ? $"Running {tests.Length:N0} workspace test(s) for '{normalizedAppId}'."
             : $"{tests.Length:N0} test(s) for '{normalizedAppId}': "
-              + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Succeeded):N0} passed, "
-              + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Failed):N0} failed, "
-              + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Skipped):N0} skipped.";
+                + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Succeeded):N0} passed, "
+                + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Failed):N0} failed, "
+                + $"{tests.Count(static test => test.Status == WorkspaceTestHistoryStatuses.Skipped):N0} skipped.";
+
         return entry with
         {
             Audit = entry.Audit with
@@ -309,16 +323,13 @@ public sealed partial class WorkspaceTestHistoryService
             : originalStatus;
     }
 
-}
-
-public sealed partial class WorkspaceTestHistoryService
-{
     private WorkspaceTestIdentity ResolveWorkspaceTestIdentity(
         SimulatorAgentRunAudit audit,
         IReadOnlyDictionary<string, string> workspacePathsByAppId,
         IDictionary<string, WorkspaceTestCatalogResult?> catalogsByWorkspacePath)
     {
         var workspacePath = audit.WorkspacePath;
+
         if (string.IsNullOrWhiteSpace(workspacePath)
             && !string.IsNullOrWhiteSpace(audit.AppId))
         {
@@ -350,9 +361,9 @@ public sealed partial class WorkspaceTestHistoryService
                 catalog = WorkspaceTestCatalog.Load(workspacePath);
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or InvalidDataException
-                                               or ArgumentException)
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or ArgumentException)
             {
                 catalog = null;
             }
@@ -364,6 +375,7 @@ public sealed partial class WorkspaceTestHistoryService
             catalog?.Tests ?? [],
             audit.AppId,
             audit.RequestedInstructions.FirstOrDefault());
+
         return new WorkspaceTestIdentity(
             workspacePath,
             audit.WorkspaceTestId ?? matchedTest?.TestId,
@@ -383,7 +395,7 @@ public sealed partial class WorkspaceTestHistoryService
         var candidates = tests
             .Where(test => !test.IsTaskOnly)
             .Where(test => string.IsNullOrWhiteSpace(appId)
-                           || string.Equals(test.AppId, appId, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(test.AppId, appId, StringComparison.OrdinalIgnoreCase))
             .ToArray();
         var exactMatches = candidates
             .Where(test => string.Equals(
@@ -392,6 +404,7 @@ public sealed partial class WorkspaceTestHistoryService
                 StringComparison.Ordinal))
             .Take(2)
             .ToArray();
+
         if (exactMatches.Length == 1)
         {
             return exactMatches[0];
@@ -403,6 +416,7 @@ public sealed partial class WorkspaceTestHistoryService
                 StringComparison.Ordinal))
             .Take(2)
             .ToArray();
+
         return scenarioMatches.Length == 1 ? scenarioMatches[0] : null;
     }
 
@@ -423,6 +437,7 @@ public sealed partial class WorkspaceTestHistoryService
 
         var title = instruction?.Trim() ?? string.Empty;
         const string scenarioPrefix = "Test scenario:";
+
         if (title.StartsWith(scenarioPrefix, StringComparison.OrdinalIgnoreCase))
         {
             title = title[scenarioPrefix.Length..].TrimStart();
@@ -432,6 +447,7 @@ public sealed partial class WorkspaceTestHistoryService
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault()
             ?? string.Empty;
+
         if (title.Length <= 72)
         {
             return string.IsNullOrWhiteSpace(title) ? "Untitled test" : title;
@@ -439,6 +455,7 @@ public sealed partial class WorkspaceTestHistoryService
 
         var shortened = title[..72];
         var lastSpace = shortened.LastIndexOf(' ');
+
         if (lastSpace >= 40)
         {
             shortened = shortened[..lastSpace];
@@ -452,6 +469,7 @@ public sealed partial class WorkspaceTestHistoryService
         WorkspaceTestIdentity identity)
     {
         var audit = entry.Audit;
+
         return new WorkspaceTestRunHistorySummary(
             audit.RunId,
             audit.BatchRunId,
@@ -493,5 +511,4 @@ public sealed partial class WorkspaceTestHistoryService
             OperatingSystem.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal);
-
 }

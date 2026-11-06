@@ -11,6 +11,7 @@ internal static class TouchHeatmapBuilder
         bool includeEmpty)
     {
         var cells = new HeatmapCell[columns, rows];
+
         for (var column = 0; column < columns; column++)
         {
             for (var row = 0; row < rows; row++)
@@ -22,6 +23,7 @@ internal static class TouchHeatmapBuilder
         foreach (var touch in touches)
         {
             var point = TouchReviewGeometry.ResolveTouchPoint(touch);
+
             if (point is null)
             {
                 continue;
@@ -33,11 +35,13 @@ internal static class TouchHeatmapBuilder
         }
 
         var payloads = new List<JsonNode?>();
+
         for (var row = 0; row < rows; row++)
         {
             for (var column = 0; column < columns; column++)
             {
                 var cell = cells[column, row];
+
                 if (includeEmpty || cell.TouchCount > 0)
                 {
                     payloads.Add(cell.ToPayload(columns, rows));

@@ -28,6 +28,7 @@ public sealed class CompanionAgentHistoryTests
         await using var runtime = CreateRuntime(directory.Path);
         var first = await ImportSessionAsync(runtime, directory.Path, "session-first", 0);
         await ImportSessionAsync(runtime, directory.Path, "session-second", 1);
+
         var source = new CliRemoteAgentChatSource(runtime);
 
         var all = await source.ListAgentTasksAsync(new RemoteAgentTaskListRequest());
@@ -50,6 +51,7 @@ public sealed class CompanionAgentHistoryTests
         var storagePath = Path.Combine(baseFolderPath, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,
@@ -93,22 +95,25 @@ public sealed class CompanionAgentHistoryTests
                     Status = "completed",
                     CreatedAtUtc = timestamp,
                     UpdatedAtUtc = timestamp
-                }
-            ]
+                }            ]
         };
+
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var entry = archive.CreateEntry("session.json");
-            await using var sessionStream = entry.Open();
-            await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                SavedAtUtc = timestamp,
-                Session = snapshot
-            }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                var entry = archive.CreateEntry("session.json");
+                await using var sessionStream = entry.Open();
+                await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
+                {
+                    SavedAtUtc = timestamp,
+                    Session = snapshot
+                }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
         }
 
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
+
         return Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
     }
 }

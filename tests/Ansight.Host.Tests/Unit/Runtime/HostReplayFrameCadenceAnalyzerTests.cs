@@ -74,8 +74,7 @@ public sealed class HostReplayFrameCadenceAnalyzerTests
         var frames = Enumerable.Range(0, 7)
             .Select(index => CreateFrame(startUtc.AddSeconds(index), index))
             .ToArray();
-        var steps = new[] { 0d, 0.1, 2, 3, 4, 5, 6, 10 }
-            .Select((seconds, index) => CreateStep(index + 1, startUtc.AddSeconds(seconds)))
+        var steps = new[] { 0d, 0.1, 2, 3, 4, 5, 6, 10 }.Select((seconds, index) => CreateStep(index + 1, startUtc.AddSeconds(seconds)))
             .ToArray();
 
         var cadence = ReplayFrameCadenceAnalyzer.Analyze(

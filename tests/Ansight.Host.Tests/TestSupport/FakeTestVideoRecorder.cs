@@ -4,7 +4,9 @@ internal sealed class FakeTestVideoRecorder : ITestVideoRecorder, ITestVideoReco
 {
     private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Task Completion => exited.Task;
+
     public void ExitUnexpectedly() => exited.TrySetResult();
+
     public string Source => "test-recorder";
     public string? OutputPath { get; private set; }
     public int Starts { get; private set; }
@@ -16,8 +18,14 @@ internal sealed class FakeTestVideoRecorder : ITestVideoRecorder, ITestVideoReco
     public Task<ITestVideoRecording> StartAsync(TestVideoRecordingRequest request, CancellationToken cancellationToken)
     {
         Starts++;
-        if (StartError is not null) throw StartError;
+
+        if (StartError is not null)
+        {
+            throw StartError;
+        }
+
         OutputPath = request.OutputPath;
+
         return Task.FromResult<ITestVideoRecording>(this);
     }
 
@@ -25,8 +33,16 @@ internal sealed class FakeTestVideoRecorder : ITestVideoRecorder, ITestVideoReco
     {
         Stops++;
         exited.TrySetResult();
-        if (InvalidFile) File.WriteAllText(OutputPath!, "incomplete MP4");
-        else File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), OutputPath!, overwrite: true);
+
+        if (InvalidFile)
+        {
+            File.WriteAllText(OutputPath!, "incomplete MP4");
+        }
+        else
+        {
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), OutputPath!, overwrite: true);
+        }
+
         return Task.FromResult(new TestVideoRecordingCompletion(Complete, Complete ? null : "Device disconnected."));
     }
 }

@@ -58,8 +58,8 @@ internal static class CliTestRuntimeOptionsResolver
         ArgumentNullException.ThrowIfNull(options);
 
         var excludedPorts = Enumerable.Range(
-                ProtocolDefaults.WebSocketSessionPortRangeStart,
-                ProtocolDefaults.WebSocketSessionPortRangeEnd
+            ProtocolDefaults.WebSocketSessionPortRangeStart,
+            ProtocolDefaults.WebSocketSessionPortRangeEnd
                 - ProtocolDefaults.WebSocketSessionPortRangeStart
                 + 1)
             .ToHashSet();
@@ -68,6 +68,7 @@ internal static class CliTestRuntimeOptionsResolver
 
         var discoveryPort = options.DiscoveryPort ?? FindAvailableUdpPort(excludedPorts);
         excludedPorts.Add(discoveryPort);
+
         var webSocketPort = options.WebSocketPort ?? FindAvailableTcpPort(excludedPorts);
 
         return options with
@@ -81,8 +82,9 @@ internal static class CliTestRuntimeOptionsResolver
     {
         var discoveryPort = options.DiscoveryPort ?? ProtocolDefaults.DiscoveryPort;
         var webSocketPort = options.WebSocketPort ?? ProtocolDefaults.WebSocketPort;
+
         return CanBindUdpPort(discoveryPort)
-               && CanBindTcpPort(webSocketPort);
+            && CanBindTcpPort(webSocketPort);
     }
 
     private static async Task<bool> TargetsPhysicalDeviceAsync(
@@ -106,9 +108,9 @@ internal static class CliTestRuntimeOptionsResolver
         }
 
         if (string.Equals(
-                Path.GetExtension(target.ApplicationPath),
-                ".ipa",
-                StringComparison.OrdinalIgnoreCase))
+            Path.GetExtension(target.ApplicationPath),
+            ".ipa",
+            StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -126,11 +128,12 @@ internal static class CliTestRuntimeOptionsResolver
                 target.DeviceIdentifier.Trim(),
                 StringComparison.OrdinalIgnoreCase))
             .Where(device => string.IsNullOrWhiteSpace(target.Platform)
-                             || string.Equals(
-                                 device.Platform,
-                                 target.Platform.Trim(),
-                                 StringComparison.OrdinalIgnoreCase))
+                || string.Equals(
+                    device.Platform,
+                    target.Platform.Trim(),
+                    StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
         return matches.Length == 1 && DeviceKinds.IsPhysical(matches[0].Kind);
     }
 
@@ -144,7 +147,9 @@ internal static class CliTestRuntimeOptionsResolver
                     ? IPAddress.IPv6Any
                     : IPAddress.Any,
                 0));
+
             var port = ((IPEndPoint)socket.LocalEndPoint!).Port;
+
             if (!excludedPorts.Contains(port))
             {
                 return port;
@@ -165,7 +170,9 @@ internal static class CliTestRuntimeOptionsResolver
                     : IPAddress.Any,
                 0));
             socket.Listen(1);
+
             var port = ((IPEndPoint)socket.LocalEndPoint!).Port;
+
             if (!excludedPorts.Contains(port))
             {
                 return port;
@@ -185,6 +192,7 @@ internal static class CliTestRuntimeOptionsResolver
                     ? IPAddress.IPv6Any
                     : IPAddress.Any,
                 port));
+
             return true;
         }
         catch (SocketException)
@@ -204,6 +212,7 @@ internal static class CliTestRuntimeOptionsResolver
                     : IPAddress.Any,
                 port));
             socket.Listen(1);
+
             return true;
         }
         catch (SocketException)
@@ -224,6 +233,7 @@ internal static class CliTestRuntimeOptionsResolver
             DualMode = true
         };
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, false);
+
         return socket;
     }
 

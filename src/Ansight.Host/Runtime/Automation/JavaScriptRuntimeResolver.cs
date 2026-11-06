@@ -15,19 +15,22 @@ internal static class JavaScriptRuntimeResolver
         IReadOnlyList<string>? platformFallbackPaths = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configuredPath);
+
         var normalizedConfiguredPath = configuredPath.Trim();
+
         if (HasDirectoryComponent(normalizedConfiguredPath))
         {
             var absolutePath = Path.GetFullPath(normalizedConfiguredPath);
+
             return File.Exists(absolutePath)
                 ? Available(absolutePath)
                 : Missing(absolutePath);
         }
 
         foreach (var candidate in EnumerateCandidates(
-                     normalizedConfiguredPath,
-                     inheritedPath ?? Environment.GetEnvironmentVariable("PATH"),
-                     platformFallbackPaths ?? GetPlatformFallbackPaths()))
+            normalizedConfiguredPath,
+            inheritedPath ?? Environment.GetEnvironmentVariable("PATH"),
+            platformFallbackPaths ?? GetPlatformFallbackPaths()))
         {
             if (File.Exists(candidate))
             {
@@ -44,8 +47,9 @@ internal static class JavaScriptRuntimeResolver
         IReadOnlyList<string> platformFallbackPaths)
     {
         var candidates = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var directoryPath in (inheritedPath ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var candidate in AddPlatformExecutableExtensions(Path.Combine(directoryPath, executableName)))
             {
@@ -66,6 +70,7 @@ internal static class JavaScriptRuntimeResolver
             var candidate = Path.GetFileName(fallbackPath).Equals(executableName, StringComparison.OrdinalIgnoreCase)
                 ? fallbackPath
                 : Path.Combine(fallbackPath, executableName);
+
             foreach (var expandedCandidate in AddPlatformExecutableExtensions(candidate))
             {
                 if (candidates.Add(expandedCandidate))
@@ -79,6 +84,7 @@ internal static class JavaScriptRuntimeResolver
     private static IEnumerable<string> AddPlatformExecutableExtensions(string candidate)
     {
         yield return candidate;
+
         if (OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(candidate)))
         {
             yield return candidate + ".exe";
@@ -99,8 +105,8 @@ internal static class JavaScriptRuntimeResolver
     private static bool HasDirectoryComponent(string path)
     {
         return Path.IsPathRooted(path)
-               || path.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
-               || path.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+            || path.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || path.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static JavaScriptRuntimeResolution Available(string executablePath)

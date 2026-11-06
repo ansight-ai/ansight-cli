@@ -29,12 +29,14 @@ internal sealed class AudioInjectionTool : Operation
                 ["sessionId"] = ToolSchema.String("Exact connected Ansight session id."),
                 ["appId"] = ToolSchema.String("Optional owning app id; must match the selected session.", nullable: true)
             };
+
             if (inject)
             {
                 properties["file"] = ToolSchema.String("PCM16 mono 16 kHz WAV, at most 15 seconds. Tasks require a repository-relative path.");
                 properties["timeoutMs"] = ToolSchema.Integer("Total deadline, 100–60000 milliseconds; default 30000.");
                 properties["waitForMicrophoneMs"] = ToolSchema.Integer("Readiness wait, 0–10000 milliseconds; default 0.");
             }
+
             return ToolSchema.Object(properties: properties, required: inject ? ["sessionId", "file"] : ["sessionId"], additionalProperties: false).ToJson();
         }
     }
@@ -45,14 +47,28 @@ internal sealed class AudioInjectionTool : Operation
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId, OperationExecutionContext? context)
     {
         var rejection = AudioExecutionPolicy.RejectParallelCall(Name, context);
-        if (rejection is not null) return rejection;
+
+        if (rejection is not null)
+        {
+            return rejection;
+        }
+
         try
         {
             var sessionId = NormalizeOptionalString(arguments?["sessionId"]?.GetValue<string>());
-            if (sessionId is null) throw new AudioInjectionException("invalid-arguments", "Provide an explicit connected sessionId.");
+
+            if (sessionId is null)
+            {
+                throw new AudioInjectionException("invalid-arguments", "Provide an explicit connected sessionId.");
+            }
+
             var appId = NormalizeOptionalString(arguments?["appId"]?.GetValue<string>());
+
             if (appId is not null && (!runtimeState.TryGetSessionSnapshot(sessionId, out var session) || session?.AppId != appId))
+            {
                 throw new AudioInjectionException("session-mismatch", "The selected session does not belong to the requested app.");
+            }
+
             var token = ToolExecutionCancellation.Current;
             var payload = inject
                 ? await router.Engine.InjectAsync(sessionId,
@@ -60,11 +76,13 @@ internal sealed class AudioInjectionTool : Operation
                     arguments?["timeoutMs"]?.GetValue<int>() ?? 30000,
                     arguments?["waitForMicrophoneMs"]?.GetValue<int>() ?? 0, token).ConfigureAwait(false)
                 : await router.Engine.GetCapabilitiesAsync(sessionId, token).ConfigureAwait(false);
+
             return RequestResult.ToolResult(payload, inject && payload["status"]?.GetValue<string>() != "completed");
         }
         catch (Exception exception) when (exception is AudioInjectionException or OperationCanceledException or InvalidOperationException or ArgumentException)
         {
             var audioError = exception as AudioInjectionException;
+
             return RequestResult.ToolResult(new JsonObject
             {
                 ["schema"] = inject ? "ansight.audio-injection/v1" : "ansight.audio-capabilities/v1",

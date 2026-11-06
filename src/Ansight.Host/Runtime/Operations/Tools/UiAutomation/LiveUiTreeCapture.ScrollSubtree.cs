@@ -10,8 +10,8 @@ internal sealed partial class LiveUiTreeCapture
         string? correlationId, LiveUiSelector selector, CancellationToken cancellationToken)
     {
         var canExpand = operationName == "ansight_scroll_ui"
-            && result.Capture is { ToolId: RemoteAppToolIds.UiGetVisualTree }
-            && selector.HasCriteria;
+            && result.Capture is { ToolId: RemoteAppToolIds.UiGetVisualTree } && selector.HasCriteria;
+
         if (!canExpand)
         {
             return result;
@@ -20,6 +20,7 @@ internal sealed partial class LiveUiTreeCapture
         var capture = result.Capture!;
         var targets = LiveUiNodeQuery.PrioritizeActionTargets(
             LiveUiNodeQuery.Find(capture.Root, selector, capture.TypeRegistry), capture.Payload, capture.Viewport!);
+
         if (targets.Count != 1)
         {
             return result;
@@ -28,6 +29,7 @@ internal sealed partial class LiveUiTreeCapture
         var target = targets[0];
         var needsSubtree = !LiveUiScrollObservation.IsCompleteArea(target.Node, capture.Payload, capture.TypeRegistry)
             && target.Node["id"] is JsonValue;
+
         if (!needsSubtree)
         {
             return result;
@@ -45,12 +47,14 @@ internal sealed partial class LiveUiTreeCapture
         var response = await bridge.CallToolWithCatalogRecoveryAsync(
             capture.Session.SessionId, RemoteAppToolIds.UiGetVisualTree, arguments, after: null,
             cancellationToken, new AppToolBridgeRequestContext("host-ui", operationName, correlationId)).ConfigureAwait(false);
+
         if (!response.Success || response.Envelope?.Payload?["result"] is not JsonObject payload)
         {
             return result;
         }
 
         var expanded = CreateCapture(capture.Session, capture.ToolId, payload.DeepClone().AsObject());
+
         if (expanded.Capture is not { } subtree)
         {
             return result;
@@ -60,6 +64,7 @@ internal sealed partial class LiveUiTreeCapture
         var sameTarget = matches.Count == 1
             && LiveUiScrollEvidence.SameVisibleArea(target, capture.Viewport, matches[0], capture.Viewport)
             && LiveUiScrollObservation.IsCompleteArea(matches[0].Node, subtree.Payload, subtree.TypeRegistry);
+
         if (!sameTarget)
         {
             return result;

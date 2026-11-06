@@ -11,8 +11,8 @@ internal sealed record TraceSelectionWindow(
     public bool Includes(double timestampMilliseconds, int processId, int threadId)
     {
         return (StartMilliseconds is null || timestampMilliseconds >= StartMilliseconds.Value)
-               && (EndMilliseconds is null || timestampMilliseconds <= EndMilliseconds.Value)
-               && (ProcessId is null || processId == ProcessId.Value)
-               && (ThreadId is null || threadId == ThreadId.Value);
+            && (EndMilliseconds is null || timestampMilliseconds <= EndMilliseconds.Value)
+            && (ProcessId is null || processId == ProcessId.Value)
+            && (ThreadId is null || threadId == ThreadId.Value);
     }
 }

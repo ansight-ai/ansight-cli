@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 public sealed class AnalyticsSettingsStore
 {
@@ -23,7 +23,6 @@ public sealed class AnalyticsSettingsStore
     }
 
     public string AnalyticsDirectoryPath { get; }
-
     public string SettingsPath => settingsPath;
 
     public bool IsDetailedTrackingEnabled
@@ -33,7 +32,10 @@ public sealed class AnalyticsSettingsStore
             try
             {
                 if (string.Equals(Environment.GetEnvironmentVariable("ANSIGHT_ANALYTICS_DISABLED"), "true", StringComparison.OrdinalIgnoreCase))
+                {
                     return false;
+                }
+
                 if (!File.Exists(settingsPath))
                 {
                     return false;
@@ -48,17 +50,16 @@ public sealed class AnalyticsSettingsStore
                 return hasAccountConsent;
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException)
+                or UnauthorizedAccessException
+                or JsonException)
             {
                 return false;
             }
         }
     }
-
     // Consent alone does not authorize per-action analytics for an unsigned user.
     public bool IsDetailedTrackingActive => IsDetailedTrackingEnabled
-                                            && AnalyticsAccount.Read(dataDirectory) == AnalyticsAccount.ReadPersisted(dataDirectory);
+        && AnalyticsAccount.Read(dataDirectory) == AnalyticsAccount.ReadPersisted(dataDirectory);
 
     public bool HasSignedInAccount => AnalyticsAccount.Read(dataDirectory) is not null;
 
@@ -74,6 +75,7 @@ public sealed class AnalyticsSettingsStore
                 }
 
                 var saved = JsonSerializer.Deserialize<AnalyticsSettings>(File.ReadAllText(settingsPath), jsonOptions);
+
                 return saved?.ConsentId ?? "legacy";
             }
             catch
@@ -87,13 +89,16 @@ public sealed class AnalyticsSettingsStore
     {
         var accountId = AnalyticsAccount.Read(dataDirectory);
         var consentId = enabled ? DetailedTrackingConsentId ?? Guid.NewGuid().ToString("D") : null;
+
         if (enabled && accountId is null)
         {
             throw new InvalidOperationException("Sign in before opting in to detailed analytics.");
         }
 
         Directory.CreateDirectory(AnalyticsDirectoryPath);
+
         var temporaryPath = $"{settingsPath}.{Guid.NewGuid():N}.tmp";
+
         try
         {
             File.WriteAllText(
@@ -105,6 +110,7 @@ public sealed class AnalyticsSettingsStore
             TryRestrictFilePermissions(temporaryPath);
             File.Move(temporaryPath, settingsPath, overwrite: true);
             TryRestrictFilePermissions(settingsPath);
+
             if (!enabled)
             {
                 ProductUsage.Flush(dataDirectory, force: true);
@@ -130,8 +136,8 @@ public sealed class AnalyticsSettingsStore
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
         }
     }

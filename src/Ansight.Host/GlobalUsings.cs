@@ -11,7 +11,7 @@ global using System.Runtime.CompilerServices;
 global using System.Security.Cryptography;
 global using System.Text;
 global using System.Text.Json;
-global using Ansight.Analytics;
+global using Ansight.Infrastructure.Analytics;
 global using Ansight.Infrastructure;
 global using Ansight.Infrastructure.IOC;
 global using Ansight.Infrastructure.Utilities;

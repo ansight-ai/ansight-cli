@@ -11,7 +11,6 @@ namespace Ansight.Host.Tests.Integration;
 
 public sealed partial class RuntimeCoordinatorIntegrationTests
 {
-
     [Fact(Timeout = 60000)]
     public async Task LocalExplorerQueriesCatalogBeforeFirstFileRequest()
     {
@@ -24,6 +23,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         var socketUri = new Uri(
             $"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}");
@@ -34,6 +34,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The paired app should appear in the local session explorer.");
@@ -41,6 +42,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var explorer = await runtime.SessionReplays.StartExplorerAsync(
             new SessionExplorerStartRequest(InitialSessionId: sessionId));
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         var explorerUrl = Assert.IsType<Uri>(explorer.ExplorerUrl);
         using var httpClient = new HttpClient();
         using var requestContent = new StringContent("{}", Encoding.UTF8, "application/json");
@@ -52,6 +54,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var queryRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, queryRequest["type"]?.GetValue<string>());
+
         var queryRequestId = Assert.IsAssignableFrom<JsonValue>(queryRequest["id"]).GetValue<string>();
         await SendJsonAsync(
             socket,
@@ -76,15 +79,18 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var listRequestTask = ReceiveJsonAsync(socket);
         var completedTask = await Task.WhenAny(listRequestTask, listTask);
+
         if (ReferenceEquals(completedTask, listTask))
         {
             using var earlyResponse = await listTask;
             Assert.Fail(
                 $"The explorer returned before forwarding the file call: {await earlyResponse.Content.ReadAsStringAsync()}");
         }
+
         var listRequest = await listRequestTask;
         Assert.Equal(ToolProtocolMessageTypes.CallType, listRequest["type"]?.GetValue<string>());
         Assert.Equal("files.list_directory", listRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var listRequestId = Assert.IsAssignableFrom<JsonValue>(listRequest["id"]).GetValue<string>();
         await SendJsonAsync(
             socket,
@@ -112,6 +118,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.True(
             listResponse.StatusCode == HttpStatusCode.OK,
             $"Expected the file list to succeed, but received {listResponse.StatusCode}: {listResponseJson}");
+
         var listJson = JsonNode.Parse(listResponseJson)!.AsObject();
         Assert.True(listJson["success"]!.GetValue<bool>());
 
@@ -131,6 +138,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         var socketUri = new Uri(
             $"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}");
@@ -141,6 +149,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The paired app should appear in the local session explorer.");
@@ -148,6 +157,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var explorer = await runtime.SessionReplays.StartExplorerAsync(
             new SessionExplorerStartRequest(InitialSessionId: sessionId));
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         var explorerUrl = Assert.IsType<Uri>(explorer.ExplorerUrl);
         using var httpClient = new HttpClient();
         using var requestContent = new StringContent(
@@ -162,6 +172,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var queryRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, queryRequest["type"]?.GetValue<string>());
+
         var queryRequestId = Assert.IsAssignableFrom<JsonValue>(queryRequest["id"]).GetValue<string>();
         await SendJsonAsync(
             socket,
@@ -195,6 +206,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Equal(
             "ansight/offline-sync/data.db3",
             toolRequest["payload"]?["arguments"]?["path"]?.GetValue<string>());
+
         var toolRequestId = Assert.IsAssignableFrom<JsonValue>(toolRequest["id"]).GetValue<string>();
         var transferId = Guid.NewGuid();
         var fileBytes = new byte[] { 1, 2, 3, 4 };
@@ -241,6 +253,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.True(
             captureResponse.StatusCode == HttpStatusCode.OK,
             $"Expected the file capture to succeed, but received {captureResponse.StatusCode}: {captureResponseText}");
+
         var captureJson = JsonNode.Parse(captureResponseText)!.AsObject();
         var artifactSnapshotId = captureJson["artifactSnapshotId"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(artifactSnapshotId));
@@ -248,8 +261,9 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         AppSessionSnapshot? snapshot = null;
         await TestWait.UntilAsync(
             () => runtime.Sessions.TryGetSnapshot(sessionId!, out snapshot)
-                  && snapshot?.ArtifactSnapshots.Count == 1,
+                && snapshot?.ArtifactSnapshots.Count == 1,
             because: "The downloaded live file should be retained as a session artifact.");
+
         var artifact = Assert.Single(snapshot!.ArtifactSnapshots);
         Assert.Equal(artifactSnapshotId, artifact.SnapshotId);
         Assert.Equal("ansight.app.artifacts", artifact.Source);
@@ -281,6 +295,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44, 8), offsetBytes);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52, 4), payload.Length);
         payload.CopyTo(frame, BinaryFileTransferProtocol.HeaderSize);
+
         return frame;
     }
 
@@ -296,6 +311,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         var socketUri = new Uri(
             $"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}");
@@ -306,6 +322,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The paired app should appear in the local session explorer.");
@@ -313,6 +330,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var explorer = await runtime.SessionReplays.StartExplorerAsync(
             new SessionExplorerStartRequest(InitialSessionId: sessionId));
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         var explorerUrl = Assert.IsType<Uri>(explorer.ExplorerUrl);
         using var httpClient = new HttpClient();
         using var requestContent = new StringContent("{}", Encoding.UTF8, "application/json");
@@ -324,6 +342,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var queryRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, queryRequest["type"]?.GetValue<string>());
+
         var queryRequestId = Assert.IsAssignableFrom<JsonValue>(queryRequest["id"]).GetValue<string>();
         await SendJsonAsync(
             socket,
@@ -363,6 +382,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var toolRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.CallType, toolRequest["type"]?.GetValue<string>());
+
         var toolRequestId = Assert.IsAssignableFrom<JsonValue>(toolRequest["id"]).GetValue<string>();
         Assert.Equal(
             "maui.get_visual_tree",
@@ -399,12 +419,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         using var captureResponse = await captureTask;
         Assert.Equal(HttpStatusCode.OK, captureResponse.StatusCode);
+
         var captureJson = JsonNode.Parse(await captureResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.True(captureJson["isSuccess"]!.GetValue<bool>());
         Assert.Equal(1, captureJson["nodeCount"]!.GetValue<int>());
         Assert.False(string.IsNullOrWhiteSpace(captureJson["snapshotId"]!.GetValue<string>()));
 
         Assert.True(runtime.Sessions.TryGetSnapshot(sessionId!, out var snapshot));
+
         var visualTree = Assert.Single(snapshot!.VisualTreeSnapshots);
         Assert.Equal("maui.get_visual_tree", visualTree.Source);
         Assert.Equal(1, visualTree.NodeCount);
@@ -420,6 +442,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             listContent);
         var listRequest = await ReceiveJsonAsync(socket);
         Assert.Equal("files.list_directory", listRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var listRequestId = Assert.IsAssignableFrom<JsonValue>(listRequest["id"]).GetValue<string>();
         Assert.Equal("appData", listRequest["payload"]?["arguments"]?["root"]?.GetValue<string>());
         Assert.Equal("Documents", listRequest["payload"]?["arguments"]?["path"]?.GetValue<string>());
@@ -454,8 +477,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         using var listResponse = await listTask;
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
         var listJson = JsonNode.Parse(await listResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.True(listJson["success"]!.GetValue<bool>());
         Assert.Equal(
@@ -473,6 +498,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             searchContent);
         var searchRequest = await ReceiveJsonAsync(socket);
         Assert.Equal("files.list_directory", searchRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var searchRequestId = Assert.IsAssignableFrom<JsonValue>(searchRequest["id"]).GetValue<string>();
         Assert.True(searchRequest["payload"]?["arguments"]?["recursive"]?.GetValue<bool>());
         Assert.Equal(16, searchRequest["payload"]?["arguments"]?["maxDepth"]?.GetValue<int>());
@@ -508,8 +534,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         using var searchResponse = await searchTask;
         Assert.Equal(HttpStatusCode.OK, searchResponse.StatusCode);
+
         var searchJson = JsonNode.Parse(await searchResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.Equal(
             "Documents/Models/asset.glb",
@@ -526,6 +554,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             readContent);
         var readRequest = await ReceiveJsonAsync(socket);
         Assert.Equal("files.read_file", readRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var readRequestId = Assert.IsAssignableFrom<JsonValue>(readRequest["id"]).GetValue<string>();
         Assert.Equal(512 * 1024, readRequest["payload"]?["arguments"]?["maxBytes"]?.GetValue<int>());
         await SendJsonAsync(
@@ -552,8 +581,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         using var readResponse = await readTask;
         Assert.Equal(HttpStatusCode.OK, readResponse.StatusCode);
+
         var readJson = JsonNode.Parse(await readResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.Equal(
             "{\"ok\":true}",
@@ -570,6 +601,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             previewContent);
         var previewRequest = await ReceiveJsonAsync(socket);
         Assert.Equal("files.download_file", previewRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var previewRequestId = Assert.IsAssignableFrom<JsonValue>(previewRequest["id"]).GetValue<string>();
         Assert.Equal(1024 * 1024, previewRequest["payload"]?["arguments"]?["maxBytes"]?.GetValue<int>());
         Assert.Equal("base64", previewRequest["payload"]?["arguments"]?["encoding"]?.GetValue<string>());
@@ -598,8 +630,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         using var previewResponse = await previewTask;
         Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+
         var previewJson = JsonNode.Parse(await previewResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.True(previewJson["isSuccess"]!.GetValue<bool>());
         Assert.Equal(FileViewerKinds.Json, previewJson["viewerKind"]!.GetValue<string>());
@@ -617,6 +651,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             forcedTextContent);
         var forcedTextRequest = await ReceiveJsonAsync(socket);
         Assert.Equal("files.download_file", forcedTextRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var forcedTextRequestId = Assert.IsAssignableFrom<JsonValue>(forcedTextRequest["id"]).GetValue<string>();
         Assert.Equal(1024 * 1024, forcedTextRequest["payload"]?["arguments"]?["maxBytes"]?.GetValue<int>());
         Assert.Equal(
@@ -647,8 +682,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         using var forcedTextResponse = await forcedTextTask;
         Assert.Equal(HttpStatusCode.OK, forcedTextResponse.StatusCode);
+
         var forcedTextJson = JsonNode.Parse(
             await forcedTextResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.Equal(FileViewerKinds.Text, forcedTextJson["viewerKind"]!.GetValue<string>());
@@ -666,6 +703,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 $"api/sessions/{Uri.EscapeDataString(sessionId!)}/files/preview"),
             modelPreviewContent);
         Assert.Equal(HttpStatusCode.OK, modelPreviewResponse.StatusCode);
+
         var modelPreviewJson = JsonNode.Parse(
             await modelPreviewResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.True(modelPreviewJson["isSuccess"]!.GetValue<bool>());
@@ -677,11 +715,12 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             new Uri(
                 explorerUrl,
                 $"api/sessions/{Uri.EscapeDataString(sessionId!)}/files/content"
-                + "?root=appData&path=Models%2Fasset.glb"));
+                    + "?root=appData&path=Models%2Fasset.glb"));
         var firstModelChunkRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(
             "files.download_file",
             firstModelChunkRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var firstModelChunkRequestId = Assert.IsAssignableFrom<JsonValue>(
             firstModelChunkRequest["id"]).GetValue<string>();
         Assert.Equal(
@@ -723,6 +762,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Equal(
             "files.download_file",
             secondModelChunkRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var secondModelChunkRequestId = Assert.IsAssignableFrom<JsonValue>(
             secondModelChunkRequest["id"]).GetValue<string>();
         Assert.Equal(

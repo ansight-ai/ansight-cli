@@ -16,6 +16,7 @@ internal static class BoundedRunHistory
     {
         var lines = new List<string>();
         long totalBytes = 0;
+
         foreach (var record in records.OrderByDescending(completedAtUtc))
         {
             if (lines.Count >= maximumRecords)
@@ -25,6 +26,7 @@ internal static class BoundedRunHistory
 
             var line = serialize(record);
             var bytes = Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+
             if (bytes > MaximumRecordBytes || totalBytes + bytes > MaximumFileBytes)
             {
                 continue;
@@ -35,6 +37,7 @@ internal static class BoundedRunHistory
         }
 
         lines.Reverse();
+
         var temporaryPath = filePath + ".tmp";
         File.WriteAllLines(temporaryPath, lines);
         RestrictFile(temporaryPath);

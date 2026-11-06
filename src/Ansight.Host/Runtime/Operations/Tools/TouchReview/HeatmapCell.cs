@@ -14,15 +14,14 @@ internal sealed class HeatmapCell
     }
 
     public int Column { get; }
-
     public int Row { get; }
-
     public int TouchCount { get; private set; }
 
     public void Add(SessionTouchInputRecord touch)
     {
         TouchCount++;
         pointerIds.Add(touch.PointerId);
+
         var action = TouchReviewGeometry.NormalizeTouchAction(touch.Action);
         actionCounts[action] = actionCounts.GetValueOrDefault(action) + 1;
     }

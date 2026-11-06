@@ -4,14 +4,6 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Workspaces.History;
 
-public sealed record WorkspaceTestTraceExportResult(
-    bool IsSuccess,
-    string Message,
-    string RunId,
-    string OutputPath,
-    int TraceCount,
-    int SessionCount);
-
 public sealed class WorkspaceTestTraceExporter
 {
     private readonly RuntimeCoordinator runtime;
@@ -37,6 +29,7 @@ public sealed class WorkspaceTestTraceExporter
         var normalizedRunId = runId.Trim();
         var normalizedOutputPath = Path.GetFullPath(outputPath.Trim());
         var inspection = historyInspector(normalizedRunId, appId);
+
         if (inspection is null)
         {
             return new WorkspaceTestTraceExportResult(
@@ -52,6 +45,7 @@ public sealed class WorkspaceTestTraceExporter
             .Where(static entry => entry.Audit.TraceEnabled == false)
             .Select(static entry => entry.Audit.RunId)
             .ToArray();
+
         if (untracedRunIds.Length > 0)
         {
             return new WorkspaceTestTraceExportResult(
@@ -64,6 +58,7 @@ public sealed class WorkspaceTestTraceExporter
         }
 
         var outputDirectoryPath = Path.GetDirectoryName(normalizedOutputPath);
+
         if (string.IsNullOrWhiteSpace(outputDirectoryPath))
         {
             return new WorkspaceTestTraceExportResult(
@@ -79,23 +74,27 @@ public sealed class WorkspaceTestTraceExporter
             Path.GetTempPath(),
             $"ansight-trace-export-{Guid.NewGuid():N}");
         Directory.CreateDirectory(temporaryDirectoryPath);
+
         try
         {
             var sessionExports = new JsonArray();
             var sessionArchivePaths = new List<WorkspaceTestTraceSessionArchive>();
             var sessionsById = new Dictionary<string, WorkspaceTestTraceSessionExport>(StringComparer.Ordinal);
+
             foreach (var entry in inspection.Runs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var audit = entry.Audit;
+
                 if (!sessionsById.TryGetValue(audit.SessionId, out var sessionExport))
                 {
                     var sessionFileName = $"{FileNameUtil.Sanitize(audit.SessionId)}.ansight-session.zip";
                     var sessionArchivePath = Path.Combine(temporaryDirectoryPath, sessionFileName);
                     var exportResult = await runtime.SessionArchives.ExportSessionArchiveAsync(
-                            audit.SessionId,
-                            sessionArchivePath,
-                            cancellationToken)
+                        audit.SessionId,
+                        sessionArchivePath,
+                        cancellationToken)
                         .ConfigureAwait(false);
                     sessionExport = new WorkspaceTestTraceSessionExport(
                         exportResult.IsSuccess,
@@ -103,6 +102,7 @@ public sealed class WorkspaceTestTraceExporter
                         sessionArchivePath,
                         $"sessions/{sessionFileName}");
                     sessionsById.Add(audit.SessionId, sessionExport);
+
                     if (sessionExport.IsSuccess)
                     {
                         sessionArchivePaths.Add(new WorkspaceTestTraceSessionArchive(
@@ -124,48 +124,51 @@ public sealed class WorkspaceTestTraceExporter
             }
 
             Directory.CreateDirectory(outputDirectoryPath);
+
             if (File.Exists(normalizedOutputPath))
             {
                 File.Delete(normalizedOutputPath);
             }
 
             using (var stream = File.Create(normalizedOutputPath))
-            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                WriteTraceJsonEntry(
-                    archive,
-                    "manifest.json",
-                    new JsonObject
-                    {
-                        ["schema"] = "ansight.agent-evaluation-bundle/v1",
-                        ["exportedAtUtc"] = DateTimeOffset.UtcNow,
-                        ["requestedRunId"] = inspection.RequestedRunId,
-                        ["traceCount"] = inspection.Runs.Count,
-                        ["sessionCount"] = sessionArchivePaths.Count,
-                        ["batchIncluded"] = inspection.Batch is not null,
-                        ["sessions"] = sessionExports
-                    });
-
-                if (inspection.Batch is not null)
-                {
-                    WriteTraceJsonEntry(archive, "trace/batch.json", inspection.Batch.Audit);
-                }
-
-                foreach (var entry in inspection.Runs)
+                using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
                 {
                     WriteTraceJsonEntry(
                         archive,
-                        $"trace/{FileNameUtil.Sanitize(entry.Audit.RunId)}.json",
-                        entry.Audit);
-                    AddOcrTraceEvidenceFiles(archive, entry);
-                }
+                        "manifest.json",
+                        new JsonObject
+                        {
+                            ["schema"] = "ansight.agent-evaluation-bundle/v1",
+                            ["exportedAtUtc"] = DateTimeOffset.UtcNow,
+                            ["requestedRunId"] = inspection.RequestedRunId,
+                            ["traceCount"] = inspection.Runs.Count,
+                            ["sessionCount"] = sessionArchivePaths.Count,
+                            ["batchIncluded"] = inspection.Batch is not null,
+                            ["sessions"] = sessionExports
+                        });
 
-                foreach (var sessionArchive in sessionArchivePaths)
-                {
-                    archive.CreateEntryFromFile(
-                        sessionArchive.FilePath,
-                        sessionArchive.EntryName,
-                        CompressionLevel.NoCompression);
+                    if (inspection.Batch is not null)
+                    {
+                        WriteTraceJsonEntry(archive, "trace/batch.json", inspection.Batch.Audit);
+                    }
+
+                    foreach (var entry in inspection.Runs)
+                    {
+                        WriteTraceJsonEntry(
+                            archive,
+                            $"trace/{FileNameUtil.Sanitize(entry.Audit.RunId)}.json",
+                            entry.Audit);
+                        AddOcrTraceEvidenceFiles(archive, entry);
+                    }
+
+                    foreach (var sessionArchive in sessionArchivePaths)
+                    {
+                        archive.CreateEntryFromFile(
+                            sessionArchive.FilePath,
+                            sessionArchive.EntryName,
+                            CompressionLevel.NoCompression);
+                    }
                 }
             }
 
@@ -178,9 +181,9 @@ public sealed class WorkspaceTestTraceExporter
                 sessionArchivePaths.Count);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or InvalidDataException
-                                           or JsonException)
+            or UnauthorizedAccessException
+            or InvalidDataException
+            or JsonException)
         {
             return new WorkspaceTestTraceExportResult(
                 false,
@@ -218,6 +221,7 @@ public sealed class WorkspaceTestTraceExporter
         SimulatorAgentRunHistoryEntry historyEntry)
     {
         var auditDirectoryPath = Path.GetDirectoryName(historyEntry.FilePath);
+
         if (string.IsNullOrWhiteSpace(auditDirectoryPath))
         {
             return;
@@ -233,9 +237,11 @@ public sealed class WorkspaceTestTraceExporter
             .Select(static path => path!)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
         foreach (var relativePath in relativePaths)
         {
             var normalizedRelativePath = relativePath.Replace('\\', '/').TrimStart('/');
+
             if (Path.IsPathRooted(relativePath)
                 || normalizedRelativePath.Split('/').Any(static segment => segment is "" or "." or ".."))
             {
@@ -246,6 +252,7 @@ public sealed class WorkspaceTestTraceExporter
                 auditDirectoryPath,
                 normalizedRelativePath.Replace('/', Path.DirectorySeparatorChar)));
             var sourceRelativePath = Path.GetRelativePath(auditDirectoryPath, sourcePath);
+
             if (sourceRelativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 || string.Equals(sourceRelativePath, "..", StringComparison.Ordinal)
                 || !File.Exists(sourcePath))

@@ -35,22 +35,24 @@ internal static class RepositoryModuleContractArtifacts
 
     private static JsonObject ParseObject(string source, string description)
         => JsonNode.Parse(source) as JsonObject
-           ?? throw new InvalidDataException($"The embedded Ansight {description} is not a JSON object.");
+            ?? throw new InvalidDataException($"The embedded Ansight {description} is not a JSON object.");
 
     private static string ReadText(string fileName)
     {
         var suffix = $".Runtime.RepositoryContracts.{fileName}";
         var resourceName = assembly.GetManifestResourceNames()
             .SingleOrDefault(name => name.EndsWith(suffix, StringComparison.Ordinal));
+
         if (resourceName is null)
         {
             throw new InvalidOperationException($"The embedded Ansight contract artifact '{fileName}' was not found.");
         }
 
         using var stream = assembly.GetManifestResourceStream(resourceName)
-                           ?? throw new InvalidOperationException(
-                               $"The embedded Ansight contract artifact '{fileName}' could not be opened.");
+            ?? throw new InvalidOperationException(
+                $"The embedded Ansight contract artifact '{fileName}' could not be opened.");
         using var reader = new StreamReader(stream);
+
         return reader.ReadToEnd();
     }
 }

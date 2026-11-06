@@ -16,8 +16,8 @@ internal sealed class JavaScriptRepositoryTaskExecutor
     private const int MaximumTaskResultCharacters = 262_144;
     private static readonly string bootstrapSource = RepositoryModuleContractArtifacts.GetTaskRuntimeConstants()
         + Environment.NewLine + EmbeddedTextResource
-        .Read("Runtime/Tasks/Resources/repository-task-bootstrap.mjs")
-        .TrimEnd();
+            .Read("Runtime/Tasks/Resources/repository-task-bootstrap.mjs")
+            .TrimEnd();
 
     private readonly Func<string, CancellationToken, Task<JsonObject>>? capabilityResolver;
     private readonly string executablePath;
@@ -65,12 +65,18 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         await using var networkScope = Ansight.Host.Devices.Network.NetworkConditioningScope.Begin(request.RunId);
-        request = request with { SourceCapture = request.CaptureTrace ? new RepositoryTaskSourceCapture() : null };
+        request = request with
+        {
+            SourceCapture = request.CaptureTrace ? new RepositoryTaskSourceCapture() : null
+        };
+
         var startedAtUtc = DateTimeOffset.UtcNow;
         var stopwatch = Stopwatch.StartNew();
         var toolCalls = new List<RepositoryTaskToolCall>();
         var recordedAssertions = new List<RepositoryTaskAssertion>();
+
         if (unavailableMessage is not null)
         {
             return Finish(
@@ -87,24 +93,34 @@ internal sealed class JavaScriptRepositoryTaskExecutor
 
         Process? process = null;
         Task<string>? standardErrorTask = null;
+
         try
         {
             if (capabilityResolver is not null)
             {
                 using var preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 preflight.CancelAfter(TimeSpan.FromSeconds(15));
+
                 var capabilities = await capabilityResolver(request.SessionId, preflight.Token).ConfigureAwait(false);
-                request = request with { Capabilities = capabilities };
+                request = request with
+                {
+                    Capabilities = capabilities
+                };
+
                 if (ExecutionCapabilities.Missing(capabilities, request.Task.Requires) is { } missing)
+                {
                     return Finish(request, RepositoryTaskRunStatus.Rejected, startedAtUtc, stopwatch,
                         missing["message"]!.GetValue<string>(), missing, [], toolCalls, string.Empty);
+                }
             }
             else if (request.Task.Requires is { } requirements && (requirements.Capabilities.Count > 0 || requirements.AppTools.Count > 0))
             {
                 return Finish(request, RepositoryTaskRunStatus.Rejected, startedAtUtc, stopwatch,
                     "The task host cannot resolve execution capabilities.", null, [], toolCalls, string.Empty);
             }
+
             process = Process.Start(CreateStartInfo(request.Task, request.CaptureTrace));
+
             if (process is null)
             {
                 return Finish(
@@ -123,41 +139,46 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 process.StandardError,
                 MaximumStandardErrorCharacters,
                 CancellationToken.None);
+
             string? handshake;
+
             using (var moduleLoadTimeoutCts = new CancellationTokenSource(moduleLoadTimeout))
-            using (var moduleLoadCts = CancellationTokenSource.CreateLinkedTokenSource(
-                       cancellationToken,
-                       moduleLoadTimeoutCts.Token))
             {
-                try
+                using (var moduleLoadCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    moduleLoadTimeoutCts.Token))
                 {
-                    do
+                    try
                     {
-                        handshake = await process.StandardOutput.ReadLineAsync(moduleLoadCts.Token).ConfigureAwait(false);
+                        do
+                        {
+                            handshake = await process.StandardOutput.ReadLineAsync(moduleLoadCts.Token).ConfigureAwait(false);
+                        } while (TryParseMessage(handshake, out var sourceMessage)
+                            && sourceMessage is not null
+                            && request.SourceCapture?.TryRead(sourceMessage) == true);
                     }
-                    while (TryParseMessage(handshake, out var sourceMessage)
-                           && sourceMessage is not null
-                           && request.SourceCapture?.TryRead(sourceMessage) == true);
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(process);
-                    await ObserveExitAsync(process).ConfigureAwait(false);
-                    var standardError = await standardErrorTask.ConfigureAwait(false);
-                    return Finish(
-                        request,
-                        cancellationToken.IsCancellationRequested
-                            ? RepositoryTaskRunStatus.Cancelled
-                            : RepositoryTaskRunStatus.TimedOut,
-                        startedAtUtc,
-                        stopwatch,
-                        cancellationToken.IsCancellationRequested
-                            ? "Repository task execution was cancelled while loading its module."
-                            : $"Task module loading exceeded the host's {moduleLoadTimeout.TotalSeconds:0}-second limit.",
-                        null,
-                        recordedAssertions,
-                        toolCalls,
-                        standardError);
+                    catch (OperationCanceledException)
+                    {
+                        TryKill(process);
+                        await ObserveExitAsync(process).ConfigureAwait(false);
+
+                        var standardError = await standardErrorTask.ConfigureAwait(false);
+
+                        return Finish(
+                            request,
+                            cancellationToken.IsCancellationRequested
+                                ? RepositoryTaskRunStatus.Cancelled
+                                : RepositoryTaskRunStatus.TimedOut,
+                            startedAtUtc,
+                            stopwatch,
+                            cancellationToken.IsCancellationRequested
+                                ? "Repository task execution was cancelled while loading its module."
+                                : $"Task module loading exceeded the host's {moduleLoadTimeout.TotalSeconds:0}-second limit.",
+                            null,
+                            recordedAssertions,
+                            toolCalls,
+                            standardError);
+                    }
                 }
             }
 
@@ -166,7 +187,9 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             {
                 TryKill(process);
                 await ObserveExitAsync(process).ConfigureAwait(false);
+
                 var standardError = await standardErrorTask.ConfigureAwait(false);
+
                 return Finish(
                     request,
                     RepositoryTaskRunStatus.Error,
@@ -187,14 +210,17 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             using var taskCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken,
                 taskTimeoutCts.Token);
+
             try
             {
                 while (true)
                 {
                     var line = await process.StandardOutput.ReadLineAsync(taskCts.Token).ConfigureAwait(false);
+
                     if (line is null)
                     {
                         var standardError = await standardErrorTask.ConfigureAwait(false);
+
                         return Finish(
                             request,
                             RepositoryTaskRunStatus.Error,
@@ -211,6 +237,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     {
                         TryKill(process);
                         await ObserveExitAsync(process).ConfigureAwait(false);
+
                         return Finish(
                             request,
                             RepositoryTaskRunStatus.Error,
@@ -223,14 +250,20 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             await standardErrorTask.ConfigureAwait(false));
                     }
 
-                    if (request.SourceCapture?.TryRead(message) == true) continue;
+                    if (request.SourceCapture?.TryRead(message) == true)
+                    {
+                        continue;
+                    }
+
                     var messageType = message["type"]?.GetValue<string>();
+
                     if (string.Equals(messageType, "assertion", StringComparison.Ordinal)
                         && message["assertion"] is JsonObject assertion)
                     {
                         recordedAssertions.AddRange(ParseAssertions(new JsonArray(assertion.DeepClone())));
                         continue;
                     }
+
                     if (string.Equals(messageType, "call", StringComparison.Ordinal))
                     {
                         var callFailure = await HandleToolCallAsync(
@@ -239,10 +272,12 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                             message,
                             toolCalls,
                             taskCts.Token).ConfigureAwait(false);
+
                         if (callFailure is not null)
                         {
                             TryKill(process);
                             await ObserveExitAsync(process).ConfigureAwait(false);
+
                             return Finish(
                                 request,
                                 callFailure.Value.Status,
@@ -262,6 +297,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     {
                         TryKill(process);
                         await ObserveExitAsync(process).ConfigureAwait(false);
+
                         return Finish(
                             request,
                             RepositoryTaskRunStatus.Error,
@@ -276,19 +312,21 @@ internal sealed class JavaScriptRepositoryTaskExecutor
 
                     process.StandardInput.Close();
                     await process.WaitForExitAsync(taskCts.Token).ConfigureAwait(false);
+
                     // The streamed values capture what was compared at the time of the check,
                     // even if a task later mutates an object used by an expectation.
                     IReadOnlyList<RepositoryTaskAssertion> assertions = recordedAssertions.Count > 0
                         ? recordedAssertions : ParseAssertions(message["assertions"] as JsonArray);
                     var status = ParseStatus(message["status"]?.GetValue<string>());
                     var resultMessage = message["message"]?.GetValue<string>()
-                                        ?? "Repository task completed.";
+                        ?? "Repository task completed.";
+
                     if ((status is RepositoryTaskRunStatus.Passed or RepositoryTaskRunStatus.Inconclusive)
                         && assertions.Any(static assertion => !assertion.Passed))
                     {
                         status = RepositoryTaskRunStatus.Failed;
                         resultMessage = $"Task failed {assertions.Count(static assertion => !assertion.Passed)} "
-                                        + $"of {assertions.Count} assertion(s).";
+                            + $"of {assertions.Count} assertion(s).";
                     }
                     else if (status == RepositoryTaskRunStatus.Passed && assertions.Count == 0)
                     {
@@ -297,6 +335,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     }
 
                     var output = message["output"]?.DeepClone();
+
                     if (output?.ToJsonString().Length > MaximumTaskResultCharacters)
                     {
                         output = new JsonObject
@@ -322,6 +361,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             {
                 TryKill(process);
                 await ObserveExitAsync(process).ConfigureAwait(false);
+
                 return Finish(
                     request,
                     cancellationToken.IsCancellationRequested
@@ -339,9 +379,9 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             }
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or JsonException
-                                           or System.ComponentModel.Win32Exception)
+            or InvalidOperationException
+            or JsonException
+            or System.ComponentModel.Win32Exception)
         {
             if (process is not null)
             {
@@ -352,6 +392,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             var standardError = standardErrorTask is null
                 ? string.Empty
                 : await standardErrorTask.ConfigureAwait(false);
+
             return Finish(
                 request,
                 RepositoryTaskRunStatus.Error,
@@ -379,6 +420,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         var callId = message["callId"]?.GetValue<string>();
         var callKind = message["kind"]?.GetValue<string>();
         var requestedName = message["name"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(callId)
             || string.IsNullOrWhiteSpace(callKind)
             || string.IsNullOrWhiteSpace(requestedName))
@@ -399,6 +441,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         var auditName = requestedName;
         var isTaskMethod = false;
         JsonObject arguments;
+
         if (string.Equals(callKind, "hostMethod", StringComparison.Ordinal))
         {
             if (!standardHostToolNames.Contains(requestedName))
@@ -426,7 +469,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             ApplySessionTarget(arguments, request.SessionId);
         }
         else if (string.Equals(callKind, "appMethod", StringComparison.Ordinal)
-                 || string.Equals(callKind, "appTool", StringComparison.Ordinal))
+            || string.Equals(callKind, "appTool", StringComparison.Ordinal))
         {
             if (string.Equals(callKind, "appMethod", StringComparison.Ordinal)
                 && !RepositoryJavaScriptApiMethods.IsStandardAppToolId(requestedName))
@@ -437,6 +480,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             }
 
             toolName = "ansight_call_app_tool";
+
             var appToolArguments = message["arguments"]?.DeepClone() as JsonObject ?? new JsonObject();
             RemoveTargetOverrides(appToolArguments);
             arguments = new JsonObject
@@ -454,6 +498,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                     RepositoryTaskRunStatus.Rejected,
                     $"Task composition method '{requestedName}' is not available through the Ansight task API.");
             }
+
             if (taskApiExecutor is null)
             {
                 return new RepositoryTaskCallFailure(
@@ -496,9 +541,11 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         using var fixtureScope = AudioFixtureScope.Push(request.Task.RepositoryRootPath);
         using var penScope = PenInputScope.Push(request.Task.RepositoryRootPath);
         using var screenshotWorkspace = ScreenshotWorkspaceScope.Push(request.Task.RepositoryRootPath);
+
         try
         {
             var audioRejection = AudioExecutionPolicy.RejectParallelCall(toolName, request.OperationContext);
+
             if (audioRejection is not null)
             {
                 result = audioRejection;
@@ -506,11 +553,11 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             else if (isTaskMethod)
             {
                 var taskApiResult = await taskApiExecutor!(
-                        request,
-                        toolName,
-                        arguments,
-                        callCorrelationId,
-                        cancellationToken)
+                    request,
+                    toolName,
+                    arguments,
+                    callCorrelationId,
+                    cancellationToken)
                     .ConfigureAwait(false);
                 result = taskApiResult.Result;
                 childCalls = request.CaptureTrace ? taskApiResult.ChildCalls : null;
@@ -555,30 +602,37 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 exception.Message,
                 "tool",
                 cancellationToken).ConfigureAwait(false);
+
             return null;
         }
 
         stopwatch.Stop();
+
         var payload = result.Payload;
         var isToolError = result.IsError
-                          || (payload?["isError"] is JsonValue errorValue
-                              && errorValue.TryGetValue<bool>(out var parsedError)
-                              && parsedError);
+            || (payload?["isError"] is JsonValue errorValue
+                && errorValue.TryGetValue<bool>(out var parsedError)
+                && parsedError);
         var structuredContent = payload?["structuredContent"]?.DeepClone()
-                                ?? payload?.DeepClone()
-                                ?? new JsonObject();
+            ?? payload?.DeepClone()
+            ?? new JsonObject();
         var originalStructuredContent = structuredContent;
+
         // A completed comparison is data. Named expect assertions decide the task outcome.
         // Capture, transport and baseline errors have no comparison result and still throw.
         if (toolName == "ansight_assert_screenshot"
             && structuredContent["capability"]?.GetValue<string>() == "screenshot.assert"
             && structuredContent["passed"] is JsonValue comparison && comparison.TryGetValue<bool>(out _))
+        {
             isToolError = false;
+        }
+
         var resultText = structuredContent.ToJsonString(JsonUtil.Compact);
         var messageText = result.ErrorMessage
-                          ?? structuredContent["message"]?.GetValue<string>()
-                          ?? (isToolError ? ReadAppToolErrorMessage(structuredContent) : null)
-                          ?? (isToolError ? $"{auditName} failed." : $"{auditName} completed.");
+            ?? structuredContent["message"]?.GetValue<string>()
+            ?? (isToolError ? ReadAppToolErrorMessage(structuredContent) : null)
+            ?? (isToolError ? $"{auditName} failed." : $"{auditName} completed.");
+
         if (resultText.Length > MaximumToolResultCharacters)
         {
             isToolError = true;
@@ -596,8 +650,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 ["isError"] = true,
                 ["errorCode"] = result.ErrorCode,
                 ["message"] = messageText
-            }
-            : originalStructuredContent);
+            } : originalStructuredContent);
         await WriteCallResultAsync(
             process,
             callId,
@@ -608,6 +661,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
                 ? "assertion"
                 : "tool",
             cancellationToken).ConfigureAwait(false);
+
         return null;
 
         void RecordCall(bool isError, string callMessage, JsonNode? callResult)
@@ -638,6 +692,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         var error = payload?["error"] as JsonObject;
         var message = ReadString(error?["message"]) ?? ReadString(payload?["message"]);
         var code = ReadString(error?["code"]) ?? ReadString(payload?["code"]);
+
         return code is null
             ? message
             : message is null ? code : $"{code}: {message}";
@@ -645,8 +700,8 @@ internal sealed class JavaScriptRepositoryTaskExecutor
 
     private static string? ReadString(JsonNode? node)
         => node is JsonValue value
-           && value.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && value.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text
             : null;
 
@@ -685,6 +740,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         if (string.Equals(Path.GetExtension(task.ModulePath), ".ts", StringComparison.OrdinalIgnoreCase))
         {
             startInfo.ArgumentList.Add("--no-warnings");
@@ -701,10 +757,11 @@ internal sealed class JavaScriptRepositoryTaskExecutor
 
         var inheritedPath = Environment.GetEnvironmentVariable("PATH");
         var inheritedTemp = Environment.GetEnvironmentVariable("TMPDIR")
-                            ?? Environment.GetEnvironmentVariable("TEMP")
-                            ?? Path.GetTempPath();
+            ?? Environment.GetEnvironmentVariable("TEMP")
+            ?? Path.GetTempPath();
         var inheritedSystemRoot = Environment.GetEnvironmentVariable("SystemRoot");
         startInfo.Environment.Clear();
+
         if (!string.IsNullOrWhiteSpace(inheritedPath))
         {
             startInfo.Environment["PATH"] = inheritedPath;
@@ -715,6 +772,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         startInfo.Environment["TMP"] = inheritedTemp;
         startInfo.Environment["ANSIGHT_TASK"] = "1";
         startInfo.Environment["NO_COLOR"] = "1";
+
         if (!string.IsNullOrWhiteSpace(inheritedSystemRoot))
         {
             startInfo.Environment["SystemRoot"] = inheritedSystemRoot;
@@ -789,9 +847,11 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         }
 
         var assertions = new List<RepositoryTaskAssertion>();
+
         foreach (var item in array.OfType<JsonObject>())
         {
             var assertionId = item["assertionId"]?.GetValue<string>();
+
             if (string.IsNullOrWhiteSpace(assertionId))
             {
                 continue;
@@ -834,6 +894,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         string standardError)
     {
         stopwatch.Stop();
+
         return new RepositoryTaskRunResult(
             request.RunId,
             request.Task.RepositoryRootPath,
@@ -858,6 +919,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
     private static bool TryParseMessage(string? text, out JsonObject? message)
     {
         message = null;
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return false;
@@ -866,6 +928,7 @@ internal sealed class JavaScriptRepositoryTaskExecutor
         try
         {
             message = JsonNode.Parse(text) as JsonObject;
+
             return message is not null;
         }
         catch (JsonException)
@@ -881,16 +944,19 @@ internal sealed class JavaScriptRepositoryTaskExecutor
     {
         var buffer = new char[4_096];
         var builder = new StringBuilder();
+
         while (true)
         {
             var count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken)
                 .ConfigureAwait(false);
+
             if (count == 0)
             {
                 break;
             }
 
             var retainedCount = Math.Min(count, maximumCharacters - builder.Length);
+
             if (retainedCount > 0)
             {
                 builder.Append(buffer, 0, retainedCount);

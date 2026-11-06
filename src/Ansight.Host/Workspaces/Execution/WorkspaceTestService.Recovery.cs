@@ -7,20 +7,31 @@ public sealed partial class WorkspaceTestService
     internal int RecoverInterruptedSessionRuns()
     {
         var candidates = new List<InterruptedSessionRun>();
+
         foreach (var session in runtime.Sessions.GetSummaries())
         {
-            if (!session.IsHistorical || runtime.IsSessionLive(session.SessionId)) continue;
+            if (!session.IsHistorical || runtime.IsSessionLive(session.SessionId))
+            {
+                continue;
+            }
+
             lock (sessionClaimGate)
             {
-                if (claimedSessionIds.Contains(session.SessionId)) continue;
+                if (claimedSessionIds.Contains(session.SessionId))
+                {
+                    continue;
+                }
             }
 
             try
             {
                 var run = session.CustomProperties?[SessionUiTestRun.PropertyGroup]?.Deserialize<SessionUiTestRun>(JsonUtil.Compact);
+
                 if (run is not null && !string.IsNullOrWhiteSpace(run.RunId)
                     && string.Equals(run.Status, "running", StringComparison.OrdinalIgnoreCase))
+                {
                     candidates.Add(new InterruptedSessionRun(session.SessionId, run));
+                }
             }
             catch (JsonException)
             {
@@ -28,8 +39,13 @@ public sealed partial class WorkspaceTestService
             }
         }
 
-        if (candidates.Count == 0) return 0;
+        if (candidates.Count == 0)
+        {
+            return 0;
+        }
+
         var audits = simulatorAgent.ListRunHistory();
+
         foreach (var candidate in candidates)
         {
             var run = candidate.Run;
@@ -41,6 +57,7 @@ public sealed partial class WorkspaceTestService
                 CompletedUtc = audit?.CompletedUtc ?? DateTimeOffset.UtcNow
             });
         }
+
         return candidates.Count;
     }
 

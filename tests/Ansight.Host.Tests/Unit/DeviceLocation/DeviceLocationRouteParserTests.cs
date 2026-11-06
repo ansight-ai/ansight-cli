@@ -92,6 +92,7 @@ public sealed class DeviceLocationRouteParserTests
     private static DeviceLocationRoute Parse(string fileName, string content)
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+
         return DeviceLocationRouteParser.Parse(fileName, stream);
     }
 }

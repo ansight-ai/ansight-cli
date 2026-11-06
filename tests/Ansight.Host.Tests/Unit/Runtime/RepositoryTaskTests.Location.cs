@@ -8,7 +8,11 @@ public sealed partial class RepositoryTaskTests
     [Fact]
     public void PlayLocation_TypeScriptContractAcceptsPlaybackAndRejectsDeviceOverride()
     {
-        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null) return;
+        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null)
+        {
+            return;
+        }
+
         using var repository = CreateRepository("export const placeholder = true;");
         var path = Path.Combine(repository.RootPath, "play.ts");
         File.WriteAllText(path, """
@@ -57,6 +61,7 @@ public sealed partial class RepositoryTaskTests
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         Assert.Empty(task.DeclaredHostTools);
         Assert.Empty(LocalTaskExtractionCoordinator.ValidateTaskApiSurface(module));
+
         var calls = 0;
         var executor = new JavaScriptRepositoryTaskExecutor("node", (toolName, arguments, _) =>
         {
@@ -67,9 +72,11 @@ public sealed partial class RepositoryTaskTests
             Assert.Null(arguments["appId"]);
             Assert.Equal("<gpx />", arguments["routeContent"]!.GetValue<string>());
             Assert.Equal(20, arguments["fixedSpeedKph"]!.GetValue<int>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject
             {
-                ["runId"] = "playback-1", ["message"] = fail ? "Invalid GPX track." : "Started."
+                ["runId"] = "playback-1",
+                ["message"] = fail ? "Invalid GPX track." : "Started."
             }, isError: fail));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
 
@@ -78,6 +85,10 @@ public sealed partial class RepositoryTaskTests
 
         Assert.Equal(1, calls);
         Assert.Equal(fail ? RepositoryTaskRunStatus.Error : RepositoryTaskRunStatus.Passed, result.Status);
-        if (fail) Assert.Contains("Invalid GPX track.", result.Message);
+
+        if (fail)
+        {
+            Assert.Contains("Invalid GPX track.", result.Message);
+        }
     }
 }

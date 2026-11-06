@@ -19,18 +19,22 @@ internal static class RuntimeSnapshotNormalizer
         if (string.IsNullOrWhiteSpace(annotation.AnnotationId))
         {
             error = "Annotation id is required.";
+
             return false;
         }
 
         var label = annotation.Label?.Trim();
+
         if (string.IsNullOrWhiteSpace(label))
         {
             error = "Annotation label is required.";
+
             return false;
         }
 
         var startUtc = annotation.StartUtc.ToUniversalTime();
         var endUtc = annotation.EndUtc?.ToUniversalTime();
+
         if (endUtc.HasValue && endUtc.Value < startUtc)
         {
             (startUtc, endUtc) = (endUtc.Value, startUtc);
@@ -66,6 +70,7 @@ internal static class RuntimeSnapshotNormalizer
             Geometry = normalizedGeometry,
             Target = NormalizeAnnotationTarget(annotation.Target)
         };
+
         return true;
     }
 
@@ -128,6 +133,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var x = Math.Clamp(bounds.X, 0d, 1d);
         var y = Math.Clamp(bounds.Y, 0d, 1d);
+
         return new SessionAnnotationTargetBounds
         {
             X = x,
@@ -146,6 +152,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var normalized = new List<SessionAnnotation>();
         var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var annotation in annotations)
         {
             if (!TryNormalizeAnnotation(annotation, out var normalizedAnnotation, out _)
@@ -159,6 +166,7 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         normalized.Sort(CompareAnnotations);
+
         return normalized.ToArray();
     }
 
@@ -171,6 +179,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var normalized = new List<SessionTouchInputRecord>();
         var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var touch in touches)
         {
             if (!TryNormalizeTouch(touch, out var normalizedTouch)
@@ -192,6 +201,7 @@ internal static class RuntimeSnapshotNormalizer
     internal static bool TryNormalizeTouch(SessionTouchInputRecord? touch, out SessionTouchInputRecord? normalizedTouch)
     {
         normalizedTouch = null;
+
         if (touch is null
             || string.IsNullOrWhiteSpace(touch.Id)
             || string.IsNullOrWhiteSpace(touch.Action)
@@ -227,6 +237,7 @@ internal static class RuntimeSnapshotNormalizer
             SurfaceScale = NormalizePositiveValue(touch.SurfaceScale),
             Details = touch.Details
         };
+
         return true;
     }
 
@@ -269,6 +280,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var normalized = new List<SessionVisualTreeSnapshot>();
         var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var snapshot in snapshots)
         {
             if (TryNormalizeVisualTreeSnapshot(snapshot, out var normalizedSnapshot)
@@ -294,6 +306,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var normalized = new List<SessionArtifactSnapshot>();
         var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var snapshot in snapshots)
         {
             if (TryNormalizeArtifactSnapshot(snapshot, out var normalizedSnapshot)
@@ -315,6 +328,7 @@ internal static class RuntimeSnapshotNormalizer
         out SessionArtifactSnapshot? normalizedSnapshot)
     {
         normalizedSnapshot = null;
+
         if (string.IsNullOrWhiteSpace(snapshot.SnapshotId)
             || string.IsNullOrWhiteSpace(snapshot.RootAlias)
             || string.IsNullOrWhiteSpace(snapshot.ArtifactDirectoryName))
@@ -340,6 +354,7 @@ internal static class RuntimeSnapshotNormalizer
             Truncated = snapshot.Truncated,
             Entries = entries
         };
+
         return true;
     }
 
@@ -378,6 +393,7 @@ internal static class RuntimeSnapshotNormalizer
         out SessionVisualTreeSnapshot? normalizedSnapshot)
     {
         normalizedSnapshot = null;
+
         if (string.IsNullOrWhiteSpace(snapshot.SnapshotId)
             || snapshot.Payload.Count == 0)
         {
@@ -416,6 +432,7 @@ internal static class RuntimeSnapshotNormalizer
             ScreenshotHash = string.IsNullOrWhiteSpace(snapshot.ScreenshotHash) ? null : snapshot.ScreenshotHash.Trim(),
             Payload = snapshot.Payload.DeepClone() as JsonObject ?? new JsonObject()
         };
+
         return true;
     }
 
@@ -428,6 +445,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var normalized = new List<SessionAnnotationGeometry>();
         var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var current in geometry)
         {
             if (string.IsNullOrWhiteSpace(current.GeometryId)
@@ -437,6 +455,7 @@ internal static class RuntimeSnapshotNormalizer
             }
 
             var normalizedCurrent = NormalizeGeometry(current);
+
             if (normalizedCurrent is null || !seenIds.Add(normalizedCurrent.GeometryId))
             {
                 continue;
@@ -452,20 +471,20 @@ internal static class RuntimeSnapshotNormalizer
         IEnumerable<SessionAnnotationEvidence>? evidence)
     {
         return evidence?
-            .Where(item => !string.IsNullOrWhiteSpace(item.Id)
-                           && !string.IsNullOrWhiteSpace(item.Kind)
-                           && !string.IsNullOrWhiteSpace(item.Status))
-            .Select(item => new SessionAnnotationEvidence
-            {
-                Id = item.Id.Trim(),
-                Kind = item.Kind.Trim(),
-                Status = item.Status.Trim(),
-                Reason = RuntimeState.NormalizeNotes(item.Reason),
-                CapturedAtUtc = item.CapturedAtUtc?.ToUniversalTime(),
-                SizeBytes = item.SizeBytes.HasValue ? Math.Max(0, item.SizeBytes.Value) : null,
-                Truncated = item.Truncated
-            })
-            .ToArray()
+                .Where(item => !string.IsNullOrWhiteSpace(item.Id)
+                    && !string.IsNullOrWhiteSpace(item.Kind)
+                    && !string.IsNullOrWhiteSpace(item.Status))
+                    .Select(item => new SessionAnnotationEvidence
+                    {
+                        Id = item.Id.Trim(),
+                        Kind = item.Kind.Trim(),
+                        Status = item.Status.Trim(),
+                        Reason = RuntimeState.NormalizeNotes(item.Reason),
+                        CapturedAtUtc = item.CapturedAtUtc?.ToUniversalTime(),
+                        SizeBytes = item.SizeBytes.HasValue ? Math.Max(0, item.SizeBytes.Value) : null,
+                        Truncated = item.Truncated
+                    })
+                    .ToArray()
             ?? Array.Empty<SessionAnnotationEvidence>();
     }
 
@@ -483,6 +502,7 @@ internal static class RuntimeSnapshotNormalizer
                     Y = Math.Clamp(point.Y, 0d, 1d)
                 })
                 .ToArray();
+
             if (points.Length < 2)
             {
                 return null;
@@ -492,6 +512,7 @@ internal static class RuntimeSnapshotNormalizer
             var pathY = points.Min(point => point.Y);
             var pathWidth = points.Max(point => point.X) - pathX;
             var pathHeight = points.Max(point => point.Y) - pathY;
+
             if (pathWidth <= 0d && pathHeight <= 0d)
             {
                 return null;
@@ -533,19 +554,19 @@ internal static class RuntimeSnapshotNormalizer
             },
             SessionAnnotationGeometryKind.Rectangle or SessionAnnotationGeometryKind.Ellipse
                 when geometry.Width.GetValueOrDefault() > 0d && geometry.Height.GetValueOrDefault() > 0d => new SessionAnnotationGeometry
-            {
-                GeometryId = geometry.GeometryId.Trim(),
-                FrameId = geometry.FrameId.Trim(),
-                CapturedAtUtc = geometry.CapturedAtUtc.ToUniversalTime(),
-                Kind = geometry.Kind,
-                X = x,
-                Y = y,
-                Width = Math.Clamp(geometry.Width!.Value, 0d, 1d - x),
-                Height = Math.Clamp(geometry.Height!.Value, 0d, 1d - y),
-                Text = RuntimeState.NormalizeNotes(geometry.Text),
-                StrokeColor = RuntimeState.NormalizeNotes(geometry.StrokeColor),
-                StrokeWidth = geometry.StrokeWidth.HasValue ? Math.Max(0d, geometry.StrokeWidth.Value) : null
-            },
+                {
+                    GeometryId = geometry.GeometryId.Trim(),
+                    FrameId = geometry.FrameId.Trim(),
+                    CapturedAtUtc = geometry.CapturedAtUtc.ToUniversalTime(),
+                    Kind = geometry.Kind,
+                    X = x,
+                    Y = y,
+                    Width = Math.Clamp(geometry.Width!.Value, 0d, 1d - x),
+                    Height = Math.Clamp(geometry.Height!.Value, 0d, 1d - y),
+                    Text = RuntimeState.NormalizeNotes(geometry.Text),
+                    StrokeColor = RuntimeState.NormalizeNotes(geometry.StrokeColor),
+                    StrokeWidth = geometry.StrokeWidth.HasValue ? Math.Max(0d, geometry.StrokeWidth.Value) : null
+                },
             _ => null
         };
     }
@@ -619,17 +640,17 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         return string.Equals(left.Kind, right.Kind, StringComparison.Ordinal)
-               && string.Equals(left.Source, right.Source, StringComparison.Ordinal)
-               && string.Equals(left.TargetId, right.TargetId, StringComparison.Ordinal)
-               && string.Equals(left.VisualTreeSnapshotId, right.VisualTreeSnapshotId, StringComparison.Ordinal)
-               && string.Equals(left.Type, right.Type, StringComparison.Ordinal)
-               && string.Equals(left.ElementKind, right.ElementKind, StringComparison.Ordinal)
-               && string.Equals(left.Label, right.Label, StringComparison.Ordinal)
-               && string.Equals(left.AutomationId, right.AutomationId, StringComparison.Ordinal)
-               && left.Depth == right.Depth
-               && left.ChildCount == right.ChildCount
-               && SessionAnnotationTargetBoundsEqual(left.AbsoluteBounds, right.AbsoluteBounds)
-               && SessionAnnotationTargetBoundsEqual(left.NormalizedBounds, right.NormalizedBounds);
+            && string.Equals(left.Source, right.Source, StringComparison.Ordinal)
+            && string.Equals(left.TargetId, right.TargetId, StringComparison.Ordinal)
+            && string.Equals(left.VisualTreeSnapshotId, right.VisualTreeSnapshotId, StringComparison.Ordinal)
+            && string.Equals(left.Type, right.Type, StringComparison.Ordinal)
+            && string.Equals(left.ElementKind, right.ElementKind, StringComparison.Ordinal)
+            && string.Equals(left.Label, right.Label, StringComparison.Ordinal)
+            && string.Equals(left.AutomationId, right.AutomationId, StringComparison.Ordinal)
+            && left.Depth == right.Depth
+            && left.ChildCount == right.ChildCount
+            && SessionAnnotationTargetBoundsEqual(left.AbsoluteBounds, right.AbsoluteBounds)
+            && SessionAnnotationTargetBoundsEqual(left.NormalizedBounds, right.NormalizedBounds);
     }
 
     internal static bool SessionAnnotationTargetBoundsEqual(
@@ -647,25 +668,25 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         return left.X.Equals(right.X)
-               && left.Y.Equals(right.Y)
-               && left.Width.Equals(right.Width)
-               && left.Height.Equals(right.Height);
+            && left.Y.Equals(right.Y)
+            && left.Width.Equals(right.Width)
+            && left.Height.Equals(right.Height);
     }
 
     internal static bool SessionAnnotationGeometryEqual(SessionAnnotationGeometry left, SessionAnnotationGeometry right)
     {
         return string.Equals(left.GeometryId, right.GeometryId, StringComparison.Ordinal)
-               && string.Equals(left.FrameId, right.FrameId, StringComparison.Ordinal)
-               && left.CapturedAtUtc == right.CapturedAtUtc
-               && left.Kind == right.Kind
-               && left.X.Equals(right.X)
-               && left.Y.Equals(right.Y)
-               && Nullable.Equals(left.Width, right.Width)
-               && Nullable.Equals(left.Height, right.Height)
-               && GeometryPointsEqual(left.Points, right.Points)
-               && string.Equals(left.Text, right.Text, StringComparison.Ordinal)
-               && string.Equals(left.StrokeColor, right.StrokeColor, StringComparison.Ordinal)
-               && Nullable.Equals(left.StrokeWidth, right.StrokeWidth);
+            && string.Equals(left.FrameId, right.FrameId, StringComparison.Ordinal)
+            && left.CapturedAtUtc == right.CapturedAtUtc
+            && left.Kind == right.Kind
+            && left.X.Equals(right.X)
+            && left.Y.Equals(right.Y)
+            && Nullable.Equals(left.Width, right.Width)
+            && Nullable.Equals(left.Height, right.Height)
+            && GeometryPointsEqual(left.Points, right.Points)
+            && string.Equals(left.Text, right.Text, StringComparison.Ordinal)
+            && string.Equals(left.StrokeColor, right.StrokeColor, StringComparison.Ordinal)
+            && Nullable.Equals(left.StrokeWidth, right.StrokeWidth);
     }
 
     internal static bool GeometryPointsEqual(
@@ -706,6 +727,7 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         var capturedComparison = left.CapturedAtUtc.CompareTo(right.CapturedAtUtc);
+
         return capturedComparison != 0
             ? capturedComparison
             : string.CompareOrdinal(left.SnapshotId, right.SnapshotId);
@@ -729,6 +751,7 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         var capturedComparison = left.CapturedAtUtc.CompareTo(right.CapturedAtUtc);
+
         return capturedComparison != 0
             ? capturedComparison
             : string.CompareOrdinal(left.SnapshotId, right.SnapshotId);
@@ -752,6 +775,7 @@ internal static class RuntimeSnapshotNormalizer
         }
 
         var startComparison = left.StartUtc.CompareTo(right.StartUtc);
+
         if (startComparison != 0)
         {
             return startComparison;
@@ -760,6 +784,7 @@ internal static class RuntimeSnapshotNormalizer
         var leftEnd = left.EndUtc ?? left.StartUtc;
         var rightEnd = right.EndUtc ?? right.StartUtc;
         var endComparison = leftEnd.CompareTo(rightEnd);
+
         if (endComparison != 0)
         {
             return endComparison;
@@ -777,6 +802,7 @@ internal static class RuntimeSnapshotNormalizer
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var normalized = new List<string>();
+
         foreach (var rawTag in tags)
         {
             foreach (var tag in SplitTags(rawTag))

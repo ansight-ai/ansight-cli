@@ -9,6 +9,5 @@ public sealed class ThemeApplyingEventArgs : EventArgs
     }
 
     public ITheme? PreviousTheme { get; }
-
     public ITheme NewTheme { get; }
 }

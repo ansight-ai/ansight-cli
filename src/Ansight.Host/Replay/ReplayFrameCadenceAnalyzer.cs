@@ -23,6 +23,7 @@ public static class ReplayFrameCadenceAnalyzer
         ArgumentNullException.ThrowIfNull(replaySteps);
         rangeStartUtc = rangeStartUtc.ToUniversalTime();
         rangeEndUtc = rangeEndUtc.ToUniversalTime();
+
         if (rangeEndUtc < rangeStartUtc)
         {
             (rangeStartUtc, rangeEndUtc) = (rangeEndUtc, rangeStartUtc);
@@ -42,6 +43,7 @@ public static class ReplayFrameCadenceAnalyzer
             .Select(static frame => frame.CapturedAtUtc.ToUniversalTime())
             .ToArray();
         var intervals = new double[Math.Max(0, frameTimes.Length - 1)];
+
         for (var index = 1; index < frameTimes.Length; index++)
         {
             intervals[index - 1] = Math.Max(
@@ -50,6 +52,7 @@ public static class ReplayFrameCadenceAnalyzer
         }
 
         var boundaryAndFrameGaps = new List<double>(intervals.Length + 2);
+
         if (frameTimes.Length == 0)
         {
             boundaryAndFrameGaps.Add((rangeEndUtc - rangeStartUtc).TotalMilliseconds);
@@ -181,6 +184,7 @@ public static class ReplayFrameCadenceAnalyzer
         double? distinctSupportingFramePercent)
     {
         var findings = new List<string>();
+
         if (frameCount < 2)
         {
             findings.Add("fewer than two screenshot frames were captured in the selected range");
@@ -220,26 +224,28 @@ public static class ReplayFrameCadenceAnalyzer
         IReadOnlyList<string> findings)
     {
         var message = $"Frame support is {rating}: {frameCount:N0} retained change frame(s) across "
-                      + $"{rangeDurationSeconds:0.0} s ({effectiveFramesPerSecond:0.00} retained change fps); "
-                      + $"observed median interval {FormatDuration(medianInterval)}, "
-                      + $"p95 {FormatDuration(p95Interval)}, longest retained-frame gap {FormatDuration(maximumGap)}";
+            + $"{rangeDurationSeconds:0.0} s ({effectiveFramesPerSecond:0.00} retained change fps); "
+            + $"observed median interval {FormatDuration(medianInterval)}, "
+            + $"p95 {FormatDuration(p95Interval)}, longest retained-frame gap {FormatDuration(maximumGap)}";
+
         if (timedStepCount > 0)
         {
             message += $"; {coveredStepCount:N0}/{timedStepCount:N0} replay step(s) "
-                       + $"({stepCoveragePercent:0.#}%) have a frame within "
-                       + $"{FormatDuration(CoverageWindowMilliseconds)}; "
-                       + $"{distinctSupportingFrameCount:N0} distinct supporting frame(s) "
-                       + $"({distinctSupportingFramePercent:0.#}% of steps); "
-                       + $"nearest-frame distance median {FormatDuration(medianStepFrameDistance)}, "
-                       + $"p95 {FormatDuration(p95StepFrameDistance)}, "
-                       + $"maximum {FormatDuration(maximumStepFrameDistance)}";
+                + $"({stepCoveragePercent:0.#}%) have a frame within "
+                + $"{FormatDuration(CoverageWindowMilliseconds)}; "
+                + $"{distinctSupportingFrameCount:N0} distinct supporting frame(s) "
+                + $"({distinctSupportingFramePercent:0.#}% of steps); "
+                + $"nearest-frame distance median {FormatDuration(medianStepFrameDistance)}, "
+                + $"p95 {FormatDuration(p95StepFrameDistance)}, "
+                + $"maximum {FormatDuration(maximumStepFrameDistance)}";
         }
 
         message += ". Retained-frame gaps are informational because exact consecutive duplicate images are suppressed.";
+
         if (findings.Count > 0)
         {
             message += " " + string.Join("; ", findings.Select(static finding =>
-                char.ToUpperInvariant(finding[0]) + finding[1..])) + ".";
+                        char.ToUpperInvariant(finding[0]) + finding[1..])) + ".";
         }
 
         return message;
@@ -262,16 +268,17 @@ public static class ReplayFrameCadenceAnalyzer
         foreach (var step in timedSteps.OrderBy(static step => step.CapturedAtUtc))
         {
             var capturedAtUtc = step.CapturedAtUtc!.Value.ToUniversalTime();
+
             while (nextFrameIndex < distinctFrames.Length
-                   && (capturedAtUtc - distinctFrames[nextFrameIndex].CapturedAtUtc).TotalMilliseconds
-                   > CoverageWindowMilliseconds)
+                && (capturedAtUtc - distinctFrames[nextFrameIndex].CapturedAtUtc).TotalMilliseconds
+                    > CoverageWindowMilliseconds)
             {
                 nextFrameIndex++;
             }
 
             if (nextFrameIndex < distinctFrames.Length
                 && (distinctFrames[nextFrameIndex].CapturedAtUtc - capturedAtUtc).TotalMilliseconds
-                <= CoverageWindowMilliseconds)
+                    <= CoverageWindowMilliseconds)
             {
                 supportingFrameCount++;
                 nextFrameIndex++;
@@ -297,6 +304,7 @@ public static class ReplayFrameCadenceAnalyzer
             .OrderBy(static match => match.DistanceMilliseconds)
             .ThenBy(static match => match.FrameId, StringComparer.Ordinal)
             .First();
+
         return nearest;
     }
 
@@ -309,6 +317,7 @@ public static class ReplayFrameCadenceAnalyzer
 
         var ordered = values.Order().ToArray();
         var rank = Math.Max(1, (int)Math.Ceiling(percentile * ordered.Length));
+
         return ordered[rank - 1];
     }
 

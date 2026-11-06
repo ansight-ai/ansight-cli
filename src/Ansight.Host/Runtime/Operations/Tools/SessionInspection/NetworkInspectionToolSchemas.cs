@@ -16,6 +16,7 @@ internal static class NetworkInspectionToolSchemas
         properties["failedOnly"] = ToolSchema.Boolean("Return transport errors and HTTP status 400 or greater.");
         properties["limit"] = ToolSchema.Integer("Page size, default 200, range 1 to 1000.");
         properties["cursor"] = ToolSchema.String("Continue a stable network snapshot. Cursors expire after five minutes or cache eviction.");
+
         var schema = ToolSchema.Object(properties: properties, additionalProperties: false).ToJson();
         schema["properties"]!["statuses"] = new JsonObject
         {
@@ -25,11 +26,12 @@ internal static class NetworkInspectionToolSchemas
             {
                 ["anyOf"] = new JsonArray
                 {
-                    new JsonObject { ["type"] = "integer", ["minimum"] = 100, ["maximum"] = 599 },
-                    new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("1xx", "2xx", "3xx", "4xx", "5xx") }
+                    new JsonObject {["type"] = "integer", ["minimum"] = 100, ["maximum"] = 599 },
+                    new JsonObject {["type"] = "string", ["enum"] = new JsonArray("1xx", "2xx", "3xx", "4xx", "5xx") }
                 }
             }
         };
+
         return schema;
     }
 
@@ -37,6 +39,7 @@ internal static class NetworkInspectionToolSchemas
     {
         var properties = SessionProperties();
         properties["requestId"] = ToolSchema.String("Exact retained request identifier in this session.");
+
         if (body)
         {
             properties["side"] = ToolSchema.String("Body side: request or response.");
@@ -44,6 +47,7 @@ internal static class NetworkInspectionToolSchemas
         }
 
         var schema = ToolSchema.Object(properties: properties, required: body ? ["requestId", "side"] : ["requestId"], additionalProperties: false).ToJson();
+
         if (body)
         {
             schema["properties"]!["side"]!["enum"] = new JsonArray("request", "response");

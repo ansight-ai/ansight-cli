@@ -18,6 +18,7 @@ internal sealed partial class SessionCaptureStore
             capturesRootPath,
             FileNameUtil.Sanitize(appId));
         var sessionDirectoryPath = Path.Combine(appDirectoryPath, FileNameUtil.Sanitize(sessionId));
+
         return new SessionPathLayout(
             appDirectoryPath,
             sessionDirectoryPath,
@@ -70,6 +71,7 @@ internal sealed partial class SessionCaptureStore
             () =>
             {
                 action();
+
                 return true;
             });
 
@@ -91,6 +93,7 @@ internal sealed partial class SessionCaptureStore
             for (var index = 0; index < normalizedSessionIds.Length; index++)
             {
                 var sessionId = normalizedSessionIds[index];
+
                 if (!persistenceLockStateBySessionId.TryGetValue(sessionId, out var lockState))
                 {
                     lockState = new SessionPersistenceLockState();
@@ -114,6 +117,7 @@ internal sealed partial class SessionCaptureStore
                 {
                     var lockState = lockStates[index];
                     lockState.ReferenceCount--;
+
                     if (lockState.ReferenceCount == 0
                         && persistenceLockStateBySessionId.TryGetValue(normalizedSessionIds[index], out var registeredState)
                         && ReferenceEquals(lockState, registeredState))

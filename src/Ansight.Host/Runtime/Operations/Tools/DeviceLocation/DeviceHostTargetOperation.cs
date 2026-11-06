@@ -30,6 +30,7 @@ internal abstract class DeviceHostTargetOperation : Operation
         out string error)
     {
         var requestedDeviceIdentifier = NormalizeOptionalString(arguments?["deviceId"]?.GetValue<string>());
+
         if (requestedDeviceIdentifier is not null)
         {
             target = new DeviceHostTarget(
@@ -38,11 +39,13 @@ internal abstract class DeviceHostTargetOperation : Operation
                 AppId: null,
                 Source: "deviceId");
             error = string.Empty;
+
             return true;
         }
 
         var requestedSessionId = NormalizeOptionalString(arguments?["sessionId"]?.GetValue<string>());
         var requestedAppId = NormalizeOptionalString(arguments?["appId"]?.GetValue<string>());
+
         if (requestedSessionId is null && requestedAppId is null)
         {
             target = new DeviceHostTarget(
@@ -51,20 +54,24 @@ internal abstract class DeviceHostTargetOperation : Operation
                 AppId: null,
                 Source: "hostSelection");
             error = string.Empty;
+
             return true;
         }
 
         if (!sessionResolver.TryResolveLiveSession(arguments, out var snapshot, out error))
         {
             target = DeviceHostTarget.Empty;
+
             return false;
         }
 
         var deviceIdentifier = ResolveNativeDeviceIdentifier(snapshot!);
+
         if (deviceIdentifier is null)
         {
             target = DeviceHostTarget.Empty;
             error = "The live session does not report device.nativeDeviceId, so Ansight cannot safely target its simulator or emulator.";
+
             return false;
         }
 
@@ -73,6 +80,7 @@ internal abstract class DeviceHostTargetOperation : Operation
             snapshot!.SessionId,
             snapshot.AppId,
             Source: "liveSession");
+
         return true;
     }
 
@@ -96,13 +104,4 @@ internal abstract class DeviceHostTargetOperation : Operation
 
     private static string? ResolveNativeDeviceIdentifier(AppSessionSnapshot snapshot)
         => DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot);
-}
-
-internal sealed record DeviceHostTarget(
-    string? DeviceIdentifier,
-    string? SessionId,
-    string? AppId,
-    string Source)
-{
-    public static DeviceHostTarget Empty { get; } = new(null, null, null, string.Empty);
 }

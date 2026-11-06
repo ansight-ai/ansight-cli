@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 /// <summary>Local-only capture receipts, aggregated into versioned daily snapshots.</summary>
 public sealed class LocalCaptureUsage
@@ -56,6 +56,7 @@ public sealed class LocalCaptureUsage
         try
         {
             var state = Read<State>(Path.Combine(root, "state.json"));
+
             if (state is null)
             {
                 return new HashSet<string>();
@@ -86,6 +87,7 @@ public sealed class LocalCaptureUsage
 
             var key = CaptureKey(sessionId, createdUtc);
             var path = Path.Combine(root, "pending", key + ".json");
+
             if (!File.Exists(path))
             {
                 WriteAtomic(path, new Receipt(key, savedUtc), overwrite: false);
@@ -112,23 +114,27 @@ public sealed class LocalCaptureUsage
             }
 
             var tick = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
             if (!force && tick - lastFlush.GetOrAdd(root, 0) < 60)
             {
                 return;
             }
 
             lastFlush[root] = tick;
+
             var envelopes = new List<EventEnvelope>();
             string? snapshotConsent = null;
 
             Mutate(state =>
             {
                 snapshotConsent = state.ConsentId;
+
                 var now = DateTimeOffset.UtcNow;
                 var oldestDay = new DateTimeOffset(now.UtcDateTime.Date.AddDays(-29), TimeSpan.Zero);
                 var pending = Path.Combine(root, "pending");
                 var paths = Directory.Exists(pending) ? Directory.GetFiles(pending, "*.json") : [];
                 var consumed = new List<string>();
+
                 foreach (var path in paths)
                 {
                     try
@@ -170,6 +176,7 @@ public sealed class LocalCaptureUsage
 
                 // Receipt consumption and deduplication are one atomic ledger write.
                 WriteAtomic(Path.Combine(root, "state.json"), state);
+
                 foreach (var path in consumed)
                 {
                     File.Delete(path);
@@ -189,6 +196,7 @@ public sealed class LocalCaptureUsage
                     var device = group.Count(capture => capture.Source == "device");
                     var count = sdk + device;
                     var insertId = Hash($"local-captures:1:{installation}:{state.Epoch}:{group.Key.Day}:{group.Key.BusinessId}:{group.Key.IsCi}:{count}");
+
                     if (state.Acknowledged.ContainsKey(insertId))
                     {
                         continue;
@@ -221,12 +229,14 @@ public sealed class LocalCaptureUsage
             });
 
             var settings = new AnalyticsSettingsStore(dataDirectory);
+
             if (snapshotConsent is null || settings.DetailedTrackingConsentId != snapshotConsent)
             {
                 return;
             }
 
             var outbox = new EventOutbox(settings.AnalyticsDirectoryPath);
+
             foreach (var envelope in envelopes)
             {
                 if (envelope.Properties["account_id"] as string != AnalyticsAccount.ReadPersisted(dataDirectory))
@@ -236,6 +246,7 @@ public sealed class LocalCaptureUsage
 
                 outbox.TryStore(envelope);
             }
+
             // Requeue unacknowledged snapshots, including after outbox eviction.
             // Their stable IDs and revision-based reporting make delivery retries idempotent.
         }
@@ -287,6 +298,7 @@ public sealed class LocalCaptureUsage
     public void Acknowledge(IEnumerable<EventEnvelope> delivered)
     {
         var captures = delivered.Where(envelope => envelope.EventName == EventName).ToArray();
+
         if (captures.Length == 0)
         {
             return;
@@ -316,6 +328,7 @@ public sealed class LocalCaptureUsage
         try
         {
             using var guard = AcquireLock();
+
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
@@ -364,6 +377,7 @@ public sealed class LocalCaptureUsage
 
             change(state!);
             WriteAtomic(path, state);
+
             return true;
         }
         catch
@@ -376,6 +390,7 @@ public sealed class LocalCaptureUsage
     private IDisposable AcquireLock()
     {
         var mutex = new Mutex(false, "ansight-capture-usage-" + Hash(root));
+
         try
         {
             try
@@ -417,7 +432,9 @@ public sealed class LocalCaptureUsage
     internal static void WriteAtomic<T>(string path, T value, bool overwrite = true)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
         try
         {
             var options = new FileStreamOptions

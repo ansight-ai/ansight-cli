@@ -13,9 +13,13 @@ public sealed class SessionUiTestRunTests
         using var runtime = composition.Get<RuntimeCoordinator>();
         var state = composition.Get<IRuntimeState>();
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("android", "phone", "Phone", "test.app", false, false, false)
-        { ExecutionMode = "device", DeviceKind = DeviceKinds.Physical });
+        {
+            ExecutionMode = "device",
+            DeviceKind = DeviceKinds.Physical
+        });
         state.UpdateSessionMetadata(id, true, ["keep"], "Keep notes", "My recording");
         state.SetSessionCustomProperties(id, new JsonObject { ["app"] = new JsonObject { ["tenant"] = "first" } });
+
         var run = new SessionUiTestRun("checkout", "Checkout", "run-1", "running", "task", DateTimeOffset.UtcNow);
         state.SetSessionUiTestRun(id, run);
         state.TryGetSessionSnapshot(id, out var running);
@@ -26,7 +30,11 @@ public sealed class SessionUiTestRunTests
             ["app"] = new JsonObject { ["tenant"] = "second" },
             ["ui-test"] = new JsonObject { ["status"] = "stale" }
         });
-        state.SetSessionUiTestRun(id, run with { Status = "succeeded", CompletedUtc = DateTimeOffset.UtcNow });
+        state.SetSessionUiTestRun(id, run with
+        {
+            Status = "succeeded",
+            CompletedUtc = DateTimeOffset.UtcNow
+        });
         state.TryGetSessionSnapshot(id, out var completed);
         Assert.Equal("second", completed!.CustomProperties!["app"]!["tenant"]!.GetValue<string>());
         Assert.Equal("succeeded", completed.CustomProperties["ui-test"]!["status"]!.GetValue<string>());

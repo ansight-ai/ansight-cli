@@ -18,6 +18,7 @@ public sealed class SessionCacheMaintenanceTests
             runtime.UserPreferences.SessionAutoCleanupEnabled = true;
             runtime.UserPreferences.SessionAutoCleanupMaximumCacheBytes = 256L * 1_024 * 1_024;
             runtime.UserPreferences.SessionAutoCompactionAgeDays = 365;
+
             var belowLimit = SessionCacheMaintenance.RunOnce(runtime, CancellationToken.None);
             Assert.Equal(0, belowLimit.DeletedSessionCount);
             Assert.Contains(runtime.Sessions.GetSummaries(), session => session.SessionId == old.SessionId);
@@ -25,6 +26,7 @@ public sealed class SessionCacheMaintenanceTests
 
         var recent = CreateSnapshot("recent", DateTimeOffset.UtcNow.AddDays(-2));
         SaveWithAdditionalBytes(store, environment, recent, 255L * 1_024 * 1_024);
+
         using (var runtime = environment.CreateRuntime())
         {
             var overLimit = SessionCacheMaintenance.RunOnce(runtime, CancellationToken.None);
@@ -58,11 +60,13 @@ public sealed class SessionCacheMaintenanceTests
         long additionalBytes)
     {
         store.Save(snapshot);
+
         var sessionPath = Path.Combine(
             environment.ApplicationPaths.ApplicationDataPath,
             "session-captures",
             FileNameUtil.Sanitize(snapshot.AppId),
             FileNameUtil.Sanitize(snapshot.SessionId));
+
         using (var stream = File.Create(Path.Combine(sessionPath, "sparse-test-payload.bin")))
         {
             stream.SetLength(additionalBytes);

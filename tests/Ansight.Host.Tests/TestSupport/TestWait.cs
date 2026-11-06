@@ -9,6 +9,7 @@ internal static class TestWait
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(10);
         var startedUtc = DateTimeOffset.UtcNow;
+
         while (DateTimeOffset.UtcNow - startedUtc < effectiveTimeout)
         {
             if (condition())

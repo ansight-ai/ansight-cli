@@ -7,6 +7,7 @@ internal sealed record IosWebDriverAgentOptions(string? ServerUrl)
     public static IosWebDriverAgentOptions Resolve(RuntimeOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         return new IosWebDriverAgentOptions(
             FirstNonEmpty(
                 options.IosWebDriverAgentServerUrl,

@@ -27,6 +27,7 @@ internal static class WebSocketTransport
             }
 
             messageType ??= result.MessageType;
+
             if (result.Count > 0)
             {
                 payload.Advance(result.Count);
@@ -52,6 +53,6 @@ internal static class WebSocketTransport
             or ObjectDisposedException
             or IOException
             or InvalidOperationException
-               or OperationCanceledException;
+            or OperationCanceledException;
     }
 }

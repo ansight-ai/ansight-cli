@@ -8,12 +8,14 @@ internal static class LiveUiUnobstructedPoint
         LiveUiTreeCapture capture, LiveUiNodeMatch target, LiveUiScreenPoint requested, bool explicitPoint)
     {
         var area = LiveUiNodeQuery.ReadBounds(target.Node);
+
         if (area is null || capture.Viewport is null)
         {
             return null;
         }
 
         area = LiveUiBounds.Intersection(area, capture.Viewport);
+
         if (area is null)
         {
             return null;
@@ -25,6 +27,7 @@ internal static class LiveUiUnobstructedPoint
             .Select(candidate => LiveUiNodeQuery.ReadBounds(candidate.Node))
             .OfType<LiveUiBounds>()
             .ToArray();
+
         if (!obstacles.Any(bounds => Contains(bounds, requested)))
         {
             return requested;
@@ -42,6 +45,7 @@ internal static class LiveUiUnobstructedPoint
             foreach (var x in new[] { 0.5, 0.25, 0.75, 0.1, 0.9 })
             {
                 var point = new LiveUiScreenPoint(area.X + area.Width * x, area.Y + area.Height * y);
+
                 if (!obstacles.Any(bounds => Contains(bounds, point)))
                 {
                     return point;
@@ -57,6 +61,7 @@ internal static class LiveUiUnobstructedPoint
         var related = SameObservedNode(candidate.Node, target.Node)
             || candidate.Ancestors.Any(ancestor => SameObservedNode(ancestor, target.Node))
             || target.Ancestors.Any(ancestor => SameObservedNode(ancestor, candidate.Node));
+
         if (related)
         {
             return false;
@@ -66,6 +71,7 @@ internal static class LiveUiUnobstructedPoint
             && LiveUiNodeQuery.IsEffectivelyEnabled(candidate)
             && LiveUiNodeQuery.ReadSupportedActions(candidate.Node, candidate.TypeRegistry)
                 .Any(action => action is "tap" or "typeText" or "longPress");
+
         return actionable;
     }
 
@@ -83,6 +89,7 @@ internal static class LiveUiUnobstructedPoint
             && id == LiveUiNodeQuery.ReadString(second, "id")
             && LiveUiNodeQuery.ReadBounds(first) is { } bounds
             && bounds == LiveUiNodeQuery.ReadBounds(second);
+
         return sameProjection;
     }
 
@@ -92,6 +99,7 @@ internal static class LiveUiUnobstructedPoint
             && point.X <= bounds.X + bounds.Width
             && point.Y >= bounds.Y
             && point.Y <= bounds.Y + bounds.Height;
+
         return contains;
     }
 }

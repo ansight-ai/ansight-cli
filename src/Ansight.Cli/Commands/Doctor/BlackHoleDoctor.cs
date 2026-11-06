@@ -12,9 +12,11 @@ internal static class BlackHoleDoctor
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
+
         try
         {
             var response = await IosAudioHelper.RunAsync(["devices"], timeout.Token).ConfigureAwait(false);
+
             return FromDevices(response["devices"] as JsonArray ?? []);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -30,9 +32,10 @@ internal static class BlackHoleDoctor
     internal static DoctorCheck FromDevices(JsonArray devices)
     {
         var registered = devices.OfType<JsonObject>().FirstOrDefault(device =>
-            device["uid"]?.GetValue<string>() == IosAudioHelper.DefaultDeviceUid
-            && device["inputChannels"]?.GetValue<int>() > 0
-            && device["outputChannels"]?.GetValue<int>() > 0);
+                device["uid"]?.GetValue<string>() == IosAudioHelper.DefaultDeviceUid
+                    && device["inputChannels"]?.GetValue<int>() > 0
+                    && device["outputChannels"]?.GetValue<int>() > 0);
+
         return registered is not null
             ? new DoctorCheck(CheckName, "registered", true, false,
                 "BlackHole 2ch is registered with CoreAudio for input and output. Select it in Simulator > I/O > Audio Input before injecting audio; registration alone does not verify that route.",

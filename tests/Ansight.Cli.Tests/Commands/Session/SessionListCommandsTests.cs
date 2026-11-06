@@ -105,7 +105,7 @@ public sealed class SessionListCommandsTests
         var page = SessionCommands.QuerySessionSummaries(
             [matching, wrongApp, outsideRange, wrongPlatform],
             CliArguments.Parse(
-            [
+                [
                 "session", "list",
                 "--app-id", "com.alphaoutdoors.redpoint",
                 "--from", now.AddHours(-1).ToString("O"),
@@ -174,10 +174,10 @@ public sealed class SessionListCommandsTests
     public void QuerySessionSummaries_RejectsAnInvalidCursor()
     {
         var exception = Assert.Throws<CliUsageException>(() =>
-            SessionCommands.QuerySessionSummaries(
-                [],
-                CliArguments.Parse(["session", "list", "--cursor", "invalid"]),
-                static _ => false));
+                SessionCommands.QuerySessionSummaries(
+                    [],
+                    CliArguments.Parse(["session", "list", "--cursor", "invalid"]),
+                    static _ => false));
 
         Assert.Equal("--cursor is not a valid session-list cursor.", exception.Message);
     }
@@ -186,15 +186,15 @@ public sealed class SessionListCommandsTests
     public void QuerySessionSummaries_RejectsAnInvertedTimeRange()
     {
         var exception = Assert.Throws<CliUsageException>(() =>
-            SessionCommands.QuerySessionSummaries(
-                [],
-                CliArguments.Parse(
-                [
-                    "session", "list",
+                SessionCommands.QuerySessionSummaries(
+                    [],
+                    CliArguments.Parse(
+                        [
+                        "session", "list",
                     "--from", "2026-08-30T05:00:00Z",
                     "--to", "2026-08-30T04:00:00Z"
-                ]),
-                static _ => false));
+                    ]),
+                    static _ => false));
 
         Assert.Equal("--from must be earlier than or equal to --to.", exception.Message);
     }

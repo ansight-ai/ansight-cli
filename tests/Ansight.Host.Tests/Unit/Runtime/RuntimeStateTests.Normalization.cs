@@ -11,6 +11,7 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-08-28T01:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
 
         var frames = new[]
@@ -57,8 +58,7 @@ public sealed partial class RuntimeStateTests
                             TargetId = "target-001",
                             VisualTreeSnapshotId = "ios-002"
                         }
-                    }
-                ],
+                    }                ],
                 AgentTaskLinks =
                 [
                     new SessionAgentTaskLink
@@ -74,8 +74,7 @@ public sealed partial class RuntimeStateTests
                         Status = "complete",
                         CreatedAtUtc = At(2),
                         UpdatedAtUtc = At(2)
-                    }
-                ],
+                    }                ],
                 MetricChannels = [],
                 Metrics = []
             },
@@ -88,6 +87,7 @@ public sealed partial class RuntimeStateTests
             });
 
         Assert.True(importResult.IsSuccess);
+
         var sessionId = importResult.ImportedSession!.SessionId;
         var duplicateImagePath = SessionImageArtifactPath.ResolveCapturedImagePath(
             SessionImageArtifactPath.ResolveSessionCapturesRootPath(environment.ApplicationPaths),
@@ -119,6 +119,7 @@ public sealed partial class RuntimeStateTests
         Assert.Equal(
             "frame-001",
             normalized.VisualTreeSnapshots.Single(tree => tree.SnapshotId == "maui-001").ScreenshotFrameId);
+
         var annotation = Assert.Single(normalized.Annotations);
         Assert.Equal("frame-001", Assert.Single(annotation.Geometry).FrameId);
         Assert.Equal("ios-001", annotation.Target?.VisualTreeSnapshotId);

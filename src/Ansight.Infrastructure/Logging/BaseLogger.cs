@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Ansight.Infrastructure.Logging;
 
@@ -50,6 +50,7 @@ public abstract class BaseLogger : ILogger
         }
 
         var tag = Tags.PropertyTag;
+
         if (!string.IsNullOrEmpty(group))
         {
             tag = $"{tag}.{group.Trim()}";
@@ -99,7 +100,6 @@ public abstract class BaseLogger : ILogger
         {
             suspendLogFormattingScope = newScope;
         }
-
 
         return newScope;
     }

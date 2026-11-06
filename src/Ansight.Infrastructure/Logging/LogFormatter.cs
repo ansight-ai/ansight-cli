@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -8,14 +8,14 @@ public static class LogFormatter
 {
     private const string dateTimeFormat = "MM-dd HH:mm:ss.fff";
 
-    private static readonly IReadOnlyDictionary<LogLevel, string> Levels = new Dictionary<LogLevel, string>()
+    private static readonly IReadOnlyDictionary<LogLevel, string> levels = new Dictionary<LogLevel, string>()
     {
-        { LogLevel.Verbose    , "V" },
-        { LogLevel.Debug      , "D" },
-        { LogLevel.Information, "I" },
-        { LogLevel.Warning    , "W" },
-        { LogLevel.Error      , "E" },
-        { LogLevel.Fatal      , "F" },
+        {LogLevel.Verbose    , "V" },
+        {LogLevel.Debug      , "D" },
+        {LogLevel.Information, "I" },
+        {LogLevel.Warning    , "W" },
+        {LogLevel.Error      , "E" },
+        {LogLevel.Fatal      , "F" },
     };
 
     public static string Render(DateTime dateTime, string tag, string message, int processId, int threadId, LogLevel logLevel)
@@ -37,7 +37,7 @@ public static class LogFormatter
             dateTime.ToString(dateTimeFormat),
             processId.ToString(CultureInfo.InvariantCulture),
             threadId.ToString(CultureInfo.InvariantCulture),
-            Levels[logLevel],
+            levels[logLevel],
             tag,
             message);
 

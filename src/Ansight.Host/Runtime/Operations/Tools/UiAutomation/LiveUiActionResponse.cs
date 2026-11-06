@@ -18,6 +18,7 @@ internal static class LiveUiActionResponse
         }
 
         byte[] imageBytes;
+
         try
         {
             imageBytes = File.ReadAllBytes(finalEvidence.ScreenshotArtifactPath);

@@ -9,6 +9,7 @@ public sealed class PlatformCredentialVaultMigrationTests
         File.WriteAllText(
             environment.SecureStorageFilePath,
             "{\"legacy-account\":\"refresh-token\",\"test-secret\":\"password\"}");
+
         var destination = new InMemoryEncryptedStorage();
 
         var migrated = PlatformCredentialVaultMigration.TryMigrate(
@@ -28,6 +29,7 @@ public sealed class PlatformCredentialVaultMigrationTests
         using var environment = new TestSupport.StorageTestEnvironment();
         var source = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
         source.Set("example", "encrypted-value");
+
         var destination = new InMemoryEncryptedStorage();
 
         var migrated = PlatformCredentialVaultMigration.TryMigrate(
@@ -47,6 +49,7 @@ public sealed class PlatformCredentialVaultMigrationTests
         File.WriteAllText(
             environment.SecureStorageFilePath,
             "{\"existing\":\"stale-file-value\",\"missing\":\"legacy-value\"}");
+
         var destination = new InMemoryEncryptedStorage();
         destination.Set("existing", "current-vault-value");
 

@@ -17,6 +17,7 @@ public sealed class LiveUiTapHintTests
         var root = SearchTree();
         var node = root["children"]![1]!.AsObject();
         node["id"] = "before";
+
         var registry = CreateRegistry();
         var viewport = new LiveUiBounds(0, 0, 400, 850);
         var selector = LiveUiSelector.Parse(new JsonObject { ["nodeId"] = "before", ["role"] = "text", ["visible"] = true });
@@ -27,20 +28,42 @@ public sealed class LiveUiTapHintTests
             ["targetFingerprint"] = LiveUiTapTarget.Fingerprint(root, match, viewport)
         };
         node["id"] = "after";
-        if (scenario == "changed-label") node["text"] = "Different result";
-        if (scenario == "changed-bounds") node["bounds"]!["y"] = 450;
-        if (scenario == "hidden") node["visible"] = false;
-        if (scenario == "conflicting-selector") selector = LiveUiSelector.Parse(new JsonObject { ["nodeId"] = "before", ["text"] = "Not the result" });
+
+        if (scenario == "changed-label")
+        {
+            node["text"] = "Different result";
+        }
+
+        if (scenario == "changed-bounds")
+        {
+            node["bounds"]!["y"] = 450;
+        }
+
+        if (scenario == "hidden")
+        {
+            node["visible"] = false;
+        }
+
+        if (scenario == "conflicting-selector")
+        {
+            selector = LiveUiSelector.Parse(new JsonObject { ["nodeId"] = "before", ["text"] = "Not the result" });
+        }
+
         if (scenario == "ambiguous")
         {
             var duplicate = node.DeepClone();
             duplicate["id"] = "duplicate";
             root["children"]!.AsArray().Add(duplicate);
         }
+
         var refreshed = LiveUiTapTarget.RefreshTransientNodeId(root, registry, viewport, selector,
             "device.accessibility", arguments);
         Assert.Equal(recovered ? "after" : "before", refreshed.NodeId);
-        if (recovered) Assert.Same(node, Assert.Single(LiveUiNodeQuery.Find(root, refreshed, registry)).Node);
+
+        if (recovered)
+        {
+            Assert.Same(node, Assert.Single(LiveUiNodeQuery.Find(root, refreshed, registry)).Node);
+        }
     }
 
     [Fact]
@@ -49,6 +72,7 @@ public sealed class LiveUiTapHintTests
         var root = SearchTree();
         root["children"]![1]!["automationId"] = "result";
         root["children"]![1]!["id"] = "transient-first";
+
         var registry = CreateRegistry();
         var viewport = new LiveUiBounds(0, 0, 400, 850);
         var query = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "result" });
@@ -59,6 +83,7 @@ public sealed class LiveUiTapHintTests
         Assert.Equal(LiveUiTreeCapture.DeviceAccessibilityToolId, selector["targetSource"]!.GetValue<string>());
         Assert.Equal("result", selector["automationId"]!.GetValue<string>());
         Assert.Null(selector["nodeId"]);
+
         var fingerprint = selector["targetFingerprint"]!.GetValue<string>();
         const string legacyFingerprint = "F920307378C3B5ED3EC661DFEAC911058044D458175DE3667A86E681CA539B79";
         Assert.Equal(20, fingerprint.Length);
@@ -106,6 +131,7 @@ public sealed class LiveUiTapHintTests
     {
         var root = SearchTree();
         var label = root["children"]![1]!;
+
         if (state == "duplicate")
         {
             root["children"]!.AsArray().Add(label.DeepClone());
@@ -118,6 +144,7 @@ public sealed class LiveUiTapHintTests
         {
             label[state == "disabled" ? "enabled" : "visible"] = false;
         }
+
         var registry = CreateRegistry();
         var query = LiveUiSelector.Parse(new JsonObject { ["text"] = "Kalymnos", ["role"] = "text" });
         var match = LiveUiNodeQuery.Find(root, query, registry)[0];
@@ -141,10 +168,12 @@ public sealed class LiveUiTapHintTests
         var first = root["children"]![1]!.AsObject();
         first["automationId"] = "result-label";
         first["id"] = "first-result";
+
         var second = first.DeepClone().AsObject();
         second["id"] = "second-result";
         second["bounds"]!["y"] = 450;
         root["children"]!.AsArray().Add(second);
+
         var registry = CreateRegistry();
         var query = LiveUiSelector.Parse(new JsonObject { ["text"] = "Kalymnos" });
         var match = LiveUiNodeQuery.Find(root, query, registry)[2];
@@ -167,22 +196,28 @@ public sealed class LiveUiTapHintTests
         tab["text"] = "Map";
         tab["id"] = "old-native-id";
         tab["supportedActions"] = supportsTap ? new JsonArray("tap") : new JsonArray();
+
         var other = tab.DeepClone().AsObject();
         other["id"] = "other-native-id";
         root["children"]!.AsArray().Add(other);
         root["children"]!.AsArray().Add(new JsonObject
         {
-            ["automationId"] = "bottom-tabs", ["visible"] = true, ["enabled"] = true,
+            ["automationId"] = "bottom-tabs",
+            ["visible"] = true,
+            ["enabled"] = true,
             ["children"] = new JsonArray(tab)
         });
+
         var registry = CreateRegistry();
         var viewport = new LiveUiBounds(0, 0, 400, 850);
         var match = LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(new JsonObject { ["nodeId"] = "old-native-id" }), registry)[0];
         var hint = FindLiveUiTool.BuildTapHint(root, match, viewport, LiveUiSelector.Parse(null),
             targetSource: RemoteAppToolIds.UiGetVisualTree);
+
         if (!supportsTap)
         {
             Assert.Null(hint);
+
             return;
         }
 
@@ -191,6 +226,7 @@ public sealed class LiveUiTapHintTests
         Assert.Equal("bottom-tabs", selector["ancestorAutomationId"]!.GetValue<string>());
         Assert.Null(selector["nodeId"]);
         tab["id"] = "new-native-id";
+
         var resolved = Assert.Single(LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(selector.AsObject()), registry));
         Assert.Same(tab, resolved.Node);
         Assert.Equal(selector["targetFingerprint"]!.GetValue<string>(), LiveUiTapTarget.Fingerprint(root, resolved, viewport));
@@ -203,9 +239,11 @@ public sealed class LiveUiTapHintTests
         var second = root["children"]![1]!.DeepClone().AsObject();
         second["bounds"]!["y"] = 500;
         root["children"]!.AsArray().Add(second);
+
         var region = Node("StaticText", "text", 545);
         region["text"] = "Greece · Crag";
         root["children"]!.AsArray().Add(region);
+
         var registry = CreateRegistry();
         var viewport = new LiveUiBounds(0, 0, 400, 850);
         var query = LiveUiSelector.Parse(new JsonObject { ["text"] = "Kalymnos" });
@@ -218,6 +256,7 @@ public sealed class LiveUiTapHintTests
             var hint = FindLiveUiTool.BuildTapHint(root, match, viewport, query);
             var selector = Assert.IsType<JsonObject>(hint?["selector"]);
             Assert.Equal(index - 1, selector["index"]!.GetValue<int>());
+
             var exactMatches = LiveUiNodeQuery.PrioritizeActionTargets(
                 LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(selector), registry), root, viewport);
             var selected = exactMatches[selector["index"]!.GetValue<int>()];
@@ -228,12 +267,17 @@ public sealed class LiveUiTapHintTests
             {
                 ["matches"] = new JsonArray(new JsonObject
                 {
-                    ["text"] = "Kalymnos", ["tapHint"] = hint,
+                    ["text"] = "Kalymnos",
+                    ["tapHint"] = hint,
                     ["nearbyText"] = LiveUiTapTarget.NearbyText(root, match, viewport)
                 })
             }, UiProjectionOptions.Model);
             Assert.True(JsonNode.DeepEquals(selector, compact["matches"]![0]!["tapHint"]!["selector"]));
-            if (index == 2) Assert.Contains("Greece", compact["matches"]![0]!["nearbyText"]!.ToJsonString());
+
+            if (index == 2)
+            {
+                Assert.Contains("Greece", compact["matches"]![0]!["nearbyText"]!.ToJsonString());
+            }
         }
     }
 
@@ -241,17 +285,29 @@ public sealed class LiveUiTapHintTests
     public void NearbyText_ExcludesInputValuesHiddenAndDistantLabels()
     {
         var root = SearchTree();
+
         foreach (var kind in new[] { "near", "hidden", "distant", "password" })
         {
             var label = Node("StaticText", "text", kind == "distant" ? 650 : 345);
             label["text"] = kind;
-            if (kind == "hidden") label["visible"] = false;
-            if (kind == "password") label["isPassword"] = true;
+
+            if (kind == "hidden")
+            {
+                label["visible"] = false;
+            }
+
+            if (kind == "password")
+            {
+                label["isPassword"] = true;
+            }
+
             root["children"]!.AsArray().Add(label);
         }
+
         var input = Node("TextField", "textbox", 345);
         input["text"] = "private input";
         root["children"]!.AsArray().Add(input);
+
         var match = LiveUiNodeQuery.Find(root,
             LiveUiSelector.Parse(new JsonObject { ["text"] = "Kalymnos", ["role"] = "text" }), CreateRegistry())[0];
 

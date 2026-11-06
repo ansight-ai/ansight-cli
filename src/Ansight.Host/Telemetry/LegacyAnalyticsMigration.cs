@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 
 namespace Ansight.Host.Telemetry;
 
@@ -29,6 +29,7 @@ internal sealed class LegacyAnalyticsMigration
             var legacyIdentity = TryReadIdentity();
             var canonicalOutbox = new EventOutbox(canonicalSettings.AnalyticsDirectoryPath);
             MigrateOutbox(canonicalOutbox, canonicalIdentity, legacyIdentity);
+
             if (canonicalSettings.IsDetailedTrackingActive)
             {
                 MigrateUsage(canonicalOutbox, canonicalIdentity);
@@ -37,6 +38,7 @@ internal sealed class LegacyAnalyticsMigration
             {
                 RemoveLegacyUsage();
             }
+
             RemoveLegacyDirectoryWhenDrained();
         }
         catch
@@ -48,6 +50,7 @@ internal sealed class LegacyAnalyticsMigration
     private void MigrateOutbox(EventOutbox canonicalOutbox, string canonicalIdentity, string? legacyIdentity)
     {
         var legacyOutbox = new EventOutbox(legacyAnalyticsDirectory);
+
         foreach (var item in legacyOutbox.Load(250))
         {
             if (item.Envelope.Level == EventLevel.Detailed && !canonicalSettings.IsDetailedTrackingActive)
@@ -57,6 +60,7 @@ internal sealed class LegacyAnalyticsMigration
             }
 
             var migrated = RewriteEnvelope(item.Envelope, canonicalIdentity, legacyIdentity);
+
             if (!canonicalOutbox.TryStore(migrated))
             {
                 continue;
@@ -76,6 +80,7 @@ internal sealed class LegacyAnalyticsMigration
     private void MigrateUsage(EventOutbox canonicalOutbox, string canonicalIdentity)
     {
         var usageDirectory = Path.Combine(legacyAnalyticsDirectory, "usage");
+
         if (!Directory.Exists(usageDirectory))
         {
             return;
@@ -94,6 +99,7 @@ internal sealed class LegacyAnalyticsMigration
                 var envelope = state is null
                     ? null
                     : ProductUsage.CreateSnapshotEnvelope(state, canonicalIdentity, File.GetLastWriteTimeUtc(path));
+
                 if (envelope is not null && canonicalOutbox.TryStore(envelope))
                 {
                     File.Delete(path);
@@ -112,11 +118,13 @@ internal sealed class LegacyAnalyticsMigration
         string? legacyIdentity)
     {
         var properties = new Dictionary<string, object?>(envelope.Properties, StringComparer.Ordinal);
+
         if (properties.TryGetValue("installation_id", out var installationId)
             && string.Equals(ReadString(installationId), legacyIdentity, StringComparison.Ordinal))
         {
             properties["installation_id"] = canonicalIdentity;
         }
+
         if (properties.TryGetValue("$anon_distinct_id", out var anonymousId)
             && string.Equals(ReadString(anonymousId), legacyIdentity, StringComparison.Ordinal))
         {
@@ -129,7 +137,8 @@ internal sealed class LegacyAnalyticsMigration
         var insertId = AcquisitionAnalytics.IsOnceEvent(envelope.EventName)
             ? AcquisitionAnalytics.CreateOnceInsertId(canonicalIdentity, envelope.EventName)
             : TryCreateUsageInsertId(envelope.EventName, properties, canonicalIdentity)
-              ?? envelope.InsertId;
+                ?? envelope.InsertId;
+
         return envelope with
         {
             InsertId = insertId,
@@ -141,6 +150,7 @@ internal sealed class LegacyAnalyticsMigration
     private void RemoveLegacyUsage()
     {
         var usageDirectory = Path.Combine(legacyAnalyticsDirectory, "usage");
+
         if (Directory.Exists(usageDirectory))
         {
             foreach (var path in Directory.EnumerateFiles(usageDirectory, "*.json"))
@@ -148,17 +158,21 @@ internal sealed class LegacyAnalyticsMigration
                 File.Delete(path);
             }
         }
+
         RemoveLegacyDirectoryWhenDrained();
     }
 
     private string? TryReadIdentity()
     {
         var path = Path.Combine(legacyAnalyticsDirectory, "posthog.distinct-id");
+
         if (!File.Exists(path))
         {
             return null;
         }
+
         var value = File.ReadAllText(path).Trim();
+
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
@@ -167,9 +181,10 @@ internal sealed class LegacyAnalyticsMigration
         var outboxDirectory = Path.Combine(legacyAnalyticsDirectory, "posthog-outbox");
         var usageDirectory = Path.Combine(legacyAnalyticsDirectory, "usage");
         var hasOutboxEvents = Directory.Exists(outboxDirectory)
-                              && Directory.EnumerateFiles(outboxDirectory, "*.json").Any();
+            && Directory.EnumerateFiles(outboxDirectory, "*.json").Any();
         var hasUsageState = Directory.Exists(usageDirectory)
-                            && Directory.EnumerateFiles(usageDirectory, "*.json").Any();
+            && Directory.EnumerateFiles(usageDirectory, "*.json").Any();
+
         if (!hasOutboxEvents && !hasUsageState)
         {
             Directory.Delete(legacyAnalyticsDirectory, recursive: true);
@@ -206,6 +221,7 @@ internal sealed class LegacyAnalyticsMigration
 
         var day = ReadString(dayValue);
         var epoch = ReadString(epochValue);
+
         if (string.IsNullOrWhiteSpace(day)
             || string.IsNullOrWhiteSpace(epoch)
             || !TryReadBoolean(isCiValue, out var isCi)
@@ -222,13 +238,17 @@ internal sealed class LegacyAnalyticsMigration
         if (value is bool boolean)
         {
             result = boolean;
+
             return true;
         }
+
         if (value is JsonElement { ValueKind: JsonValueKind.True or JsonValueKind.False } element)
         {
             result = element.GetBoolean();
+
             return true;
         }
+
         return bool.TryParse(ReadString(value), out result);
     }
 
@@ -237,13 +257,16 @@ internal sealed class LegacyAnalyticsMigration
         if (value is long integer)
         {
             result = integer;
+
             return true;
         }
+
         if (value is JsonElement { ValueKind: JsonValueKind.Number } element
             && element.TryGetInt64(out result))
         {
             return true;
         }
+
         return long.TryParse(ReadString(value), out result);
     }
 }

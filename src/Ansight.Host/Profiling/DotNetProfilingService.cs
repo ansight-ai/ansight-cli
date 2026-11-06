@@ -22,6 +22,7 @@ public sealed class DotNetProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         var toolchain = await profiling.GetToolchainAsync(cancellationToken).ConfigureAwait(false);
+
         return new DotNetProfilingToolchain(
             toolchain.IsAvailable,
             toolchain.IsAndroidEmulatorAvailable || toolchain.IsAndroidDeviceAvailable,
@@ -43,6 +44,7 @@ public sealed class DotNetProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return await profiling.StartStartupCaptureAsync(
             new DotNetStartupCaptureRequest(
                 request.ApplicationPath,
@@ -57,6 +59,7 @@ public sealed class DotNetProfilingService : IDisposable
     public DotNetCaptureSnapshot? GetCapture(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.TryGetCapture(captureId.Trim(), out var snapshot) && snapshot is not null
             ? ToPublic(snapshot)
             : null;
@@ -68,8 +71,9 @@ public sealed class DotNetProfilingService : IDisposable
     public DotNetCaptureManifest? GetManifest(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CaptureStore.TryLoadManifest(captureId.Trim(), out var manifest)
-               && manifest is not null
+            && manifest is not null
             ? ToPublic(manifest)
             : null;
     }
@@ -77,13 +81,16 @@ public sealed class DotNetProfilingService : IDisposable
     public string GetCaptureDirectoryPath(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CaptureStore.GetCapturePath(captureId.Trim());
     }
 
     public DotNetCaptureArtifactLocation? GetSpeedScopeArtifact(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var normalizedCaptureId = captureId.Trim();
+
         if (!profiling.CaptureStore.TryLoadManifest(normalizedCaptureId, out var manifest)
             || manifest is null
             || !profiling.CaptureStore.TryResolveArtifactPath(
@@ -99,6 +106,7 @@ public sealed class DotNetProfilingService : IDisposable
             candidate.Kind,
             DotNetProfilingEngine.SpeedScopeArtifactKind,
             StringComparison.Ordinal));
+
         return new DotNetCaptureArtifactLocation(
             normalizedCaptureId,
             filePath,
@@ -109,6 +117,7 @@ public sealed class DotNetProfilingService : IDisposable
     public bool CancelCapture(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CancelCapture(captureId.Trim());
     }
 
@@ -119,11 +128,13 @@ public sealed class DotNetProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tracePath);
+
         var manifest = await profiling.ImportTraceAsync(
             Path.GetFullPath(tracePath.Trim()),
             appId,
             applicationPath,
             cancellationToken).ConfigureAwait(false);
+
         return ToPublic(manifest);
     }
 
@@ -131,6 +142,7 @@ public sealed class DotNetProfilingService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CaptureId);
+
         var selection = request.Selection ?? new DotNetTraceSelection(null, null, null, null);
         ValidateSelection(selection);
         ValidateLimit(request.HotspotLimit, 1, 1_000, nameof(request.HotspotLimit));
@@ -147,6 +159,7 @@ public sealed class DotNetProfilingService : IDisposable
             request.HotspotLimit,
             request.CallTreeDepth,
             request.CallTreeChildLimit);
+
         return ToPublic(analysisResult);
     }
 
@@ -173,6 +186,7 @@ public sealed class DotNetProfilingService : IDisposable
     private static DotNetTraceAnalysisResult ToPublic(ParsedTraceAnalysisResult result)
     {
         var traceAnalysis = result.Analysis;
+
         return new DotNetTraceAnalysisResult(
             result.Manifest.CaptureId,
             DotNetTraceAnalysisService.AnalyzerVersion,
@@ -336,9 +350,9 @@ public sealed class DotNetProfilingService : IDisposable
     private static string ResolveStartupMilestoneKind(ParsedStartupMilestone milestone)
     {
         if (string.Equals(
-                milestone.EventName,
-                DotNetStartupMarker.EventName,
-                StringComparison.Ordinal))
+            milestone.EventName,
+            DotNetStartupMarker.EventName,
+            StringComparison.Ordinal))
         {
             return "application-ready";
         }
@@ -356,8 +370,8 @@ public sealed class DotNetProfilingService : IDisposable
         var text = value.ToString();
         var characters = text.SelectMany((character, index) =>
             index > 0 && char.IsUpper(character)
-                ? new[] { '-', char.ToLowerInvariant(character) }
-                : new[] { char.ToLowerInvariant(character) });
+                ? new[] { '-', char.ToLowerInvariant(character) } : new[] { char.ToLowerInvariant(character) });
+
         return new string(characters.ToArray());
     }
 }

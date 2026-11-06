@@ -60,6 +60,7 @@ internal sealed partial class RuntimeState
         var importMessage = string.Equals(preferredSessionId, importedSnapshot.SessionId, StringComparison.Ordinal)
             ? $"Imported session {importedSnapshot.SessionId}."
             : $"Imported session {preferredSessionId} as {importedSnapshot.SessionId}.";
+
         return SessionImportResult.Success(importMessage, importedSnapshot);
     }
 
@@ -104,6 +105,7 @@ internal sealed partial class RuntimeState
 
         var trimmedSessionId = sessionId.Trim();
         var trimmedAnnotationId = annotationId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return SessionExtractionResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -112,6 +114,7 @@ internal sealed partial class RuntimeState
         SessionAnnotation sourceAnnotation;
         DateTimeOffset rangeStartUtc;
         DateTimeOffset rangeEndUtc;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -121,6 +124,7 @@ internal sealed partial class RuntimeState
 
             var annotation = session.Annotations.FirstOrDefault(candidate =>
                 string.Equals(candidate.AnnotationId, trimmedAnnotationId, StringComparison.Ordinal));
+
             if (annotation is null)
             {
                 return SessionExtractionResult.Failure($"Annotation '{trimmedAnnotationId}' was not found for session '{trimmedSessionId}'.");
@@ -155,6 +159,7 @@ internal sealed partial class RuntimeState
         }
 
         var trimmedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -172,9 +177,10 @@ internal sealed partial class RuntimeState
             }
 
             var hasChanged = session.IsPinned != isPinned
-                             || !session.Tags.SequenceEqual(normalizedTags, StringComparer.Ordinal)
-                             || !string.Equals(session.Notes, normalizedNotes, StringComparison.Ordinal)
-                             || (name is not null && !string.Equals(session.Name, normalizedName, StringComparison.Ordinal));
+                || !session.Tags.SequenceEqual(normalizedTags, StringComparer.Ordinal)
+                || !string.Equals(session.Notes, normalizedNotes, StringComparison.Ordinal)
+                || (name is not null && !string.Equals(session.Name, normalizedName, StringComparison.Ordinal));
+
             if (!hasChanged)
             {
                 return OperationResult.Success("Session metadata is unchanged.");
@@ -184,6 +190,7 @@ internal sealed partial class RuntimeState
             session.Tags.Clear();
             session.Tags.AddRange(normalizedTags);
             session.Notes = normalizedNotes;
+
             if (name is not null)
             {
                 session.Name = normalizedName;
@@ -194,6 +201,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_metadata_updated sessionId={trimmedSessionId} isPinned={isPinned} tagCount={normalizedTags.Length} hasName={!string.IsNullOrWhiteSpace(normalizedName)} hasNotes={!string.IsNullOrWhiteSpace(normalizedNotes)}");
+
         return OperationResult.Success($"Session '{trimmedSessionId}' metadata updated.");
     }
 
@@ -207,6 +215,7 @@ internal sealed partial class RuntimeState
         ArgumentNullException.ThrowIfNull(annotation);
 
         var trimmedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -228,9 +237,11 @@ internal sealed partial class RuntimeState
 
             var existingIndex = session.Annotations.FindIndex(candidate =>
                 string.Equals(candidate.AnnotationId, normalizedAnnotation.AnnotationId, StringComparison.Ordinal));
+
             if (existingIndex >= 0)
             {
                 wasUpdated = !SessionAnnotationsEqual(session.Annotations[existingIndex], normalizedAnnotation);
+
                 if (!wasUpdated)
                 {
                     return OperationResult.Success("Annotation is unchanged.");
@@ -249,6 +260,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_annotation_upserted sessionId={trimmedSessionId} annotationId={normalizedAnnotation.AnnotationId} label={normalizedAnnotation.Label} geometryCount={normalizedAnnotation.Geometry.Count} isUpdate={wasUpdated}");
+
         return OperationResult.Success($"Annotation '{normalizedAnnotation.AnnotationId}' saved for session '{trimmedSessionId}'.");
     }
 
@@ -262,6 +274,7 @@ internal sealed partial class RuntimeState
         ArgumentNullException.ThrowIfNull(taskLink);
 
         var trimmedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -274,6 +287,7 @@ internal sealed partial class RuntimeState
         }
 
         var wasUpdated = false;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -283,6 +297,7 @@ internal sealed partial class RuntimeState
 
             var existingIndex = session.AgentTaskLinks.FindIndex(candidate =>
                 string.Equals(candidate.LinkId, normalizedTaskLink.LinkId, StringComparison.Ordinal));
+
             if (existingIndex >= 0)
             {
                 session.AgentTaskLinks[existingIndex] = normalizedTaskLink;
@@ -300,6 +315,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_agent_task_link_upserted sessionId={trimmedSessionId} linkId={normalizedTaskLink.LinkId} provider={normalizedTaskLink.Provider} status={normalizedTaskLink.Status} isUpdate={wasUpdated}");
+
         return OperationResult.Success(
             $"Agent task link '{normalizedTaskLink.LinkId}' saved for session '{trimmedSessionId}'.");
     }
@@ -312,12 +328,14 @@ internal sealed partial class RuntimeState
     {
         normalized = null;
         error = null;
+
         var linkId = NormalizeTaskLinkValue(taskLink.LinkId, 128);
         var annotationBatchId = NormalizeTaskLinkValue(taskLink.AnnotationBatchId, 128);
         var source = NormalizeTaskLinkValue(taskLink.Source, 128);
         var provider = NormalizeTaskLinkValue(taskLink.Provider, 64);
         var providerTaskId = NormalizeTaskLinkValue(taskLink.ProviderTaskId, 256);
         var status = NormalizeTaskLinkValue(taskLink.Status, 64);
+
         if (linkId is null
             || annotationBatchId is null
             || source is null
@@ -328,11 +346,13 @@ internal sealed partial class RuntimeState
             || !string.Equals(sessionId, taskLink.SessionId?.Trim(), StringComparison.Ordinal))
         {
             error = "The agent task link is missing required session, provider, task, prompt, or status data.";
+
             return false;
         }
 
         var createdAtUtc = taskLink.CreatedAtUtc.ToUniversalTime();
         var updatedAtUtc = taskLink.UpdatedAtUtc.ToUniversalTime();
+
         if (updatedAtUtc < createdAtUtc)
         {
             updatedAtUtc = createdAtUtc;
@@ -360,6 +380,7 @@ internal sealed partial class RuntimeState
             CreatedAtUtc = createdAtUtc,
             UpdatedAtUtc = updatedAtUtc
         };
+
         return true;
     }
 
@@ -371,6 +392,7 @@ internal sealed partial class RuntimeState
         }
 
         var normalized = value.Trim();
+
         return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
     }
 
@@ -379,12 +401,12 @@ internal sealed partial class RuntimeState
         int maximumLength)
     {
         return values?
-                   .Select(value => NormalizeTaskLinkValue(value, maximumLength))
-                   .Where(static value => value is not null)
-                   .Cast<string>()
-                   .Distinct(StringComparer.Ordinal)
-                   .ToArray()
-               ?? Array.Empty<string>();
+                       .Select(value => NormalizeTaskLinkValue(value, maximumLength))
+                           .Where(static value => value is not null)
+                           .Cast<string>()
+                           .Distinct(StringComparer.Ordinal)
+                           .ToArray()
+            ?? Array.Empty<string>();
     }
 
     public OperationResult AddSessionVisualTreeSnapshot(string sessionId, SessionVisualTreeSnapshot snapshot)
@@ -408,6 +430,7 @@ internal sealed partial class RuntimeState
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var trimmedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return SessionVisualTreeIngestionResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -430,7 +453,8 @@ internal sealed partial class RuntimeState
             if (discardIfUnchanged)
             {
                 var lastMatchingSnapshot = session.VisualTreeSnapshots.LastOrDefault(candidate =>
-                    VisualTreeSnapshotContentFingerprint.RepresentsSameVisualTree(candidate, normalizedSnapshot));
+                                VisualTreeSnapshotContentFingerprint.RepresentsSameVisualTree(candidate, normalizedSnapshot));
+
                 if (lastMatchingSnapshot is not null
                     && string.Equals(
                         VisualTreeSnapshotContentFingerprint.Compute(lastMatchingSnapshot),
@@ -438,6 +462,7 @@ internal sealed partial class RuntimeState
                         StringComparison.Ordinal))
                 {
                     log.Info($"session_visual_tree_snapshot_discarded sessionId={trimmedSessionId} snapshotId={normalizedSnapshot.SnapshotId} matchesSnapshotId={lastMatchingSnapshot.SnapshotId}");
+
                     return SessionVisualTreeIngestionResult.Discarded(
                         $"Visual tree snapshot '{normalizedSnapshot.SnapshotId}' matched the previous snapshot and was discarded.");
                 }
@@ -445,6 +470,7 @@ internal sealed partial class RuntimeState
 
             var existingIndex = session.VisualTreeSnapshots.FindIndex(candidate =>
                 string.Equals(candidate.SnapshotId, normalizedSnapshot.SnapshotId, StringComparison.Ordinal));
+
             if (existingIndex >= 0)
             {
                 session.VisualTreeSnapshots[existingIndex] = normalizedSnapshot;
@@ -462,6 +488,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_visual_tree_snapshot_saved sessionId={trimmedSessionId} snapshotId={normalizedSnapshot.SnapshotId} nodeCount={normalizedSnapshot.NodeCount} isUpdate={wasUpdated}");
+
         return SessionVisualTreeIngestionResult.Saved(
             $"Visual tree snapshot '{normalizedSnapshot.SnapshotId}' saved for session '{trimmedSessionId}'.");
     }
@@ -480,6 +507,7 @@ internal sealed partial class RuntimeState
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectoryPath);
 
         var trimmedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -491,6 +519,7 @@ internal sealed partial class RuntimeState
         }
 
         string appId;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -515,6 +544,7 @@ internal sealed partial class RuntimeState
         }
 
         var wasUpdated = false;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -524,6 +554,7 @@ internal sealed partial class RuntimeState
 
             var existingIndex = session.ArtifactSnapshots.FindIndex(candidate =>
                 string.Equals(candidate.SnapshotId, normalizedSnapshot.SnapshotId, StringComparison.Ordinal));
+
             if (existingIndex >= 0)
             {
                 session.ArtifactSnapshots[existingIndex] = normalizedSnapshot;
@@ -557,6 +588,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_artifact_snapshot_saved sessionId={trimmedSessionId} snapshotId={normalizedSnapshot.SnapshotId} fileCount={normalizedSnapshot.FileCount} byteCount={normalizedSnapshot.ByteCount} isUpdate={wasUpdated}");
+
         return OperationResult.Success($"Artifact snapshot '{normalizedSnapshot.SnapshotId}' saved for session '{trimmedSessionId}'.");
     }
 
@@ -574,6 +606,7 @@ internal sealed partial class RuntimeState
 
         AppSessionSnapshot sourceSnapshot;
         AppSessionSnapshot extractedSnapshot;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -587,8 +620,12 @@ internal sealed partial class RuntimeState
             }
 
             if (SessionTimelineTransformer.SplitsVideoRecording(session.VideoRecordings, rangeStartUtc, rangeEndUtc))
+            {
                 return SessionExtractionResult.Failure("This range cuts through a video recording. Select the whole recording; partial video extraction is not supported yet.");
+            }
+
             sourceSnapshot = SessionStateMapper.CreateSnapshot(session);
+
             var extractedSessionId = ResolveImportedSessionId(
                 $"{sourceSnapshot.SessionId}-extract",
                 sourceSnapshot.AppId);
@@ -624,6 +661,7 @@ internal sealed partial class RuntimeState
 
         QueueSessionUpdated(extractedSnapshot.SessionId);
         log.Info($"session_extracted sourceSessionId={sourceSnapshot.SessionId} extractedSessionId={extractedSnapshot.SessionId} startUtc={rangeStartUtc:O} endUtc={rangeEndUtc:O} sourceAnnotationId={sourceAnnotation?.AnnotationId ?? string.Empty}");
+
         return SessionExtractionResult.Success(
             $"Extracted session {extractedSnapshot.SessionId} from {sourceSnapshot.SessionId}.",
             extractedSnapshot);
@@ -643,6 +681,7 @@ internal sealed partial class RuntimeState
 
         var trimmedSessionId = sessionId.Trim();
         var trimmedAnnotationId = annotationId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -657,6 +696,7 @@ internal sealed partial class RuntimeState
 
             var annotationIndex = session.Annotations.FindIndex(annotation =>
                 string.Equals(annotation.AnnotationId, trimmedAnnotationId, StringComparison.Ordinal));
+
             if (annotationIndex < 0)
             {
                 return OperationResult.Failure($"Annotation '{trimmedAnnotationId}' was not found for session '{trimmedSessionId}'.");
@@ -668,6 +708,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_annotation_deleted sessionId={trimmedSessionId} annotationId={trimmedAnnotationId}");
+
         return OperationResult.Success($"Annotation '{trimmedAnnotationId}' deleted.");
     }
 
@@ -685,6 +726,7 @@ internal sealed partial class RuntimeState
 
         var trimmedSessionId = sessionId.Trim();
         var trimmedAnalysisId = analysisId.Trim();
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -699,6 +741,7 @@ internal sealed partial class RuntimeState
 
             var analysisIndex = session.Analyses.FindIndex(analysis =>
                 string.Equals(analysis.AnalysisId, trimmedAnalysisId, StringComparison.Ordinal));
+
             if (analysisIndex < 0)
             {
                 return OperationResult.Failure($"Analysis '{trimmedAnalysisId}' was not found for session '{trimmedSessionId}'.");
@@ -710,6 +753,7 @@ internal sealed partial class RuntimeState
 
         PersistAndBroadcast(trimmedSessionId);
         log.Info($"session_analysis_deleted sessionId={trimmedSessionId} analysisId={trimmedAnalysisId}");
+
         return OperationResult.Success($"Analysis '{trimmedAnalysisId}' deleted.");
     }
 
@@ -728,6 +772,7 @@ internal sealed partial class RuntimeState
         }
 
         var normalizedSessionId = sessionId.Trim();
+
         if (!EnsureSessionLoaded(normalizedSessionId))
         {
             return SessionNormalizationResult.Failure($"Session '{normalizedSessionId}' was not found.");
@@ -736,6 +781,7 @@ internal sealed partial class RuntimeState
         string appId;
         SessionImageFrame[] images;
         SessionVisualTreeSnapshot[] visualTrees;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(normalizedSessionId, out var session))
@@ -767,6 +813,7 @@ internal sealed partial class RuntimeState
         SessionNormalizationChanges changes;
         cancellationToken.ThrowIfCancellationRequested();
         report?.Invoke(new("Updating session evidence references…"));
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(normalizedSessionId, out var session))
@@ -781,6 +828,7 @@ internal sealed partial class RuntimeState
             }
 
             changes = sessionNormalizationService.Apply(session, plan);
+
             if (!changes.HasChanges)
             {
                 return SessionNormalizationResult.Success(
@@ -797,14 +845,14 @@ internal sealed partial class RuntimeState
         QueueSessionUpdated(normalizedSessionId);
         log.Info(
             $"session_normalized sessionId={normalizedSessionId} "
-            + $"removedScreenshotCount={changes.RemovedScreenshotCount} "
-            + $"removedVisualTreeSnapshotCount={changes.RemovedVisualTreeSnapshotCount}");
+                + $"removedScreenshotCount={changes.RemovedScreenshotCount} "
+                + $"removedVisualTreeSnapshotCount={changes.RemovedVisualTreeSnapshotCount}");
 
         return SessionNormalizationResult.Success(
             $"Normalized session '{normalizedSessionId}': removed {changes.RemovedScreenshotCount:N0} duplicate "
-            + $"{(changes.RemovedScreenshotCount == 1 ? "screenshot" : "screenshots")} and "
-            + $"{changes.RemovedVisualTreeSnapshotCount:N0} duplicate "
-            + $"{(changes.RemovedVisualTreeSnapshotCount == 1 ? "visual tree" : "visual trees")}.",
+                + $"{(changes.RemovedScreenshotCount == 1 ? "screenshot" : "screenshots")} and "
+                + $"{changes.RemovedVisualTreeSnapshotCount:N0} duplicate "
+                + $"{(changes.RemovedVisualTreeSnapshotCount == 1 ? "visual tree" : "visual trees")}.",
             changes.RemovedScreenshotCount,
             changes.RemovedVisualTreeSnapshotCount);
     }
@@ -833,6 +881,7 @@ internal sealed partial class RuntimeState
 
         var trimmedSessionId = sessionId.Trim();
         report?.Invoke(new("Loading session evidence…"));
+
         if (!EnsureSessionLoaded(trimmedSessionId))
         {
             return OperationResult.Failure($"Session '{trimmedSessionId}' was not found.");
@@ -853,7 +902,10 @@ internal sealed partial class RuntimeState
             }
 
             if (SessionTimelineTransformer.SplitsVideoRecording(session.VideoRecordings, rangeStartUtc, rangeEndUtc))
+            {
                 return OperationResult.Failure("This range cuts through a video recording. Select the whole recording; partial video trimming is not supported yet.");
+            }
+
             if (!SessionTimelineTransformer.ApplyTimelineTrim(session, rangeStartUtc, rangeEndUtc, mode, report))
             {
                 return OperationResult.Success("Session timeline is unchanged.");
@@ -867,6 +919,7 @@ internal sealed partial class RuntimeState
         sessionCaptureStore.SaveAndPruneDetachedContent(snapshot, message => report?.Invoke(new(message)));
         QueueSessionUpdated(trimmedSessionId);
         log.Info($"session_timeline_trimmed sessionId={trimmedSessionId} mode={mode} startUtc={rangeStartUtc:O} endUtc={rangeEndUtc:O}");
+
         return OperationResult.Success(mode == SessionTimelineTrimMode.CutSelection
             ? "Cut the selected timeline range from the session."
             : "Trimmed the session to the selected timeline range.");
@@ -897,6 +950,7 @@ internal sealed partial class RuntimeState
         }
 
         var deletedPersistedCapture = sessionCaptureStore.Delete(sessionId);
+
         if (removedSession is null && !deletedPersistedCapture)
         {
             return OperationResult.Failure($"Session '{sessionId}' was not found.");
@@ -923,7 +977,7 @@ internal sealed partial class RuntimeState
 
         SessionDeleted?.Invoke(this, sessionId);
         log.Info($"session_deleted sessionId={sessionId}");
+
         return OperationResult.Success($"Session '{sessionId}' deleted.");
     }
-
 }

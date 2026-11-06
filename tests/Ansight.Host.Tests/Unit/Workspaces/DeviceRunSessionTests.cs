@@ -11,7 +11,11 @@ public sealed class DeviceRunSessionTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "core-device-id", "iPhone",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Physical,
+            ExecutionMode = "device"
+        });
         Assert.True(state.TryGetSessionSnapshot(id, out var session));
         Assert.False(session!.DeviceProfile!.Device!.IsVirtual);
         Assert.False(session.DeviceProfile.Device.IsEmulator);
@@ -24,7 +28,11 @@ public sealed class DeviceRunSessionTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("android", "R58N123", "Pixel",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Device, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Device,
+            ExecutionMode = "device"
+        });
         Assert.True(state.TryGetSessionSnapshot(id, out var session));
         Assert.False(session!.DeviceProfile!.Device!.IsVirtual);
         Assert.False(session.DeviceProfile.Device.IsEmulator);
@@ -41,8 +49,12 @@ public sealed class DeviceRunSessionTests
         var device = new DeviceDescriptor(Guid.NewGuid().ToString(), "Phone", "ios", "test-runtime", "booted", true, true, DeviceKinds.Simulator);
         var claim = DeviceExecutionClaim.Acquire(device);
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("ios", device.Identifier, device.Name, "test.app", false, false, true)
-            { DeviceKind = DeviceKinds.Simulator, ExecutionMode = "device" });
+        {
+            DeviceKind = DeviceKinds.Simulator,
+            ExecutionMode = "device"
+        });
         Assert.True(state.TryGetSessionSnapshot(id, out var session));
+
         var captures = new CaptureManager(state, failStop);
         var finalized = 0;
         var releases = 0;
@@ -58,6 +70,7 @@ public sealed class DeviceRunSessionTests
                 finalized++;
             }
         };
+
         var lease = new DeviceRunSession(session!, state, captures, claim,
             drainTriggers: (sessionId, _) =>
             {
@@ -65,20 +78,32 @@ public sealed class DeviceRunSessionTests
                 Assert.False(state.IsDeviceSessionActive(id));
                 Assert.Equal(0, captures.Stops);
                 drained = true;
+
                 return Task.CompletedTask;
             }, releaseResources: () =>
             {
                 releases++;
+
                 return Task.CompletedTask;
             }, stopAdditionalEvidence: () =>
             {
                 Assert.True(state.IsDeviceSessionActive(id));
                 instrumentsStopped = true;
+
                 return Task.CompletedTask;
             });
-        if (failStop) await Assert.ThrowsAsync<IOException>(async () => await lease.DisposeAsync());
-        else await lease.DisposeAsync();
+
+        if (failStop)
+        {
+            await Assert.ThrowsAsync<IOException>(async () => await lease.DisposeAsync());
+        }
+        else
+        {
+            await lease.DisposeAsync();
+        }
+
         Assert.False(state.IsDeviceSessionActive(id));
+
         using var replacement = DeviceExecutionClaim.Acquire(device);
         await lease.DisposeAsync();
         Assert.Equal(1, captures.Stops);
@@ -86,22 +111,55 @@ public sealed class DeviceRunSessionTests
         Assert.Equal(1, releases);
     }
 
-    private sealed class CaptureManager(IRuntimeState state, bool failStop) : IExternalSessionScreenshotCaptureManager
+    private sealed class CaptureManager : IExternalSessionScreenshotCaptureManager
     {
-        public event EventHandler<ExternalSessionScreenshotCaptureFailedEventArgs>? CaptureFailed { add { } remove { } }
+        private readonly IRuntimeState state;
+        private readonly bool failStop;
+
+        public CaptureManager(IRuntimeState state, bool failStop)
+        {
+            this.state = state;
+            this.failStop = failStop;
+        }
+
+        public event EventHandler<ExternalSessionScreenshotCaptureFailedEventArgs>? CaptureFailed
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
         public int Stops { get; private set; }
+
         public Task<ExternalSessionScreenshotCapturePolicy> AttachAsync(string sessionId, DeviceAppProfile? profile,
             string? profileJson, ExternalSessionScreenshotCaptureRequest captureRequest, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+                    => throw new NotSupportedException();
+
         public IDisposable BeginTestRun(string sessionId) => throw new NotSupportedException();
+
         public IDisposable SuspendPeriodicCapture(string sessionId) => throw new NotSupportedException();
+
         public bool IsPeriodicCaptureSuspended(string sessionId) => false;
-        public event EventHandler<string>? PeriodicCaptureChanged { add { } remove { } }
+
+        public event EventHandler<string>? PeriodicCaptureChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public void SetInterval(string sessionId, int intervalMilliseconds) => throw new NotSupportedException();
+
         public Task StopAsync(string sessionId, string reason)
         {
             Stops++;
             Assert.False(state.IsDeviceSessionActive(sessionId));
+
             return failStop ? Task.FromException(new IOException("Capture stop failed")) : Task.CompletedTask;
         }
     }

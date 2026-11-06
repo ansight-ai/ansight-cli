@@ -16,6 +16,7 @@ public sealed class LocalCaptureUsageTests
         Assert.True(usage.Register("local-only-session", started, "sdk", business));
         usage.RecordSavedEvidence("local-only-session", started, started.AddMinutes(1));
         usage.Flush(true);
+
         var first = Assert.Single(Entries(directory.Path));
         var properties = Properties(first);
         Assert.Equal(1, properties["capture_count"]!.GetValue<int>());
@@ -28,6 +29,7 @@ public sealed class LocalCaptureUsageTests
         usage = new LocalCaptureUsage(directory.Path);
         usage.RecordSavedEvidence("local-only-session", started, DateTimeOffset.UtcNow);
         usage.Flush(true);
+
         var retry = Assert.Single(Entries(directory.Path));
         Assert.Equal(first.Envelope.InsertId, retry.Envelope.InsertId);
         Assert.Equal(1, Properties(retry)["capture_count"]!.GetValue<int>());
@@ -38,6 +40,7 @@ public sealed class LocalCaptureUsageTests
     {
         using var directory = TestDirectory.Create();
         Enable(directory.Path);
+
         var started = DateTimeOffset.UtcNow.AddMinutes(-1);
         var usage = new LocalCaptureUsage(directory.Path);
         usage.Register("old-owner", started, "sdk");
@@ -63,11 +66,17 @@ public sealed class LocalCaptureUsageTests
         using var directory = TestDirectory.Create();
         var oldAccount = Enable(directory.Path);
         Enable(directory.Path);
+
         var usage = new LocalCaptureUsage(directory.Path);
         var started = DateTimeOffset.UtcNow.AddMinutes(-1);
         Assert.True(usage.Register("current-capture", started, "sdk"));
         Assert.True(usage.RecordSavedEvidence("current-capture", started, DateTimeOffset.UtcNow));
-        using (AnalyticsAccount.Capture(directory.Path, oldAccount)) usage.Flush(true);
+
+        using (AnalyticsAccount.Capture(directory.Path, oldAccount))
+        {
+            usage.Flush(true);
+        }
+
         usage.Flush(true);
         Assert.Equal(1, Properties(Assert.Single(Entries(directory.Path)))["capture_count"]!.GetValue<int>());
     }
@@ -77,6 +86,7 @@ public sealed class LocalCaptureUsageTests
     {
         using var directory = TestDirectory.Create();
         Enable(directory.Path);
+
         var business = Guid.NewGuid().ToString("D");
         var started = DateTimeOffset.UtcNow.AddMinutes(-1);
         await Task.WhenAll(Enumerable.Range(0, 24).Select(index => Task.Run(() =>
@@ -86,6 +96,7 @@ public sealed class LocalCaptureUsageTests
             Assert.True(usage.RecordSavedEvidence($"capture-{index}", started, DateTimeOffset.UtcNow));
         })));
         new LocalCaptureUsage(directory.Path).Flush(true);
+
         var properties = Properties(Assert.Single(Entries(directory.Path)));
         Assert.Equal(24, properties["capture_count"]!.GetValue<int>());
         Assert.Equal(12, properties["sdk_count"]!.GetValue<int>());
@@ -97,10 +108,12 @@ public sealed class LocalCaptureUsageTests
     {
         using var directory = TestDirectory.Create();
         Enable(directory.Path);
+
         var usage = new LocalCaptureUsage(directory.Path);
         var started = DateTimeOffset.UtcNow.AddMinutes(-1);
         usage.Register("retry", started, "device");
         usage.RecordSavedEvidence("retry", started, DateTimeOffset.UtcNow);
+
         var path = Path.Combine(directory.Path, "analytics", "local-captures", "state.json");
         var original = File.ReadAllText(path);
         File.WriteAllText(path, "invalid JSON");
@@ -122,20 +135,25 @@ public sealed class LocalCaptureUsageTests
         var personal = Guid.NewGuid();
         using var teams = JsonDocument.Parse(JsonSerializer.Serialize(new[]
         {
-            new { id = first, workspace_kind = "organisation", allowed_app_ids = new[] { "app" } },
-            new { id = second, workspace_kind = "organisation", allowed_app_ids = new[] { "*" } },
-            new { id = personal, workspace_kind = "personal", allowed_app_ids = new[] { "*" } }
+            new {id = first, workspace_kind = "organisation", allowed_app_ids = new[] {"app" }},
+            new {id = second, workspace_kind = "organisation", allowed_app_ids = new[] {"*" }},
+            new {id = personal, workspace_kind = "personal", allowed_app_ids = new[] {"*" }}
         }));
         CaptureBusinessAttribution.SaveVerifiedMemberships(directory.Path, account, teams.RootElement);
         Assert.Equal(first.ToString("D"), CaptureBusinessAttribution.Resolve(directory.Path, "app", first.ToString("D")));
         Assert.Null(CaptureBusinessAttribution.Resolve(directory.Path, "other", first.ToString("D")));
         Assert.Null(CaptureBusinessAttribution.Resolve(directory.Path, "app", personal.ToString("D")));
+
         using (CaptureBusinessAttribution.Select(directory.Path, "app", second))
         {
             Assert.Equal(second.ToString("D"), CaptureBusinessAttribution.Resolve(directory.Path, "app", first.ToString("D")));
+
             using (CaptureBusinessAttribution.Select(directory.Path, "app", first))
+            {
                 Assert.Null(CaptureBusinessAttribution.Resolve(directory.Path, "app", first.ToString("D")));
+            }
         }
+
         Enable(directory.Path);
         Assert.Null(CaptureBusinessAttribution.Resolve(directory.Path, "app", first.ToString("D")));
     }
@@ -145,9 +163,12 @@ public sealed class LocalCaptureUsageTests
         var account = Guid.NewGuid().ToString("D");
         AnalyticsAccount.Update(directory, account);
         new AnalyticsSettingsStore(directory).SetDetailedTrackingEnabled(true);
+
         return account;
     }
+
     private static IReadOnlyList<OutboxEntry> Entries(string directory) => new EventOutbox(Path.Combine(directory, "analytics"))
         .Load(250).Where(entry => entry.Envelope.EventName == LocalCaptureUsage.EventName).ToArray();
+
     private static JsonObject Properties(OutboxEntry entry) => JsonNode.Parse(File.ReadAllText(entry.Path))!["properties"]!.AsObject();
 }

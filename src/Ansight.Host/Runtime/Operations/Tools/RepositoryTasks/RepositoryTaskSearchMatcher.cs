@@ -46,6 +46,7 @@ internal static class RepositoryTaskSearchMatcher
     public static RepositoryTaskSearchMatch? Match(RepositoryTaskDefinition task, string? query)
     {
         var evaluation = Evaluate(task, query);
+
         return evaluation.ExclusionReason is null ? evaluation : null;
     }
 
@@ -61,6 +62,7 @@ internal static class RepositoryTaskSearchMatcher
             .Where(term => !ignoredQueryWords.Contains(term))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
         if (queryTerms.Length == 0)
         {
             return new RepositoryTaskSearchMatch(
@@ -78,14 +80,18 @@ internal static class RepositoryTaskSearchMatcher
         var totalQueryWeight = 0d;
         var matchedQueryWeight = 0d;
         var weightedMatchQuality = 0d;
+
         foreach (var queryTerm in queryTerms)
         {
             var queryWeight = behavioralSynonyms.ContainsKey(queryTerm) ? 1.2 : 1;
             totalQueryWeight += queryWeight;
+
             var evidence = FindBestEvidence(queryTerm, indexedTerms);
+
             if (evidence is null)
             {
                 unmatchedTerms.Add(queryTerm);
+
                 // A parameterized task describes the operation, not every possible input value.
                 // Keep unknown values in the evidence, but limit their ranking cost only when
                 // the query independently names the task's intent. Actions keep their full weight.
@@ -93,6 +99,7 @@ internal static class RepositoryTaskSearchMatcher
                 {
                     totalQueryWeight -= queryWeight * 0.8;
                 }
+
                 continue;
             }
 
@@ -117,8 +124,9 @@ internal static class RepositoryTaskSearchMatcher
             Math.Max(
                 0,
                 (((coverage * 0.75) + (matchQuality * 0.25)) * 100)
-                - entityMismatchPenalty),
+                    - entityMismatchPenalty),
             1);
+
         return new RepositoryTaskSearchMatch(
             task,
             score,
@@ -140,16 +148,15 @@ internal static class RepositoryTaskSearchMatcher
         IReadOnlyList<string>? keywords = null)
     {
         if (!string.IsNullOrWhiteSpace(query) && Regex.IsMatch(
-                query,
-                $@"(?<![\w.-]){Regex.Escape(taskId)}(?![\w.-])",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            query,
+            $@"(?<![\w.-]){Regex.Escape(taskId)}(?![\w.-])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
             return true;
         }
 
         var queryTerms = Tokenize(query, 4096);
-        var intentTerms = new[] { feature, taskId, title }
-            .Concat(keywords ?? [])
+        var intentTerms = new[] { feature, taskId, title }.Concat(keywords ?? [])
             .SelectMany(value => Tokenize(value, MaximumIndexedTermsPerValue))
             .Where(term => !taskContextWords.Contains(term))
             .Distinct(StringComparer.Ordinal)
@@ -159,27 +166,51 @@ internal static class RepositoryTaskSearchMatcher
         // to disprove. A domain-specific task needs more than incidental open/page overlap.
         return intentTerms.Length == 0 || intentTerms.Any(intent => queryTerms.Any(term =>
             CreateEvidence(term, new RepositoryTaskIndexedTerm(intent, 1, "feature")) is
-                { Kind: not RepositoryTaskSearchMatchKind.Fuzzy }
-                or { Kind: RepositoryTaskSearchMatchKind.Fuzzy, EditDistance: 1 }));
+        { Kind: not RepositoryTaskSearchMatchKind.Fuzzy } or { Kind: RepositoryTaskSearchMatchKind.Fuzzy, EditDistance: 1 }));
     }
 
     private static bool HasStringInput(JsonObject inputSchema)
         => inputSchema["properties"] is JsonObject properties
-           && properties.Any(property => property.Value is JsonObject propertySchema
-               && propertySchema["type"] is JsonValue type
-               && type.TryGetValue<string>(out var value) && value == "string");
+            && properties.Any(property => property.Value is JsonObject propertySchema
+                && propertySchema["type"] is JsonValue type
+                && type.TryGetValue<string>(out var value) && value == "string");
 
     private static HashSet<string> CreateTaskContextWords()
     {
         var words = new HashSet<string>(ignoredQueryWords, StringComparer.Ordinal)
         {
-            "app", "area", "card", "complete", "current", "exact", "focus", "focused", "load", "map", "my",
-            "named", "open", "page", "ready", "screen", "select", "selected", "selection", "stable", "state", "task",
-            "ui", "validate", "verify", "workflow", "your"
+            "app",
+            "area",
+            "card",
+            "complete",
+            "current",
+            "exact",
+            "focus",
+            "focused",
+            "load",
+            "map",
+            "my",
+            "named",
+            "open",
+            "page",
+            "ready",
+            "screen",
+            "select",
+            "selected",
+            "selection",
+            "stable",
+            "state",
+            "task",
+            "ui",
+            "validate",
+            "verify",
+            "workflow",
+            "your"
         };
         words.UnionWith(behavioralSynonyms["open"]);
         words.UnionWith(behavioralSynonyms["validate"]);
         words.UnionWith(behavioralSynonyms["select"]);
+
         return words;
     }
 
@@ -188,21 +219,24 @@ internal static class RepositoryTaskSearchMatcher
         IReadOnlyList<string> queryTerms)
     {
         var taskEntities = BuildTaskEntities(task);
+
         return taskEntities.Count > 0
-               && !taskEntities.Any(entity => entity.All(entityTerm => queryTerms.Any(
-                   queryTerm => AreTermsEquivalent(entityTerm, queryTerm))));
+            && !taskEntities.Any(entity => entity.All(entityTerm => queryTerms.Any(
+                queryTerm => AreTermsEquivalent(entityTerm, queryTerm))));
     }
 
     private static IReadOnlyList<IReadOnlyList<string>> BuildTaskEntities(
         RepositoryTaskDefinition task)
     {
         var entities = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
         foreach (var keyword in task.Keywords)
         {
             AddTaskEntity(entities, keyword);
         }
 
         AddInputSchemaEntities(entities, task.InputSchema);
+
         return entities.Values.ToArray();
     }
 
@@ -252,6 +286,7 @@ internal static class RepositoryTaskSearchMatcher
             .Where(term => !ignoredQueryWords.Contains(term))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
         if (terms.Length == 0
             || (!allowSingleTerm && terms.Length < 2)
             || terms.All(genericEntityWords.Contains))
@@ -267,6 +302,7 @@ internal static class RepositoryTaskSearchMatcher
         var evidence = CreateEvidence(
             left,
             new RepositoryTaskIndexedTerm(right, 1, "query"));
+
         return evidence is not null && evidence.MatchStrength >= 0.8;
     }
 
@@ -276,6 +312,7 @@ internal static class RepositoryTaskSearchMatcher
         AddIndexedTerms(indexedTerms, task.TaskId, 1, "taskId");
         AddIndexedTerms(indexedTerms, task.Title, 1, "title");
         AddIndexedTerms(indexedTerms, task.Feature, 1, "feature");
+
         foreach (var keyword in task.Keywords)
         {
             AddIndexedTerms(indexedTerms, keyword, 1, "keywords");
@@ -283,6 +320,7 @@ internal static class RepositoryTaskSearchMatcher
 
         AddIndexedTerms(indexedTerms, task.Description, 0.95, "description");
         AddInputSchemaTerms(indexedTerms, task.InputSchema);
+
         return indexedTerms.Values.ToArray();
     }
 
@@ -309,6 +347,7 @@ internal static class RepositoryTaskSearchMatcher
                         }
                     }
                 }
+
                 AddInputSchemaTerms(indexedTerms, property.Value);
             }
         }
@@ -341,9 +380,11 @@ internal static class RepositoryTaskSearchMatcher
         IReadOnlyList<RepositoryTaskIndexedTerm> indexedTerms)
     {
         RepositoryTaskSearchEvidence? bestEvidence = null;
+
         foreach (var indexedTerm in indexedTerms)
         {
             var evidence = CreateEvidence(queryTerm, indexedTerm);
+
             if (evidence is null)
             {
                 continue;
@@ -351,7 +392,7 @@ internal static class RepositoryTaskSearchMatcher
 
             if (bestEvidence is null
                 || (evidence.MatchStrength * evidence.IndexedWeight)
-                > (bestEvidence.MatchStrength * bestEvidence.IndexedWeight))
+                    > (bestEvidence.MatchStrength * bestEvidence.IndexedWeight))
             {
                 bestEvidence = evidence;
             }
@@ -384,6 +425,7 @@ internal static class RepositoryTaskSearchMatcher
 
         var shorterLength = Math.Min(queryTerm.Length, indexedTerm.Term.Length);
         var longerLength = Math.Max(queryTerm.Length, indexedTerm.Term.Length);
+
         if (shorterLength >= 3
             && (queryTerm.StartsWith(indexedTerm.Term, StringComparison.Ordinal)
                 || indexedTerm.Term.StartsWith(queryTerm, StringComparison.Ordinal))
@@ -417,18 +459,21 @@ internal static class RepositoryTaskSearchMatcher
         var maximumDistance = indexedTerm.Source == "description"
             ? 0
             : MaximumFuzzyDistance(queryTerm.Length, indexedTerm.Term.Length);
+
         if (maximumDistance == 0)
         {
             return null;
         }
 
         var distance = ComputeLevenshteinDistance(queryTerm, indexedTerm.Term, maximumDistance);
+
         if (distance > maximumDistance)
         {
             return null;
         }
 
         var similarity = 1 - ((double)distance / longerLength);
+
         return new RepositoryTaskSearchEvidence(
             queryTerm,
             indexedTerm.Term,
@@ -443,6 +488,7 @@ internal static class RepositoryTaskSearchMatcher
     {
         var shorter = left.Length <= right.Length ? left : right;
         var longer = left.Length > right.Length ? left : right;
+
         return longer[shorter.Length..] is "s" or "es" or "ed" or "ing" or "ly"
             or "ion" or "ions" or "tion" or "tions" or "ation" or "ations";
     }
@@ -451,6 +497,7 @@ internal static class RepositoryTaskSearchMatcher
     {
         var shorterLength = Math.Min(leftLength, rightLength);
         var longerLength = Math.Max(leftLength, rightLength);
+
         if (shorterLength < 4 || longerLength - shorterLength > 2)
         {
             return 0;
@@ -468,6 +515,7 @@ internal static class RepositoryTaskSearchMatcher
 
         var previousRow = new int[right.Length + 1];
         var currentRow = new int[right.Length + 1];
+
         for (var column = 0; column <= right.Length; column++)
         {
             previousRow[column] = column;
@@ -476,7 +524,9 @@ internal static class RepositoryTaskSearchMatcher
         for (var row = 1; row <= left.Length; row++)
         {
             currentRow[0] = row;
+
             var rowMinimum = currentRow[0];
+
             for (var column = 1; column <= right.Length; column++)
             {
                 var substitutionCost = left[row - 1] == right[column - 1] ? 0 : 1;
@@ -505,6 +555,7 @@ internal static class RepositoryTaskSearchMatcher
         var indexedWords = indexedTerms
             .Select(indexedTerm => indexedTerm.Term)
             .ToHashSet(StringComparer.Ordinal);
+
         return indexedWords
             .Where(behavioralSynonyms.ContainsKey)
             .SelectMany(word => behavioralSynonyms[word])
@@ -518,8 +569,8 @@ internal static class RepositoryTaskSearchMatcher
     private static IReadOnlyDictionary<string, HashSet<string>> CreateBehavioralSynonyms()
     {
         string[][] groups =
-        [
-            ["search", "find", "locate", "lookup", "discover", "query"],
+            [
+                ["search", "find", "locate", "lookup", "discover", "query"],
             ["open", "launch", "enter", "show", "view", "display", "visit", "navigate", "go"],
             ["select", "choose", "pick", "tap", "press", "activate"],
             ["close", "dismiss", "exit"],
@@ -540,8 +591,9 @@ internal static class RepositoryTaskSearchMatcher
             ["reset", "restore", "restart"],
             ["guide", "walkthrough", "tour", "viewer"],
             ["detail", "details", "information", "info", "overview"]
-        ];
+            ];
         var synonymsByWord = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
         foreach (var group in groups)
         {
             foreach (var word in group)
@@ -567,7 +619,7 @@ internal static class RepositoryTaskSearchMatcher
         var words = new HashSet<string>(ignoredQueryWords, StringComparer.Ordinal);
         words.UnionWith(behavioralSynonyms.Keys);
         words.UnionWith(
-        [
+            [
             "3d",
             "account",
             "app",
@@ -591,6 +643,7 @@ internal static class RepositoryTaskSearchMatcher
             "test",
             "user"
         ]);
+
         return words;
     }
 
@@ -604,9 +657,11 @@ internal static class RepositoryTaskSearchMatcher
         var normalized = value.Normalize(NormalizationForm.FormD);
         var terms = new List<string>();
         var builder = new StringBuilder();
+
         for (var index = 0; index < normalized.Length && terms.Count < maximumTerms; index++)
         {
             var character = normalized[index];
+
             if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
             {
                 continue;
@@ -621,10 +676,11 @@ internal static class RepositoryTaskSearchMatcher
             var previous = index > 0 ? normalized[index - 1] : '\0';
             var next = index + 1 < normalized.Length ? normalized[index + 1] : '\0';
             var startsWord = builder.Length > 0
-                             && ((char.IsDigit(character) && char.IsLetter(previous))
-                                 || (char.IsUpper(character)
-                                     && (char.IsLower(previous)
-                                         || (char.IsUpper(previous) && char.IsLower(next)))));
+                && ((char.IsDigit(character) && char.IsLetter(previous))
+                    || (char.IsUpper(character)
+                        && (char.IsLower(previous)
+                            || (char.IsUpper(previous) && char.IsLower(next)))));
+
             if (startsWord)
             {
                 FlushToken(builder, terms);
@@ -654,38 +710,4 @@ internal static class RepositoryTaskSearchMatcher
         terms.Add(builder.ToString());
         builder.Clear();
     }
-}
-
-internal sealed record RepositoryTaskSearchMatch(
-    RepositoryTaskDefinition Task,
-    double Score,
-    double Coverage,
-    IReadOnlyList<string> MatchedQueryTerms,
-    IReadOnlyList<string> UnmatchedQueryTerms,
-    IReadOnlyList<RepositoryTaskSearchEvidence> Evidence,
-    IReadOnlyList<string> BehavioralSynonyms)
-{
-    public string? ExclusionReason { get; init; }
-}
-
-internal sealed record RepositoryTaskSearchEvidence(
-    string QueryTerm,
-    string IndexedTerm,
-    string IndexedSource,
-    RepositoryTaskSearchMatchKind Kind,
-    double MatchStrength,
-    double IndexedWeight,
-    int? EditDistance);
-
-internal sealed record RepositoryTaskIndexedTerm(
-    string Term,
-    double Weight,
-    string Source);
-
-internal enum RepositoryTaskSearchMatchKind
-{
-    Exact,
-    Prefix,
-    Synonym,
-    Fuzzy
 }

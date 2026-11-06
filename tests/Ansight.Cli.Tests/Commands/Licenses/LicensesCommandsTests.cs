@@ -20,6 +20,7 @@ public sealed class LicensesCommandsTests
               }
             }
             """);
+
         var packageDirectory = Path.Combine(
             directory.Path,
             "packages",
@@ -73,6 +74,7 @@ public sealed class LicensesCommandsTests
     {
         var manifestPath = Path.Combine(AppContext.BaseDirectory, "ansight.deps.json");
         Assert.True(File.Exists(manifestPath), $"Expected dependency manifest at {manifestPath}.");
+
         using var document = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var catalog = ThirdPartySoftwareCatalog.Load(
             dependencyManifestPath: null,
@@ -88,8 +90,10 @@ public sealed class LicensesCommandsTests
 
             var separatorIndex = library.Name.LastIndexOf('/');
             Assert.True(separatorIndex > 0, $"Unexpected dependency key '{library.Name}'.");
+
             var name = library.Name[..separatorIndex];
             var version = library.Name[(separatorIndex + 1)..];
+
             if (name.Equals("Ansight", StringComparison.OrdinalIgnoreCase)
                 || name.StartsWith("Ansight.", StringComparison.OrdinalIgnoreCase))
             {
@@ -99,8 +103,8 @@ public sealed class LicensesCommandsTests
             Assert.Contains(
                 catalog.Software,
                 entry => entry.Source == "nuget"
-                         && entry.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
-                         && entry.Version == version);
+                    && entry.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                    && entry.Version == version);
         }
     }
 

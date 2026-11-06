@@ -9,15 +9,16 @@ public sealed class UiCommandsTests
     public async Task LongPressPassesSelectorAndExactHoldDuration()
     {
         var result = await UiCommands.RunAsync(CliArguments.Parse([
-            "ui", "long-press", "--automation-id", "card", "--duration-ms", "3500", "--session", "hold-session"]),
+                "ui", "long-press", "--automation-id", "card", "--duration-ms", "3500", "--session", "hold-session"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null), (operation, input, _) =>
-            {
-                Assert.Equal(UiAutomationOperation.LongPress, operation);
-                Assert.Equal("card", input["automationId"]!.GetValue<string>());
-                Assert.Equal(3500, input["durationMs"]!.GetValue<int>());
-                Assert.Equal("hold-session", input["sessionId"]!.GetValue<string>());
-                return Task.FromResult(Success(operation));
-            }, CancellationToken.None);
+                {
+                    Assert.Equal(UiAutomationOperation.LongPress, operation);
+                    Assert.Equal("card", input["automationId"]!.GetValue<string>());
+                    Assert.Equal(3500, input["durationMs"]!.GetValue<int>());
+                    Assert.Equal("hold-session", input["sessionId"]!.GetValue<string>());
+
+                    return Task.FromResult(Success(operation));
+                }, CancellationToken.None);
         Assert.Equal(CliExitCodes.Success, result);
     }
 
@@ -25,15 +26,16 @@ public sealed class UiCommandsTests
     public async Task FrameworkPenPlaybackPassesSurfaceWithoutNativeRecognizer()
     {
         var result = await UiCommands.RunAsync(CliArguments.Parse([
-            "ui", "play-pen", "--file", "demo.pen.json", "--mode", "sdk", "--target", "canvas", "--session", "pen-session"]),
+                "ui", "play-pen", "--file", "demo.pen.json", "--mode", "sdk", "--target", "canvas", "--session", "pen-session"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null), (operation, input, _) =>
-            {
-                Assert.Equal(UiAutomationOperation.PlayPen, operation);
-                Assert.Equal("sdk", input["mode"]!.GetValue<string>());
-                Assert.Equal("canvas", input["target"]!.GetValue<string>());
-                Assert.Null(input["hoverRecognizer"]);
-                return Task.FromResult(Success(operation));
-            }, CancellationToken.None);
+                {
+                    Assert.Equal(UiAutomationOperation.PlayPen, operation);
+                    Assert.Equal("sdk", input["mode"]!.GetValue<string>());
+                    Assert.Equal("canvas", input["target"]!.GetValue<string>());
+                    Assert.Null(input["hoverRecognizer"]);
+
+                    return Task.FromResult(Success(operation));
+                }, CancellationToken.None);
         Assert.Equal(CliExitCodes.Success, result);
     }
 
@@ -41,18 +43,19 @@ public sealed class UiCommandsTests
     public async Task PlayPenResolvesFileAgainstClientWorkingDirectoryAndPassesMode()
     {
         var result = await UiCommands.RunAsync(CliArguments.Parse([
-            "ui", "play-pen", "--file", "fixtures/demo.pen.json", "--mode", "hid+sdk", "--target", "canvas", "--hover-recognizer", "hover", "--session", "pen-session"]),
+                "ui", "play-pen", "--file", "fixtures/demo.pen.json", "--mode", "hid+sdk", "--target", "canvas", "--hover-recognizer", "hover", "--session", "pen-session"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (operation, input, _) =>
-            {
-                Assert.Equal(UiAutomationOperation.PlayPen, operation);
-                Assert.Equal(Path.GetFullPath("fixtures/demo.pen.json"), input["file"]!.GetValue<string>());
-                Assert.Equal("hid+sdk", input["mode"]!.GetValue<string>());
-                Assert.Equal("canvas", input["target"]!.GetValue<string>());
-                Assert.Equal("hover", input["hoverRecognizer"]!.GetValue<string>());
-                Assert.Equal("pen-session", input["sessionId"]!.GetValue<string>());
-                return Task.FromResult(Success(operation));
-            }, CancellationToken.None);
+                {
+                    Assert.Equal(UiAutomationOperation.PlayPen, operation);
+                    Assert.Equal(Path.GetFullPath("fixtures/demo.pen.json"), input["file"]!.GetValue<string>());
+                    Assert.Equal("hid+sdk", input["mode"]!.GetValue<string>());
+                    Assert.Equal("canvas", input["target"]!.GetValue<string>());
+                    Assert.Equal("hover", input["hoverRecognizer"]!.GetValue<string>());
+                    Assert.Equal("pen-session", input["sessionId"]!.GetValue<string>());
+
+                    return Task.FromResult(Success(operation));
+                }, CancellationToken.None);
         Assert.Equal(CliExitCodes.Success, result);
     }
 
@@ -73,6 +76,7 @@ public sealed class UiCommandsTests
                 Assert.Equal("Password", input["automationId"]!.GetValue<string>());
                 Assert.Equal("session-1", input["sessionId"]!.GetValue<string>());
                 Assert.False(input.ContainsKey("value"));
+
                 return Task.FromResult(Success(UiAutomationOperation.Type));
             });
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -92,8 +96,16 @@ public sealed class UiCommandsTests
             {
                 Assert.Equal("com.example.app", input["secretAppId"]!.GetValue<string>());
                 Assert.Equal("login.password", input["secretAlias"]!.GetValue<string>());
-                if (explicitSession) Assert.False(input.ContainsKey("appId"));
-                else Assert.Equal("com.example.app", input["appId"]!.GetValue<string>());
+
+                if (explicitSession)
+                {
+                    Assert.False(input.ContainsKey("appId"));
+                }
+                else
+                {
+                    Assert.Equal("com.example.app", input["appId"]!.GetValue<string>());
+                }
+
                 return Task.FromResult(Success(UiAutomationOperation.Type));
             });
     }
@@ -102,7 +114,7 @@ public sealed class UiCommandsTests
     public async Task ConflictingQualifiedAppReferenceIsRejectedBeforeDispatch()
     {
         await Assert.ThrowsAsync<CliUsageException>(() => UiCommands.RunAsync(CliArguments.Parse([
-            "ui", "type", "--app", "com.other.app", "--automation-id", "Password", "--value", "@secret:com.example.app/password"]),
+                "ui", "type", "--app", "com.other.app", "--automation-id", "Password", "--value", "@secret:com.example.app/password"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (_, _, _) => throw new InvalidOperationException("Must not type"), CancellationToken.None));
     }
@@ -134,6 +146,7 @@ public sealed class UiCommandsTests
             (operation, _, _) =>
             {
                 observedOperation = operation;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -165,6 +178,7 @@ public sealed class UiCommandsTests
             {
                 observedOperation = operation;
                 observedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -194,6 +208,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 invoked = true;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None));
@@ -218,6 +233,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 observedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -253,6 +269,7 @@ public sealed class UiCommandsTests
             CancellationToken.None);
 
         Assert.Equal(CliExitCodes.Failure, exitCode);
+
         var json = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("ansight.ui-operation/v1", json["schema"]!.GetValue<string>());
         Assert.False(json["succeeded"]!.GetValue<bool>());
@@ -274,6 +291,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 invoked = true;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None));
@@ -287,11 +305,11 @@ public sealed class UiCommandsTests
     {
         var exception = await Assert.ThrowsAsync<CliUsageException>(() => UiCommands.RunAsync(
             CliArguments.Parse([
-                "ui", "tap",
+                    "ui", "tap",
                 "--session", "session-001",
                 "--app", "com.example.app",
                 "--automation-id", "SaveButton"
-            ]),
+                ]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (_, _, _) => throw new InvalidOperationException("The host must not be called."),
             CancellationToken.None));
@@ -314,6 +332,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 observedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -328,11 +347,11 @@ public sealed class UiCommandsTests
     {
         var exception = await Assert.ThrowsAsync<CliUsageException>(() => UiCommands.RunAsync(
             CliArguments.Parse([
-                "ui", "assert",
+                    "ui", "assert",
                 "--automation-id", "Toast",
                 "--exists", "true",
                 "--count", "0"
-            ]),
+                ]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (_, _, _) => throw new InvalidOperationException("The host must not be called."),
             CancellationToken.None));
@@ -345,10 +364,10 @@ public sealed class UiCommandsTests
     {
         var exception = await Assert.ThrowsAsync<CliUsageException>(() => UiCommands.RunAsync(
             CliArguments.Parse([
-                "ui", "swipe",
+                    "ui", "swipe",
                 "--start-x", "0.5",
                 "--start-y", "0.8"
-            ]),
+                ]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (_, _, _) => throw new InvalidOperationException("The host must not be called."),
             CancellationToken.None));
@@ -384,6 +403,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 suppliedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -405,6 +425,7 @@ public sealed class UiCommandsTests
             (operation, arguments, _) =>
             {
                 suppliedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);

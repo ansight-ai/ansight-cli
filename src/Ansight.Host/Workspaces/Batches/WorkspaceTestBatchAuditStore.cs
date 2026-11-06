@@ -3,8 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace Ansight.Host.Workspaces.Batches;
 
-internal sealed record WorkspaceTestBatchAuditSaveResult(string? FilePath, string? ErrorMessage);
-
 internal sealed class WorkspaceTestBatchAuditStore
 {
     private const string HistoryDirectoryName = "workspace-test-history";
@@ -28,14 +26,17 @@ internal sealed class WorkspaceTestBatchAuditStore
     public WorkspaceTestBatchAuditSaveResult Save(WorkspaceTestBatchRunAudit audit)
     {
         ArgumentNullException.ThrowIfNull(audit);
+
         try
         {
             PrivateStorageDirectory.Ensure(HistoryDirectoryPath);
+
             var timestamp = audit.StartedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff");
             var filePath = Path.Combine(
                 HistoryDirectoryPath,
                 $"{timestamp}-{NormalizeRunId(audit.BatchRunId)}.json");
             var temporaryPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+
             try
             {
                 File.WriteAllText(temporaryPath, JsonSerializer.Serialize(audit, jsonOptions));
@@ -55,9 +56,9 @@ internal sealed class WorkspaceTestBatchAuditStore
             return new WorkspaceTestBatchAuditSaveResult(filePath, null);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or JsonException
-                                           or NotSupportedException)
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
         {
             return new WorkspaceTestBatchAuditSaveResult(null, exception.Message);
         }
@@ -73,25 +74,27 @@ internal sealed class WorkspaceTestBatchAuditStore
             }
 
             var entries = new List<WorkspaceTestBatchRunHistoryEntry>();
+
             foreach (var filePath in Directory.EnumerateFiles(
-                         HistoryDirectoryPath,
-                         "*.json",
-                         SearchOption.TopDirectoryOnly))
+                HistoryDirectoryPath,
+                "*.json",
+                SearchOption.TopDirectoryOnly))
             {
                 try
                 {
                     var audit = JsonSerializer.Deserialize<WorkspaceTestBatchRunAudit>(
                         File.ReadAllText(filePath),
                         jsonOptions);
+
                     if (audit is not null)
                     {
                         entries.Add(new WorkspaceTestBatchRunHistoryEntry(audit, filePath));
                     }
                 }
                 catch (Exception exception) when (exception is IOException
-                                                   or UnauthorizedAccessException
-                                                   or JsonException
-                                                   or NotSupportedException)
+                    or UnauthorizedAccessException
+                    or JsonException
+                    or NotSupportedException)
                 {
                     // One partial or incompatible record must not hide the remaining history.
                 }
@@ -111,9 +114,11 @@ internal sealed class WorkspaceTestBatchAuditStore
     private static string NormalizeRunId(string runId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
         var normalized = new string(runId.Trim()
             .Where(static character => char.IsLetterOrDigit(character) || character is '-' or '_')
             .ToArray());
+
         if (normalized.Length == 0)
         {
             throw new ArgumentException("Batch run ID must contain a letter or number.", nameof(runId));
@@ -134,8 +139,8 @@ internal sealed class WorkspaceTestBatchAuditStore
             File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
         }
     }

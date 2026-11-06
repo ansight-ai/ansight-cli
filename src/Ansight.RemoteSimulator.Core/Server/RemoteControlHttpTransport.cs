@@ -10,25 +10,29 @@ internal static class RemoteControlHttpTransport
 {
     private const int MaximumHeaderBytes = 16 * 1024;
     private const int MaximumRequestBodyBytes = 64 * 1024;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
 
     public static async Task<HttpRequestData?> ReadRequestAsync(
         Stream stream,
         CancellationToken cancellationToken)
     {
         var rented = ArrayPool<byte>.Shared.Rent(MaximumHeaderBytes);
+
         try
         {
             var headerLength = 0;
+
             while (headerLength < MaximumHeaderBytes)
             {
                 var read = await stream.ReadAsync(rented.AsMemory(headerLength, 1), cancellationToken).ConfigureAwait(false);
+
                 if (read == 0)
                 {
                     return null;
                 }
 
                 headerLength += read;
+
                 if (headerLength >= 4
                     && rented[headerLength - 4] == '\r'
                     && rented[headerLength - 3] == '\n'
@@ -46,21 +50,25 @@ internal static class RemoteControlHttpTransport
 
             var headerText = Encoding.ASCII.GetString(rented, 0, headerLength);
             var lines = headerText.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+
             if (lines.Length == 0)
             {
                 return null;
             }
 
             var requestParts = lines[0].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+
             if (requestParts.Length != 3)
             {
                 throw new InvalidOperationException("Malformed HTTP request line.");
             }
 
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var line in lines.Skip(1))
             {
                 var separator = line.IndexOf(':');
+
                 if (separator <= 0)
                 {
                     continue;
@@ -81,9 +89,11 @@ internal static class RemoteControlHttpTransport
 
             var body = new byte[contentLength];
             var offset = 0;
+
             while (offset < body.Length)
             {
                 var read = await stream.ReadAsync(body.AsMemory(offset), cancellationToken).ConfigureAwait(false);
+
                 if (read == 0)
                 {
                     throw new InvalidOperationException("HTTP request body ended unexpectedly.");
@@ -107,6 +117,7 @@ internal static class RemoteControlHttpTransport
     public static Dictionary<string, string> ParseQuery(string query)
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var separator = pair.IndexOf('=');
@@ -128,7 +139,7 @@ internal static class RemoteControlHttpTransport
             stream,
             statusCode,
             "application/json; charset=utf-8",
-            JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions),
+            JsonSerializer.SerializeToUtf8Bytes(value, jsonOptions),
             cancellationToken,
             "Cache-Control: no-store\r\n");
 
@@ -163,13 +174,13 @@ internal static class RemoteControlHttpTransport
         };
         var header = Encoding.ASCII.GetBytes(
             $"HTTP/1.1 {(int)statusCode} {reason}\r\n"
-            + $"Content-Type: {contentType}\r\n"
-            + $"Content-Length: {body.Length}\r\n"
-            + "Connection: close\r\n"
-            + "X-Content-Type-Options: nosniff\r\n"
-            + "Referrer-Policy: no-referrer\r\n"
-            + extraHeaders
-            + "\r\n");
+                + $"Content-Type: {contentType}\r\n"
+                + $"Content-Length: {body.Length}\r\n"
+                + "Connection: close\r\n"
+                + "X-Content-Type-Options: nosniff\r\n"
+                + "Referrer-Policy: no-referrer\r\n"
+                + extraHeaders
+                + "\r\n");
         await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
         await stream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);

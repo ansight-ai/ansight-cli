@@ -10,10 +10,12 @@ public sealed class CliSecretForwardingTests
             $"ansight-cli-secret-forwarding-{Guid.NewGuid():N}");
         var testsPath = Path.Combine(workspacePath, "ansight", "tests");
         Directory.CreateDirectory(testsPath);
+
         try
         {
             WriteTest(testsPath, "alpha", "ENV_ALPHA");
             WriteTest(testsPath, "beta", "ENV_BETA");
+
             var environment = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["ENV_ALPHA"] = "alpha-value",
@@ -69,7 +71,7 @@ public sealed class CliSecretForwardingTests
 
         var values = ControlClient.CollectForwardedSecretValues(
             CliArguments.Parse(
-            [
+                [
                 "app",
                 "execute",
                 "session-1",

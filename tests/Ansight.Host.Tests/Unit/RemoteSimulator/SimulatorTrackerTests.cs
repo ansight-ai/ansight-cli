@@ -47,6 +47,7 @@ public sealed class SimulatorTrackerTests
         Assert.True(Assert.Single(tracker.Current.Devices).IsBooted);
 
         runner.Fail = true;
+
         var snapshot = await tracker.RefreshAsync();
 
         Assert.Empty(snapshot.Devices);
@@ -69,7 +70,6 @@ public sealed class SimulatorTrackerTests
         public string DeviceState { get; set; } = "Shutdown";
 
         public bool Fail { get; set; }
-
         public IReadOnlyList<string> LastArguments { get; private set; } = [];
 
         public Task<SimCtlCommandResult> RunAsync(
@@ -79,10 +79,12 @@ public sealed class SimulatorTrackerTests
         {
             LastArguments = arguments.ToArray();
             Interlocked.Increment(ref callCount);
+
             if (Fail)
             {
                 return Task.FromResult(new SimCtlCommandResult(1, string.Empty, "simctl failed"));
             }
+
             return Task.FromResult(new SimCtlCommandResult(0, $$"""
                 {
                   "devices": {

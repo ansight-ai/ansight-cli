@@ -1,12 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host;
+using static Ansight.Cli.Input.CliSelectorArguments;
 
 namespace Ansight.Cli.Commands.Keyboard;
 
 internal static class KeyboardCommands
 {
-    private static readonly string[] CommonFlagOptions =
+    private static readonly string[] commonFlagOptions =
     [
         "help",
         "beta",
@@ -19,7 +20,7 @@ internal static class KeyboardCommands
         "disable-repository-automations"
     ];
 
-    private static readonly string[] CommonValueOptions =
+    private static readonly string[] commonValueOptions =
     [
         "session",
         "session-id",
@@ -36,17 +37,6 @@ internal static class KeyboardCommands
         "websocket-port",
         "automation-repository",
         "node-path"
-    ];
-
-    private static readonly string[] SelectorFlagOptions = ["contains", "case-sensitive"];
-
-    private static readonly string[] SelectorValueOptions =
-    [
-        "automation-id",
-        "text",
-        "role",
-        "ancestor",
-        "index"
     ];
 
     internal delegate Task<UiAutomationResult> ExecuteKeyboardOperation(
@@ -69,6 +59,7 @@ internal static class KeyboardCommands
             options,
             start: true,
             cancellationToken).ConfigureAwait(false);
+
         return await RunAsync(
             arguments,
             output,
@@ -83,10 +74,13 @@ internal static class KeyboardCommands
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(execute);
+
         var action = arguments.RequirePositional(1, "keyboard action").ToLowerInvariant();
         arguments.EnsurePositionalCount(2, $"ansight keyboard {action} [options]");
+
         var operation = ResolveOperation(action);
         ValidateOptions(operation, action, arguments);
+
         var operationArguments = BuildOperationArguments(operation, arguments);
         var result = await execute(operation, operationArguments, cancellationToken)
             .ConfigureAwait(false);
@@ -101,6 +95,7 @@ internal static class KeyboardCommands
             () => result.Payload.Count == 0
                 ? result.Message
                 : result.Payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -124,6 +119,7 @@ internal static class KeyboardCommands
         AddOptionalString(result, "sessionId", arguments.GetOption("session") ?? arguments.GetOption("session-id"));
         AddOptionalString(result, "appId", arguments.GetOption("app") ?? arguments.GetOption("app-id"));
         AddOptionalString(result, "deviceId", arguments.GetOption("device") ?? arguments.GetOption("device-id"));
+
         if (operation == UiAutomationOperation.KeyboardOpen)
         {
             AddSelector(result, arguments);
@@ -134,28 +130,12 @@ internal static class KeyboardCommands
             result["includeScreenshot"] = false;
         }
 
-        if (operation == UiAutomationOperation.KeyboardPress) result["key"] = arguments.GetOption("key");
-        return result;
-    }
+        if (operation == UiAutomationOperation.KeyboardPress)
+        {
+            result["key"] = arguments.GetOption("key");
+        }
 
-    private static void AddSelector(JsonObject target, CliArguments arguments)
-    {
-        AddOptionalString(target, "automationId", arguments.GetOption("automation-id"));
-        AddOptionalString(target, "text", arguments.GetOption("text"));
-        AddOptionalString(target, "role", arguments.GetOption("role"));
-        AddOptionalString(target, "ancestorAutomationId", arguments.GetOption("ancestor"));
-        if (arguments.GetOption("index") is not null)
-        {
-            target["index"] = arguments.GetIntOption("index", 0, 0, int.MaxValue);
-        }
-        if (arguments.HasFlag("contains"))
-        {
-            target["exact"] = false;
-        }
-        if (arguments.HasFlag("case-sensitive"))
-        {
-            target["caseSensitive"] = true;
-        }
+        return result;
     }
 
     private static void ValidateOptions(
@@ -163,19 +143,29 @@ internal static class KeyboardCommands
         string action,
         CliArguments arguments)
     {
-        var flags = CommonFlagOptions.ToList();
-        var values = CommonValueOptions.ToList();
+        var flags = commonFlagOptions.ToList();
+        var values = commonValueOptions.ToList();
+
         if (operation == UiAutomationOperation.KeyboardOpen)
         {
             flags.AddRange(SelectorFlagOptions);
             values.AddRange(SelectorValueOptions);
         }
 
-        if (operation == UiAutomationOperation.KeyboardPress) values.Add("key");
+        if (operation == UiAutomationOperation.KeyboardPress)
+        {
+            values.Add("key");
+        }
+
         arguments.EnsureOptionContract($"ansight keyboard {action}", flags, values);
+
         if (operation == UiAutomationOperation.KeyboardPress && arguments.GetOption("key") != "Enter")
+        {
             throw new CliUsageException("ansight keyboard press requires --key Enter.");
+        }
+
         ValidateTargetOptions(arguments);
+
         if (operation == UiAutomationOperation.KeyboardOpen)
         {
             RequireSelector(arguments);
@@ -185,9 +175,10 @@ internal static class KeyboardCommands
     private static void RequireSelector(CliArguments arguments)
     {
         var hasSelector = arguments.GetOption("automation-id") is not null
-                          || arguments.GetOption("text") is not null
-                          || arguments.GetOption("role") is not null
-                          || arguments.GetOption("ancestor") is not null;
+            || arguments.GetOption("text") is not null
+            || arguments.GetOption("role") is not null
+            || arguments.GetOption("ancestor") is not null;
+
         if (!hasSelector)
         {
             throw new CliUsageException(
@@ -203,6 +194,7 @@ internal static class KeyboardCommands
         var hasAppId = arguments.GetOption("app-id") is not null;
         var hasDevice = arguments.GetOption("device") is not null;
         var hasDeviceId = arguments.GetOption("device-id") is not null;
+
         if (hasSession && hasSessionId)
         {
             throw new CliUsageException("Use only one of --session or --session-id.");
@@ -222,14 +214,6 @@ internal static class KeyboardCommands
         {
             throw new CliUsageException(
                 "Use --session/--session-id alone, or select with --app/--app-id and/or --device/--device-id.");
-        }
-    }
-
-    private static void AddOptionalString(JsonObject target, string propertyName, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            target[propertyName] = value.Trim();
         }
     }
 

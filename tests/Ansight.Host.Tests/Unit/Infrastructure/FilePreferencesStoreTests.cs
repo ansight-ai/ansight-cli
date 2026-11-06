@@ -8,6 +8,7 @@ public sealed class FilePreferencesStoreTests
     public void SetRecreatesParentDirectoryDeletedAfterStoreCreation()
     {
         var testRootPath = CreateTestRootPath();
+
         try
         {
             var dataPath = Path.Combine(testRootPath, "data");
@@ -31,12 +32,14 @@ public sealed class FilePreferencesStoreTests
     public void SetKeepsPreviousValueWhenPersistenceFails()
     {
         var testRootPath = CreateTestRootPath();
+
         try
         {
             var dataPath = Path.Combine(testRootPath, "data");
             var preferencesPath = Path.Combine(dataPath, "ansight-preferences.json");
             var store = new FilePreferencesStore(preferencesPath);
             store.Set("selected-device", "simulator-1");
+
             var changedCount = 0;
             store.Changed += (_, _) => changedCount++;
 
@@ -63,12 +66,14 @@ public sealed class FilePreferencesStoreTests
     public void RemoveKeepsValueWhenPersistenceFails()
     {
         var testRootPath = CreateTestRootPath();
+
         try
         {
             var dataPath = Path.Combine(testRootPath, "data");
             var preferencesPath = Path.Combine(dataPath, "ansight-preferences.json");
             var store = new FilePreferencesStore(preferencesPath);
             store.Set("selected-device", "simulator-1");
+
             var changedCount = 0;
             store.Changed += (_, _) => changedCount++;
 
@@ -96,6 +101,7 @@ public sealed class FilePreferencesStoreTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"ansight-preference-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
+
         return path;
     }
 

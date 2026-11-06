@@ -42,6 +42,7 @@ public sealed partial class SessionCaptureStoreTests
         Assert.True(store.TryLoad(snapshot.SessionId, out var loaded));
         Assert.NotNull(loaded);
         Assert.Equal(2, loaded.ApplicationEvents.Count);
+
         var timeline = SessionTimelineBuilder.BuildEvents(loaded, null, null);
         Assert.Contains(timeline, item => item.Payload["category"]?.GetValue<string>() == "motion");
         Assert.Contains(timeline, item => item.Payload["category"]?.GetValue<string>() == "applicationEvent");

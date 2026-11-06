@@ -188,8 +188,8 @@ public sealed class CliArgumentsTests
     public void ParseSeparatesPositionalsFlagsAndValues()
     {
         var arguments = CliArguments.Parse(
-        [
-            "test",
+            [
+                "test",
             "run",
             "/workspace",
             "smoke",
@@ -199,7 +199,7 @@ public sealed class CliArgumentsTests
             "first",
             "--test",
             "second"
-        ]);
+            ]);
 
         Assert.Equal(["test", "run", "/workspace", "smoke"], arguments.Positionals);
         Assert.True(arguments.IsJson);
@@ -212,7 +212,7 @@ public sealed class CliArgumentsTests
     {
         var workingDirectory = Path.Combine(Path.GetTempPath(), "ansight-caller-workspace");
         var arguments = CliArguments.Parse(
-        [
+            [
             "test",
             "run-all",
             "--verbose",
@@ -238,7 +238,7 @@ public sealed class CliArgumentsTests
     {
         var workingDirectory = Path.Combine(Path.GetTempPath(), "ansight-workspace-init-caller");
         var arguments = CliArguments.Parse(
-        [
+            [
             "workspace",
             "init",
             ".",
@@ -299,7 +299,7 @@ public sealed class CliArgumentsTests
     {
         var workingDirectory = Path.Combine(Path.GetTempPath(), "ansight-app-execution-caller");
         var arguments = CliArguments.Parse(
-        [
+            [
             "app",
             "execute",
             "--app",
@@ -419,8 +419,7 @@ public sealed class CliArgumentsTests
         string? nestedAction)
     {
         var values = nestedAction is null
-            ? new[] { command, action }
-            : new[] { command, action, nestedAction };
+            ? new[] { command, action } : new[] { command, action, nestedAction };
 
         Assert.True(ControlClient.ShouldForward(CliArguments.Parse(values)));
     }

@@ -51,6 +51,7 @@ internal interface IAppToolBridge
             arguments?["ifRevision"]?.GetValue<string>(),
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         if (!response.Success
             || response.Envelope?.Payload is not JsonObject payload)
         {
@@ -60,6 +61,7 @@ internal interface IAppToolBridge
         var filteredPayload = Ansight.Host.Runtime.Operations.Tools.RemoteApp.RemoteAppToolCatalogFilter.Apply(
             payload,
             arguments);
+
         return response with
         {
             Envelope = new ToolProtocolEnvelope

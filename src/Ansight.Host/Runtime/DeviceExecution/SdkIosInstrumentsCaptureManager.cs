@@ -29,25 +29,40 @@ internal sealed class SdkIosInstrumentsCaptureManager
 
     public void Attach(string sessionId, DeviceAppProfile? profile, string? profileJson)
     {
-        if (profile is null || !IsIos(profile)) return;
-        lock (gate)
+        if (profile is null || !IsIos(profile))
         {
-            if (captures.ContainsKey(sessionId)) return;
-        }
-        if (!OperatingSystem.IsMacOS())
-        {
-            MarkUnavailable(sessionId, "iOS Instruments capture requires Xcode on macOS.");
-            return;
-        }
-        if (profile.App?.ProcessId is not > 0)
-        {
-            MarkUnavailable(sessionId, "The SDK profile did not report an app process ID.");
             return;
         }
 
         lock (gate)
         {
-            if (captures.ContainsKey(sessionId)) return;
+            if (captures.ContainsKey(sessionId))
+            {
+                return;
+            }
+        }
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            MarkUnavailable(sessionId, "iOS Instruments capture requires Xcode on macOS.");
+
+            return;
+        }
+
+        if (profile.App?.ProcessId is not > 0)
+        {
+            MarkUnavailable(sessionId, "The SDK profile did not report an app process ID.");
+
+            return;
+        }
+
+        lock (gate)
+        {
+            if (captures.ContainsKey(sessionId))
+            {
+                return;
+            }
+
             var handle = new CaptureHandle();
             captures.Add(sessionId, handle);
             handle.StartTask = Task.Run(() => StartAsync(sessionId, profile, profileJson, handle.Cancellation.Token));
@@ -57,16 +72,25 @@ internal sealed class SdkIosInstrumentsCaptureManager
     public async Task StopAsync(string sessionId)
     {
         CaptureHandle? handle;
+
         lock (gate)
         {
-            if (!captures.Remove(sessionId, out handle)) return;
+            if (!captures.Remove(sessionId, out handle))
+            {
+                return;
+            }
         }
 
         await handle.Cancellation.CancelAsync().ConfigureAwait(false);
+
         try
         {
             var capture = await handle.StartTask.ConfigureAwait(false);
-            if (capture is not null) await capture.StopAsync().ConfigureAwait(false);
+
+            if (capture is not null)
+            {
+                await capture.StopAsync().ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -80,9 +104,11 @@ internal sealed class SdkIosInstrumentsCaptureManager
         try
         {
             var target = await ResolveTargetAsync(profile, profileJson, cancellationToken).ConfigureAwait(false);
+
             if (target.DeviceId is null)
             {
                 MarkUnavailable(sessionId, target.Reason ?? "No matching iOS device was found.");
+
                 return null;
             }
 
@@ -100,6 +126,7 @@ internal sealed class SdkIosInstrumentsCaptureManager
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
             MarkUnavailable(sessionId, exception.Message);
+
             return null;
         }
     }
@@ -108,9 +135,15 @@ internal sealed class SdkIosInstrumentsCaptureManager
         DeviceAppProfile profile, string? profileJson, CancellationToken cancellationToken)
     {
         var tool = await SimCtlToolLocator.ResolveAsync(preferences.XcodePath, cancellationToken).ConfigureAwait(false);
-        if (!tool.IsFound) return new TargetResolution(null, tool.Message);
+
+        if (!tool.IsFound)
+        {
+            return new TargetResolution(null, tool.Message);
+        }
+
         var processId = profile.App!.ProcessId!.Value;
         var nativeDeviceId = ReadNativeDeviceId(profileJson);
+
         if (profile.Device?.IsVirtual == true || profile.Device?.IsEmulator == true)
         {
             var client = new SimCtlClient(tool);
@@ -119,9 +152,15 @@ internal sealed class SdkIosInstrumentsCaptureManager
                     && (nativeDeviceId is null || string.Equals(device.Udid, nativeDeviceId,
                         StringComparison.OrdinalIgnoreCase))).ToArray();
             var matches = new List<SimCtlDevice>();
+
             foreach (var device in booted)
+            {
                 if (await client.ProcessExistsAsync(device.Udid, processId, cancellationToken).ConfigureAwait(false))
+                {
                     matches.Add(device);
+                }
+            }
+
             return matches.Count == 1
                 ? new TargetResolution(matches[0].Udid, null)
                 : new TargetResolution(null, matches.Count == 0
@@ -130,27 +169,39 @@ internal sealed class SdkIosInstrumentsCaptureManager
         }
 
         var bundleId = profile.App?.AppId?.Trim();
+
         if (string.IsNullOrWhiteSpace(bundleId))
+        {
             return new TargetResolution(null, "The SDK profile did not report an app bundle ID.");
+        }
+
         var coreDevice = new CoreDeviceClient(tool);
         var devices = (await coreDevice.GetDevicesAsync(cancellationToken).ConfigureAwait(false))
             .Where(device => device.IsIos && device.IsAvailable
                 && (nativeDeviceId is null || string.Equals(device.Identifier, nativeDeviceId,
                     StringComparison.OrdinalIgnoreCase))).ToArray();
+
         if (nativeDeviceId is not null)
+        {
             return devices.Length == 1
                 ? new TargetResolution(devices[0].Identifier, null)
                 : new TargetResolution(null, "The SDK's iPhone is not connected with Developer Mode enabled.");
+        }
+
         var matchingDevices = new List<string>();
+
         foreach (var device in devices)
         {
             try
             {
                 var identity = await coreDevice.GetRunningApplicationProcessIdentityAsync(
                     device.Identifier, bundleId, cancellationToken).ConfigureAwait(false);
+
                 if (PhysicalIosInstrumentsCapture.TryParseProcessId(identity, out var actualProcessId)
                     && actualProcessId == processId)
+                {
                     matchingDevices.Add(device.Identifier);
+                }
             }
             catch (Exception exception) when (exception is IOException or InvalidOperationException)
             {
@@ -170,13 +221,22 @@ internal sealed class SdkIosInstrumentsCaptureManager
 
     internal static string? ReadNativeDeviceId(string? profileJson)
     {
-        if (string.IsNullOrWhiteSpace(profileJson)) return null;
+        if (string.IsNullOrWhiteSpace(profileJson))
+        {
+            return null;
+        }
+
         try
         {
             using var document = JsonDocument.Parse(profileJson);
+
             if (document.RootElement.ValueKind != JsonValueKind.Object
                 || !document.RootElement.TryGetProperty("device", out var device)
-                || device.ValueKind != JsonValueKind.Object) return null;
+                || device.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
             return device.TryGetProperty("nativeDeviceId", out var id) && id.ValueKind == JsonValueKind.String
                 ? id.GetString()?.Trim() is { Length: > 0 } value ? value : null
                 : null;
@@ -189,7 +249,11 @@ internal sealed class SdkIosInstrumentsCaptureManager
 
     private void MarkUnavailable(string sessionId, string reason)
     {
-        if (!state.TryGetSessionSnapshot(sessionId, out var session)) return;
+        if (!state.TryGetSessionSnapshot(sessionId, out var session))
+        {
+            return;
+        }
+
         var properties = session!.CustomProperties?.DeepClone().AsObject() ?? new JsonObject();
         properties["instruments"] = new JsonObject
         {
@@ -207,7 +271,6 @@ internal sealed class SdkIosInstrumentsCaptureManager
     private sealed class CaptureHandle
     {
         public CancellationTokenSource Cancellation { get; } = new();
-        public Task<PhysicalIosInstrumentsCapture?> StartTask { get; set; }
-            = Task.FromResult<PhysicalIosInstrumentsCapture?>(null);
+        public Task<PhysicalIosInstrumentsCapture?> StartTask { get; set; } = Task.FromResult<PhysicalIosInstrumentsCapture?>(null);
     }
 }

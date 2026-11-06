@@ -13,12 +13,14 @@ public sealed class LiveUiScrollObservationTests
     {
         var root = CreateContainer();
         root["childCount"] = 2;
+
         foreach (var child in root["children"]!.AsArray())
         {
             child!["childCount"] = 0;
         }
 
         var first = root["children"]![0]!;
+
         if (scenario == "missing-child")
         {
             first["childCount"] = 1;
@@ -60,6 +62,7 @@ public sealed class LiveUiScrollObservationTests
     {
         var before = CreateContainer();
         var after = before.DeepClone().AsObject();
+
         if (change == "text")
         {
             after["children"]![0]!["text"] = "Next route";
@@ -88,6 +91,7 @@ public sealed class LiveUiScrollObservationTests
     {
         var types = VisualTreeTypeRegistry.FromPayload(new JsonObject());
         var viewport = new LiveUiBounds(0, 0, 100, 100);
+
         return LiveUiScrollObservation.CompareVisibleContent(before, types, viewport, after, types, viewport);
     }
 
@@ -95,17 +99,21 @@ public sealed class LiveUiScrollObservationTests
     {
         return new JsonObject
         {
-            ["id"] = "container", ["role"] = "scrollview",
+            ["id"] = "container",
+            ["role"] = "scrollview",
             ["bounds"] = new JsonObject { ["x"] = 0, ["y"] = 10, ["width"] = 100, ["height"] = 80 },
             ["children"] = new JsonArray(
                 new JsonObject
                 {
-                    ["id"] = "child", ["text"] = "Route", ["role"] = "text",
+                    ["id"] = "child",
+                    ["text"] = "Route",
+                    ["role"] = "text",
                     ["bounds"] = new JsonObject { ["x"] = 10, ["y"] = 20, ["width"] = 60, ["height"] = 10 }
                 },
                 new JsonObject
                 {
-                    ["text"] = "Below viewport", ["role"] = "text",
+                    ["text"] = "Below viewport",
+                    ["role"] = "text",
                     ["bounds"] = new JsonObject { ["x"] = 10, ["y"] = 120, ["width"] = 60, ["height"] = 10 }
                 })
         };

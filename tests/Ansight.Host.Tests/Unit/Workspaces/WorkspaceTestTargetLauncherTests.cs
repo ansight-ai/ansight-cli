@@ -20,6 +20,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 DevicePlatforms.Android, isBooted: alreadyBooted)], [])
         };
         devices.SetApplications("emulator-5554", new InstalledApplication("com.example.target", "Target"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync("com.example.target",
@@ -39,13 +40,14 @@ public sealed partial class WorkspaceTestTargetLauncherTests
             Inventory = new DeviceInventory(
                 [],
                 [
-                    Device("ios-1", "First iPhone", DevicePlatforms.Ios, isBooted: true),
+                        Device("ios-1", "First iPhone", DevicePlatforms.Ios, isBooted: true),
                     Device("android-1", "Pixel", DevicePlatforms.Android, isBooted: true)
-                ],
+                    ],
                 [])
         };
         devices.SetApplications("ios-1", new InstalledApplication("com.example.target", "Target"));
         devices.SetApplications("android-1", new InstalledApplication("com.example.other", "Other"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync(
@@ -107,6 +109,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 [])
         };
         devices.SetApplications("ios-target", new InstalledApplication("com.example.target", "Target"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync(
@@ -118,6 +121,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
             CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Message);
+
         if (isBooted)
         {
             Assert.Empty(devices.StartedDeviceIdentifiers);
@@ -172,6 +176,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 [])
         };
         devices.SetApplications("target-1", new InstalledApplication("com.example.target", "Target"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync(
@@ -194,13 +199,14 @@ public sealed partial class WorkspaceTestTargetLauncherTests
             Inventory = new DeviceInventory(
                 [],
                 [
-                    Device("ios-1", "First iPhone", DevicePlatforms.Ios, isBooted: true),
+                        Device("ios-1", "First iPhone", DevicePlatforms.Ios, isBooted: true),
                     Device("ios-2", "Second iPhone", DevicePlatforms.Ios, isBooted: true)
-                ],
+                    ],
                 [])
         };
         devices.SetApplications("ios-1", new InstalledApplication("com.example.target", "Target"));
         devices.SetApplications("ios-2", new InstalledApplication("com.example.target", "Target"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync(
@@ -219,9 +225,11 @@ public sealed partial class WorkspaceTestTargetLauncherTests
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"ansight-launcher-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(temporaryPath);
+
         try
         {
             var ipaPath = Path.Combine(temporaryPath, "Target.ipa");
+
             using (var archive = ZipFile.Open(ipaPath, ZipArchiveMode.Create))
             {
                 var executable = archive.CreateEntry("Payload/Target.app/Target");
@@ -266,9 +274,11 @@ public sealed partial class WorkspaceTestTargetLauncherTests
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"ansight-launcher-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(temporaryPath);
+
         try
         {
             var ipaPath = Path.Combine(temporaryPath, "Target.ipa");
+
             using (var archive = ZipFile.Open(ipaPath, ZipArchiveMode.Create))
             {
                 archive.CreateEntry("Payload/Target.app/Target");
@@ -308,6 +318,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"ansight-launcher-test-{Guid.NewGuid():N}.apk");
         var contents = "matching apk"u8.ToArray();
         await File.WriteAllBytesAsync(temporaryPath, contents);
+
         try
         {
             var devices = new FakeHostDeviceService
@@ -326,6 +337,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 "android-device-1",
                 "com.example.target",
                 new ApplicationChecksum(Convert.ToHexStringLower(SHA256.HashData(contents))));
+
             var progress = new RecordingProgress<WorkspaceTestRunProgress>();
             var launcher = new WorkspaceTestTargetLauncher(devices);
 
@@ -344,7 +356,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
             Assert.Equal("com.example.target", devices.TerminatedApplicationIdentifier);
             Assert.Contains(progress.Values, value =>
                 value.Stage == "app.reuse"
-                && value.Message.Contains("checksum matches", StringComparison.OrdinalIgnoreCase));
+                    && value.Message.Contains("checksum matches", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
@@ -357,6 +369,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"ansight-launcher-test-{Guid.NewGuid():N}.apk");
         await File.WriteAllTextAsync(temporaryPath, "replacement apk");
+
         try
         {
             var devices = new FakeHostDeviceService
@@ -375,6 +388,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 "android-device-1",
                 "com.example.target",
                 new ApplicationChecksum(new string('0', 64)));
+
             var launcher = new WorkspaceTestTargetLauncher(devices);
 
             var result = await launcher.LaunchAsync(
@@ -412,6 +426,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
                 "Stop failed.")
         };
         devices.SetApplications("android-1", new InstalledApplication("com.example.target", "Target"));
+
         var launcher = new WorkspaceTestTargetLauncher(devices);
 
         var result = await launcher.LaunchAsync(
@@ -466,6 +481,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         devices.SetApplications(
             "android-device-1",
             new InstalledApplication("com.example.target", "Target"));
+
         var enrollmentIssuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, enrollmentIssuer);
 
@@ -495,6 +511,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         devices.SetApplications(
             "android-virtual-1",
             new InstalledApplication("com.example.target", "Target"));
+
         var enrollmentIssuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, enrollmentIssuer);
 
@@ -533,6 +550,7 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         devices.SetApplications(
             "ios-device-1",
             new InstalledApplication("com.example.target", "Target"));
+
         var enrollmentIssuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, enrollmentIssuer);
 
@@ -568,14 +586,13 @@ public sealed partial class WorkspaceTestTargetLauncherTests
     private sealed class FakeEnrollmentIssuer : IWorkspaceTestEnrollmentIssuer
     {
         public string? IssuedAppId { get; private set; }
-
         public string? RevokedInviteId { get; private set; }
-
         public string? RevokedAppId { get; private set; }
 
         public UnattendedEnrollmentIssueResult Issue(string appId)
         {
             IssuedAppId = appId;
+
             return UnattendedEnrollmentIssueResult.Success(
                 "invite-1",
                 "ans2:one-use-payload",

@@ -5,7 +5,7 @@ namespace Ansight.Host.Runtime.WebSocketSessions;
 internal static class WebSocketAcceptor
 {
     private const int MaximumHeaderBytes = 16 * 1024;
-    private static readonly byte[] HeaderTerminator = "\r\n\r\n"u8.ToArray();
+    private static readonly byte[] headerTerminator = "\r\n\r\n"u8.ToArray();
 
     public static async Task<WebSocketConnection> AcceptAsync(
         TcpListener listener,
@@ -21,10 +21,13 @@ internal static class WebSocketAcceptor
         {
             var tcpClient = await listener.AcceptTcpClientAsync(cancellationToken);
             NetworkStream? networkStream = null;
+
             try
             {
                 networkStream = tcpClient.GetStream();
+
                 var request = await ReadUpgradeRequestAsync(networkStream, cancellationToken);
+
                 if (!string.Equals(request.Path, expectedPath, StringComparison.Ordinal))
                 {
                     await WriteFailureAsync(networkStream, "404 Not Found", cancellationToken);
@@ -56,6 +59,7 @@ internal static class WebSocketAcceptor
                         IsServer = true,
                         KeepAliveInterval = TimeSpan.FromSeconds(30)
                     });
+
                 return new WebSocketConnection(tcpClient, networkStream, webSocket);
             }
             catch (InvalidDataException)
@@ -78,16 +82,19 @@ internal static class WebSocketAcceptor
     {
         using var buffer = new MemoryStream();
         var singleByte = new byte[1];
+
         while (buffer.Length < MaximumHeaderBytes)
         {
             var count = await stream.ReadAsync(singleByte, cancellationToken);
+
             if (count == 0)
             {
                 throw new EndOfStreamException("WebSocket client closed during the HTTP upgrade.");
             }
 
             buffer.WriteByte(singleByte[0]);
-            if (EndsWith(buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length)), HeaderTerminator))
+
+            if (EndsWith(buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length)), headerTerminator))
             {
                 break;
             }
@@ -101,17 +108,19 @@ internal static class WebSocketAcceptor
         var headerText = Encoding.ASCII.GetString(buffer.GetBuffer(), 0, checked((int)buffer.Length));
         var lines = headerText.Split("\r\n", StringSplitOptions.None);
         var requestLine = lines.FirstOrDefault()?.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (requestLine is not { Length: 3 }
-            || !string.Equals(requestLine[0], "GET", StringComparison.Ordinal)
+
+        if (requestLine is not { Length: 3 } || !string.Equals(requestLine[0], "GET", StringComparison.Ordinal)
             || !string.Equals(requestLine[2], "HTTP/1.1", StringComparison.Ordinal))
         {
             throw new InvalidDataException("WebSocket upgrade request line is invalid.");
         }
 
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var line in lines.Skip(1))
         {
             var separator = line.IndexOf(':');
+
             if (separator <= 0)
             {
                 continue;
@@ -136,6 +145,7 @@ internal static class WebSocketAcceptor
         var querySeparator = requestTarget.IndexOf('?');
         var path = querySeparator < 0 ? requestTarget : requestTarget[..querySeparator];
         var query = querySeparator < 0 ? string.Empty : requestTarget[(querySeparator + 1)..];
+
         return new WebSocketUpgradeRequest(path, ReadToken(query), key);
     }
 
@@ -145,15 +155,17 @@ internal static class WebSocketAcceptor
         {
             var separator = pair.IndexOf('=');
             var encodedName = separator < 0 ? pair : pair[..separator];
+
             if (!string.Equals(
-                    Uri.UnescapeDataString(encodedName.Replace("+", " ", StringComparison.Ordinal)),
-                    "token",
-                    StringComparison.Ordinal))
+                Uri.UnescapeDataString(encodedName.Replace("+", " ", StringComparison.Ordinal)),
+                "token",
+                StringComparison.Ordinal))
             {
                 continue;
             }
 
             var encodedValue = separator < 0 ? string.Empty : pair[(separator + 1)..];
+
             return Uri.UnescapeDataString(encodedValue.Replace("+", " ", StringComparison.Ordinal));
         }
 

@@ -3,33 +3,6 @@ using Ansight.Host.SimulatorAgent;
 
 namespace Ansight.Host.AppGraphs;
 
-public sealed record AppGraphNavigationTechnologyDescriptor(
-    string Framework,
-    string Kind,
-    string NavigationToolId,
-    string StructureFingerprint)
-{
-    public AppGraphNavigationParadigm? Paradigm => AppGraphNavigationTechnologyCatalog
-        .GetKinds(Framework).FirstOrDefault(kind => string.Equals(
-            kind.Kind, Kind?.Trim(), StringComparison.OrdinalIgnoreCase))?.Paradigm;
-}
-
-public sealed record AppGraphNavigationTechnologyKind(
-    string Kind,
-    string Label,
-    string NormalizedRole,
-    bool SupportsNavigationHost,
-    bool SupportsTabGroup)
-{
-    public AppGraphNavigationParadigm Paradigm { get; init; } =
-        AppGraphNavigationParadigms.Resolve("native-unknown", "generic_host");
-}
-
-public sealed record AppGraphNavigationFramework(
-    string Framework,
-    string Label,
-    IReadOnlyList<AppGraphNavigationTechnologyKind> Kinds);
-
 public static class AppGraphNavigationTechnologyCatalog
 {
     public const string NavigationHostScope = "navigation_host";
@@ -122,6 +95,7 @@ public static class AppGraphNavigationTechnologyCatalog
             candidate.Framework,
             framework?.Trim(),
             StringComparison.OrdinalIgnoreCase));
+
         if (match is null)
         {
             return [];
@@ -155,13 +129,16 @@ public static class AppGraphNavigationTechnologyCatalog
         var conflictsWithStackOrder = technology?.Paradigm?.ActiveChildMustBeLast == true
             && children.Count > 0
             && !string.Equals(children[^1], activeChild, StringComparison.Ordinal);
+
         if (conflictsWithStackOrder)
         {
             error = $"Technology '{technology!.Framework}/{technology.Kind}' requires root-to-top child order with the active child last. Preserve the observed stack order.";
+
             return false;
         }
 
         error = string.Empty;
+
         return true;
     }
 
@@ -172,11 +149,13 @@ public static class AppGraphNavigationTechnologyCatalog
         out string error)
     {
         normalizedRole = string.Empty;
+
         if (technology is null
             || string.IsNullOrWhiteSpace(technology.Framework)
             || string.IsNullOrWhiteSpace(technology.Kind))
         {
             error = "A framework-specific navigation technology is required.";
+
             return false;
         }
 
@@ -194,31 +173,39 @@ public static class AppGraphNavigationTechnologyCatalog
             TabGroupScope => kind?.SupportsTabGroup == true,
             _ => false
         };
+
         if (framework is null || kind is null || !supportsScope)
         {
             error = $"Navigation technology '{technology.Framework}/{technology.Kind}' is not supported for {scope.Replace('_', ' ')}s.";
+
             return false;
         }
 
         var controller = NavigationControllerCatalog.ResolveFramework(framework.Framework);
         var navigationToolId = technology.NavigationToolId?.Trim() ?? string.Empty;
+
         if (navigationToolId.Length > 0
             && (controller is null
                 || !controller.NavigationToolIds.Contains(navigationToolId, StringComparer.Ordinal)))
         {
             error = $"Navigation tool '{navigationToolId}' does not belong to framework '{framework.Framework}'.";
+
             return false;
         }
+
         var fingerprint = technology.StructureFingerprint?.Trim() ?? string.Empty;
+
         if (navigationToolId.Length > 0
             && (fingerprint.Length != 64 || fingerprint.Any(static character => !Uri.IsHexDigit(character))))
         {
             error = "Navigation-controller evidence requires a SHA-256 structure fingerprint.";
+
             return false;
         }
 
         normalizedRole = kind.NormalizedRole;
         error = string.Empty;
+
         return true;
     }
 
@@ -236,6 +223,7 @@ public static class AppGraphNavigationTechnologyCatalog
                 ReadString(value, "kind") ?? string.Empty,
                 ReadString(value, "navigationToolId") ?? string.Empty,
                 ReadString(value, "structureFingerprint") ?? string.Empty);
+
         return TryValidate(technology, scope, out normalizedRole, out error);
     }
 

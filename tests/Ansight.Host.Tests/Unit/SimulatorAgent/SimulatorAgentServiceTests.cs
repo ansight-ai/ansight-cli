@@ -28,7 +28,7 @@ public sealed partial class SimulatorAgentServiceTests
         var storage = new InMemoryEncryptedStorage();
         var httpClient = new FakeOpenAiClient([]);
         var webSocketSession = new FakeOpenAiSession(
-        [
+            [
             new OpenAiTurn(
                 "resp-thinking",
                 "gpt-5.6-terra",
@@ -68,6 +68,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(2, webSocketSession.Requests.Count);
         Assert.True(webSocketSession.Requests[0].StartNewConversation);
         Assert.False(webSocketSession.Requests[1].StartNewConversation);
+
         var incrementalInput = webSocketSession.IncrementalInputs[1];
         var feedback = Assert.Single(incrementalInput.OfType<JsonObject>());
         Assert.Equal("user", feedback["role"]?.GetValue<string>());
@@ -79,7 +80,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var httpClient = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -114,15 +115,15 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var webSocketSession = new FakeOpenAiSession(
-        [
+            [
             CreateFunctionTurn(
                 "call-find-first",
                 "ansight_find_ui",
-                new JsonObject { ["automationId"] = "first" }),
+                new JsonObject {["automationId"] = "first" }),
             CreateFunctionTurn(
                 "call-find-second",
                 "ansight_find_ui",
-                new JsonObject { ["automationId"] = "second" }),
+                new JsonObject {["automationId"] = "second" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -141,6 +142,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"matches\":[]}}",
             "Second query completed."));
+
         using var service = new SimulatorAgentService(
             storage,
             new FakeOpenAiClient([]),
@@ -163,6 +165,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.DoesNotContain("superseded", webSocketSession.Requests[2].Input.ToJsonString());
         Assert.Equal(2, webSocketSession.Requests[2].Input.OfType<JsonObject>()
             .Count(static item => item["type"]?.GetValue<string>() == "function_call_output"));
+
         var latest = Assert.Single(webSocketSession.IncrementalInputs[2].OfType<JsonObject>(),
             static item => item["type"]?.GetValue<string>() == "function_call_output");
         Assert.Equal("call-find-second", latest["call_id"]?.GetValue<string>());
@@ -178,7 +181,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-scan",
                 "ansight_scan_screen",
@@ -191,13 +194,17 @@ public sealed partial class SimulatorAgentServiceTests
                     ["currentDestinationId"] = "home",
                     ["destinations"] = new JsonArray(new JsonObject
                     {
-                        ["id"] = "home", ["kind"] = "screen", ["name"] = "Home",
-                        ["purpose"] = "Start", ["scrollStatus"] = "not_scrollable"
+                        ["id"] = "home",
+                        ["kind"] = "screen",
+                        ["name"] = "Home",
+                        ["purpose"] = "Start",
+                        ["scrollStatus"] = "not_scrollable"
                     }),
-                    ["actions"] = new JsonArray(), ["transitions"] = new JsonArray(),
-                    ["coverage"] = new JsonObject { ["gaps"] = new JsonArray() }
+                    ["actions"] = new JsonArray(),
+                    ["transitions"] = new JsonArray(),
+                    ["coverage"] = new JsonObject {["gaps"] = new JsonArray() }
                 })
-            } : Array.Empty<OpenAiTurn>(),
+            }: Array.Empty<OpenAiTurn>(),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -211,6 +218,7 @@ public sealed partial class SimulatorAgentServiceTests
         {
             Capabilities = SessionCapabilities.Empty("ios") with { IsDeviceOnly = deviceMode }
         };
+
         foreach (var toolName in new[] { "ansight_scan_screen", "ansight_find_ui" })
         {
             gateway.ToolDefinitions.Add(new JsonObject
@@ -220,6 +228,7 @@ public sealed partial class SimulatorAgentServiceTests
                 ["parameters"] = new JsonObject { ["type"] = "object" }
             });
         }
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -238,6 +247,7 @@ public sealed partial class SimulatorAgentServiceTests
             client.Tools[0].OfType<JsonObject>(),
             tool => tool["name"]?.GetValue<string>() == "ansight_find_ui");
         Assert.Single(gateway.Calls);
+
         var scan = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-scan");
@@ -250,7 +260,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-progress",
                 "report_app_graph_progress",
@@ -317,7 +327,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-find-all",
                 "ansight_find_ui",
@@ -373,6 +383,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["name"] = "ansight_find_ui",
             ["parameters"] = new JsonObject { ["type"] = "object" }
         });
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -385,6 +396,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Empty(gateway.Calls);
+
         var rejectedCall = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-find-all");
@@ -408,7 +420,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["length"] = 0.75
         };
         var client = new FakeOpenAiClient(
-        [
+            [
             .. Enumerable.Range(1, 6).SelectMany(index => new[]
             {
                 ScrollScopeProgress($"observe-{index}", "home", index > 1 && index <= expectedCalls + 1 ? $"scroll-{index - 1}" : null),
@@ -455,6 +467,7 @@ public sealed partial class SimulatorAgentServiceTests
                 })
         ]);
         var gateway = new FakeToolGateway();
+
         for (var index = 1; index <= expectedCalls; index++)
         {
             var hasEvidence = evidenceMode != "missing" && !(evidenceMode == "mixed" && index is 1 or 3);
@@ -479,12 +492,14 @@ public sealed partial class SimulatorAgentServiceTests
                 : "{\"isError\":false}";
             gateway.Results.Enqueue(new ToolCallResult(false, output, "Scroll delivered."));
         }
+
         gateway.ToolDefinitions.Add(new JsonObject
         {
             ["type"] = "function",
             ["name"] = "ansight_scroll_ui",
             ["parameters"] = new JsonObject { ["type"] = "object" }
         });
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -497,11 +512,13 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Failed, result.Status);
         Assert.Equal(expectedCalls, gateway.Calls.Count(call => call.ToolName == "ansight_scroll_ui"));
+
         var guardedCalls = result.Audit.ToolCalls.Where(call => call.ToolName == "ansight_scroll_ui" && call.IsError).ToArray();
         Assert.Equal(6 - expectedCalls, guardedCalls.Length);
         Assert.All(guardedCalls, call => Assert.Contains(
             evidenceMode is "missing" or "raw_hash_changes" ? "2 consecutive attempts without evidence" : "unchanged semantic viewport",
             call.Message, StringComparison.Ordinal));
+
         var run = Assert.Single(service.ListAppGraphLiveRuns("session-123"));
         Assert.Equal("blocked", Assert.Single(run.Nodes).ScrollStatus);
     }
@@ -530,7 +547,8 @@ public sealed partial class SimulatorAgentServiceTests
                     ["actionOutcome"] = previousInputId is null ? null : GraphOutcome(previousInputId, "no_change"),
                     ["stateObservation"] = observationId is null ? null : new JsonObject
                     {
-                        ["observationId"] = observationId, ["evidence"] = "Fresh inspection identifies the profile page."
+                        ["observationId"] = observationId,
+                        ["evidence"] = "Fresh inspection identifies the profile page."
                     },
                     ["destinations"] = includeDestination
                         ? new JsonArray(
@@ -575,14 +593,15 @@ public sealed partial class SimulatorAgentServiceTests
                 });
 
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateProgressTurn("progress-home-1", "home", includeDestination: true, "queued"),
             CreateFunctionTurn("tap-home-1", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
             CreateProgressTurn("progress-home-2", "home", includeDestination: false, "explored", "tap-home-1"),
             CreateFunctionTurn("tap-home-2", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
             CreateFunctionTurn("inspect-profile", "ansight_get_live_visual_tree", new JsonObject
             {
-                ["toolId"] = "ui.get_visual_tree", ["root"] = "window"
+                ["toolId"] = "ui.get_visual_tree",
+                ["root"] = "window"
             }),
             CreateProgressTurn("progress-profile", "profile", includeDestination: true, "queued", observationId: "inspect-profile"),
             CreateFunctionTurn("tap-profile-1", "ansight_tap_ui", tapArguments.DeepClone().AsObject()),
@@ -603,6 +622,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["name"] = "ansight_tap_ui",
             ["parameters"] = new JsonObject { ["type"] = "object" }
         });
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -615,6 +635,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(2, gateway.Calls.Count(call => call.ToolName == "ansight_tap_ui"));
+
         var guardedCall = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "tap-home-2");
@@ -671,7 +692,7 @@ public sealed partial class SimulatorAgentServiceTests
                 })
         }.ToJsonString();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-progress",
                 "report_app_graph_progress",
@@ -761,16 +782,17 @@ public sealed partial class SimulatorAgentServiceTests
                 })
         ]);
         var gateway = new FakeToolGateway();
+
         foreach (var toolName in new[]
-                 {
-                     "ansight_tap_ui",
-                     "ansight_scan_screen",
-                     "ansight_list_tasks",
-                     "ansight_describe_module",
-                     "ansight_run_task",
-                     "ansight_list_app_tools",
-                     "ansight_call_app_tool"
-                 })
+        {
+            "ansight_tap_ui",
+            "ansight_scan_screen",
+            "ansight_list_tasks",
+            "ansight_describe_module",
+            "ansight_run_task",
+            "ansight_list_app_tools",
+            "ansight_call_app_tool"
+        })
         {
             gateway.ToolDefinitions.Add(new JsonObject
             {
@@ -779,6 +801,7 @@ public sealed partial class SimulatorAgentServiceTests
                 ["parameters"] = new JsonObject { ["type"] = "object" }
             });
         }
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -791,6 +814,7 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var run = Assert.Single(service.ListAppGraphLiveRuns("session-123"));
         Assert.Equal(result.Audit.RunId, run.RunId);
         Assert.Equal("succeeded", run.Status);
@@ -803,12 +827,14 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(
             client.Tools[0].OfType<JsonObject>(),
             tool => tool["name"]?.GetValue<string>() == "report_app_graph_progress");
+
         var reportTool = Assert.Single(
             client.Tools[0].OfType<JsonObject>(),
             tool => tool["name"]?.GetValue<string>() == "report_app_graph_progress");
         var reportProperties = Assert.IsType<JsonObject>(reportTool["parameters"]?["properties"]);
         Assert.True(reportProperties.ContainsKey("navigationHosts"));
         Assert.True(reportProperties.ContainsKey("tabGroups"));
+
         var navigationHostItemProperties = Assert.IsType<JsonObject>(
             reportProperties["navigationHosts"]?["items"]?["properties"]);
         var tabGroupItemProperties = Assert.IsType<JsonObject>(
@@ -834,7 +860,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(
             run.Trace,
             entry => entry.Stage == "ToolCompleted"
-                     && entry.Message.Contains("rejected", StringComparison.Ordinal));
+                && entry.Message.Contains("rejected", StringComparison.Ordinal));
         Assert.Contains(run.Trace, entry => entry.Stage == "InstructionCompleted");
         Assert.Equal("Completed", run.Trace[^1].Stage);
         Assert.True(run.Trace.Select(entry => entry.Sequence).SequenceEqual(
@@ -845,15 +871,17 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_AllowsPartialAppGraphCompletionWithoutDiscardingFrontier()
     {
         var client = new FakeOpenAiClient(
-        [
-            ScrollScopeProgress("observe", "home"),
+            [
+                ScrollScopeProgress("observe", "home"),
             CreateFunctionTurn("partial", "complete_instruction", new JsonObject
             {
-                ["outcome"] = "partial", ["summary"] = "Partial pass: remaining home scroll coverage is deferred."
+                ["outcome"] = "partial",
+                ["summary"] = "Partial pass: remaining home scroll coverage is deferred."
             })
-        ]);
+            ]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123", ["Inspect one branch."])
         {
             AppGraphExplorationName = "Default"
@@ -900,8 +928,9 @@ public sealed partial class SimulatorAgentServiceTests
         var repairedDialog = Assert.IsType<JsonObject>(repairedSummary["destinations"]?[1]);
         repairedDialog["kind"] = "dialog";
         repairedDialog["parentScreen"] = null;
+
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-progress",
                 "report_app_graph_progress",
@@ -965,6 +994,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(3, result.TotalTurns);
         Assert.Equal(1, result.Audit.CompletionGracePassCount);
+
         var invalidCompletion = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-invalid-completion");
@@ -991,7 +1021,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1003,6 +1033,7 @@ public sealed partial class SimulatorAgentServiceTests
         ]);
         using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var instruction = new string('x', SimulatorAgentService.MaximumInstructionCharacters + 1);
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest(
@@ -1023,7 +1054,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1038,14 +1069,19 @@ public sealed partial class SimulatorAgentServiceTests
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest(
             "session-123",
-            ["Verify the current screen."]) { CaptureTrace = false });
+            ["Verify the current screen."])
+        {
+            CaptureTrace = false
+        });
 
         Assert.False(result.Audit.TraceEnabled);
         Assert.Null(result.Audit.AgentPrompt);
         Assert.Empty(result.Audit.AppGraphPlans);
+
         var modelPass = Assert.Single(result.Audit.ModelPasses);
         Assert.Null(modelPass.Context);
         Assert.Null(modelPass.AssistantText);
+
         var toolCall = Assert.Single(result.Audit.ToolCalls);
         Assert.Empty(toolCall.Arguments.Content);
         Assert.Empty(toolCall.Result.Content);
@@ -1060,7 +1096,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-first-complete",
                 "complete_instruction",
@@ -1114,7 +1150,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-secret",
                 "ansight_type_secret",
@@ -1134,6 +1170,7 @@ public sealed partial class SimulatorAgentServiceTests
         ]);
         using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var secret = service.SetTestSecret("com.example.app", "login.password", "sensitive-value");
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest(
@@ -1158,7 +1195,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-observe",
                 "ansight_get_live_visual_tree",
@@ -1193,6 +1230,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentInstructionStatus.Succeeded, result.Instructions[0].Status);
         Assert.Equal(2, result.TotalTurns);
         Assert.Equal(1, result.TotalToolCalls);
+
         var call = Assert.Single(gateway.Calls);
         Assert.Equal("ansight_get_live_visual_tree", call.ToolName);
         Assert.Equal("session-123", call.SessionId);
@@ -1240,6 +1278,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains("isError", result.Audit.ToolCalls[0].Result.Content, StringComparison.Ordinal);
         Assert.Equal("complete_instruction", result.Audit.ToolCalls[1].ToolName);
         Assert.All(result.Audit.ModelPasses, pass => Assert.NotNull(pass.Context));
+
         var firstPassContext = JsonNode.Parse(result.Audit.ModelPasses[0].Context!.Content)!.AsObject();
         Assert.Contains("bounded mobile UI control agent", firstPassContext["instructions"]!.GetValue<string>(), StringComparison.Ordinal);
         Assert.True(JsonNode.DeepEquals(client.Inputs[0], firstPassContext["input"]));
@@ -1251,7 +1290,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1263,6 +1302,7 @@ public sealed partial class SimulatorAgentServiceTests
         ]);
         using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var graphId = Guid.NewGuid();
         var versionId = Guid.NewGuid();
         var bindingId = Guid.NewGuid();
@@ -1285,7 +1325,7 @@ public sealed partial class SimulatorAgentServiceTests
                             bindingId,
                             1,
                             "ui_action",
-                            new JsonObject { ["action"] = "tap", ["text"] = "Open 3D Guide" },
+                            new JsonObject {["action"] = "tap", ["text"] = "Open 3D Guide" },
                             [],
                             ["The 3D player is visible."],
                             0.98m)
@@ -1319,7 +1359,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1331,6 +1371,7 @@ public sealed partial class SimulatorAgentServiceTests
         ]);
         using var service = new SimulatorAgentService(storage, client, new FakeToolGateway());
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var plan = new SimulatorAgentAppGraphPlan(
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -1366,15 +1407,15 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-list",
                 "ansight_list_tasks",
-                new JsonObject { ["query"] = "open guide" }),
+                new JsonObject {["query"] = "open guide" }),
             CreateFunctionTurn(
                 "call-run",
                 "ansight_run_task",
-                new JsonObject { ["taskId"] = "open-guide", ["input"] = new JsonObject() }),
+                new JsonObject {["taskId"] = "open-guide", ["input"] = new JsonObject() }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1393,6 +1434,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"status\":\"passed\"}}",
             "Task passed."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1412,11 +1454,11 @@ public sealed partial class SimulatorAgentServiceTests
         const string taskToolName = "ansight_task_1_open_current_area_3d_guide";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-preloaded-task",
                 taskToolName,
-                new JsonObject { ["targetArea"] = "El Pati" }),
+                new JsonObject {["targetArea"] = "El Pati" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1452,6 +1494,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"taskId\":\"open-current-area-3d-guide\",\"status\":\"Passed\"}}",
             "Task passed."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1463,12 +1506,14 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(
             client.Tools[0].OfType<JsonObject>(),
             definition => definition["name"]?.GetValue<string>() == taskToolName);
+
         var initialInput = client.Inputs[0].ToJsonString();
         Assert.Contains("Preloaded tasks:", initialInput, StringComparison.Ordinal);
         Assert.Contains("open-current-area-3d-guide", initialInput, StringComparison.Ordinal);
         Assert.DoesNotContain("No earlier instructions", initialInput, StringComparison.Ordinal);
         Assert.DoesNotContain("Authorized published App Graph route candidates", initialInput, StringComparison.Ordinal);
         Assert.DoesNotContain("Host-owned App Graph exploration frontier", initialInput, StringComparison.Ordinal);
+
         var canonicalCall = Assert.Single(gateway.Calls);
         Assert.Equal("ansight_run_task", canonicalCall.ToolName);
         Assert.Equal("open-current-area-3d-guide", canonicalCall.Arguments["taskId"]?.GetValue<string>());
@@ -1486,11 +1531,11 @@ public sealed partial class SimulatorAgentServiceTests
         const string taskToolName = "ansight_task_1_open_my_account_from_map_menu";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-blocked-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "home-menu-item-button-account" }),
+                new JsonObject {["automationId"] = "home-menu-item-button-account" }),
             CreateFunctionTurn(
                 "call-preloaded-task",
                 taskToolName,
@@ -1518,6 +1563,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"taskId\":\"open-my-account-from-map-menu\",\"status\":\"Passed\"}}",
             "Task passed."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1526,11 +1572,13 @@ public sealed partial class SimulatorAgentServiceTests
             ["Open My Account from the map menu."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var blockedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-blocked-tap");
         Assert.True(blockedTap.IsError);
         Assert.Contains("open-my-account-from-map-menu", blockedTap.Message, StringComparison.Ordinal);
+
         var canonicalCall = Assert.Single(gateway.Calls);
         Assert.Equal("ansight_run_task", canonicalCall.ToolName);
         Assert.Equal("open-my-account-from-map-menu", canonicalCall.Arguments["taskId"]?.GetValue<string>());
@@ -1543,15 +1591,15 @@ public sealed partial class SimulatorAgentServiceTests
         const string remainingTaskToolName = "ansight_task_2_open_current_area_3d_guide";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-first-task",
                 firstTaskToolName,
-                new JsonObject { ["searchArea"] = "Siurana" }),
+                new JsonObject {["searchArea"] = "Siurana" }),
             CreateFunctionTurn(
                 "call-blocked-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "area-open3d-guide-button" }),
+                new JsonObject {["automationId"] = "area-open3d-guide-button" }),
             CreateFunctionTurn(
                 "call-declare-uncovered",
                 "ansight_declare_uncovered_step",
@@ -1566,7 +1614,7 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-allowed-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "area-open3d-guide-button" }),
+                new JsonObject {["automationId"] = "area-open3d-guide-button" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1598,6 +1646,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"performed\":true}}",
             "Tap delivered."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1612,15 +1661,18 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(2, gateway.Calls.Count);
         Assert.Equal("ansight_run_task", gateway.Calls[0].ToolName);
         Assert.Equal("ansight_tap_ui", gateway.Calls[1].ToolName);
+
         var blockedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-blocked-tap");
         Assert.True(blockedTap.IsError);
         Assert.Contains("open-current-area-3d-guide", blockedTap.Message, StringComparison.Ordinal);
+
         var declaration = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-declare-uncovered");
         Assert.False(declaration.IsError);
+
         var allowedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-allowed-tap");
@@ -1638,11 +1690,11 @@ public sealed partial class SimulatorAgentServiceTests
         const string remainingTaskToolName = "ansight_task_2_open_current_area_3d_guide";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-first-task",
                 firstTaskToolName,
-                new JsonObject { ["searchArea"] = "Siurana" }),
+                new JsonObject {["searchArea"] = "Siurana" }),
             CreateFunctionTurn(
                 "call-false-uncovered",
                 "ansight_declare_uncovered_step",
@@ -1657,7 +1709,7 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-matching-task",
                 remainingTaskToolName,
-                new JsonObject { ["targetArea"] = "El Pati" }),
+                new JsonObject {["targetArea"] = "El Pati" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1685,9 +1737,7 @@ public sealed partial class SimulatorAgentServiceTests
                     {
                         ["type"] = "object",
                         ["properties"] = new JsonObject
-                        {
-                            ["targetArea"] = new JsonObject { ["type"] = "string" }
-                        },
+{                            ["targetArea"] = new JsonObject {["type"] = "string" }},
                         ["required"] = new JsonArray("targetArea"),
                         ["additionalProperties"] = false
                     },
@@ -1703,6 +1753,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"taskId\":\"open-current-area-3d-guide\",\"status\":\"Passed\"}}",
             "Task passed."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1711,6 +1762,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Use repository tasks to open and verify the El Pati 3D guide."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var rejectedDeclaration = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-false-uncovered");
@@ -1728,7 +1780,7 @@ public sealed partial class SimulatorAgentServiceTests
         const string remainingTaskToolName = "ansight_task_2_open_current_area_3d_guide";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-first-task",
                 firstTaskToolName,
@@ -1779,6 +1831,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"taskId\":\"open-current-area-3d-guide\",\"status\":\"Passed\"}}",
             "Task passed."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1787,6 +1840,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Use repository tasks to open and verify the El Pati 3D guide."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var rejectedDeclaration = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-false-partial");
@@ -1802,12 +1856,12 @@ public sealed partial class SimulatorAgentServiceTests
         const string taskToolName = "ansight_task_1_open_current_area_3d_guide";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("call-task", taskToolName, new JsonObject()),
             CreateFunctionTurn(
                 "call-blocked-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "area-open3d-guide-button" }),
+                new JsonObject {["automationId"] = "area-open3d-guide-button" }),
             CreateFunctionTurn(
                 "call-declare-failed",
                 "ansight_declare_uncovered_step",
@@ -1822,7 +1876,7 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-allowed-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "area-open3d-guide-button" }),
+                new JsonObject {["automationId"] = "area-open3d-guide-button" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1850,6 +1904,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"performed\":true}",
             "Tap delivered."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1858,15 +1913,18 @@ public sealed partial class SimulatorAgentServiceTests
             ["Open the current area 3D guide."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var blockedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-blocked-tap");
         Assert.True(blockedTap.IsError);
         Assert.Contains("Failed task IDs", blockedTap.Message, StringComparison.Ordinal);
+
         var declaration = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-declare-failed");
         Assert.False(declaration.IsError);
+
         var allowedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-allowed-tap");
@@ -1883,7 +1941,7 @@ public sealed partial class SimulatorAgentServiceTests
         const string remainingTaskId = "export-account-data";
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-first-declaration",
                 "ansight_declare_uncovered_step",
@@ -1891,11 +1949,11 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-first-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "welcome-dismiss-button" }),
+                new JsonObject {["automationId"] = "welcome-dismiss-button" }),
             CreateFunctionTurn(
                 "call-blocked-second-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "consent-accept-button" }),
+                new JsonObject {["automationId"] = "consent-accept-button" }),
             CreateFunctionTurn(
                 "call-second-declaration",
                 "ansight_declare_uncovered_step",
@@ -1903,7 +1961,7 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-second-tap",
                 "ansight_tap_ui",
-                new JsonObject { ["automationId"] = "consent-accept-button" }),
+                new JsonObject {["automationId"] = "consent-accept-button" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1931,6 +1989,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"performed\":true}",
             "Tap delivered."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -1939,6 +1998,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Dismiss the welcome overlay and accept the consent prompt."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var blockedTap = Assert.Single(
             result.Audit.ToolCalls,
             call => call.CallId == "call-blocked-second-tap");
@@ -1962,7 +2022,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -1990,7 +2050,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -2023,7 +2083,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("call-launch", "ansight_launch_app", new JsonObject()),
             CreateFunctionTurn("call-observe", "ansight_get_live_visual_tree", new JsonObject()),
             CreateFunctionTurn(
@@ -2076,11 +2136,11 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-verify",
                 "ansight_assert_ui",
-                new JsonObject { ["text"] = "Ready" }),
+                new JsonObject {["text"] = "Ready" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -2103,6 +2163,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(2, result.Instructions[0].Turns);
         Assert.Equal(1, result.Audit.CompletionGracePassCount);
         Assert.Contains("completion-only pass", client.Inputs[1].ToJsonString(), StringComparison.Ordinal);
+
         var completionTools = Assert.Single(client.Tools[1].OfType<JsonObject>());
         Assert.Equal("complete_instruction", completionTools["name"]?.GetValue<string>());
     }
@@ -2112,7 +2173,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-tap",
                 "ansight_tap_ui",
@@ -2148,9 +2209,10 @@ public sealed partial class SimulatorAgentServiceTests
             progress.Message.Contains("screen-space bounds", StringComparison.Ordinal));
         Assert.Contains(reported, progress =>
             progress.Stage == SimulatorAgentProgressStage.ModelCompleted
-            && progress.Message.Contains("15 total", StringComparison.Ordinal));
+                && progress.Message.Contains("15 total", StringComparison.Ordinal));
         Assert.All(reported, progress =>
             Assert.InRange(progress.InstructionIndex, 1, progress.InstructionCount));
+
         var auditedToolCall = Assert.Single(
             result.Audit.ToolCalls,
             static call => call.CallId == "call-tap");
@@ -2180,11 +2242,13 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Equal(SimulatorAgentRunStatus.Failed, result.Status);
+
         var instruction = Assert.Single(result.Instructions);
         Assert.Contains("8 consecutive read-only", instruction.Summary, StringComparison.Ordinal);
         Assert.Equal(9, instruction.Turns);
         Assert.Equal(8, gateway.Calls.Count);
         Assert.Contains("next call must perform", client.Inputs[8].ToJsonString(), StringComparison.Ordinal);
+
         var stoppedCall = Assert.Single(
             result.Audit.ToolCalls,
             static call => call.CallId == "call-observe-9");
@@ -2197,7 +2261,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-failed",
                 "complete_instruction",
@@ -2237,7 +2301,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-app-tool",
                 "ansight_call_app_tool",
@@ -2278,7 +2342,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "query-selection",
                 "ansight_call_app_tool",
@@ -2320,7 +2384,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "query-map",
                 "ansight_call_app_tool",
@@ -2358,6 +2422,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Validate the map contents.", "Select the exact map target."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var secondInstructionInput = client.Inputs[2].ToJsonString();
         Assert.Contains("These app-tool calls succeeded earlier", secondInstructionInput, StringComparison.Ordinal);
         Assert.Contains("redpoint.mapbox.query_surface_contents", secondInstructionInput, StringComparison.Ordinal);
@@ -2370,14 +2435,14 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "query-camera-before",
                 "ansight_call_app_tool",
                 new JsonObject
                 {
                     ["toolId"] = "redpoint.3d_player.query_view",
-                    ["arguments"] = new JsonObject { ["includeScene"] = true }
+                    ["arguments"] = new JsonObject {["includeScene"] = true }
                 }),
             CreateFunctionTurn(
                 "swipe-player",
@@ -2395,7 +2460,7 @@ public sealed partial class SimulatorAgentServiceTests
                 new JsonObject
                 {
                     ["toolId"] = "redpoint.3d_player.query_view",
-                    ["arguments"] = new JsonObject { ["includeScene"] = true }
+                    ["arguments"] = new JsonObject {["includeScene"] = true }
                 }),
             CreateFunctionTurn(
                 "complete-swipe",
@@ -2410,6 +2475,7 @@ public sealed partial class SimulatorAgentServiceTests
         gateway.Results.Enqueue(CreateCameraToolResult(10));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"isError\":false}", "Swiped."));
         gateway.Results.Enqueue(CreateCameraToolResult(25));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2428,7 +2494,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "tap-map-point",
                 "ansight_tap_ui",
@@ -2455,6 +2521,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Select the exact map annotation."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var postTapInput = client.Inputs[1].ToJsonString();
         Assert.Contains("bounded target-local tap was delivered", postTapInput, StringComparison.Ordinal);
         Assert.Contains("most specific semantic postcondition", postTapInput, StringComparison.Ordinal);
@@ -2467,14 +2534,14 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "query-secret-garden",
                 "ansight_call_app_tool",
                 new JsonObject
                 {
                     ["toolId"] = "redpoint.mapbox.query_surface_contents",
-                    ["arguments"] = new JsonObject { ["surfaceId"] = "1" }
+                    ["arguments"] = new JsonObject {["surfaceId"] = "1" }
                 }),
             CreateFunctionTurn(
                 "find-search-overlay",
@@ -2517,6 +2584,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"performed\":true}",
             "Tapped map."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2528,6 +2596,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains("Host retained one exact named target", client.Inputs[1].ToJsonString());
         Assert.Contains("targetX", client.Inputs[1].ToJsonString());
         Assert.Contains("516.97", client.Inputs[1].ToJsonString());
+
         var postOverlayInput = client.Inputs[2].ToJsonString();
         Assert.Contains("targetX", postOverlayInput);
         Assert.Contains("516.97", postOverlayInput);
@@ -2542,7 +2611,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "find-guide-enabled",
                 "ansight_find_ui",
@@ -2589,6 +2658,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"performed\":true}",
             "Tapped."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2608,7 +2678,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "type-search",
                 "ansight_type_text",
@@ -2643,6 +2713,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"matches\":[{\"text\":\"Sikati Bay\",\"tapHint\":{\"tool\":\"ansight_tap_ui\",\"selector\":{\"automationId\":\"search-result-sikati-bay\"}}}],\"totalMatches\":1}}",
             "One result."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2652,6 +2723,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Contains("Select a result only when", client.Inputs[1].ToJsonString());
+
         var postFindInput = client.Inputs[2].ToJsonString();
         Assert.Contains("Use the complete current instruction", postFindInput);
         Assert.Contains("If it asks only to search or verify results", postFindInput);
@@ -2665,7 +2737,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "type-search",
                 "ansight_type_text",
@@ -2700,6 +2772,7 @@ public sealed partial class SimulatorAgentServiceTests
             false,
             "{\"isError\":false,\"result\":{\"matches\":[],\"totalMatches\":0}}",
             "No semantic match."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2708,6 +2781,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Search for and select Example Place."]));
 
         Assert.Equal(SimulatorAgentRunStatus.Failed, result.Status);
+
         var postFindInput = client.Inputs[2].ToJsonString();
         Assert.Contains("not represented by the current semantic tree", postFindInput);
         Assert.Contains("loading/searching state", postFindInput);
@@ -2721,7 +2795,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-type",
                 "ansight_type_text",
@@ -2769,7 +2843,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var storage = new InMemoryEncryptedStorage();
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn(
                 "call-observe",
                 "ansight_get_live_visual_tree",
@@ -2777,7 +2851,7 @@ public sealed partial class SimulatorAgentServiceTests
             CreateFunctionTurn(
                 "call-assert",
                 "ansight_assert_ui",
-                new JsonObject { ["text"] = "Ready" }),
+                new JsonObject {["text"] = "Ready" }),
             CreateFunctionTurn(
                 "call-complete",
                 "complete_instruction",
@@ -2799,6 +2873,7 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway();
         gateway.Results.Enqueue(new ToolCallResult(false, largeObservation, "Observed."));
         gateway.Results.Enqueue(new ToolCallResult(false, assertion, "Ready is visible."));
+
         using var service = new SimulatorAgentService(storage, client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -2810,12 +2885,14 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Contains(new string('x', 1_000), client.Inputs[1].ToJsonString(), StringComparison.Ordinal);
+
         var finalInput = client.Inputs[2].ToJsonString();
         Assert.DoesNotContain(new string('x', 1_000), finalInput, StringComparison.Ordinal);
+
         var compactedFunctionOutput = Assert.Single(
             client.Inputs[2].OfType<JsonObject>(),
             item => item["type"]?.GetValue<string>() == "function_call_output"
-                    && item["call_id"]?.GetValue<string>() == "call-observe");
+                && item["call_id"]?.GetValue<string>() == "call-observe");
         var compactedOutput = Assert.IsType<JsonObject>(JsonNode.Parse(
             compactedFunctionOutput["output"]?.GetValue<string>() ?? string.Empty));
         Assert.True(compactedOutput["superseded"]?.GetValue<bool>());
@@ -2860,6 +2937,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.DoesNotContain("call-tap-0", client.Inputs[^1].ToJsonString(), StringComparison.Ordinal);
+
         foreach (var input in client.Inputs)
         {
             var callIds = input.OfType<JsonObject>()
@@ -2931,14 +3009,15 @@ public sealed partial class SimulatorAgentServiceTests
     private static FakeToolGateway CreateGatewayWithLifecycleTools()
     {
         var gateway = new FakeToolGateway();
+
         foreach (var toolName in new[]
-                 {
-                     "ansight_list_host_devices",
-                     "ansight_start_device",
-                     "ansight_launch_app",
-                     "ansight_terminate_app",
-                     "ansight_get_live_visual_tree"
-                 })
+        {
+            "ansight_list_host_devices",
+            "ansight_start_device",
+            "ansight_launch_app",
+            "ansight_terminate_app",
+            "ansight_get_live_visual_tree"
+        })
         {
             gateway.ToolDefinitions.Add(new JsonObject
             {
@@ -2969,6 +3048,7 @@ public sealed partial class SimulatorAgentServiceTests
         JsonObject arguments)
     {
         var argumentText = arguments.ToJsonString();
+
         return new OpenAiTurn(
             $"resp-{callId}",
             "gpt-5.6-terra",
@@ -3022,11 +3102,18 @@ public sealed partial class SimulatorAgentServiceTests
             }.ToJsonString(),
             "Queried camera state.");
 
-    private sealed class FakeOpenAiSessionFactory(
-        IOpenAiSession session) : IOpenAiSessionFactory
+    private sealed class FakeOpenAiSessionFactory : IOpenAiSessionFactory
     {
+        private readonly IOpenAiSession session;
+
+        public FakeOpenAiSessionFactory(
+            IOpenAiSession session)
+        {
+            this.session = session;
+        }
+
         public IOpenAiSession Create()
-            => session;
+                    => session;
     }
 
     private sealed class FakeOpenAiSession : IOpenAiSession
@@ -3049,6 +3136,7 @@ public sealed partial class SimulatorAgentServiceTests
         public Task WarmupAsync(OpenAiRequest request, CancellationToken cancellationToken)
         {
             WarmupRequests.Add(request);
+
             return Task.CompletedTask;
         }
 
@@ -3063,12 +3151,14 @@ public sealed partial class SimulatorAgentServiceTests
                 IncrementalInput = request.IncrementalInput?.DeepClone().AsArray()
             });
             IncrementalInputs.Add(request.IncrementalInput?.DeepClone().AsArray() ?? []);
+
             return Task.FromResult(responses.Dequeue());
         }
 
         public ValueTask DisposeAsync()
         {
             IsDisposed = true;
+
             return ValueTask.CompletedTask;
         }
     }
@@ -3078,7 +3168,7 @@ public sealed partial class SimulatorAgentServiceTests
         public Task<OpenAiTurn> CreateResponseAsync(
             OpenAiRequest request,
             CancellationToken cancellationToken)
-            => throw new OpenAiWebSocketTransportException("Connection failed.");
+                => throw new OpenAiWebSocketTransportException("Connection failed.");
 
         public ValueTask DisposeAsync()
             => ValueTask.CompletedTask;
@@ -3115,6 +3205,7 @@ public sealed partial class SimulatorAgentServiceTests
             Inputs.Add(request.Input.DeepClone().AsArray());
             Tools.Add(request.Tools.DeepClone().AsArray());
             MaximumOutputTokens.Add(request.MaximumOutputTokens);
+
             return Task.FromResult(responses.Dequeue());
         }
 
@@ -3143,7 +3234,6 @@ public sealed partial class SimulatorAgentServiceTests
         public Queue<ToolCallResult> Results { get; } = new();
 
         public ToolCallResult? InitialObservation { get; init; }
-
         public string AppState { get; init; } = "foreground";
 
         public Task<ToolCallResult?> CaptureInitialObservationAsync(
@@ -3163,7 +3253,6 @@ public sealed partial class SimulatorAgentServiceTests
                 []);
 
         public ToolSessionContext? ReplacementSession { get; init; }
-
         public List<string> ReboundSessionIds { get; } = [];
 
         public void BeginRun(
@@ -3190,6 +3279,7 @@ public sealed partial class SimulatorAgentServiceTests
             bool appGraphEnabled = false)
         {
             var definitions = ToolDefinitions.DeepClone().AsArray();
+
             foreach (var task in repositoryTasks ?? [])
             {
                 definitions.Add(new JsonObject
@@ -3215,6 +3305,7 @@ public sealed partial class SimulatorAgentServiceTests
             {
                 trace?.Invoke(item);
             }
+
             return Task.FromResult(RepositoryTaskShortcuts);
         }
 
@@ -3225,6 +3316,7 @@ public sealed partial class SimulatorAgentServiceTests
                 candidate.ToolName,
                 call.Name,
                 StringComparison.Ordinal));
+
             return task is null
                 ? call
                 : new OpenAiFunctionCall(
@@ -3288,12 +3380,20 @@ public sealed partial class SimulatorAgentServiceTests
                 sessionId,
                 correlationId));
             TaskTraceStates.Add(Ansight.Host.Runtime.Tasks.RepositoryTaskTraceScope.IsEnabled);
+
             return Task.FromResult(Results.Count > 0 ? Results.Dequeue() : Result);
         }
     }
 
-    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    private sealed class SynchronousProgress<T> : IProgress<T>
     {
+        private readonly Action<T> report;
+
+        public SynchronousProgress(Action<T> report)
+        {
+            this.report = report;
+        }
+
         public void Report(T value)
         {
             report(value);
@@ -3307,6 +3407,7 @@ public sealed partial class SimulatorAgentServiceTests
         public AuditSaveResult Save(SimulatorAgentRunAudit audit)
         {
             SavedAudit = audit;
+
             return new AuditSaveResult("/tmp/simulator-agent-audit.json", null);
         }
 

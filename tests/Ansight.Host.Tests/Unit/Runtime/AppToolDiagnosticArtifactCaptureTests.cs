@@ -53,6 +53,7 @@ public sealed class AppToolDiagnosticArtifactCaptureTests
         Assert.True(capture.IsCaptured, capture.Message);
         Assert.NotNull(capture.SnapshotId);
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var session));
+
         var artifact = Assert.Single(session!.ArtifactSnapshots);
         Assert.Equal(capture.SnapshotId, artifact.SnapshotId);
         Assert.Equal("ansight.app-tool.diagnostic", artifact.Source);
@@ -124,6 +125,7 @@ public sealed class AppToolDiagnosticArtifactCaptureTests
         Assert.True(capture.IsSupported);
         Assert.True(capture.IsCaptured, capture.Message);
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var session));
+
         var artifact = Assert.Single(session!.ArtifactSnapshots);
         Assert.Equal("jni-reference-graph", artifact.Kind);
         Assert.Equal("jni-reference-graph.json", Assert.Single(artifact.Entries).Name);
@@ -134,6 +136,7 @@ public sealed class AppToolDiagnosticArtifactCaptureTests
             artifact,
             artifact.Entries[0],
             out var artifactFilePath));
+
         using var artifactDocument = JsonDocument.Parse(File.ReadAllText(artifactFilePath));
         Assert.Equal(
             "ansight.jni-reference-graph.v1",

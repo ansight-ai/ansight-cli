@@ -15,8 +15,10 @@ internal static class SessionLogStreamArchiveCodec
         JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(archive);
+
         var streams = SessionLogStreams.Normalize(sourceStreams, Array.Empty<LogEntry>());
         var descriptors = new List<SessionLogStreamArchiveDescriptor>(streams.Count);
+
         for (var index = 0; index < streams.Count; index++)
         {
             var stream = streams[index];
@@ -50,7 +52,9 @@ internal static class SessionLogStreamArchiveCodec
         JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(archive);
+
         using var reader = new SystemZipSessionArchiveReader(archive);
+
         return TryRead(reader, options);
     }
 
@@ -59,13 +63,16 @@ internal static class SessionLogStreamArchiveCodec
         JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(archive);
+
         var indexEntry = archive.GetEntry(IndexEntryPath);
+
         if (indexEntry is null)
         {
             return null;
         }
 
         SessionLogStreamArchiveIndexDocument? index;
+
         using (var stream = indexEntry.Open())
         {
             index = JsonSerializer.Deserialize<SessionLogStreamArchiveIndexDocument>(stream, options);
@@ -77,6 +84,7 @@ internal static class SessionLogStreamArchiveCodec
         }
 
         var result = new List<SessionLogStream>(index.Streams.Count);
+
         foreach (var descriptor in index.Streams)
         {
             if (string.IsNullOrWhiteSpace(descriptor.StreamId)
@@ -110,7 +118,7 @@ internal static class SessionLogStreamArchiveCodec
     public static IReadOnlyList<LogEntry> GetLegacySdkEntries(IReadOnlyList<SessionLogStream> streams)
         => streams
             .Where(stream => string.Equals(stream.StreamId, SessionLogStreamIds.AnsightSdk, StringComparison.Ordinal)
-                             || string.Equals(stream.Kind, SessionLogStreamKinds.AnsightSdk, StringComparison.Ordinal))
+                || string.Equals(stream.Kind, SessionLogStreamKinds.AnsightSdk, StringComparison.Ordinal))
             .SelectMany(stream => stream.Entries)
             .OrderBy(entry => entry.TimestampUtc)
             .ToArray();
@@ -121,12 +129,14 @@ internal static class SessionLogStreamArchiveCodec
         JsonSerializerOptions options)
     {
         var entry = archive.GetEntry(entryPath);
+
         if (entry is null)
         {
             return null;
         }
 
         using var stream = entry.Open();
+
         return JsonSerializer.Deserialize<SessionLogStreamArchiveEntriesDocument>(stream, options);
     }
 
@@ -149,6 +159,7 @@ internal static class SessionLogStreamArchiveCodec
                 : '-')
             .ToArray();
         var value = new string(characters).Trim('-');
+
         return string.IsNullOrWhiteSpace(value) ? "stream" : value;
     }
 

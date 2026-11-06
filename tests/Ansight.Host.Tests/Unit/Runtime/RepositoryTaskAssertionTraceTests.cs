@@ -20,11 +20,16 @@ public sealed partial class RepositoryTaskTests
               expect(comparison.passed, { id: 'visual-check' }).toBe(EXPECTED);
             }
             """.Replace("EXPECTED", requireMatch ? "true" : "false"));
+
         var result = await CreateExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(new JsonObject
         {
-            ["capability"] = "screenshot.assert", ["passed"] = false, ["differenceRatio"] = 0.5
+            ["capability"] = "screenshot.assert",
+            ["passed"] = false,
+            ["differenceRatio"] = 0.5
         }, true))).ExecuteAsync(new RepositoryTaskExecutionRequest("compare", task, "session", new JsonObject(), "compare")
-        { CaptureTrace = true }, CancellationToken.None);
+        {
+            CaptureTrace = true
+        }, CancellationToken.None);
 
         Assert.Equal(requireMatch ? RepositoryTaskRunStatus.Failed : RepositoryTaskRunStatus.Passed, result.Status);
         Assert.Equal("visual-check", Assert.Single(result.Assertions).AssertionId);
@@ -42,6 +47,7 @@ public sealed partial class RepositoryTaskTests
               expect(true, { id: 'unreachable' }).toBe(true);
             }
             """);
+
         var result = await CreateExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(
             new JsonObject { ["message"] = "Baseline is missing." }, true))).ExecuteAsync(
             new RepositoryTaskExecutionRequest("compare", task, "session", new JsonObject(), "compare"), CancellationToken.None);
@@ -66,9 +72,12 @@ public sealed partial class RepositoryTaskTests
               expect(true, { id: 'unreachable' }).toBe(true);
             }
             """);
+
         var result = await CreateExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(new JsonObject(), false)))
             .ExecuteAsync(new RepositoryTaskExecutionRequest("assertions", task, "session", new JsonObject(), "assertions")
-            { CaptureTrace = true }, CancellationToken.None);
+            {
+                CaptureTrace = true
+            }, CancellationToken.None);
 
         Assert.Equal(RepositoryTaskRunStatus.Failed, result.Status);
         Assert.Single(result.ToolCalls); // Expectations do not consume the task's one-action budget.
@@ -82,6 +91,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal("displayed", result.Assertions[2].Expected!.GetValue<string>());
         Assert.Equal("copied", result.Assertions[2].Actual!.GetValue<string>());
         Assert.All(result.Assertions, assertion => Assert.InRange(assertion.CompletedAtUtc!.Value, result.StartedAtUtc.AddSeconds(-1), result.CompletedAtUtc));
+
         var protocol = RepositoryTaskProtocol.BuildRunResult(result);
         var retained = protocol["assertions"]!.Deserialize<RepositoryTaskAssertion[]>(JsonUtil.Compact)!;
         Assert.Equal("copied", retained[2].Actual!.GetValue<string>());
@@ -101,15 +111,20 @@ public sealed partial class RepositoryTaskTests
               expect(true, { id: 'unreached' }).toBe(true);
             }
             """);
+
         using var cancellation = new CancellationTokenSource();
         var result = await CreateExecutor((_, _, _) =>
         {
             cancellation.Cancel();
+
             return new TaskCompletionSource<RequestResult>().Task;
         }).ExecuteAsync(new RepositoryTaskExecutionRequest("cancel", task, "session", new JsonObject(), "cancel")
-        { CaptureTrace = true }, cancellation.Token);
+        {
+            CaptureTrace = true
+        }, cancellation.Token);
 
         Assert.Equal(RepositoryTaskRunStatus.Cancelled, result.Status);
+
         var assertion = Assert.Single(result.Assertions);
         Assert.Equal("ready", assertion.AssertionId);
         Assert.True(assertion.Passed);
@@ -131,9 +146,12 @@ public sealed partial class RepositoryTaskTests
               expect(circular, { id: 'circular' }).toBe(circular);
             }
             """);
+
         var result = await CreateExecutor((_, _, _) => throw new InvalidOperationException()).ExecuteAsync(
             new RepositoryTaskExecutionRequest("values", task, "session", new JsonObject(), "values")
-            { CaptureTrace = true }, CancellationToken.None);
+            {
+                CaptureTrace = true
+            }, CancellationToken.None);
 
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
         Assert.Equal(5, result.Assertions.Count);

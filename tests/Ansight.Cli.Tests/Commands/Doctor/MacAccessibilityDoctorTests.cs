@@ -12,6 +12,7 @@ public sealed class MacAccessibilityDoctorTests
         Assert.Equal("amber", check.Signal);
         Assert.Contains("Privacy_Accessibility", check.InstallInstructions);
         Assert.Contains("same launcher", check.InstallInstructions);
+
         var checks = new List<DoctorCheck> { check };
         DoctorCommand.RequireChecks(checks, [MacAccessibilityDoctor.CheckName]);
         Assert.True(checks[0].IsRequired);

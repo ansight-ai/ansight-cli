@@ -6,6 +6,7 @@ internal static class TextInputEncoder
     {
         var operations = new List<TextInputOperation>();
         var buffer = new System.Text.StringBuilder();
+
         foreach (var character in text.Replace("\r\n", "\n", StringComparison.Ordinal))
         {
             if (character == '\n')
@@ -37,6 +38,7 @@ internal static class TextInputEncoder
         }
 
         FlushText(buffer, operations);
+
         return operations;
     }
 

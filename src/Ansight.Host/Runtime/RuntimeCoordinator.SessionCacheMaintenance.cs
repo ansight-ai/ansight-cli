@@ -4,7 +4,7 @@ using Ansight.Host.Sessions;
 
 public sealed partial class RuntimeCoordinator
 {
-    private static readonly TimeSpan SessionCacheMaintenanceInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan sessionCacheMaintenanceInterval = TimeSpan.FromMinutes(15);
     private SessionCacheMaintenanceResult? lastSessionCacheCleanup;
 
     public event EventHandler<SessionCacheMaintenanceResult>? SessionCacheMaintenanceCompleted;
@@ -18,6 +18,7 @@ public sealed partial class RuntimeCoordinator
             try
             {
                 var result = SessionCacheMaintenance.RunOnce(this, cancellationToken);
+
                 if (result.DeletedSessionCount > 0)
                 {
                     Volatile.Write(ref lastSessionCacheCleanup, result);
@@ -37,7 +38,7 @@ public sealed partial class RuntimeCoordinator
 
             try
             {
-                await Task.Delay(SessionCacheMaintenanceInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(sessionCacheMaintenanceInterval, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

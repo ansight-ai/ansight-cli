@@ -7,7 +7,6 @@ namespace Ansight.Host.Runtime.Operations.Tools.Shared;
 
 internal sealed class OperationServices
 {
-
     public OperationServices(
         IRuntimeState runtimeState,
         IApplicationPaths applicationPaths,
@@ -32,11 +31,13 @@ internal sealed class OperationServices
         NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningManager(
             Path.Combine(applicationPaths.ApplicationTempPath, "network-conditioning"),
             (target, action, value) =>
-            {
-                if (target.SessionId is not null)
-                    HostSessionEvents.Publish(runtimeState, target.SessionId, "network.conditioning." + action,
-                        "NetworkConditioning", value.ToJsonString());
-            });
+                {
+                    if (target.SessionId is not null)
+                    {
+                        HostSessionEvents.Publish(runtimeState, target.SessionId, "network.conditioning." + action,
+                            "NetworkConditioning", value.ToJsonString());
+                    }
+                });
         DevicePermissionsRouter = devicePermissionsRouter ?? new DevicePermissionsRouter();
         DeviceMotionRouter = deviceMotionRouter ?? new DeviceMotionRouter();
         DeviceEvidence = deviceEvidence;
@@ -48,9 +49,9 @@ internal sealed class OperationServices
         PairingConfigService = pairingConfigService;
         PairingConfigCache = pairingConfigCache;
         AppService = hostAppService
-                         ?? new AppService(knownAppStore, runtimeState, appToolBridge, pairingConfigCache);
+            ?? new AppService(knownAppStore, runtimeState, appToolBridge, pairingConfigCache);
         PairingService = hostPairingService
-                             ?? new PairingService(pairingConfigService, pairingConfigCache, knownAppStore);
+            ?? new PairingService(pairingConfigService, pairingConfigCache, knownAppStore);
         AppToolBridge = appToolBridge;
         CloudSessionSharingService = cloudSessionSharingService;
         SessionResolver = sessionResolver;
@@ -59,49 +60,29 @@ internal sealed class OperationServices
         DeviceLocationRouter = deviceLocationRouter ?? new DeviceLocationRouter();
         DeviceLifecycleRouter = deviceLifecycleRouter ?? new DeviceLifecycleRouter();
         RepositoryTaskRouter = repositoryTaskRouter
-                               ?? new RepositoryTaskRouter(applicationPaths);
+            ?? new RepositoryTaskRouter(applicationPaths);
     }
 
     public Ansight.Host.Devices.Network.NetworkConditioningManager NetworkConditioning { get; }
-
     public IExternalSessionScreenshotCaptureManager? ExternalScreenshots { get; }
-
     public DeviceSessionEvidence? DeviceEvidence { get; }
-
     public AudioInjectionRouter AudioInjectionRouter { get; }
-
     internal IScreenshotEvaluator? ScreenshotEvaluator { get; set; }
-
     public IRuntimeState RuntimeState { get; }
-
     public IApplicationPaths ApplicationPaths { get; }
-
     public IKnownAppStore KnownAppStore { get; }
-
     public IPairingConfigService PairingConfigService { get; }
-
     public IPairingConfigCache PairingConfigCache { get; }
-
     public AppService AppService { get; }
-
     public PairingService PairingService { get; }
-
     public IAppToolBridge AppToolBridge { get; }
-
     public ICloudSessionSharingService? CloudSessionSharingService { get; }
-
     public SessionResolver SessionResolver { get; }
-
     public UiInputRouter UiInputRouter { get; }
-
     public DeviceLocationRouter DeviceLocationRouter { get; }
-
     public DeviceMotionRouter DeviceMotionRouter { get; }
-
     public DevicePermissionsRouter DevicePermissionsRouter { get; }
-
     public DeviceLifecycleRouter DeviceLifecycleRouter { get; }
-
     public RepositoryTaskRouter RepositoryTaskRouter { get; }
 
     public void AttachHostToolRegistry(OperationRegistry registry)

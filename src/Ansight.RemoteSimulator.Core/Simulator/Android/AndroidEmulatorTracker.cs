@@ -6,7 +6,7 @@ namespace Ansight.RemoteSimulator.Core.Simulator.Android;
 
 public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyncDisposable
 {
-    private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan defaultPollInterval = TimeSpan.FromSeconds(2);
     private readonly IAndroidEmulatorClient client;
     private readonly TimeSpan pollInterval;
     private readonly SemaphoreSlim refreshGate = new(1, 1);
@@ -18,7 +18,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
         TimeSpan? pollInterval = null)
     {
         this.client = client ?? throw new ArgumentNullException(nameof(client));
-        this.pollInterval = pollInterval ?? DefaultPollInterval;
+        this.pollInterval = pollInterval ?? defaultPollInterval;
     }
 
     public event EventHandler<RemoteRuntimeSnapshot>? SnapshotChanged;
@@ -40,9 +40,11 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
     public async Task<RemoteRuntimeSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
         await refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             RemoteRuntimeSnapshot next;
+
             try
             {
                 var adbDevices = await client.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
@@ -65,12 +67,14 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
 
             var previous = Current;
             Current = next;
+
             if (!HasMeaningfulChange(previous, next))
             {
                 return next;
             }
 
             SnapshotChanged?.Invoke(this, next);
+
             return next;
         }
         finally
@@ -90,6 +94,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
         var result = await client.RunAsync(
             ["-s", deviceSerial, "emu", "kill"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("stop the emulator", result));
@@ -153,6 +158,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
         var displaySize = displaySizeTask.Result.IsSuccess
             ? ParseDisplaySize(displaySizeTask.Result.StandardOutput)
             : null;
+
         return CreateDevice(device, avdName, apiLevel, displaySize, isBooted);
     }
 
@@ -168,6 +174,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
         var runtime = string.IsNullOrWhiteSpace(apiLevel)
             ? "Android emulator"
             : $"Android API {apiLevel}";
+
         return new RemoteRuntimeDevice(
             device.Serial,
             name,
@@ -183,9 +190,11 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
     internal static IReadOnlyDictionary<string, string> ParseProperties(string output)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var match = PropertyPattern().Match(line);
+
             if (match.Success)
             {
                 result[match.Groups["name"].Value] = match.Groups["value"].Value;
@@ -198,6 +207,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
     internal static AndroidDisplaySize? ParseDisplaySize(string output)
     {
         AndroidDisplaySize? result = null;
+
         foreach (var match in DisplaySizePattern().Matches(output).Cast<Match>())
         {
             if (int.TryParse(match.Groups["width"].Value, out var width)
@@ -222,6 +232,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
     private async Task PollAsync(CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(pollInterval);
+
         while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
         {
             await RefreshAsync(cancellationToken).ConfigureAwait(false);
@@ -230,7 +241,7 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
 
     private static bool HasMeaningfulChange(RemoteRuntimeSnapshot previous, RemoteRuntimeSnapshot next)
         => !string.Equals(previous.Error, next.Error, StringComparison.Ordinal)
-           || !previous.Devices.SequenceEqual(next.Devices);
+            || !previous.Devices.SequenceEqual(next.Devices);
 
     private static bool IsEmulatorSerial(string serial)
         => serial.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase);
@@ -240,11 +251,12 @@ public sealed partial class AndroidEmulatorTracker : IRemoteRuntimeSource, IAsyn
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim()
-           ?? string.Empty;
+            ?? string.Empty;
 
     private static string BuildFailureMessage(string operation, AdbCommandResult result)
     {
         var detail = FirstNonEmpty(result.StandardError, result.StandardOutput);
+
         return string.IsNullOrWhiteSpace(detail)
             ? $"ADB failed to {operation} with exit code {result.ExitCode}."
             : $"ADB failed to {operation}: {detail}";

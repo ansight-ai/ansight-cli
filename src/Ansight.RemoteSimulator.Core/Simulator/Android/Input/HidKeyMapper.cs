@@ -12,6 +12,7 @@ internal static class HidKeyMapper
     private static IReadOnlyDictionary<uint, string> BuildKeyCodes()
     {
         var result = new Dictionary<uint, string>();
+
         for (uint usageCode = 4; usageCode <= 29; usageCode++)
         {
             result[usageCode] = $"KEYCODE_{(char)('A' + usageCode - 4)}";
@@ -40,6 +41,7 @@ internal static class HidKeyMapper
         result[55] = "KEYCODE_PERIOD";
         result[56] = "KEYCODE_SLASH";
         result[57] = "KEYCODE_CAPS_LOCK";
+
         for (uint usageCode = 58; usageCode <= 69; usageCode++)
         {
             result[usageCode] = $"KEYCODE_F{usageCode - 57}";
@@ -64,6 +66,7 @@ internal static class HidKeyMapper
         result[86] = "KEYCODE_NUMPAD_SUBTRACT";
         result[87] = "KEYCODE_NUMPAD_ADD";
         result[88] = "KEYCODE_NUMPAD_ENTER";
+
         for (uint usageCode = 89; usageCode <= 97; usageCode++)
         {
             result[usageCode] = $"KEYCODE_NUMPAD_{usageCode - 88}";
@@ -80,6 +83,7 @@ internal static class HidKeyMapper
         result[229] = "KEYCODE_SHIFT_RIGHT";
         result[230] = "KEYCODE_ALT_RIGHT";
         result[231] = "KEYCODE_META_RIGHT";
+
         return result;
     }
 }

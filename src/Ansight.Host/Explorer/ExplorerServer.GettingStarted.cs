@@ -7,16 +7,25 @@ internal sealed partial class ExplorerServer
     private async Task<bool> TryHandleGettingStartedGetAsync(
         string route, HttpListenerResponse response, bool isHead, CancellationToken cancellationToken)
     {
-        if (route != "api/getting-started" || !isExplorer) return false;
+        if (route != "api/getting-started" || !isExplorer)
+        {
+            return false;
+        }
+
         await WriteJsonAsync(response, GettingStarted.Read(), HttpStatusCode.OK, isHead, cancellationToken)
             .ConfigureAwait(false);
+
         return true;
     }
 
     private async Task<bool> TryHandleGettingStartedPostAsync(
         string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken)
     {
-        if (route != "api/getting-started" || !isExplorer) return false;
+        if (route != "api/getting-started" || !isExplorer)
+        {
+            return false;
+        }
+
         var update = await ReadJsonAsync<GettingStartedUpdate>(request, cancellationToken).ConfigureAwait(false);
         var state = update.Action switch
         {
@@ -28,7 +37,7 @@ internal sealed partial class ExplorerServer
             "replay" when !string.IsNullOrWhiteSpace(update.SessionId)
                 && runtime.Sessions.GetSummaries().Any(session =>
                     session.SessionId == update.SessionId && session.TotalImageCount > 0
-                    && !runtime.IsSessionLive(session.SessionId))
+                        && !runtime.IsSessionLive(session.SessionId))
                 => GettingStarted.Update(current => current with { ReplayedSessionId = update.SessionId }),
             "automation-saved" when !string.IsNullOrWhiteSpace(update.SessionId)
                 && runtime.Sessions.GetSummaries().Any(session => session.SessionId == update.SessionId)
@@ -37,6 +46,7 @@ internal sealed partial class ExplorerServer
         };
         await WriteJsonAsync(response, state, HttpStatusCode.OK, false, cancellationToken)
             .ConfigureAwait(false);
+
         return true;
     }
 

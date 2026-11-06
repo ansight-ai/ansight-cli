@@ -60,6 +60,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         toolCatalog = new AppToolCatalogService(
             connectionRegistry,
             SendToolRequestAsync);
+
         if (this.externalSessionScreenshotCaptureManager is not null)
         {
             this.externalSessionScreenshotCaptureManager.CaptureFailed += ExternalSessionScreenshotCaptureManagerOnCaptureFailed;
@@ -80,6 +81,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         if (!portLeasePool.TryLeaseListener(out var leasedPort, out var listener, out var leaseError))
         {
             runtimeState.SetSessionStatus(sessionId, "WebSocket Error", leaseError);
+
             return null;
         }
 
@@ -122,6 +124,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
                 ? warning
                 : $"WebSocket session startup failed: {ex.Message}";
             runtimeState.SetSessionStatus(sessionId, "WebSocket Error", statusMessage);
+
             return null;
         }
     }
@@ -156,6 +159,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
 
         const string disconnectReason = "Force disconnected from the host.";
         connection.RequestDisconnect(disconnectReason);
+
         try
         {
             connection.Abort();
@@ -168,6 +172,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         UnregisterConnection(normalizedSessionId, connection, disconnectReason);
 
         log.Info($"session_force_disconnect_requested sessionId={normalizedSessionId}");
+
         return HostOperationResult.Success($"Force disconnected session '{normalizedSessionId}'.");
     }
 
@@ -177,13 +182,14 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         AppToolBridgeRequestContext? requestContext = null)
     {
         var response = await toolCatalog.QueryAsync(
-                sessionId,
-                filterArguments: null,
-                callerRevision: null,
-                cancellationToken,
-                requestContext)
+            sessionId,
+            filterArguments: null,
+            callerRevision: null,
+            cancellationToken,
+            requestContext)
             .ConfigureAwait(false);
         CaptureQueriedAppToolCatalog(sessionId, response);
+
         return response;
     }
 
@@ -292,6 +298,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         AppToolBridgeRequestContext? requestContext = null)
     {
         ArgumentNullException.ThrowIfNull(calls);
+
         if (calls.Count is < 1 or > 32)
         {
             return Task.FromResult(AppToolBridgeResponse.FromFailure(
@@ -299,6 +306,7 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
         }
 
         var callPayloads = new JsonArray();
+
         foreach (var call in calls)
         {
             if (string.IsNullOrWhiteSpace(call.ToolId))
@@ -331,5 +339,4 @@ internal sealed partial class WebSocketSessionManager : IAppToolBridge
 
         return SendToolRequestAsync(sessionId, envelope, cancellationToken, requestContext);
     }
-
 }

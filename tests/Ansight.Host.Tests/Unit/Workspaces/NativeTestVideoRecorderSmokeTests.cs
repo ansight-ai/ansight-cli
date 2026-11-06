@@ -10,7 +10,12 @@ public sealed class NativeTestVideoRecorderSmokeTests
     public async Task RecordsSelectedDeviceIntoAPlayableMp4()
     {
         var deviceId = Environment.GetEnvironmentVariable("ANSIGHT_TEST_VIDEO_DEVICE_ID");
-        if (string.IsNullOrWhiteSpace(deviceId)) return;
+
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return;
+        }
+
         var platform = Environment.GetEnvironmentVariable("ANSIGHT_TEST_VIDEO_PLATFORM") ?? "ios";
         using var environment = new TestEnvironment();
         using var runtime = environment.CreateRuntime();
@@ -18,8 +23,16 @@ public sealed class NativeTestVideoRecorderSmokeTests
         var recording = await new NativeTestVideoRecorder(runtime.UserPreferences).StartAsync(
             new(platform, deviceId, true, path), CancellationToken.None);
         TestVideoRecordingCompletion result;
-        try { await Task.Delay(1500); }
-        finally { result = await recording.StopAsync(); }
+
+        try
+        {
+            await Task.Delay(1500);
+        }
+        finally
+        {
+            result = await recording.StopAsync();
+        }
+
         Assert.True(result.IsComplete, result.Error);
         SessionVideoMp4TimingInspector.ExtendFinalFrame(path, result.CapturedDuration!.Value);
         Assert.True(SessionVideoMp4TimingInspector.ReadDuration(path) >= TimeSpan.FromSeconds(1.4));

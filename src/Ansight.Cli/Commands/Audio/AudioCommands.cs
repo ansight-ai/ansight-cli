@@ -32,6 +32,7 @@ internal static class AudioCommands
             var context = CliCommandContext.Current
                 ?? throw new CliHostUnavailableException(
                     "Audio injection requires a resident host and an existing connected session. Run 'ansight host run' and select a session with 'ansight session list --connected --json'.");
+
             return context.Runtime.Audio.ExecuteAsync(operation, operationArguments, token);
         }, cancellationToken);
     }
@@ -43,8 +44,10 @@ internal static class AudioCommands
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(execute);
+
         var action = arguments.RequirePositional(1, "audio action").ToLowerInvariant();
         arguments.EnsurePositionalCount(2, $"ansight audio {action} [options]");
+
         var operation = action switch
         {
             "capabilities" => AudioOperation.Capabilities,
@@ -61,11 +64,14 @@ internal static class AudioCommands
 
         var session = arguments.GetOption("session");
         var sessionAlias = arguments.GetOption("session-id");
+
         if (session is not null && sessionAlias is not null)
         {
             throw new CliUsageException("Use only one of --session or --session-id.");
         }
+
         var sessionId = session ?? sessionAlias;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             throw new CliUsageException(
@@ -73,6 +79,7 @@ internal static class AudioCommands
         }
 
         var operationArguments = new JsonObject { ["sessionId"] = sessionId.Trim() };
+
         if (operation == AudioOperation.Inject)
         {
             operationArguments["file"] = Path.GetFullPath(arguments.RequireOption("file"));
@@ -85,11 +92,17 @@ internal static class AudioCommands
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var result = await execute(operation, operationArguments, cancellationToken).ConfigureAwait(false);
         output.Write(result.Payload, () => !result.IsSuccess || result.Payload.Count == 0
             ? result.Message
             : result.Payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        if (result.IsSuccess) return CliExitCodes.Success;
+
+        if (result.IsSuccess)
+        {
+            return CliExitCodes.Success;
+        }
+
         return result.Payload["code"]?.GetValue<string>() switch
         {
             "cancelled" => CliExitCodes.Cancelled,

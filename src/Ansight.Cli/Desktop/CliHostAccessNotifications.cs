@@ -1,21 +1,38 @@
 namespace Ansight.Cli.Desktop;
 
-internal sealed class CliHostAccessNotifications(INotificationSink? sink)
+internal sealed class CliHostAccessNotifications
 {
+    private readonly INotificationSink? sink;
     internal const string Identifier = "host-access-required";
     private string? lastReason;
+
+    public CliHostAccessNotifications(INotificationSink? sink)
+    {
+        this.sink = sink;
+    }
 
     public async Task UpdateAsync(AccessDecision decision, CancellationToken cancellationToken)
     {
         var reason = decision.IsAuthorized ? "active" : decision.Reason;
-        if (reason == lastReason) return;
+
+        if (reason == lastReason)
+        {
+            return;
+        }
+
         lastReason = reason;
-        if (sink is null) return;
+
+        if (sink is null)
+        {
+            return;
+        }
+
         try
         {
             if (decision.IsAuthorized || reason != "product_access_required")
             {
                 await sink.RemoveAsync(Identifier, cancellationToken).ConfigureAwait(false);
+
                 return;
             }
 

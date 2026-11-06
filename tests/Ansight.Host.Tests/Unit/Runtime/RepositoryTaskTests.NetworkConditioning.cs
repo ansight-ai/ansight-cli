@@ -20,6 +20,7 @@ public sealed partial class RepositoryTaskTests
               {{(fail ? "throw new Error('test failure');" : "return { applied: true };")}}
             }
             """;
+
         using var repository = CreateRepository(source);
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var cleaned = false;
@@ -28,9 +29,17 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("ansight_network_conditioning_set", name);
             Assert.Equal("network-session", arguments["sessionId"]!.GetValue<string>());
             Assert.Null(arguments["deviceId"]);
+
             var scope = Assert.IsType<NetworkConditioningScope>(NetworkConditioningScope.Current);
             Assert.Equal("network-run", scope.OwnerId);
-            scope.Register(() => { cleaned = true; return Task.CompletedTask; });
+            scope.Register(() =>
+            {
+                cleaned = true;
+
+                return Task.CompletedTask;
+            }
+        );
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["leaseId"] = "test-lease" }, isError: false));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest("network-run", task, "network-session", new JsonObject(), "network-test"), default);

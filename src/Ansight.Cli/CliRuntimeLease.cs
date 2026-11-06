@@ -29,6 +29,7 @@ internal sealed class CliRuntimeLease : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         if (CliCommandContext.Current is { } commandContext)
         {
             if (!PathsEqual(commandContext.DataDirectory, options.DataDirectory))
@@ -51,6 +52,7 @@ internal sealed class CliRuntimeLease : IAsyncDisposable
 
         var dataLock = CliDataDirectoryLock.Acquire(options.DataDirectory);
         var runtime = CliRuntime.CreateHostRuntime(options);
+
         try
         {
             if (start)
@@ -76,6 +78,7 @@ internal sealed class CliRuntimeLease : IAsyncDisposable
         }
 
         disposed = true;
+
         if (!ownsRuntime)
         {
             return;
@@ -86,6 +89,7 @@ internal sealed class CliRuntimeLease : IAsyncDisposable
             if (started)
             {
                 using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
                 try
                 {
                     await Runtime.StopAsync(stopTimeout.Token).ConfigureAwait(false);
@@ -108,6 +112,7 @@ internal sealed class CliRuntimeLease : IAsyncDisposable
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
+
         return string.Equals(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),

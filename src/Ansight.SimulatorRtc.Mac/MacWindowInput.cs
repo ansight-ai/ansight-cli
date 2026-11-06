@@ -22,17 +22,19 @@ public static class MacWindowInput
         double scrollDeltaY = 0)
     {
         ValidateProcessIdentifier(processIdentifier);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.MacWindowInputSendPointer(
-                processIdentifier,
-                (int)phase,
-                (int)button,
-                normalizedX,
-                normalizedY,
-                scrollDeltaX,
-                scrollDeltaY,
-                errorBuffer,
-                (nuint)errorBuffer.Length))
+            processIdentifier,
+            (int)phase,
+            (int)button,
+            normalizedX,
+            normalizedY,
+            scrollDeltaX,
+            scrollDeltaY,
+            errorBuffer,
+            (nuint)errorBuffer.Length))
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not forward the macOS pointer event."));
         }
@@ -41,13 +43,15 @@ public static class MacWindowInput
     public static void SendKey(int processIdentifier, uint usageCode, bool isKeyDown)
     {
         ValidateProcessIdentifier(processIdentifier);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.MacWindowInputSendKey(
-                processIdentifier,
-                usageCode,
-                isKeyDown,
-                errorBuffer,
-                (nuint)errorBuffer.Length))
+            processIdentifier,
+            usageCode,
+            isKeyDown,
+            errorBuffer,
+            (nuint)errorBuffer.Length))
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not forward the macOS keyboard event."));
         }
@@ -57,12 +61,14 @@ public static class MacWindowInput
     {
         ValidateProcessIdentifier(processIdentifier);
         ArgumentNullException.ThrowIfNull(text);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.MacWindowInputSendText(
-                processIdentifier,
-                text,
-                errorBuffer,
-                (nuint)errorBuffer.Length))
+            processIdentifier,
+            text,
+            errorBuffer,
+            (nuint)errorBuffer.Length))
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not forward macOS text input."));
         }
@@ -79,12 +85,14 @@ public static class MacWindowInput
     private static string ReadBuffer(byte[] buffer, string fallback)
     {
         var length = Array.IndexOf(buffer, (byte)0);
+
         if (length < 0)
         {
             length = buffer.Length;
         }
 
         var message = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
 }

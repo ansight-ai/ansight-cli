@@ -49,13 +49,16 @@ internal static class NetworkInspectionPayload
         var detail = Summary(request);
         detail["protocol"] = request.Protocol;
         detail["reasonPhrase"] = request.ReasonPhrase;
+
         var requestHeaders = new JsonArray();
         var responseHeaders = new JsonArray();
         detail["requestHeaders"] = requestHeaders;
         detail["responseHeaders"] = responseHeaders;
         payload["request"] = detail;
         payload["headersTruncated"] = false;
+
         var serializedCharacters = payload.ToJsonString().Length + 1024;
+
         if (serializedCharacters > MaximumSerializedCharacters)
         {
             throw new ArgumentException("The network request metadata exceeds the serialized output budget.");
@@ -64,16 +67,19 @@ internal static class NetworkInspectionPayload
         var omitted = AppendHeaders(request.RequestHeaders, requestHeaders, ref serializedCharacters);
         omitted |= AppendHeaders(request.ResponseHeaders, responseHeaders, ref serializedCharacters);
         payload["headersTruncated"] = omitted;
+
         return payload;
     }
 
     private static bool AppendHeaders(IReadOnlyList<SessionNetworkHeader> headers, JsonArray target, ref int serializedCharacters)
     {
         var omitted = false;
+
         foreach (var header in headers)
         {
             var item = new JsonObject { ["name"] = header.Name, ["value"] = header.Value };
             var size = item.ToJsonString().Length + 1;
+
             if (size > MaximumSerializedCharacters - serializedCharacters)
             {
                 omitted = true;
@@ -92,8 +98,10 @@ internal static class NetworkInspectionPayload
         var payload = Identity(snapshot);
         payload["requestId"] = request.Id;
         payload["side"] = side;
+
         var body = side == "request" ? request.RequestBody : request.ResponseBody;
         payload["body"] = body is null ? null : BodyPreview(body, maximumBytes);
+
         return payload;
     }
 
@@ -102,13 +110,16 @@ internal static class NetworkInspectionPayload
         string data;
         int returnedBytes;
         bool isTruncated;
+
         if (body.Encoding == "utf8")
         {
             var characterCount = 0;
             returnedBytes = 0;
+
             while (characterCount < body.Data.Length)
             {
                 var status = Rune.DecodeFromUtf16(body.Data.AsSpan(characterCount), out var rune, out var consumed);
+
                 if (status != OperationStatus.Done)
                 {
                     throw new ArgumentException("The retained network body contains invalid UTF-8 text.");
@@ -131,6 +142,7 @@ internal static class NetworkInspectionPayload
             // Capture storage normalizes Base64, so decode only enough complete groups for this preview.
             var encodedCount = Math.Min(body.Data.Length, ((maximumBytes + 2) / 3) * 4);
             byte[] prefix;
+
             try
             {
                 prefix = Convert.FromBase64String(body.Data[..encodedCount]);
@@ -153,12 +165,14 @@ internal static class NetworkInspectionPayload
         payload["data"] = data;
         payload["returnedByteCount"] = returnedBytes;
         payload["isTruncated"] = isTruncated;
+
         return payload;
     }
 
     public static RequestResult Result(JsonObject payload)
     {
         var result = RequestResult.ToolResult(payload, isError: false);
+
         return result.Payload!.ToJsonString().Length <= MaximumSerializedCharacters
             ? result
             : Error("The network result exceeds the serialized output budget. Narrow the query or request a smaller preview.");

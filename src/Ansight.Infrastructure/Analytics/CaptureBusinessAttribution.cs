@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 /// <summary>Verified organisation memberships plus explicitly selected capture context.</summary>
 public static class CaptureBusinessAttribution
@@ -13,6 +13,7 @@ public static class CaptureBusinessAttribution
     {
         var key = Guid.NewGuid();
         selections[key] = new(Path.GetFullPath(dataDirectory), appId, AnalyticsAccount.Read(dataDirectory), businessId);
+
         return new SelectionScope(key);
     }
 
@@ -21,6 +22,7 @@ public static class CaptureBusinessAttribution
         try
         {
             var account = AnalyticsAccount.Read(dataDirectory);
+
             if (account is null)
             {
                 return null;
@@ -58,12 +60,14 @@ public static class CaptureBusinessAttribution
             }
 
             var path = Path.Combine(root, "analytics", "capture-businesses.json");
+
             if (!File.Exists(path) || new FileInfo(path).Length > 1024 * 1024)
             {
                 return null;
             }
 
             var cache = JsonSerializer.Deserialize<MembershipCache>(File.ReadAllText(path), json);
+
             if (cache?.AccountId != account || cache.CheckedUtc < DateTimeOffset.UtcNow.AddDays(-7))
             {
                 return null;
@@ -101,6 +105,7 @@ public static class CaptureBusinessAttribution
             }
 
             var businesses = new List<Business>();
+
             foreach (var team in teams.EnumerateArray())
             {
                 var isOrganisation = team.TryGetProperty("workspace_kind", out var kind)
@@ -144,12 +149,14 @@ public static class CaptureBusinessAttribution
         try
         {
             var path = Path.Combine(dataDirectory, "analytics", "capture-businesses.json");
+
             if (!File.Exists(path) || new FileInfo(path).Length > 1024 * 1024)
             {
                 return true;
             }
 
             var cache = JsonSerializer.Deserialize<MembershipCache>(File.ReadAllText(path), json);
+
             return cache?.AccountId != accountId || cache.CheckedUtc < DateTimeOffset.UtcNow.AddMinutes(-15);
         }
         catch

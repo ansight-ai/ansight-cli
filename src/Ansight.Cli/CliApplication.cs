@@ -16,6 +16,7 @@ public static class CliApplication
         IDisposable? logging = null;
         var originalStandardOutput = Console.Out;
         var originalStandardError = Console.Error;
+
         if (arguments.IsSilent)
         {
             Console.SetOut(TextWriter.Null);
@@ -25,6 +26,7 @@ public static class CliApplication
         try
         {
             logging = CliLogging.Configure(arguments, arguments.IsVerbose, arguments.IsSilent);
+
             var output = new CliOutput(arguments.IsJson, silent: arguments.IsSilent);
             using var cancellation = new CancellationTokenSource();
             ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
@@ -33,12 +35,13 @@ public static class CliApplication
                 cancellation.Cancel();
             };
             Console.CancelKeyPress += cancelHandler;
+
             using var terminateRegistration = RegisterTerminationSignal(cancellation);
 
             try
             {
                 if (ShouldInitializeAnalytics(arguments)
-)
+            )
                 {
                     analytics = CliAnalytics.TryCreate(arguments);
                 }
@@ -58,6 +61,7 @@ public static class CliApplication
                 }
 
                 analyticsExitCode = exitCode;
+
                 return exitCode;
             }
             finally
@@ -75,7 +79,6 @@ public static class CliApplication
                         arguments,
                         analyticsExitCode,
                         analyticsStopwatch.Elapsed).ConfigureAwait(false);
-
                 }
             }
             catch
@@ -110,28 +113,33 @@ public static class CliApplication
     {
         using var callerContext = SessionActivityContext.Current is null
             ? SessionActivityContext.Push(new SessionActivityContext(ActivityCaller.FromEnvironment())) : null;
+
         try
         {
             var useRunnerCredentials = expectedAccountUserId is null
-                                       && CliCommandAccessPolicy.HasRunnerCredentials;
+                && CliCommandAccessPolicy.HasRunnerCredentials;
             var accessClass = CliCommandAccessPolicy.Classify(arguments, useRunnerCredentials);
             var invalidAccountRequest = expectedAccountUserId is not null
-                                        && (accessClass != CliAccessClass.Cloud
-                                            || !CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments));
+                && (accessClass != CliAccessClass.Cloud
+                    || !CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments));
+
             if (invalidAccountRequest)
             {
                 return AccessDecision.AuthenticationRequired.WriteFailure(output);
             }
+
             if (accessClass == CliAccessClass.ResidentHost)
             {
                 return await HostCommands.RunRecoverableHostAsync(arguments, output, cancellationToken,
                     CliLocalAccessAuthorizer.Instance,
                     timeProvider ?? TimeProvider.System).ConfigureAwait(false);
             }
+
             if (accessClass == CliAccessClass.Bootstrap)
             {
                 await using var localLease = CliAccessLease.CreateLocal(cancellationToken, timeProvider);
                 using var localContext = CliAccessContext.Push(CliLocalAccessAuthorizer.Instance, localLease);
+
                 return await RunAuthorizedAsync(arguments, output, localLease.Token,
                     allowResidentHostForwarding, standardInput, standardInputIsInteractive,
                     residentHostForwarder).ConfigureAwait(false);
@@ -139,17 +147,19 @@ public static class CliApplication
 
             // Uploads reuse the host's storage under the caller's request-scoped identity.
             var canForwardRunnerRequest = accessClass == CliAccessClass.Runner
-                                          && CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments);
+                && CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments);
             var canForwardAccountUpload = accessClass == CliAccessClass.Cloud
-                                          && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments);
+                && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments);
             allowResidentHostForwarding &= canForwardRunnerRequest || canForwardAccountUpload;
             accessAuthorizer = accessClass == CliAccessClass.Runner
                 ? Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<ICliAccessAuthorizer>("Access.CreateRunnerAuthorizer", [arguments])
                 : accessAuthorizer is CliLocalAccessAuthorizer || accessAuthorizer is null
                     ? Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<ICliAccessAuthorizer>("Access.CreateAccountAuthorizer", [CliRuntime.ResolveOptions(arguments)])
                     : accessAuthorizer;
+
             await using var lease = await CliAccessLease.CreateAsync(accessAuthorizer, cancellationToken, timeProvider)
                 .ConfigureAwait(false);
+
             if (expectedAccountUserId is not null && lease.Decision.UserId != expectedAccountUserId)
             {
                 return AccessDecision.AuthenticationRequired.WriteFailure(output);
@@ -166,11 +176,19 @@ public static class CliApplication
             using var accessContext = CliAccessContext.Push(accessAuthorizer, lease);
             using var authenticatedCaller = lease.Decision.UserId is { } principalId
                 ? SessionActivityContext.Push((SessionActivityContext.Current!) with
-                { Caller = SessionActivityContext.Current!.Caller with { PrincipalId = principalId, PrincipalAttribution = "authenticated" } }) : null;
+                {
+                    Caller = SessionActivityContext.Current!.Caller with
+                    {
+                        PrincipalId = principalId,
+                        PrincipalAttribution = "authenticated"
+                    }
+                }) : null;
+
             try
             {
                 var result = await RunAuthorizedAsync(arguments, output, lease.Token, allowResidentHostForwarding,
                     standardInput, standardInputIsInteractive, residentHostForwarder).ConfigureAwait(false);
+
                 return lease.IsDenied ? lease.Failure.WriteFailure(output) : result;
             }
             catch (OperationCanceledException) when (lease.IsDenied)
@@ -185,21 +203,25 @@ public static class CliApplication
         catch (CliUsageException exception)
         {
             output.WriteError("usage", exception.Message, CliExitCodes.Usage);
+
             return CliExitCodes.Usage;
         }
         catch (CliHostUnavailableException exception)
         {
             output.WriteError("host_unavailable", exception.Message, CliExitCodes.HostUnavailable);
+
             return CliExitCodes.HostUnavailable;
         }
         catch (Ansight.Infrastructure.Extensions.OptionalExtensionUnavailableException exception)
         {
             output.WriteError("capability_unavailable", exception.Message, CliExitCodes.CapabilityUnavailable);
+
             return CliExitCodes.CapabilityUnavailable;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             output.WriteError("cancelled", "Operation cancelled.", CliExitCodes.Cancelled);
+
             return CliExitCodes.Cancelled;
         }
         catch (Exception)
@@ -212,8 +234,8 @@ public static class CliApplication
 
     private static bool MayPromptBeforeForwarding(CliArguments arguments)
         => arguments.Positionals.Count > 1
-           && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
-           && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize";
+            && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
+            && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize";
 
     private static async Task<int> RunAuthorizedAsync(
         CliArguments arguments,
@@ -228,6 +250,7 @@ public static class CliApplication
         {
             ModelTransportOptions.Validate(arguments);
             ReasoningOptions.ValidateForCommand(arguments);
+
             if (arguments.Positionals.Count == 0)
             {
                 if (arguments.HasFlag("version"))
@@ -237,17 +260,19 @@ public static class CliApplication
                 }
 
                 output.WriteText(BuildHelp(arguments.HasFlag("beta")));
+
                 return CliExitCodes.Success;
             }
 
             var isHelpRequest = CliCommandHelp.IsRequested(arguments)
-                                || string.Equals(
-                                    arguments.Positionals[0],
-                                    "help",
-                                    StringComparison.OrdinalIgnoreCase)
-                                || arguments.Positionals.Count == 1
-                                && arguments.Positionals[0].ToLowerInvariant()
+                || string.Equals(
+                    arguments.Positionals[0],
+                    "help",
+                    StringComparison.OrdinalIgnoreCase)
+                || arguments.Positionals.Count == 1
+                    && arguments.Positionals[0].ToLowerInvariant()
                                     is "auth" or "companion" or "remote" or "remote-simulator";
+
             if (arguments.Positionals[0].Equals("replay", StringComparison.OrdinalIgnoreCase))
             {
                 ReplayCommands.ValidateOptions(arguments);
@@ -266,41 +291,49 @@ public static class CliApplication
                 cancellationToken).ConfigureAwait(false);
 
             var commandName = arguments.Positionals[0].ToLowerInvariant();
+
             if (commandName == "mcp")
+            {
                 return await Commands.Mcp.ReplayMcpCommand.RunAsync(arguments, output, cancellationToken).ConfigureAwait(false);
+            }
+
             if (AppInteractionCommand.IsMatch(arguments))
             {
                 return await AppInteractionCommand.RunAsync(arguments, output,
                     standardInput ?? TextReader.Null, cancellationToken).ConfigureAwait(false);
             }
+
             var isLocalAccountCommand = commandName == "account"
-                                        && (arguments.Positionals.Count < 2
-                                            || arguments.Positionals[1].ToLowerInvariant() is not ("grant" or "grants"));
+                && (arguments.Positionals.Count < 2
+                    || arguments.Positionals[1].ToLowerInvariant() is not ("grant" or "grants"));
             var isLocalHostInspectionCommand = commandName == "host"
-                                               && arguments.Positionals.Count >= 2
-                                               && arguments.Positionals[1].ToLowerInvariant()
+                && arguments.Positionals.Count >= 2
+                && arguments.Positionals[1].ToLowerInvariant()
                                                    is "status" or "log" or "logs" or "desktop-restart";
             var isLocalCloudArtifactCommand = commandName == "cloud"
-                                              && arguments.Positionals.Count >= 2
-                                              && arguments.Positionals[1].ToLowerInvariant()
+                && arguments.Positionals.Count >= 2
+                && arguments.Positionals[1].ToLowerInvariant()
                                                   is "build" or "workspace";
             var isLocalCommand = commandName
                                      is "version" or "info" or "update" or "upgrade"
-                                     or "doctor" or "capabilities"
-                                     or "runner" or "runners"
-                                     or "analytics"
-                                     or "config" or "settings" or "setup"
-                                     or "license" or "licenses" or "licence" or "licences" or "notice" or "notices" or "attribution" or "attributions"
-                                 || isLocalAccountCommand
-                                 || isLocalCloudArtifactCommand;
+                                         or "doctor" or "capabilities"
+                                         or "runner" or "runners"
+                                         or "analytics"
+                                         or "config" or "settings" or "setup"
+                                         or "license" or "licenses" or "licence" or "licences" or "notice" or "notices" or "attribution" or "attributions"
+                || isLocalAccountCommand
+                || isLocalCloudArtifactCommand;
             isLocalCommand |= isLocalHostInspectionCommand;
+
             if (allowResidentHostForwarding && !isHelpRequest && !isLocalCommand)
             {
                 residentHostForwarder ??= ControlClient.TryRunAsync;
+
                 var forwardedExitCode = await residentHostForwarder(
                     arguments,
                     output,
                     cancellationToken).ConfigureAwait(false);
+
                 if (forwardedExitCode is not null)
                 {
                     return forwardedExitCode.Value;
@@ -309,6 +342,7 @@ public static class CliApplication
 
             using var deviceLaunchContext = DeviceLaunchContext.Push(arguments.HasFlag("headless"));
             var command = arguments.Positionals[0].ToLowerInvariant();
+
             return command switch
             {
                 "host" => await HostCommands.RunAsync(arguments, output, cancellationToken),
@@ -357,16 +391,19 @@ public static class CliApplication
         catch (CliUsageException exception)
         {
             output.WriteError("usage", exception.Message, CliExitCodes.Usage);
+
             return CliExitCodes.Usage;
         }
         catch (CliHostUnavailableException exception)
         {
             output.WriteError("host_unavailable", exception.Message, CliExitCodes.HostUnavailable);
+
             return CliExitCodes.HostUnavailable;
         }
         catch (Ansight.Infrastructure.Extensions.OptionalExtensionUnavailableException exception)
         {
             output.WriteError("capability_unavailable", exception.Message, CliExitCodes.CapabilityUnavailable);
+
             return CliExitCodes.CapabilityUnavailable;
         }
         catch (OperationCanceledException) when (CliAccessContext.Current?.Lease.IsDenied == true)
@@ -376,11 +413,13 @@ public static class CliApplication
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             output.WriteError("cancelled", "Operation cancelled.", CliExitCodes.Cancelled);
+
             return CliExitCodes.Cancelled;
         }
         catch (Exception exception)
         {
             output.WriteError("failure", exception.GetBaseException().Message, CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
     }
@@ -388,6 +427,7 @@ public static class CliApplication
     private static int WriteHelp(CliArguments arguments, CliOutput output)
     {
         output.WriteText(BuildHelp(arguments.HasFlag("beta")));
+
         return CliExitCodes.Success;
     }
 
@@ -418,27 +458,30 @@ public static class CliApplication
     }
 
 
-
     internal static bool ShouldInitializeAnalytics(CliArguments arguments)
     {
         // Full diagnostics must not open/migrate credential stores for analytics.
-        if (IsFullSystemReport(arguments) || arguments.Positionals.FirstOrDefault()?.Equals("mcp", StringComparison.OrdinalIgnoreCase) == true) return false;
+        if (IsFullSystemReport(arguments) || arguments.Positionals.FirstOrDefault()?.Equals("mcp", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return false;
+        }
+
         if (arguments.Positionals.Count == 0)
         {
             return arguments.HasFlag("version");
         }
 
         return !CliCommandHelp.IsRequested(arguments)
-               && !string.Equals(
-                   arguments.Positionals[0],
-                   "help",
-                   StringComparison.OrdinalIgnoreCase)
-               && !(arguments.Positionals.Count == 1
-                    && arguments.Positionals[0].ToLowerInvariant()
+            && !string.Equals(
+                arguments.Positionals[0],
+                "help",
+                StringComparison.OrdinalIgnoreCase)
+            && !(arguments.Positionals.Count == 1
+                && arguments.Positionals[0].ToLowerInvariant()
                         is "companion" or "remote" or "remote-simulator")
-               && !(arguments.Positionals[0].Equals("account", StringComparison.OrdinalIgnoreCase)
-                    && (arguments.Positionals.Count == 1
-                        || arguments.Positionals[1].ToLowerInvariant() is "open" or "portal"));
+            && !(arguments.Positionals[0].Equals("account", StringComparison.OrdinalIgnoreCase)
+                && (arguments.Positionals.Count == 1
+                    || arguments.Positionals[1].ToLowerInvariant() is "open" or "portal"));
     }
 
     private static bool IsFullSystemReport(CliArguments arguments)
@@ -619,6 +662,7 @@ Beta feature commands:
     profile sample tools|start|status|cancel|list|manifest|artifact
                                     Capture macOS sampled thread stacks and call graphs
 """;
+
         return help.Replace(
             outputOptionsHeading,
             betaFeatureHelp + Environment.NewLine + outputOptionsHeading,

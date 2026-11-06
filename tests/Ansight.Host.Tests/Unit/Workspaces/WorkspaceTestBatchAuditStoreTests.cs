@@ -63,12 +63,14 @@ public sealed class WorkspaceTestBatchAuditStoreTests
         Assert.Null(startedSave.ErrorMessage);
         Assert.Null(completedSave.ErrorMessage);
         Assert.Equal(startedSave.FilePath, completedSave.FilePath);
+
         var history = Assert.Single(store.List());
         Assert.Equal("batch-123", history.Audit.BatchRunId);
         Assert.Equal(WorkspaceTestHistoryStatuses.Succeeded, history.Audit.Status);
         Assert.Equal(1, history.Audit.PassedCount);
         Assert.Equal(1200, history.Audit.TotalTokens);
         Assert.Equal("agent-123", Assert.Single(history.Audit.Tests).AgentRunId);
+
         if (!OperatingSystem.IsWindows())
         {
             Assert.Equal(

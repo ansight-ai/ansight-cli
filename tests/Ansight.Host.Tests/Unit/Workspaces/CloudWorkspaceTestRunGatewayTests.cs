@@ -29,6 +29,7 @@ public sealed class CloudWorkspaceTestRunGatewayTests
             CancellationToken cancellationToken = default)
         {
             Preparations++;
+
             return Task.FromResult(WorkspaceTestRunPreparation.Failure("Cloud permission denied"));
         }
 

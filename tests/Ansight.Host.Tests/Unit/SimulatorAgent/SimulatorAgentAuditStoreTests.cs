@@ -9,6 +9,7 @@ public sealed class SimulatorAgentAuditStoreTests
     public void Save_RecordsChargedCostAndReasoningWithoutModelOrProviderCost()
     {
         var rootPath = Path.Combine(Path.GetTempPath(), "ansight-trace-cost-tests", Guid.NewGuid().ToString("N"));
+
         try
         {
             var store = new AuditStore(new DataToolApplicationPaths(rootPath));
@@ -23,6 +24,7 @@ public sealed class SimulatorAgentAuditStoreTests
             var saved = store.Save(audit);
 
             Assert.Null(saved.ErrorMessage);
+
             var json = File.ReadAllText(saved.FilePath!);
             using var document = JsonDocument.Parse(json);
             var trace = document.RootElement;
@@ -34,6 +36,7 @@ public sealed class SimulatorAgentAuditStoreTests
             Assert.DoesNotContain("responseModel", json);
             Assert.DoesNotContain("test-model", json);
             Assert.DoesNotContain("warmup-model", json);
+
             var reloaded = Assert.Single(store.List()).Audit;
             Assert.Equal(1873, reloaded.CalculatedCost!.CostMicros);
             Assert.Equal(audit.CreateModelPassUsages(), reloaded.CreateModelPassUsages());
@@ -41,7 +44,10 @@ public sealed class SimulatorAgentAuditStoreTests
         }
         finally
         {
-            if (Directory.Exists(rootPath)) Directory.Delete(rootPath, recursive: true);
+            if (Directory.Exists(rootPath))
+            {
+                Directory.Delete(rootPath, recursive: true);
+            }
         }
     }
 
@@ -54,6 +60,7 @@ public sealed class SimulatorAgentAuditStoreTests
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var cost = JsonSerializer.Deserialize<SimulatorAgentRunCost>(json, options)!;
         Assert.Equal(expected, cost.CostMicros);
+
         var serialized = JsonSerializer.Serialize(cost, options);
         Assert.DoesNotContain("providerCostMicros", serialized);
         Assert.DoesNotContain("customerCostMicros", serialized);
@@ -68,11 +75,13 @@ public sealed class SimulatorAgentAuditStoreTests
             "ansight-simulator-agent-store-tests",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);
+
         try
         {
             var screenshotPath = Path.Combine(rootPath, "ocr-source.png");
             var screenshotBytes = new byte[] { 1, 2, 3, 4, 5 };
             File.WriteAllBytes(screenshotPath, screenshotBytes);
+
             var startedUtc = DateTimeOffset.Parse("2026-08-27T03:00:00Z");
             var resultsJson = "{\"provider\":\"tesseract\",\"detectionCount\":1,\"detections\":[{\"text\":\"Account\"}]}";
             var payload = new SimulatorAgentAuditPayload(
@@ -122,11 +131,13 @@ public sealed class SimulatorAgentAuditStoreTests
 
             Assert.Null(save.ErrorMessage);
             Assert.NotNull(save.FilePath);
+
             var saved = Assert.Single(store.List()).Audit;
             var evidence = Assert.Single(saved.ToolCalls).OcrEvidence;
             Assert.NotNull(evidence);
             Assert.NotNull(evidence.ScreenshotPath);
             Assert.NotNull(evidence.ResultsPath);
+
             var auditDirectory = Path.GetDirectoryName(save.FilePath)!;
             Assert.Equal(
                 screenshotBytes,
@@ -150,6 +161,7 @@ public sealed class SimulatorAgentAuditStoreTests
             "ansight-simulator-agent-store-tests",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);
+
         try
         {
             var store = new AuditStore(new DataToolApplicationPaths(rootPath));
@@ -178,6 +190,7 @@ public sealed class SimulatorAgentAuditStoreTests
 
             Assert.Null(store.Save(older).ErrorMessage);
             Assert.Null(store.Save(newer).ErrorMessage);
+
             var auditDirectory = Path.Combine(rootPath, "data", "simulator-agent-runs");
             File.WriteAllText(Path.Combine(auditDirectory, "corrupt.json"), "{not-json");
 

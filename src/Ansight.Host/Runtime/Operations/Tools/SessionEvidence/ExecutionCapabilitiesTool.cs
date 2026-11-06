@@ -3,9 +3,17 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 
-internal sealed class ExecutionCapabilitiesTool(OperationServices services, bool require) : Operation(services)
+internal sealed class ExecutionCapabilitiesTool : Operation
 {
-    private readonly DeviceSessionEvidence? deviceEvidence = services.DeviceEvidence;
+    private readonly bool require;
+    private readonly DeviceSessionEvidence? deviceEvidence;
+
+    public ExecutionCapabilitiesTool(OperationServices services, bool require) : base(services)
+    {
+        this.require = require;
+        this.deviceEvidence = services.DeviceEvidence;
+    }
+
     public override string Name => require ? "ansight_require_capabilities" : "ansight_get_execution_capabilities";
     protected override string Title => require ? "Require execution capabilities" : "Get execution capabilities";
     protected override string Description => "Resolve current host and SDK capabilities for the exact session. Unsupported requirements fail without retry.";
@@ -19,16 +27,28 @@ internal sealed class ExecutionCapabilitiesTool(OperationServices services, bool
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         var id = arguments?["sessionId"]?.GetValue<string>();
-        if (id is null || !runtimeState.TryGetSessionSnapshot(id, out var session)) return ToolError("Session is unavailable.");
+
+        if (id is null || !runtimeState.TryGetSessionSnapshot(id, out var session))
+        {
+            return ToolError("Session is unavailable.");
+        }
+
         var snapshot = await ExecutionCapabilities.ResolveAsync(runtimeState, appToolBridge, session!, ToolExecutionCancellation.Current, deviceEvidence).ConfigureAwait(false);
+
         if (require)
         {
             var requirementArguments = arguments!.DeepClone().AsObject();
             requirementArguments.Remove("sessionId");
+
             var requirements = JsonSerializer.Deserialize<ExecutionRequirements>(requirementArguments.ToJsonString(), JsonUtil.Compact)!;
             requirements.Validate();
-            if (ExecutionCapabilities.Missing(snapshot, requirements) is { } error) return RequestResult.ToolResult(error, isError: true);
+
+            if (ExecutionCapabilities.Missing(snapshot, requirements) is { } error)
+            {
+                return RequestResult.ToolResult(error, isError: true);
+            }
         }
+
         return RequestResult.ToolResult(snapshot, isError: false);
     }
 }

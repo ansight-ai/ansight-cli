@@ -25,6 +25,7 @@ public static class ListComparisonHelper
         foreach (var t in right)
         {
             var hasMatch = false;
+
             foreach (var t1 in left)
             {
                 if (string.Equals(t, t1, StringComparison.Ordinal))

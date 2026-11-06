@@ -12,11 +12,8 @@ internal sealed class TelemetryTimelineChannelStats
     }
 
     public byte ChannelId { get; }
-
     public int Count { get; private set; }
-
     public double Min { get; private set; }
-
     public double Max { get; private set; }
 
     public void Add(double value)
@@ -39,6 +36,7 @@ internal sealed class TelemetryTimelineChannelStats
     public JsonObject ToPayload(IReadOnlyDictionary<byte, SessionMetricChannel> channelMap)
     {
         channelMap.TryGetValue(ChannelId, out var channel);
+
         return new JsonObject
         {
             ["channelId"] = ChannelId,

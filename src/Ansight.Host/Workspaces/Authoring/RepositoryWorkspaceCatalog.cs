@@ -15,10 +15,3 @@ public sealed record RepositoryWorkspaceCatalog(
     IReadOnlyList<WorkspaceTrendsDefinition> Trends,
     IReadOnlyList<WorkspaceSanitizerDefinition> Sanitizers,
     IReadOnlyList<string> Warnings);
-
-/// <summary>
-/// A TypeScript sanitizer module discovered beneath a linked Ansight workspace.
-/// </summary>
-public sealed record WorkspaceSanitizerDefinition(
-    string SanitizerId,
-    string ModulePath);

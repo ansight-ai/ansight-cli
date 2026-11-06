@@ -1,4 +1,4 @@
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 public sealed record AnalyticsSettings(bool DetailedTrackingEnabled, string? AccountId = null)
 {

@@ -43,6 +43,7 @@ public sealed partial class RepositoryTaskTests
         {
             Assert.Equal("ansight_capture_sandbox_file", name);
             Assert.Equal("device-session", arguments["sessionId"]?.GetValue<string>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["snapshotId"] = "artifact-1" }, false));
         });
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest("run", task, "device-session", new JsonObject(), "correlation"), CancellationToken.None);
@@ -91,6 +92,7 @@ public sealed partial class RepositoryTaskTests
             """);
         var result = LoadRepository(repository.RootPath);
         Assert.Empty(result.Warnings);
+
         var task = Assert.Single(result.Tasks);
         Assert.Equal(1, task.SchemaVersion);
         Assert.Equal("files.capture", Assert.Single(task.Requires!.Capabilities));

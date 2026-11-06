@@ -21,8 +21,8 @@ public sealed class CliTestRuntimeOptionsResolverTests
             Enumerable.Range(
                 ProtocolDefaults.WebSocketSessionPortRangeStart,
                 ProtocolDefaults.WebSocketSessionPortRangeEnd
-                - ProtocolDefaults.WebSocketSessionPortRangeStart
-                + 1));
+                    - ProtocolDefaults.WebSocketSessionPortRangeStart
+                    + 1));
     }
 
     [Fact]
@@ -42,7 +42,10 @@ public sealed class CliTestRuntimeOptionsResolverTests
     [Fact]
     public void WithAvailablePorts_DoesNotReuseConfiguredPort()
     {
-        var options = CreateOptions() with { DiscoveryPort = 46_123 };
+        var options = CreateOptions() with
+        {
+            DiscoveryPort = 46_123
+        };
 
         var result = CliTestRuntimeOptionsResolver.WithAvailablePorts(options);
 

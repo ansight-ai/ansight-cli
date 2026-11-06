@@ -22,6 +22,7 @@ public sealed class WorkspaceAuthoringServiceTests
             "module",
             JsonDocument.Parse(File.ReadAllText(Path.Combine(workspacePath, "ansight", "package.json")))
                 .RootElement.GetProperty("type").GetString());
+
         var readmeDocumentationUris = new Dictionary<string, string>
         {
             [string.Empty] = "https://www.ansight.ai/docs/workspace",
@@ -32,6 +33,7 @@ public sealed class WorkspaceAuthoringServiceTests
             ["sanitizers"] = "https://www.ansight.ai/docs/workspace/sanitizers",
             ["schema"] = "https://www.ansight.ai/docs/workspace/schemas"
         };
+
         foreach (var readmeDocumentationUri in readmeDocumentationUris)
         {
             var readmePath = Path.Combine(
@@ -40,13 +42,16 @@ public sealed class WorkspaceAuthoringServiceTests
                 readmeDocumentationUri.Key,
                 "README.md");
             Assert.True(File.Exists(readmePath), $"Expected workspace guide at '{readmePath}'.");
+
             var readmeContent = File.ReadAllText(readmePath);
             Assert.StartsWith("# ", readmeContent, StringComparison.Ordinal);
             Assert.Contains($"]({readmeDocumentationUri.Value})", readmeContent, StringComparison.Ordinal);
         }
+
         Assert.True(Directory.Exists(Path.Combine(workspacePath, "ansight", "tests")));
         Assert.True(Directory.Exists(Path.Combine(workspacePath, "ansight", "trends")));
         Assert.True(Directory.Exists(Path.Combine(workspacePath, "ansight", "sanitizers")));
+
         var sanitizerTypesPath = Path.Combine(
             workspacePath,
             "ansight",
@@ -56,20 +61,25 @@ public sealed class WorkspaceAuthoringServiceTests
         Assert.Contains("NetworkRequestItem", File.ReadAllText(sanitizerTypesPath), StringComparison.Ordinal);
         Assert.Contains("NetworkBody", File.ReadAllText(sanitizerTypesPath), StringComparison.Ordinal);
         Assert.Contains("SanitizeNetworkRequest", File.ReadAllText(sanitizerTypesPath), StringComparison.Ordinal);
+
         var sanitizerTypes = File.ReadAllText(sanitizerTypesPath);
         Assert.Contains("SanitizerOperationContext", sanitizerTypes, StringComparison.Ordinal);
         Assert.Contains("SanitizerShareAudience", sanitizerTypes, StringComparison.Ordinal);
         Assert.Contains("audience: SanitizerShareAudience", sanitizerTypes, StringComparison.Ordinal);
         Assert.Contains("teamId: string", sanitizerTypes, StringComparison.Ordinal);
         Assert.DoesNotContain("isPublicWithoutSignIn", sanitizerTypes, StringComparison.Ordinal);
+
         var taskRuntimePath = Path.Combine(workspacePath, "ansight", "tasks", "ansight-task.js");
         Assert.True(File.Exists(taskRuntimePath));
+
         var taskRuntime = File.ReadAllText(taskRuntimePath);
         Assert.Contains("export const Permission = Object.freeze", taskRuntime, StringComparison.Ordinal);
         Assert.Contains("export const IosPermission = Object.freeze", taskRuntime, StringComparison.Ordinal);
         Assert.Contains("export const AndroidPermission = Object.freeze", taskRuntime, StringComparison.Ordinal);
+
         var taskTypesPath = Path.Combine(workspacePath, "ansight", "tasks", "ansight-task.d.ts");
         Assert.True(File.Exists(taskTypesPath));
+
         var taskTypes = File.ReadAllText(taskTypesPath);
         Assert.Contains(
             "enabled?: boolean",
@@ -107,13 +117,14 @@ public sealed class WorkspaceAuthoringServiceTests
             "ansight",
             "schema",
             "trends-definition.v1.schema.json")));
+
         foreach (var schemaFileName in new[]
-                 {
-                     "task-definition.v1.schema.json",
-                     "test-definition.v1.schema.json",
-                     "trigger-definition.v1.schema.json",
-                     "trends-definition.v1.schema.json"
-                 })
+        {
+            "task-definition.v1.schema.json",
+            "test-definition.v1.schema.json",
+            "trigger-definition.v1.schema.json",
+            "trends-definition.v1.schema.json"
+        })
         {
             using var schema = JsonDocument.Parse(File.ReadAllText(Path.Combine(
                 workspacePath,
@@ -124,9 +135,10 @@ public sealed class WorkspaceAuthoringServiceTests
                 JsonValueKind.Object,
                 schema.RootElement.GetProperty("properties").GetProperty("enabled").ValueKind);
         }
+
         foreach (var schemaPath in Directory.EnumerateFiles(
-                     Path.Combine(workspacePath, "ansight", "schema"),
-                     "*.json"))
+            Path.Combine(workspacePath, "ansight", "schema"),
+            "*.json"))
         {
             using var _ = JsonDocument.Parse(File.ReadAllText(schemaPath));
         }
@@ -239,15 +251,19 @@ public sealed class WorkspaceAuthoringServiceTests
             "satisfies TriggerDefinition",
             File.ReadAllText(triggerResult.DefinitionPath!),
             StringComparison.Ordinal);
+
         var taskCatalog = RepositoryTaskLoader.Load(directory.RootPath, "com.example.app", _ => null);
         Assert.Empty(taskCatalog.Warnings);
         Assert.Contains(taskCatalog.Tasks, task => task.TaskId == "map.validate-areas");
+
         var testCatalog = WorkspaceTestCatalog.Load(directory.RootPath);
         Assert.Empty(testCatalog.Warnings);
+
         var test = Assert.Single(testCatalog.Tests);
         Assert.Equal("map-smoke", test.TestId);
         Assert.Equal("Open the map.\nSelect the first area.", test.Prompt);
         Assert.Equal(["MAP_TOKEN"], test.RequiredSecrets);
+
         var triggerCatalog = RepositoryAutomationTriggerLoader.Load(
             [directory.RootPath],
             TimeSpan.FromMilliseconds(100),

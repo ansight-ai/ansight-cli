@@ -16,6 +16,7 @@ internal static class RepositoryTaskExecutionCommand
         CancellationToken cancellationToken)
     {
         ValidateArguments(arguments);
+
         var requestedSessionId = arguments.GetOption("session-id");
         var requestedDeviceId = arguments.GetOption("device-id");
         var input = ReadTaskInput(arguments);
@@ -23,6 +24,7 @@ internal static class RepositoryTaskExecutionCommand
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToDictionary(alias => alias, alias => CliCommandContext.Current?.ResolveSecret(alias)
                 ?? throw new CliUsageException($"Secret '{alias}' is unavailable for this task."), StringComparer.OrdinalIgnoreCase);
+
         if (CliCommandContext.Current is null)
         {
             throw new CliHostUnavailableException(
@@ -41,6 +43,7 @@ internal static class RepositoryTaskExecutionCommand
         output.Write(
             new RepositoryTaskRunOutput("ansight.repository-task-run/v1", result),
             () => RenderTaskResult(result));
+
         return result.Status switch
         {
             RepositoryTaskRunStatus.Passed => CliExitCodes.Success,
@@ -74,6 +77,7 @@ internal static class RepositoryTaskExecutionCommand
         var sessions = runtime.Sessions.GetSummaries()
             .Where(candidate => string.Equals(candidate.AppId, appId, StringComparison.Ordinal))
             .Where(candidate => runtime.AppTools.IsConnected(candidate.SessionId));
+
         if (!string.IsNullOrWhiteSpace(requestedDeviceId))
         {
             var normalizedDeviceId = requestedDeviceId.Trim();
@@ -86,6 +90,7 @@ internal static class RepositoryTaskExecutionCommand
         var session = sessions
             .OrderByDescending(static candidate => candidate.LastUpdatedUtc)
             .FirstOrDefault();
+
         if (session is not null)
         {
             return session.SessionId;
@@ -122,11 +127,12 @@ internal static class RepositoryTaskExecutionCommand
         try
         {
             using var document = JsonDocument.Parse(snapshot.DeviceProfileJson);
+
             return document.RootElement.TryGetProperty("device", out var device)
-                   && device.ValueKind == JsonValueKind.Object
-                   && device.TryGetProperty("nativeDeviceId", out var nativeDeviceId)
-                   && nativeDeviceId.ValueKind == JsonValueKind.String
-                   && !string.IsNullOrWhiteSpace(nativeDeviceId.GetString())
+                && device.ValueKind == JsonValueKind.Object
+                && device.TryGetProperty("nativeDeviceId", out var nativeDeviceId)
+                && nativeDeviceId.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(nativeDeviceId.GetString())
                 ? nativeDeviceId.GetString()!.Trim()
                 : null;
         }
@@ -140,15 +146,18 @@ internal static class RepositoryTaskExecutionCommand
     {
         var inlineJson = arguments.GetOption("input");
         var filePath = arguments.GetOption("input-file");
+
         if (inlineJson is not null && filePath is not null)
         {
             throw new CliUsageException("Use only one of --input or --input-file.");
         }
 
         string? source = inlineJson;
+
         if (filePath is not null)
         {
             var fullPath = Path.GetFullPath(filePath);
+
             if (!File.Exists(fullPath))
             {
                 throw new CliUsageException($"Task input file '{fullPath}' was not found.");
@@ -171,7 +180,7 @@ internal static class RepositoryTaskExecutionCommand
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip
                 }) as JsonObject
-                   ?? throw new CliUsageException("Repository task input must be a JSON object.");
+                ?? throw new CliUsageException("Repository task input must be a JSON object.");
         }
         catch (JsonException exception)
         {
@@ -182,17 +191,18 @@ internal static class RepositoryTaskExecutionCommand
     private static string RenderTaskResult(RepositoryTaskRunResult result)
     {
         var summary = $"{result.Status}: task '{result.TaskId}' for '{result.AppId}' "
-                      + $"on session '{result.SessionId}' in {result.DurationMilliseconds}ms. {result.Message}";
+            + $"on session '{result.SessionId}' in {result.DurationMilliseconds}ms. {result.Message}";
+
         if (result.Assertions.Count == 0)
         {
             return summary;
         }
 
         return summary
-               + Environment.NewLine
-               + string.Join(
-                   Environment.NewLine,
-                   result.Assertions.Select(assertion =>
+            + Environment.NewLine
+            + string.Join(
+                Environment.NewLine,
+                result.Assertions.Select(assertion =>
                        $"{(assertion.Passed ? "PASS" : "FAIL")}\t{assertion.AssertionId}\t{assertion.Message}"));
     }
 }

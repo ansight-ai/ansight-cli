@@ -22,12 +22,14 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         HttpMessageHandler? handler)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         var serverUrl = string.IsNullOrWhiteSpace(options.ServerUrl)
             ? "http://127.0.0.1:8100/"
             : options.ServerUrl.Trim();
+
         if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var endpoint)
             || endpoint.Scheme != Uri.UriSchemeHttp
-            && endpoint.Scheme != Uri.UriSchemeHttps)
+                && endpoint.Scheme != Uri.UriSchemeHttps)
         {
             throw new ArgumentException(
                 "The WebDriverAgent server URL must be an absolute HTTP or HTTPS URL.",
@@ -47,7 +49,9 @@ internal sealed class IosWebDriverAgentClient : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationIdentifier);
+
         var normalizedApplicationIdentifier = applicationIdentifier.Trim();
+
         if (!sessionIdsByApplication.TryGetValue(normalizedApplicationIdentifier, out var sessionId))
         {
             sessionId = await CreateSessionAsync(
@@ -62,15 +66,17 @@ internal sealed class IosWebDriverAgentClient : IDisposable
             payload: null,
             cancellationToken).ConfigureAwait(false);
         var source = response["value"] is JsonValue value
-                     && value.TryGetValue<string>(out var text)
+            && value.TryGetValue<string>(out var text)
             ? text
             : null;
+
         if (string.IsNullOrWhiteSpace(source))
         {
             throw new InvalidOperationException("WebDriverAgent returned no accessibility page source.");
         }
 
         var viewport = ReadViewport(source);
+
         return new IosAccessibilityPageSource(source, viewport.Width, viewport.Height);
     }
 
@@ -82,20 +88,21 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         }
 
         disposed = true;
+
         foreach (var sessionId in sessionIdsByApplication.Values.Distinct(StringComparer.Ordinal))
         {
             try
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 using var response = httpClient.DeleteAsync(
-                        $"session/{Escape(sessionId)}",
-                        timeout.Token)
+                    $"session/{Escape(sessionId)}",
+                    timeout.Token)
                     .GetAwaiter()
                     .GetResult();
             }
             catch (Exception exception) when (exception is HttpRequestException
-                                               or InvalidOperationException
-                                               or TaskCanceledException)
+                or InvalidOperationException
+                or TaskCanceledException)
             {
             }
         }
@@ -109,6 +116,7 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         CancellationToken cancellationToken)
     {
         JsonObject response;
+
         try
         {
             var desiredCapabilities = new JsonObject
@@ -140,8 +148,8 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         }
 
         return ReadString(response["value"], "sessionId")
-               ?? ReadString(response, "sessionId")
-               ?? throw new InvalidOperationException("WebDriverAgent created no usable session.");
+            ?? ReadString(response, "sessionId")
+            ?? throw new InvalidOperationException("WebDriverAgent created no usable session.");
     }
 
     private async Task<JsonObject> SendAsync(
@@ -151,6 +159,7 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
+
         if (payload is not null)
         {
             request.Content = JsonContent.Create(payload);
@@ -159,6 +168,7 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         JsonObject body;
+
         try
         {
             body = string.IsNullOrWhiteSpace(content)
@@ -171,7 +181,8 @@ internal sealed class IosWebDriverAgentClient : IDisposable
         }
 
         var errorMessage = ReadString(body["value"], "message")
-                           ?? ReadString(body["value"], "error");
+            ?? ReadString(body["value"], "error");
+
         if (!response.IsSuccessStatusCode || errorMessage is not null)
         {
             throw new InvalidOperationException(
@@ -196,6 +207,7 @@ internal sealed class IosWebDriverAgentClient : IDisposable
             })
             .Where(static bounds => bounds.Width > 0 && bounds.Height > 0)
             .ToArray();
+
         if (elements.Length == 0)
         {
             throw new InvalidDataException("WebDriverAgent source contains no usable viewport bounds.");
@@ -203,6 +215,7 @@ internal sealed class IosWebDriverAgentClient : IDisposable
 
         var width = (int)Math.Ceiling(elements.Max(static bounds => bounds.X + bounds.Width));
         var height = (int)Math.Ceiling(elements.Max(static bounds => bounds.Y + bounds.Height));
+
         if (width <= 0 || height <= 0)
         {
             throw new InvalidDataException("WebDriverAgent source contains an invalid viewport.");
@@ -222,8 +235,8 @@ internal sealed class IosWebDriverAgentClient : IDisposable
 
     private static string? ReadString(JsonNode? node, string propertyName)
         => node is JsonObject value
-           && value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
+            && value[propertyName] is JsonValue property
+            && property.TryGetValue<string>(out var text)
             ? text
             : null;
 

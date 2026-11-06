@@ -1,21 +1,29 @@
 namespace Ansight.Cli.Commands.App;
 
 /// <summary>Keeps the session reserved until optional app cleanup has finished.</summary>
-internal sealed class AppExecutionScope(
-    bool closeAppOnCompletion,
-    Func<string, string, string, CancellationToken, Task<DeviceOperationResult>> terminateApplication,
-    CliOutput output,
-    TimeSpan? cleanupTimeout = null) : IAsyncDisposable
+internal sealed class AppExecutionScope : IAsyncDisposable
 {
-    private readonly TimeSpan timeout = cleanupTimeout ?? TimeSpan.FromSeconds(30);
+    private readonly Func<string, string, string, CancellationToken, Task<DeviceOperationResult>> terminateApplication;
+    private readonly CliOutput output;
+    private readonly TimeSpan timeout;
     private WorkspaceTestTarget? target;
     private bool disposed;
     private bool applicationClosed;
 
-    public bool CloseAppOnCompletion { get; } = closeAppOnCompletion;
+    public AppExecutionScope(
+        bool closeAppOnCompletion,
+        Func<string, string, string, CancellationToken, Task<DeviceOperationResult>> terminateApplication,
+        CliOutput output,
+        TimeSpan? cleanupTimeout = null)
+    {
+        this.terminateApplication = terminateApplication;
+        this.output = output;
+        this.timeout = cleanupTimeout ?? TimeSpan.FromSeconds(30);
+        this.CloseAppOnCompletion = closeAppOnCompletion;
+    }
 
+    public bool CloseAppOnCompletion { get; }
     public IDisposable? SessionClaim { get; set; }
-
     public IAsyncDisposable? DeviceSession { get; set; }
 
     public void SetTarget(WorkspaceTestTarget value) => target = value;
@@ -28,6 +36,7 @@ internal sealed class AppExecutionScope(
         }
 
         applicationClosed = true;
+
         try
         {
             if (!CloseAppOnCompletion || target is null)
@@ -39,11 +48,12 @@ internal sealed class AppExecutionScope(
             using var cleanupCancellation = new CancellationTokenSource(timeout);
             output.WriteProgress(
                 $"[app.close] Closing '{target.ApplicationIdentifier}' on '{target.DeviceIdentifier}'.");
+
             var result = await terminateApplication(
-                    target.Platform,
-                    target.DeviceIdentifier,
-                    target.ApplicationIdentifier,
-                    cleanupCancellation.Token)
+                target.Platform,
+                target.DeviceIdentifier,
+                target.ApplicationIdentifier,
+                cleanupCancellation.Token)
                 .WaitAsync(cleanupCancellation.Token)
                 .ConfigureAwait(false);
             output.WriteProgress(result.IsSuccess
@@ -63,14 +73,25 @@ internal sealed class AppExecutionScope(
 
     public async ValueTask DisposeAsync()
     {
-        if (disposed) return;
+        if (disposed)
+        {
+            return;
+        }
+
         disposed = true;
-        try { await CloseApplicationAsync().ConfigureAwait(false); }
+
+        try
+        {
+            await CloseApplicationAsync().ConfigureAwait(false);
+        }
         finally
         {
             try
             {
-                if (DeviceSession is not null) await DeviceSession.DisposeAsync().ConfigureAwait(false);
+                if (DeviceSession is not null)
+                {
+                    await DeviceSession.DisposeAsync().ConfigureAwait(false);
+                }
             }
             finally
             {
@@ -91,11 +112,12 @@ internal sealed class AppExecutionScope(
             : requestedDeviceIdentifier.Trim();
         var identifier = requestedIdentifier ?? nativeIdentifier;
         var device = ResolveDevice(identifier);
+
         if (device is null)
         {
             throw new CliUsageException(
                 $"{optionName} requires a known host device for this session. "
-                + "Pass --device-id <id> for the device running the app.");
+                    + "Pass --device-id <id> for the device running the app.");
         }
 
         if (nativeIdentifier is not null
@@ -123,8 +145,8 @@ internal sealed class AppExecutionScope(
         DeviceDescriptor? ResolveDevice(string? value)
             => inventory.Devices.FirstOrDefault(candidate =>
                    string.Equals(candidate.Identifier, value, StringComparison.OrdinalIgnoreCase))
-               ?? inventory.Devices.FirstOrDefault(candidate =>
+                ?? inventory.Devices.FirstOrDefault(candidate =>
                    candidate.IsBooted && candidate.IsVirtual && candidate.Platform == DevicePlatforms.Android
-                   && string.Equals(candidate.Name, value, StringComparison.OrdinalIgnoreCase));
+                       && string.Equals(candidate.Name, value, StringComparison.OrdinalIgnoreCase));
     }
 }

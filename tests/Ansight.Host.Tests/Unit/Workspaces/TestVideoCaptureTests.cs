@@ -17,15 +17,21 @@ public sealed class TestVideoCaptureTests
             new("always"), recorder, (_, _) =>
             {
                 Assert.Equal(1, scope.Disposals);
+
                 return OperationResult.Success("Saved");
             }, default, suspendPeriodicScreenshots: () => scope);
         Assert.Equal(0, scope.Disposals);
+
         if (unexpected)
         {
             recorder.ExitUnexpectedly();
             await TestWait.UntilAsync(() => scope.Disposals == 1);
         }
-        else await capture.StopAsync();
+        else
+        {
+            await capture.StopAsync();
+        }
+
         Assert.Equal(1, scope.Disposals);
         await capture.CompleteAsync(true);
         Assert.Equal(1, scope.Disposals);
@@ -43,9 +49,23 @@ public sealed class TestVideoCaptureTests
         var pauses = 0;
         var starting = TestVideoCapture.StartAsync("run", "session", "device", "android", true,
             new("always"), recorder, (_, _) => OperationResult.Success("Saved"), default,
-            suspendPeriodicScreenshots: () => { pauses++; return new CaptureScope(); });
-        if (cancelled) await Assert.ThrowsAsync<OperationCanceledException>(() => starting);
-        else Assert.Equal("failed", (await (await starting).CompleteAsync(false)).Status);
+            suspendPeriodicScreenshots: () =>
+            {
+                pauses++;
+
+                return new CaptureScope();
+            }
+);
+
+        if (cancelled)
+        {
+            await Assert.ThrowsAsync<OperationCanceledException>(() => starting);
+        }
+        else
+        {
+            Assert.Equal("failed", (await (await starting).CompleteAsync(false)).Status);
+        }
+
         Assert.Equal(0, pauses);
     }
 
@@ -53,6 +73,7 @@ public sealed class TestVideoCaptureTests
     {
         private int disposals;
         public int Disposals => Volatile.Read(ref disposals);
+
         public void Dispose() => Interlocked.Increment(ref disposals);
     }
 
@@ -77,7 +98,15 @@ public sealed class TestVideoCaptureTests
         var yaml = WorkspaceTestCatalog.Parse("/tmp/tests", "/tmp/tests/test.yaml",
             $"appId: example\ntaskId: example\nvideo:\n  retention: {retention}\n");
         var json = WorkspaceTestCatalog.Parse("/tmp/tests", "/tmp/tests/test.json",
-            JsonSerializer.Serialize(new { appId = "example", taskId = "example", video = new { retention } }));
+            JsonSerializer.Serialize(new
+            {
+                appId = "example",
+                taskId = "example",
+                video = new
+                {
+                    retention
+                }
+            }));
         Assert.Equal(retention, yaml.Video.Retention);
         Assert.Equal(yaml.Video, json.Video);
     }
@@ -107,6 +136,7 @@ public sealed class TestVideoCaptureTests
                 Assert.True(File.Exists(path));
                 Assert.Equal(2, SessionVideoMp4TimingInspector.ReadPresentationTimesUs(path).Count);
                 Assert.Equal("run-1", snapshot.RunId);
+
                 return OperationResult.Success("Saved");
             }, CancellationToken.None);
         var result = await capture.CompleteAsync(passed);
@@ -124,7 +154,13 @@ public sealed class TestVideoCaptureTests
         var recorder = new FakeTestVideoRecorder();
         var saved = false;
         var capture = await TestVideoCapture.StartAsync("run", "session", "device", "android", true,
-            new("always"), recorder, (_, _) => { saved = true; return OperationResult.Success("Saved"); }, default);
+            new("always"), recorder, (_, _) =>
+            {
+                saved = true;
+
+                return OperationResult.Success("Saved");
+            }
+, default);
         Assert.True((await capture.StopAsync()).IsComplete);
         Assert.False(saved);
         Assert.Equal(1, recorder.Stops);
@@ -141,6 +177,7 @@ public sealed class TestVideoCaptureTests
             new("always"), recorder, (snapshot, _) =>
             {
                 Assert.Fail("Invalid video must not be published as a replay track.");
+
                 return OperationResult.Success("Saved");
             }, CancellationToken.None);
         var result = await capture.CompleteAsync(false);
@@ -163,7 +200,11 @@ public sealed class TestVideoCaptureTests
     [Fact]
     public async Task NativeProcessReceivesGracefulInterruptAndStopIsIdempotent()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         var start = Shell("trap 'exit 0' INT; echo 'Recording started'; while :; do sleep 0.02; done");
         var recording = await NativeTestVideoRecording.StartAsync(start, "fixture", CancellationToken.None);
         var result = await recording.StopAsync();
@@ -175,17 +216,26 @@ public sealed class TestVideoCaptureTests
     [Fact]
     public async Task NativeProcessStartupFailureIsReported()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         await Assert.ThrowsAsync<IOException>(() => NativeTestVideoRecording.StartAsync(
             Shell("echo 'recorder unavailable' >&2; exit 1"), "fixture", CancellationToken.None));
     }
 
     private static ProcessStartInfo Shell(string script)
     {
-        var start = new ProcessStartInfo("/bin/sh") { UseShellExecute = false,
-            RedirectStandardOutput = true, RedirectStandardError = true };
+        var start = new ProcessStartInfo("/bin/sh")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
         start.ArgumentList.Add("-c");
         start.ArgumentList.Add(script);
+
         return start;
     }
 
@@ -196,17 +246,22 @@ public sealed class TestVideoCaptureTests
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mp4");
         File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture), path);
+
         try
         {
             var timestamps = SessionVideoMp4TimingInspector.ReadPresentationTimesUs(path);
             SessionVideoMp4TimingInspector.ExtendFinalFrame(path, TimeSpan.FromSeconds(3));
             Assert.Equal(TimeSpan.FromSeconds(3), SessionVideoMp4TimingInspector.ReadDuration(path));
             Assert.Equal(timestamps, SessionVideoMp4TimingInspector.ReadPresentationTimesUs(path));
+
             var size = new FileInfo(path).Length;
             SessionVideoMp4TimingInspector.ExtendFinalFrame(path, TimeSpan.FromSeconds(2));
             Assert.Equal(size, new FileInfo(path).Length);
             Assert.Equal(TimeSpan.FromSeconds(3), SessionVideoMp4TimingInspector.ReadDuration(path));
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }

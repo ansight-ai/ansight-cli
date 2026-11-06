@@ -14,9 +14,11 @@ public sealed partial class SimulatorAgentToolGatewayTests
             ToolDefinition("ansight_call_app_tool", "App tool", "sessionId"));
         dispatcher.SessionSnapshots.Add(CreateSessionSnapshot(
             "device-session", "com.example.app", DateTimeOffset.UtcNow, captureSource: "device"));
+
         var gateway = new ToolGateway(dispatcher);
         var capabilities = await gateway.GetSessionCapabilitiesAsync("device-session", CancellationToken.None);
         Assert.True(capabilities.IsDeviceOnly);
+
         var names = gateway.BuildOpenAiToolDefinitions(capabilities: capabilities)
             .OfType<JsonObject>().Select(value => value["name"]!.GetValue<string>()).ToArray();
         Assert.Contains("ansight_tap_ui", names);
@@ -24,6 +26,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.Contains("ansight_run_task", names);
         Assert.DoesNotContain("ansight_call_app_tool", names);
         Assert.Empty(await gateway.GetRepositoryTaskShortcutsAsync("device-session", "Inspect", CancellationToken.None));
+
         var discoveryCalls = dispatcher.Calls.Count;
         var result = await gateway.ExecuteAsync("ansight_call_app_tool", new JsonObject(),
             "device-session", "call", CancellationToken.None);

@@ -4,8 +4,8 @@ namespace Ansight.Host.Runtime.Operations;
 
 internal sealed class UiInputRouter
 {
-    private static readonly TimeSpan AccessibilitySuccessCacheDuration = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan AccessibilityFailureCacheDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan accessibilitySuccessCacheDuration = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan accessibilityFailureCacheDuration = TimeSpan.FromSeconds(2);
     private readonly Lock gate = new();
     private readonly Dictionary<string, UiInputTargetBinding> targetBindingsBySession = new(StringComparer.Ordinal);
     private readonly Dictionary<UiAccessibilityCacheKey, UiAccessibilityCacheEntry> accessibilityCache = [];
@@ -19,6 +19,7 @@ internal sealed class UiInputRouter
     {
         var previous = evidenceActionId.Value;
         evidenceActionId.Value = actionId;
+
         return new EvidenceScope(() => evidenceActionId.Value = previous);
     }
 
@@ -31,11 +32,14 @@ internal sealed class UiInputRouter
         var evidenceId = evidenceActionId.Value;
         SessionActivityOperation.Current?.AddEvidence(id);
         SessionActivityOperation.Current?.AddEvidence(evidenceId);
+
         UiInputResult? result = null;
+
         try
         {
             result = await deliver().ConfigureAwait(false);
             SessionActivityOperation.Current?.SetDeliveryOutcome(result.IsSuccess ? "succeeded" : "failed");
+
             return result;
         }
         finally
@@ -48,11 +52,18 @@ internal sealed class UiInputRouter
         }
     }
 
-    private sealed class EvidenceScope(Action restore) : IDisposable
+    private sealed class EvidenceScope : IDisposable
     {
-        private Action? restoreAction = restore;
+        private Action? restoreAction;
+
+        public EvidenceScope(Action restore)
+        {
+            this.restoreAction = restore;
+        }
+
         public void Dispose() => Interlocked.Exchange(ref restoreAction, null)?.Invoke();
     }
+
     private IUiAccessibilityDriver? accessibilityDriver;
 
     public void Configure(IUiInputDriver? value)
@@ -80,6 +91,7 @@ internal sealed class UiInputRouter
     public UiInputAvailability GetAvailability(string deviceIdentifier)
     {
         var current = GetDriver();
+
         return current?.GetAvailability(deviceIdentifier)
             ?? UiInputAvailability.Unavailable("This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.");
     }
@@ -87,10 +99,12 @@ internal sealed class UiInputRouter
     public IDisposable BeginTargetScope(string sessionId, string? deviceIdentifier)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         var normalizedDeviceIdentifier = string.IsNullOrWhiteSpace(deviceIdentifier)
             ? null
             : deviceIdentifier.Trim();
+
         if (normalizedDeviceIdentifier is null)
         {
             return UiInputTargetScope.Empty;
@@ -101,9 +115,9 @@ internal sealed class UiInputRouter
             if (targetBindingsBySession.TryGetValue(normalizedSessionId, out var existing))
             {
                 if (!string.Equals(
-                        existing.DeviceIdentifier,
-                        normalizedDeviceIdentifier,
-                        StringComparison.OrdinalIgnoreCase))
+                    existing.DeviceIdentifier,
+                    normalizedDeviceIdentifier,
+                    StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidOperationException(
                         $"Session '{normalizedSessionId}' is already bound to a different host input target.");
@@ -144,10 +158,11 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         var result = await RecordInputAsync(request.SessionId, "tap", () => GetDriver()?.TapAsync(request, cancellationToken)
-                            ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")), request.NormalizedX, request.NormalizedY)
+            ?? Task.FromResult(UiInputResult.Failure(
+                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")), request.NormalizedX, request.NormalizedY)
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -156,6 +171,7 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         request.Validate();
+
         try
         {
             return await RecordInputAsync(request.SessionId, "longPress",
@@ -174,11 +190,13 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var preflightDriver = GetInputPreflightDriver();
         var result = preflightDriver is null
             ? new UiInputResult(true, string.Empty, "The configured input driver does not require a preflight.")
             : await preflightDriver.PrepareForInputAsync(request, cancellationToken).ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -187,10 +205,11 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         var result = await (GetDriver()?.SwipeAsync(request, cancellationToken)
-                            ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
+            ?? Task.FromResult(UiInputResult.Failure(
+                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -199,10 +218,11 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         var result = await (GetDriver()?.PinchAsync(request, cancellationToken)
-                            ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
+            ?? Task.FromResult(UiInputResult.Failure(
+                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -211,10 +231,11 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         var result = await RecordInputAsync(request.SessionId, "type", () => GetDriver()?.TypeTextAsync(request, cancellationToken)
-                            ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
+            ?? Task.FromResult(UiInputResult.Failure(
+                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session.")))
             .ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -223,12 +244,14 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         Task<UiInputResult> Deliver() => GetDriver()?.PressButtonAsync(request, cancellationToken)
-                            ?? Task.FromResult(UiInputResult.Failure(
-                                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session."));
+            ?? Task.FromResult(UiInputResult.Failure(
+                "This host has no UI input driver. Start the resident host with ansight host run, then select a connected simulator or emulator session."));
+
         var result = request.Button.Equals("enter", StringComparison.OrdinalIgnoreCase)
             ? await RecordInputAsync(request.SessionId, "keyboard.press", Deliver).ConfigureAwait(false)
             : await Deliver().ConfigureAwait(false);
         InvalidateAccessibility(request.SessionId);
+
         return result;
     }
 
@@ -237,6 +260,7 @@ internal sealed class UiInputRouter
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var cacheKey = new UiAccessibilityCacheKey(
             request.SessionId,
             request.DeviceIdentifier,
@@ -244,14 +268,15 @@ internal sealed class UiInputRouter
             request.MaxNodes,
             request.MaxDepth);
         var now = DateTimeOffset.UtcNow;
+
         lock (gate)
         {
             if (accessibilityCache.TryGetValue(cacheKey, out var cached)
                 && request.AllowCached
                 && (cached.Result.IsSuccess
-                    && now - cached.CapturedAtUtc <= AccessibilitySuccessCacheDuration
+                    && now - cached.CapturedAtUtc <= accessibilitySuccessCacheDuration
                     || !cached.Result.IsSuccess
-                    && now - cached.CapturedAtUtc <= AccessibilityFailureCacheDuration))
+                        && now - cached.CapturedAtUtc <= accessibilityFailureCacheDuration))
             {
                 return CloneAccessibilityResult(cached.Result);
             }
@@ -262,6 +287,7 @@ internal sealed class UiInputRouter
             ? UiAccessibilityResult.Failure(
                 "Device accessibility capture is not running. Start the Ansight host first.")
             : await current.CaptureAccessibilityAsync(request, cancellationToken).ConfigureAwait(false);
+
         lock (gate)
         {
             accessibilityCache[cacheKey] = new UiAccessibilityCacheEntry(
@@ -293,7 +319,7 @@ internal sealed class UiInputRouter
         lock (gate)
         {
             return accessibilityDriver as IUiInputPreflightDriver
-                   ?? driver as IUiInputPreflightDriver;
+                ?? driver as IUiInputPreflightDriver;
         }
     }
 
@@ -307,6 +333,7 @@ internal sealed class UiInputRouter
             }
 
             binding.ScopeCount--;
+
             if (binding.ScopeCount <= 0)
             {
                 targetBindingsBySession.Remove(sessionId);
@@ -319,8 +346,8 @@ internal sealed class UiInputRouter
         lock (gate)
         {
             foreach (var key in accessibilityCache.Keys
-                         .Where(key => string.Equals(key.SessionId, sessionId, StringComparison.Ordinal))
-                         .ToArray())
+                .Where(key => string.Equals(key.SessionId, sessionId, StringComparison.Ordinal))
+                .ToArray())
             {
                 accessibilityCache.Remove(key);
             }
@@ -344,11 +371,16 @@ internal sealed class UiInputRouter
         DateTimeOffset CapturedAtUtc,
         UiAccessibilityResult Result);
 
-    private sealed class UiInputTargetBinding(string deviceIdentifier)
+    private sealed class UiInputTargetBinding
     {
-        public string DeviceIdentifier { get; } = deviceIdentifier;
+        public UiInputTargetBinding(string deviceIdentifier)
+        {
+            this.DeviceIdentifier = deviceIdentifier;
+            this.ScopeCount = 1;
+        }
 
-        public int ScopeCount { get; set; } = 1;
+        public string DeviceIdentifier { get; }
+        public int ScopeCount { get; set; }
     }
 
     private sealed class UiInputTargetScope : IDisposable

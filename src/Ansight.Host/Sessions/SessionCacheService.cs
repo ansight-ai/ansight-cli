@@ -27,6 +27,7 @@ public sealed class SessionCacheService
         ISet<string>? protectedSessionIds = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(compactionAgeDays, 1);
+
         return sessionReader.CompactSessionCache(
             compactionAgeDays,
             nowUtc ?? DateTimeOffset.UtcNow,
@@ -42,21 +43,22 @@ public sealed class SessionCacheService
     {
         var candidates = sessionReader.GetSessionSummaries()
             .Select(session =>
-            {
-                var cacheSizeBytes = sessionReader.TryGetSessionCacheSizeBytes(session.SessionId, out var storedCacheSizeBytes)
-                    ? storedCacheSizeBytes
-                    : session.CacheSizeBytes;
-                return new SessionCacheCleanupCandidate(
-                    session.SessionId,
-                    session.AppId,
-                    session.Name,
-                    session.CreatedUtc,
-                    session.LastUpdatedUtc,
-                    Math.Max(0, cacheSizeBytes),
-                    session.IsPinned,
-                    appToolBridge.IsSessionConnected(session.SessionId)
-                    || (sessionReader is ISessionLifecycle lifecycle && lifecycle.IsDeviceSessionActive(session.SessionId)));
-            })
+                {
+                    var cacheSizeBytes = sessionReader.TryGetSessionCacheSizeBytes(session.SessionId, out var storedCacheSizeBytes)
+                        ? storedCacheSizeBytes
+                        : session.CacheSizeBytes;
+
+                    return new SessionCacheCleanupCandidate(
+                        session.SessionId,
+                        session.AppId,
+                        session.Name,
+                        session.CreatedUtc,
+                        session.LastUpdatedUtc,
+                        Math.Max(0, cacheSizeBytes),
+                        session.IsPinned,
+                        appToolBridge.IsSessionConnected(session.SessionId)
+                            || (sessionReader is ISessionLifecycle lifecycle && lifecycle.IsDeviceSessionActive(session.SessionId)));
+                })
             .ToArray();
 
         return SessionCacheCleanupPlanner.BuildPlan(

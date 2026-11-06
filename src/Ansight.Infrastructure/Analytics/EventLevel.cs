@@ -1,4 +1,4 @@
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 public enum EventLevel
 {

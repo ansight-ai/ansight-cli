@@ -10,10 +10,12 @@ public sealed class EnrollmentProtocolIntegrationTests
         using var environment = new TestEnvironment(webSocketSessionPortCount: 2);
         using var runtime = environment.CreateRuntime();
         await runtime.StartAsync();
+
         var previousProcess = Guid.NewGuid().ToString("D");
         var currentProcess = Guid.NewGuid().ToString("D");
         var deviceId = $"crash-test-{Guid.NewGuid():N}";
         var accessToken = CryptoUtil.CreateBase64UrlRandom(32);
+
         EnrollmentConnectRequest Request(string process) => new()
         {
             EnrollmentMode = EnrollmentConnectRequest.LocalMode,
@@ -25,11 +27,14 @@ public sealed class EnrollmentProtocolIntegrationTests
             AccessToken = accessToken,
             ProcessSessionId = process
         };
+
         var original = await SendEnrollmentRequestAsync(Request(previousProcess), IPAddress.Loopback);
         Assert.True(original.Accepted, original.ReasonMessage);
+
         var previousSession = Assert.Single(runtime.Sessions.GetSummaries()).SessionId;
         var response = await SendEnrollmentRequestAsync(Request(currentProcess), IPAddress.Loopback);
         Assert.True(response.Accepted, response.ReasonMessage);
+
         using var socket = new ClientWebSocket();
         var uri = new UriBuilder("ws", IPAddress.Loopback.ToString(), response.WebSocketPort!.Value, response.WebSocketPath)
         {
@@ -37,6 +42,7 @@ public sealed class EnrollmentProtocolIntegrationTests
         }.Uri;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         await socket.ConnectAsync(uri, timeout.Token);
+
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var requestId = $"crash-handoff-{attempt}";
@@ -63,26 +69,36 @@ public sealed class EnrollmentProtocolIntegrationTests
             };
             await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(request, JsonUtil.Compact),
                 WebSocketMessageType.Text, true, timeout.Token);
+
             while (true)
             {
                 using var message = new MemoryStream();
                 var buffer = new byte[4096];
                 WebSocketReceiveResult received;
+
                 do
                 {
                     received = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), timeout.Token);
                     Assert.NotEqual(WebSocketMessageType.Close, received.MessageType);
                     message.Write(buffer, 0, received.Count);
                 } while (!received.EndOfMessage);
+
                 var reply = JsonNode.Parse(message.ToArray())!.AsObject();
-                if (reply["replyTo"]?.GetValue<string>() != requestId) continue;
+
+                if (reply["replyTo"]?.GetValue<string>() != requestId)
+                {
+                    continue;
+                }
+
                 Assert.True(reply["success"]!.GetValue<bool>(), reply["message"]?.GetValue<string>());
                 break;
             }
+
             var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
             Assert.True(restartedStore.TryLoad(previousSession, out var retained));
             Assert.Single(retained!.ArtifactSnapshots);
         }
+
         socket.Abort();
         await runtime.StopAsync();
     }
@@ -307,10 +323,13 @@ public sealed class EnrollmentProtocolIntegrationTests
     {
         using var udp = new UdpClient(hostAddress.AddressFamily);
         udp.Connect(hostAddress, ProtocolDefaults.DiscoveryPort);
+
         var payload = JsonSerializer.SerializeToUtf8Bytes(request, JsonUtil.Compact);
         await udp.SendAsync(payload, payload.Length);
+
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var response = await udp.ReceiveAsync(timeout.Token);
+
         return Assert.IsType<ConnectResponse>(
             JsonSerializer.Deserialize<ConnectResponse>(response.Buffer, JsonUtil.Compact));
     }

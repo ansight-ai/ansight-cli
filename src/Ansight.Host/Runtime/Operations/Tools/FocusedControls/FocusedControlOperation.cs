@@ -27,6 +27,7 @@ internal abstract class FocusedControlOperation : Operation
     protected RequestResult BuildGetFocusedControlResult(JsonObject? arguments)
     {
         var focusedControls = GetFilteredFocusedControls(arguments).ToArray();
+
         if (focusedControls.Length == 0)
         {
             return ToolError("No focused visual tree control is available. Use ansight_find_ui with sessionId and a selector to discover an exact live target.");
@@ -45,6 +46,7 @@ internal abstract class FocusedControlOperation : Operation
         }
 
         var focusedControl = focusedControls[0];
+
         return RequestResult.ToolResult(
             new JsonObject
             {
@@ -58,6 +60,7 @@ internal abstract class FocusedControlOperation : Operation
     {
         var sessionId = NormalizeOptionalString(arguments?["sessionId"]?.GetValue<string>());
         var appId = NormalizeOptionalString(arguments?["appId"]?.GetValue<string>());
+
         return runtimeState.GetFocusedControlSnapshots()
             .Where(snapshot => sessionId is null || string.Equals(snapshot.SessionId, sessionId, StringComparison.Ordinal))
             .Where(snapshot => appId is null || string.Equals(snapshot.AppId, appId, StringComparison.Ordinal))

@@ -35,7 +35,11 @@ public sealed class DependencyBaselineTests
         Assert.Equal(status, advice.Status);
         Assert.Equal(notice, advice.Notice is not null);
         Assert.DoesNotContain("unsupported", advice.Notice ?? "", StringComparison.OrdinalIgnoreCase);
-        if (status is "below-minimum" or "above-maximum") Assert.Contains("will likely still work", advice.Notice);
+
+        if (status is "below-minimum" or "above-maximum")
+        {
+            Assert.Contains("will likely still work", advice.Notice);
+        }
     }
 
     [Fact]
@@ -59,7 +63,10 @@ public sealed class DependencyBaselineTests
     [Fact]
     public void AndroidPackageBuildSuffixIsNotAPrerelease()
     {
-        var definition = Definition(new("37.0", "37.0.0")) with { Id = "adb" };
+        var definition = Definition(new("37.0", "37.0.0")) with
+        {
+            Id = "adb"
+        };
         var advice = DependencyBaseline.Compare(definition, "37.0.0-14910828");
         Assert.Equal("at-target", advice.Status);
         Assert.Equal("37.0.0-14910828", advice.DetectedVersion);
@@ -72,12 +79,16 @@ public sealed class DependencyBaselineTests
             "configuration", "/bin", null, [], "Android video");
         Assert.Equal("available", tool.Status);
         Assert.Equal("below-minimum", tool.VersionAdvice!.Status);
+
         var section = new SystemReportSection("complete", JsonSerializer.SerializeToNode(tool));
         var report = new SystemReport("ansight.system-report/v1", DateTimeOffset.UnixEpoch, false,
             new Dictionary<string, SystemReportSection> { ["dependencies"] = section }, []);
         Assert.True(report.IsComplete);
         Assert.Contains("will likely still work", SystemReportRenderer.Render(report));
-        Assert.Null((tool with { Status = "missing" }).VersionAdvice);
+        Assert.Null((tool with
+        {
+            Status = "missing"
+        }).VersionAdvice);
     }
 
     private static DependencyDefinition Definition(DependencyVersionPolicy versions)

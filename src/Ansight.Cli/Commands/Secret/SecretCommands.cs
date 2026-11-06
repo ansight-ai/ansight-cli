@@ -21,6 +21,7 @@ internal static class SecretCommands
             start: false,
             cancellationToken).ConfigureAwait(false);
         var runtime = lease.Runtime;
+
         return action switch
         {
             "list" => List(runtime, arguments, output),
@@ -43,6 +44,7 @@ internal static class SecretCommands
                     Environment.NewLine,
                     secrets.Select(secret =>
                         $"{secret.Alias}\t{secret.VersionId}\t{secret.UpdatedUtc:O}")));
+
         return CliExitCodes.Success;
     }
 
@@ -53,6 +55,7 @@ internal static class SecretCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(4, "ansight secret set <app-id> <alias> [--stdin|--from-env <NAME>]");
+
         var appId = arguments.RequirePositional(2, "app identifier");
         var alias = arguments.RequirePositional(3, "secret alias");
         var value = await SecretInput.ReadAsync(arguments, $"Value for {appId}/{alias}: ", cancellationToken)
@@ -61,6 +64,7 @@ internal static class SecretCommands
         output.Write(
             new SecretMutationOutput("ansight.secret-mutation/v1", "set", true, metadata),
             () => $"Saved test secret '{metadata.Alias}' for '{metadata.AppId}'.");
+
         return CliExitCodes.Success;
     }
 
@@ -74,6 +78,7 @@ internal static class SecretCommands
             () => removed
                 ? $"Removed test secret '{alias}' for '{appId}'."
                 : $"Test secret '{alias}' was not configured for '{appId}'.");
+
         return removed ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -107,5 +112,4 @@ internal static class SecretCommands
            Find app IDs with `ansight app list`. Find existing aliases with
            `ansight secret list <app-id>`; secret values are never displayed.
            """;
-
 }

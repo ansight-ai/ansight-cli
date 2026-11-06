@@ -26,38 +26,55 @@ internal static class InteractionServer
         // is retained; this is not an unbounded action scheduler.
         var requests = Channel.CreateBounded<string>(new BoundedChannelOptions(1)
         {
-            SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait
+            SingleReader = true,
+            SingleWriter = true,
+            FullMode = BoundedChannelFullMode.Wait
         });
         var receiving = ReceiveAsync(new InteractionLineReader(reader), requests.Writer, lifetime);
         var exitCode = CliExitCodes.Success;
+
         try
         {
-            await using var ownedLease = existingLease is not { IsLocal: true }
-                ? CliAccessLease.CreateLocal(lifetime.Token)
+            await using var ownedLease = existingLease is not { IsLocal: true } ? CliAccessLease.CreateLocal(lifetime.Token)
                 : null;
             var lease = existingLease is { IsLocal: true } ? existingLease : ownedLease!;
+
             if (lease.IsDenied || !lease.Decision.IsAuthorized)
+            {
                 throw new CliAccessDeniedException(lease.Failure);
+            }
+
             var context = createContext(sessionId, repository);
+
             using (var initialTimeout = CancellationTokenSource.CreateLinkedTokenSource(lease.Token))
             {
                 initialTimeout.CancelAfter(timeoutMs);
+
                 var initial = await context.ExecuteAsync(new("ready", "snapshot"), initialTimeout.Token).ConfigureAwait(false);
-                await InteractionProtocol.WriteAsync(writer, initial with { Id = null, Command = "ready" }, lease.Token).ConfigureAwait(false);
+                await InteractionProtocol.WriteAsync(writer, initial with
+                {
+                    Id = null,
+                    Command = "ready"
+                }, lease.Token).ConfigureAwait(false);
             }
 
             await foreach (var line in requests.Reader.ReadAllAsync(lease.Token).ConfigureAwait(false))
             {
                 AppInteractionRequest? request = null;
                 var dispatched = false;
+
                 try
                 {
                     request = JsonSerializer.Deserialize<AppInteractionRequest>(line, InteractionProtocol.jsonOptions)
                         ?? throw new ArgumentException("Expected a JSON request object.");
                     request.Validate();
+
                     if (repository is null && (request.Command is "task" or "tasks"
                         || request.Commands?.Any(child => child.Command is "task" or "tasks") == true))
+                    {
                         throw new ArgumentException("Task commands require --repository <root> when opening the interactive connection.");
+                    }
+
                     if (request.Command == "exit")
                     {
                         await InteractionProtocol.WriteAsync(writer,
@@ -67,17 +84,24 @@ internal static class InteractionServer
                     }
 
                     dispatched = true;
+
                     if (request.Command == "batch")
                     {
                         using var batchActivity = activity?.Begin("interaction.batch", "interaction", sessionId, requestId: request.Id);
                         var batchTimer = Stopwatch.StartNew();
                         var results = new List<AppInteractionResult>();
+
                         foreach (var child in request.Commands!)
                         {
                             var childResult = await ExecuteAsync(context, child, timeoutMs, taskTimeoutMs, lease.Token).ConfigureAwait(false);
                             results.Add(childResult);
-                            if (!childResult.Succeeded) break;
+
+                            if (!childResult.Succeeded)
+                            {
+                                break;
+                            }
                         }
+
                         var skipped = request.Commands.Skip(results.Count).Select(child => child.Id).ToArray();
                         var succeeded = results.All(result => result.Succeeded);
                         batchActivity?.Complete(succeeded ? "succeeded" : "failed");
@@ -103,6 +127,7 @@ internal static class InteractionServer
                         using var rejection = activity?.Begin("interaction.invalid_request", "interaction", sessionId, requestId: request?.Id);
                         rejection?.Complete("rejected", errorType: exception.GetType().Name);
                     }
+
                     await InteractionProtocol.WriteAsync(writer,
                         InteractionProtocol.Error(request?.Id, request?.Command ?? "invalid", sessionId, "invalid_request", exception.Message),
                         lease.Token).ConfigureAwait(false);
@@ -113,19 +138,30 @@ internal static class InteractionServer
         {
             exitCode = exception is CliAccessDeniedException ? CliExitCodes.AccessDenied
                 : exception is OperationCanceledException ? CliExitCodes.Cancelled : CliExitCodes.Failure;
+
             var message = exception is CliAccessDeniedException denied ? denied.Decision.Message
                 : exception is OperationCanceledException ? "Interaction stopped; commands may have completed."
-                : exception.Message;
+                    : exception.Message;
+
             if (!lifetime.IsCancellationRequested)
+            {
                 await InteractionProtocol.WriteAsync(writer,
                     InteractionProtocol.Error(null, "closed", sessionId, "session_closed", message), cancellationToken).ConfigureAwait(false);
+            }
         }
         finally
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
-            try { await receiving.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
+
+            try
+            {
+                await receiving.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
+
         return new(ControlProtocol.ResponseSchema, exitCode, string.Empty, string.Empty);
     }
 
@@ -135,6 +171,7 @@ internal static class InteractionServer
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(request.Command == "task" ? taskTimeoutMs : timeoutMs);
+
         try
         {
             return await context.ExecuteAsync(request, timeout.Token).ConfigureAwait(false);
@@ -159,16 +196,23 @@ internal static class InteractionServer
         try
         {
             while (await reader.ReadAsync(lifetime.Token).ConfigureAwait(false) is { } line)
+            {
                 await requests.WriteAsync(line, lifetime.Token).ConfigureAwait(false);
+            }
+
             // EOF is a disconnected client. The CLI sends an explicit exit for ordinary stdin EOF.
+
             await lifetime.CancelAsync().ConfigureAwait(false);
             requests.TryComplete();
         }
         catch (Exception exception)
         {
             requests.TryComplete(exception);
+
             if (exception is IOException or OperationCanceledException)
+            {
                 await lifetime.CancelAsync().ConfigureAwait(false);
+            }
         }
     }
 }

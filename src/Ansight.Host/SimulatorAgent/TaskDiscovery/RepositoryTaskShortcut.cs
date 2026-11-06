@@ -19,8 +19,6 @@ internal sealed record RepositoryTaskShortcut(
     double? Coverage)
 {
     public string? StartingState { get; init; }
-
     public string? SuccessState { get; init; }
-
     public IReadOnlyList<string> Keywords { get; init; } = [];
 }

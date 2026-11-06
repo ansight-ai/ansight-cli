@@ -58,8 +58,8 @@ public sealed partial class RuntimeCoordinator
     private void HandleSessionLogsAdded(object? sender, SessionLogBatchEventArgs batch)
     {
         if (RepositoryAutomations.HasCandidates(
-                AutomationEventNormalizer.SessionLogReceivedKind,
-                batch.AppId))
+            AutomationEventNormalizer.SessionLogReceivedKind,
+            batch.AppId))
         {
             foreach (var entry in batch.Entries)
             {
@@ -80,8 +80,10 @@ public sealed partial class RuntimeCoordinator
         Analytics.RecordUsage("automation",
             outcome: completedEvent.Status switch
             {
-                AutomationRunStatus.Succeeded => "succeeded", AutomationRunStatus.Cancelled => "cancelled",
-                AutomationRunStatus.Rejected => "blocked", _ => "failed"
+                AutomationRunStatus.Succeeded => "succeeded",
+                AutomationRunStatus.Cancelled => "cancelled",
+                AutomationRunStatus.Rejected => "blocked",
+                _ => "failed"
             }, durationSeconds: Math.Max(0, (completedEvent.CompletedAtUtc - completedEvent.StartedAtUtc).TotalSeconds));
     }
 
@@ -115,8 +117,10 @@ public sealed partial class RuntimeCoordinator
             case RuntimePairingEvent pairingEvent:
                 PairingEventOccurred?.Invoke(this, pairingEvent);
                 if (pairingEvent.Kind is RuntimePairingEventKind.PairingAccepted or RuntimePairingEventKind.PairingRejected)
+                {
                     Analytics.RecordUsage("pairing",
                         outcome: pairingEvent.Kind == RuntimePairingEventKind.PairingAccepted ? "succeeded" : "blocked");
+                }
                 break;
             case RuntimeClientAppStateChangedEvent clientAppStateChangedEvent:
                 ClientAppStateChanged?.Invoke(this, clientAppStateChangedEvent);
@@ -146,11 +150,13 @@ public sealed partial class RuntimeCoordinator
         if (!cancellationToken.CanBeCanceled)
         {
             await pairingTask;
+
             return;
         }
 
         var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         var completedTask = await Task.WhenAny(pairingTask, cancellationTask);
+
         if (completedTask != pairingTask)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -185,7 +191,11 @@ public sealed partial class RuntimeCoordinator
     {
         foreach (var task in tasks)
         {
-            if (task is null) continue;
+            if (task is null)
+            {
+                continue;
+            }
+
             try
             {
                 await task;
@@ -218,8 +228,9 @@ public sealed partial class RuntimeCoordinator
             }
 
             var pairingReady = runtimeState.IsServerRunning
-                               || currentPairingTask?.IsCompleted == true
-                               || !string.Equals(runtimeState.ServerStatusText, "UDP pairing listener not started.", StringComparison.Ordinal);
+                || currentPairingTask?.IsCompleted == true
+                || !string.Equals(runtimeState.ServerStatusText, "UDP pairing listener not started.", StringComparison.Ordinal);
+
             if (pairingReady)
             {
                 return;
@@ -232,6 +243,7 @@ public sealed partial class RuntimeCoordinator
     private string[] CaptureStartupWarnings()
     {
         var warnings = new List<string>();
+
         if (!runtimeState.IsServerRunning
             && !string.IsNullOrWhiteSpace(runtimeState.ServerStatusText)
             && !string.Equals(runtimeState.ServerStatusText, "UDP pairing listener not started.", StringComparison.Ordinal))
@@ -270,5 +282,4 @@ public sealed partial class RuntimeCoordinator
     {
         ObjectDisposedException.ThrowIf(disposed, this);
     }
-
 }

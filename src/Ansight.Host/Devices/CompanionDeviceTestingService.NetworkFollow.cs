@@ -11,8 +11,9 @@ internal sealed partial class CompanionDeviceTestingService
     private void StartFollowingPhone(CompanionLease lease, bool online, JsonObject payload)
     {
         var expires = payload["expiresAtUtc"]?.GetValue<DateTimeOffset>()
-                      ?? clock.GetUtcNow().AddMinutes(2);
+            ?? clock.GetUtcNow().AddMinutes(2);
         follow = new FollowState(lease, clock.GetUtcNow(), expires, online, -1);
+
         var cancellation = new CancellationTokenSource();
         followCancellation = cancellation;
         _ = MonitorPhoneAsync(cancellation);
@@ -30,10 +31,11 @@ internal sealed partial class CompanionDeviceTestingService
         CancellationToken cancellationToken)
     {
         var matches = follow is not null
-                      && follow.Lease.Id == request.LeaseId
-                      && follow.Lease.DeviceId == request.DeviceUdid
-                      && follow.Lease.AppId == request.AppId
-                      && request.Sequence >= 0;
+            && follow.Lease.Id == request.LeaseId
+            && follow.Lease.DeviceId == request.DeviceUdid
+            && follow.Lease.AppId == request.AppId
+            && request.Sequence >= 0;
+
         if (!matches)
         {
             return new RemoteDeviceTestingResult(false, "No matching phone-following lease is active.");
@@ -45,16 +47,24 @@ internal sealed partial class CompanionDeviceTestingService
         }
 
         var online = request.Online == true;
+
         if (online != follow.Online)
         {
             var result = await SetFollowProfileAsync(follow.Lease, online, cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 return new RemoteDeviceTestingResult(false, result.Payload["message"]?.GetValue<string>() ?? "Could not update connectivity.");
             }
         }
 
-        follow = follow with { LastHeartbeat = clock.GetUtcNow(), Online = online, Sequence = request.Sequence!.Value };
+        follow = follow with
+        {
+            LastHeartbeat = clock.GetUtcNow(),
+            Online = online,
+            Sequence = request.Sequence!.Value
+        };
+
         return new RemoteDeviceTestingResult(true, online
             ? "Following phone: online. Normal TCP traffic is enabled."
             : "Following phone: offline. TCP connections are blocked.");
@@ -63,6 +73,7 @@ internal sealed partial class CompanionDeviceTestingService
     internal async Task CheckPhoneTimeoutAsync(CancellationToken cancellationToken = default)
     {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (follow is null)
@@ -71,19 +82,26 @@ internal sealed partial class CompanionDeviceTestingService
             }
 
             var now = clock.GetUtcNow();
+
             if (now >= follow.ExpiresAt)
             {
                 StopFollowingPhone();
+
                 return;
             }
 
             var missedHeartbeat = follow.Online && now - follow.LastHeartbeat >= TimeSpan.FromSeconds(8);
+
             if (missedHeartbeat)
             {
                 var result = await SetFollowProfileAsync(follow.Lease, false, cancellationToken).ConfigureAwait(false);
+
                 if (result.IsSuccess)
                 {
-                    follow = follow with { Online = false };
+                    follow = follow with
+                    {
+                        Online = false
+                    };
                 }
             }
         }
@@ -128,6 +146,7 @@ internal sealed partial class CompanionDeviceTestingService
         finally
         {
             await gate.WaitAsync().ConfigureAwait(false);
+
             try
             {
                 if (ReferenceEquals(followCancellation, cancellation))

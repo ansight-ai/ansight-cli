@@ -16,6 +16,7 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
     public KnownTeamProfile? Get(string userId)
     {
         var normalizedUserId = Normalize(userId);
+
         if (string.IsNullOrWhiteSpace(normalizedUserId))
         {
             return null;
@@ -24,15 +25,17 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
         lock (gate)
         {
             return LoadProfiles().FirstOrDefault(profile =>
-                string.Equals(profile.UserId, normalizedUserId, StringComparison.Ordinal));
+                        string.Equals(profile.UserId, normalizedUserId, StringComparison.Ordinal));
         }
     }
 
     public void Save(KnownTeamProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
+
         var normalizedUserId = Normalize(profile.UserId);
         var normalizedName = Normalize(profile.Name);
+
         if (string.IsNullOrWhiteSpace(normalizedUserId)
             || profile.TeamId == Guid.Empty
             || string.IsNullOrWhiteSpace(normalizedName))
@@ -53,6 +56,7 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
     public void Remove(string userId)
     {
         var normalizedUserId = Normalize(userId);
+
         if (string.IsNullOrWhiteSpace(normalizedUserId))
         {
             return;
@@ -61,6 +65,7 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
         lock (gate)
         {
             var profiles = LoadProfiles();
+
             if (profiles.RemoveAll(profile =>
                     string.Equals(profile.UserId, normalizedUserId, StringComparison.Ordinal)) > 0)
             {
@@ -72,6 +77,7 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
     private List<KnownTeamProfile> LoadProfiles()
     {
         var json = encryptedStorage.Get(ProfilesKey);
+
         if (string.IsNullOrWhiteSpace(json))
         {
             return [];
@@ -92,6 +98,7 @@ public sealed class EncryptedKnownTeamStore : IKnownTeamStore
         if (profiles.Count == 0)
         {
             encryptedStorage.Remove(ProfilesKey);
+
             return;
         }
 

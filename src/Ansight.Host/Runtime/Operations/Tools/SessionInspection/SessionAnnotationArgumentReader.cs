@@ -22,10 +22,12 @@ internal static class SessionAnnotationArgumentReader
         if (arguments["geometries"] is not JsonArray geometryArray)
         {
             errorMessage = "geometries must be an array.";
+
             return false;
         }
 
         var parsedGeometries = new List<SessionAnnotationGeometry>();
+
         for (var index = 0; index < geometryArray.Count; index++)
         {
             if (geometryArray[index] is null)
@@ -36,6 +38,7 @@ internal static class SessionAnnotationArgumentReader
             if (geometryArray[index] is not JsonObject geometryObject)
             {
                 errorMessage = $"geometries[{index}] must be an object.";
+
                 return false;
             }
 
@@ -48,6 +51,7 @@ internal static class SessionAnnotationArgumentReader
         }
 
         geometries = parsedGeometries.ToArray();
+
         return true;
     }
 
@@ -59,6 +63,7 @@ internal static class SessionAnnotationArgumentReader
     {
         target = null;
         errorMessage = null;
+
         if (arguments?["target"] is null)
         {
             return true;
@@ -67,6 +72,7 @@ internal static class SessionAnnotationArgumentReader
         if (arguments["target"] is not JsonObject targetObject)
         {
             errorMessage = "target must be an object.";
+
             return false;
         }
 
@@ -93,6 +99,7 @@ internal static class SessionAnnotationArgumentReader
             AbsoluteBounds = absoluteBounds,
             NormalizedBounds = normalizedBounds
         };
+
         return true;
     }
 
@@ -104,10 +111,13 @@ internal static class SessionAnnotationArgumentReader
         out string? errorMessage)
     {
         geometry = null;
+
         var frameId = NormalizeOptionalString(geometryObject["frameId"]?.GetValue<string>());
+
         if (frameId is null)
         {
             errorMessage = $"geometries[{index}].frameId is required.";
+
             return false;
         }
 
@@ -120,6 +130,7 @@ internal static class SessionAnnotationArgumentReader
             || !TryReadOptionalDouble(geometryObject, "strokeWidth", out var strokeWidth, out errorMessage))
         {
             errorMessage = errorMessage is null ? null : $"geometries[{index}].{errorMessage}";
+
             return false;
         }
 
@@ -127,10 +138,12 @@ internal static class SessionAnnotationArgumentReader
         var kind = width.HasValue && height.HasValue
             ? SessionAnnotationGeometryKind.Rectangle
             : SessionAnnotationGeometryKind.Point;
+
         if (kindText is not null
             && !Enum.TryParse<SessionAnnotationGeometryKind>(kindText, ignoreCase: true, out kind))
         {
             errorMessage = $"geometries[{index}].kind must be point, rectangle, ellipse, or freeDraw.";
+
             return false;
         }
 
@@ -138,12 +151,14 @@ internal static class SessionAnnotationArgumentReader
             && (!width.HasValue || !height.HasValue))
         {
             errorMessage = $"geometries[{index}].width and height are required for rectangle and ellipse geometry.";
+
             return false;
         }
 
         if (kind == SessionAnnotationGeometryKind.FreeDraw && points.Count < 2)
         {
             errorMessage = $"geometries[{index}].points must contain at least two points for freeDraw geometry.";
+
             return false;
         }
 
@@ -170,6 +185,7 @@ internal static class SessionAnnotationArgumentReader
             StrokeColor = NormalizeOptionalString(geometryObject["strokeColor"]?.GetValue<string>()),
             StrokeWidth = strokeWidth
         };
+
         return true;
     }
 
@@ -180,6 +196,7 @@ internal static class SessionAnnotationArgumentReader
     {
         points = Array.Empty<SessionAnnotationGeometryPoint>();
         errorMessage = null;
+
         if (geometryObject["points"] is null)
         {
             return true;
@@ -188,15 +205,18 @@ internal static class SessionAnnotationArgumentReader
         if (geometryObject["points"] is not JsonArray pointArray)
         {
             errorMessage = "points must be an array.";
+
             return false;
         }
 
         var parsedPoints = new List<SessionAnnotationGeometryPoint>();
+
         for (var index = 0; index < pointArray.Count; index++)
         {
             if (pointArray[index] is not JsonObject pointObject)
             {
                 errorMessage = $"points[{index}] must be an object.";
+
                 return false;
             }
 
@@ -204,6 +224,7 @@ internal static class SessionAnnotationArgumentReader
                 || !TryReadRequiredDouble(pointObject, "y", out var y, out errorMessage))
             {
                 errorMessage = errorMessage is null ? null : $"points[{index}].{errorMessage}";
+
                 return false;
             }
 
@@ -215,6 +236,7 @@ internal static class SessionAnnotationArgumentReader
         }
 
         points = parsedPoints;
+
         return true;
     }
 
@@ -226,6 +248,7 @@ internal static class SessionAnnotationArgumentReader
     {
         bounds = null;
         errorMessage = null;
+
         if (targetObject[propertyName] is null)
         {
             return true;
@@ -234,6 +257,7 @@ internal static class SessionAnnotationArgumentReader
         if (targetObject[propertyName] is not JsonObject boundsObject)
         {
             errorMessage = $"{propertyName} must be an object.";
+
             return false;
         }
 
@@ -243,6 +267,7 @@ internal static class SessionAnnotationArgumentReader
             || !TryReadRequiredDouble(boundsObject, "height", out var height, out errorMessage))
         {
             errorMessage = errorMessage is null ? null : $"{propertyName}.{errorMessage}";
+
             return false;
         }
 
@@ -253,6 +278,7 @@ internal static class SessionAnnotationArgumentReader
             Width = width,
             Height = height
         };
+
         return true;
     }
 
@@ -264,12 +290,14 @@ internal static class SessionAnnotationArgumentReader
     {
         value = null;
         errorMessage = null;
+
         if (jsonObject[propertyName] is null)
         {
             return true;
         }
 
         var text = jsonObject[propertyName]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return true;
@@ -278,10 +306,12 @@ internal static class SessionAnnotationArgumentReader
         if (DateTimeOffset.TryParse(text, out var parsed))
         {
             value = parsed;
+
             return true;
         }
 
         errorMessage = $"{propertyName} must be a valid ISO-8601 timestamp.";
+
         return false;
     }
 
@@ -293,6 +323,7 @@ internal static class SessionAnnotationArgumentReader
     {
         value = 0;
         errorMessage = null;
+
         if (jsonObject[propertyName] is null)
         {
             return true;
@@ -306,6 +337,7 @@ internal static class SessionAnnotationArgumentReader
         }
 
         errorMessage = $"{propertyName} must be an integer.";
+
         return false;
     }
 
@@ -319,6 +351,7 @@ internal static class SessionAnnotationArgumentReader
         {
             value = 0d;
             errorMessage = $"{propertyName} is required.";
+
             return false;
         }
 
@@ -333,6 +366,7 @@ internal static class SessionAnnotationArgumentReader
     {
         value = null;
         errorMessage = null;
+
         if (jsonObject[propertyName] is null)
         {
             return true;
@@ -344,6 +378,7 @@ internal static class SessionAnnotationArgumentReader
         }
 
         value = parsed;
+
         return true;
     }
 
@@ -355,6 +390,7 @@ internal static class SessionAnnotationArgumentReader
     {
         value = 0d;
         errorMessage = null;
+
         if (jsonObject[propertyName] is JsonValue jsonValue
             && (jsonValue.TryGetValue<double>(out value)
                 || double.TryParse(jsonValue.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value))
@@ -364,6 +400,7 @@ internal static class SessionAnnotationArgumentReader
         }
 
         errorMessage = $"{propertyName} must be a finite number.";
+
         return false;
     }
 

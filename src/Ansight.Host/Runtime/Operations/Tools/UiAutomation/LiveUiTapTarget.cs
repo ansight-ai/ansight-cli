@@ -17,22 +17,31 @@ internal static class LiveUiTapTarget
             || arguments?["targetSource"]?.GetValue<string>() != captureSource
             || arguments?["targetFingerprint"] is not JsonValue scalar
             || !scalar.TryGetValue<string>(out var fingerprint) || string.IsNullOrWhiteSpace(fingerprint)
-            || LiveUiNodeQuery.Find(root, selector, registry).Count != 0) return selector;
+            || LiveUiNodeQuery.Find(root, selector, registry).Count != 0)
+        {
+            return selector;
+        }
 
         var criteria = selector.ToJson();
         criteria.Remove("nodeId");
+
         var candidates = LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(criteria), registry)
             .Where(match => LiveUiNodeQuery.IsEffectivelyVisible(match)
                 && LiveUiNodeQuery.IsEffectivelyEnabled(match)
                 && LiveUiNodeQuery.HasUsableBoundsInViewport(match, viewport)
                 && MatchesFingerprint(root, match, viewport, fingerprint))
             .Take(2).ToArray();
+
         // Only the transient ID may change. Preserve every other selector constraint,
         // require the same provider, and refuse changed or ambiguous visible evidence.
         if (candidates.Length != 1 || LiveUiNodeQuery.ReadString(candidates[0].Node, "id") is not { Length: > 0 } currentId)
+        {
             return selector;
+        }
+
         criteria["nodeId"] = currentId;
         criteria["index"] = 0;
+
         return LiveUiSelector.Parse(criteria);
     }
 
@@ -49,6 +58,7 @@ internal static class LiveUiTapTarget
         // Keep full hashes from older observations valid. New handles use an 80-bit
         // prefix to reduce model transcription errors; every character must still match.
         var full = FullFingerprint(root, match, viewport);
+
         return string.Equals(fingerprint, fingerprint.Length == FingerprintCharacters
             ? full[..FingerprintCharacters] : full, StringComparison.Ordinal);
     }
@@ -70,6 +80,7 @@ internal static class LiveUiTapTarget
             ["nearbyText"] = new JsonArray(NearbyLabels(root, match, viewport)
                 .Select(label => (JsonNode)Identity(label)).ToArray())
         };
+
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signature.ToJsonString())));
     }
 
@@ -87,8 +98,14 @@ internal static class LiveUiTapTarget
         JsonObject root, LiveUiNodeMatch match, LiveUiBounds? viewport)
     {
         var targetBounds = LiveUiNodeQuery.ReadBounds(match.Node);
-        if (targetBounds is null || viewport is null || viewport.Height <= 0) return [];
+
+        if (targetBounds is null || viewport is null || viewport.Height <= 0)
+        {
+            return [];
+        }
+
         var text = LiveUiNodeQuery.ReadText(match.Node);
+
         return LiveUiNodeQuery.Enumerate(root, match.TypeRegistry)
             .Where(candidate => !ReferenceEquals(candidate.Node, match.Node)
                 && LiveUiNodeQuery.ReadRole(candidate.Node, candidate.TypeRegistry) == "text"

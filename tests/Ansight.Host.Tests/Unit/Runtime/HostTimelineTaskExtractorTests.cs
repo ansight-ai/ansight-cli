@@ -89,11 +89,10 @@ public sealed partial class HostTimelineTaskExtractorTests
     {
         var startedAt = DateTimeOffset.Parse("2026-08-18T00:00:00Z");
         var snapshot = CreateSnapshot(startedAt, [], [],
-        [
-            new SessionAnnotation { AnnotationId = "search", StartUtc = startedAt.AddSeconds(1), EndUtc = startedAt.AddSeconds(3), Label = "Find the account", Notes = "Use the customer name" },
-            new SessionAnnotation { AnnotationId = "verify", StartUtc = startedAt.AddSeconds(4), EndUtc = startedAt.AddSeconds(6), Label = "Verify the balance" },
-            new SessionAnnotation { AnnotationId = "outside", StartUtc = startedAt.AddSeconds(11), EndUtc = startedAt.AddSeconds(12), Label = "Unrelated action" }
-        ]);
+            [
+            new SessionAnnotation {AnnotationId = "search", StartUtc = startedAt.AddSeconds(1), EndUtc = startedAt.AddSeconds(3), Label = "Find the account", Notes = "Use the customer name" },
+            new SessionAnnotation {AnnotationId = "verify", StartUtc = startedAt.AddSeconds(4), EndUtc = startedAt.AddSeconds(6), Label = "Verify the balance" },
+            new SessionAnnotation {AnnotationId = "outside", StartUtc = startedAt.AddSeconds(11), EndUtc = startedAt.AddSeconds(12), Label = "Unrelated action" }        ]);
 
         var result = WorkspaceTestExtractor.Extract(
             snapshot, startedAt, startedAt.AddSeconds(10), "Review account",
@@ -124,21 +123,22 @@ public sealed partial class HostTimelineTaskExtractorTests
             }).ToArray(),
             actionTimes.Select(second => CreateVisualTree(startedAt.AddSeconds(second), $"control-{second}", $"Action {second}")).ToArray(),
             [
-                new SessionAnnotation { AnnotationId = "first", StartUtc = startedAt.AddSeconds(3), EndUtc = startedAt.AddSeconds(5), Label = "First marked action" },
-                new SessionAnnotation { AnnotationId = "second", StartUtc = startedAt.AddSeconds(9), EndUtc = startedAt.AddSeconds(11), Label = "Second marked action" }
-            ]);
+                new SessionAnnotation {AnnotationId = "first", StartUtc = startedAt.AddSeconds(3), EndUtc = startedAt.AddSeconds(5), Label = "First marked action" },
+                new SessionAnnotation {AnnotationId = "second", StartUtc = startedAt.AddSeconds(9), EndUtc = startedAt.AddSeconds(11), Label = "Second marked action" }            ]);
 
         var result = WorkspaceTestExtractor.Extract(snapshot, startedAt, startedAt.AddSeconds(14),
             "Complete journey", ["The final action is complete"], taskSectionIds: ["first", "second"]);
         var parsed = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/journey.yaml", result.Source);
 
         var lastIndex = -1;
+
         foreach (var second in actionTimes)
         {
             var index = parsed.Prompt.IndexOf($"control-{second}", StringComparison.Ordinal);
             Assert.True(index > lastIndex, $"Recorded action {second} must be retained in order.");
             lastIndex = index;
         }
+
         Assert.Contains("First marked action", parsed.Prompt, StringComparison.Ordinal);
         Assert.Contains("Second marked action", parsed.Prompt, StringComparison.Ordinal);
         Assert.Equal(5, result.GeneratedActionCount);
@@ -204,6 +204,7 @@ public sealed partial class HostTimelineTaskExtractorTests
         {
             ["label"] = "Lengths range from ~6m to ~30m. Most climbs are between ~10m and ~15m."
         });
+
         var snapshot = CreateSnapshot(
             startedAt,
             [
@@ -232,8 +233,12 @@ public sealed partial class HostTimelineTaskExtractorTests
         {
             var tree = CreateVisualTree(startedAt.AddSeconds(second), $"screen-{second}", $"Screen {second}");
             var children = tree.Payload!["root"]!["children"]!.AsArray();
+
             for (var node = 0; node < 150; node++)
+            {
                 children.Add(new JsonObject { ["automationId"] = $"screen-{second}-control-{node}", ["label"] = $"Control {node}" });
+            }
+
             return tree;
         }).ToArray();
 
@@ -612,11 +617,12 @@ public sealed partial class HostTimelineTaskExtractorTests
         Assert.Contains("long press", result.Diagnostics[0], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ansight.ui.swipe", result.Source, StringComparison.Ordinal);
         Assert.Contains("orientation: \"N\"", result.Source, StringComparison.Ordinal);
+
         var replayStep = Assert.Single(result.ReplaySteps);
         Assert.Equal(
             "Replay the recorded swipe exactly once by calling ansight_swipe_ui with startNormalizedX=0.5, "
-            + "startNormalizedY=0.8, endNormalizedX=0.5, endNormalizedY=0.2, and durationMs=250. "
-            + "Do not recenter, approximate, or repeat the gesture.",
+                + "startNormalizedY=0.8, endNormalizedX=0.5, endNormalizedY=0.2, and durationMs=250. "
+                + "Do not recenter, approximate, or repeat the gesture.",
             replayStep.Instruction);
         Assert.Equal(0.5, replayStep.SourceEvidence?.StartNormalizedX);
         Assert.Equal(0.8, replayStep.SourceEvidence?.StartNormalizedY);
@@ -756,6 +762,7 @@ public sealed partial class HostTimelineTaskExtractorTests
         Assert.Contains("ansight.ui.typeText", result.Source, StringComparison.Ordinal);
         Assert.DoesNotContain("ansight.ui.tap", result.Source, StringComparison.Ordinal);
         Assert.Contains("ada@example.test", result.Source, StringComparison.Ordinal);
+
         var replayStep = Assert.Single(result.ReplaySteps);
         Assert.Equal("input", replayStep.Kind);
         Assert.Equal(startedAt.AddSeconds(2), replayStep.CapturedAtUtc);
@@ -834,7 +841,7 @@ public sealed partial class HostTimelineTaskExtractorTests
         Assert.DoesNotContain(
             result.ReplaySteps,
             step => step.Kind == "tap"
-                    && step.Instruction.Contains("email-field", StringComparison.Ordinal));
+                && step.Instruction.Contains("email-field", StringComparison.Ordinal));
         AssertTaskSourceLoads(result.Source, "submit-email");
     }
 
@@ -886,6 +893,7 @@ public sealed partial class HostTimelineTaskExtractorTests
     {
         var rootPath = Path.Combine(Path.GetTempPath(), $"ansight-task-extraction-{Guid.NewGuid():N}");
         var taskDirectory = Path.Combine(rootPath, "ansight", "tasks");
+
         try
         {
             Directory.CreateDirectory(taskDirectory);
@@ -1043,6 +1051,7 @@ public sealed partial class HostTimelineTaskExtractorTests
     {
         var tree = CreateInputVisualTree(capturedAt, snapshotId, value);
         var input = tree.Payload["root"]!.DeepClone();
+
         return new SessionVisualTreeSnapshot
         {
             SnapshotId = snapshotId,

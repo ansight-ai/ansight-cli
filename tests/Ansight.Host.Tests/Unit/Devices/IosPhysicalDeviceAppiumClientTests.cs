@@ -17,8 +17,10 @@ public sealed class IosPhysicalDeviceAppiumClientTests
             new IosPhysicalDeviceAppiumOptions(null, null, null, null, null), handler);
         await client.LongPressAsync("physical-udid", "com.example.target", 0.25, 0.75,
             duration, CancellationToken.None);
+
         var pointer = JsonNode.Parse(handler.ActionsRequestBody!)!["actions"]![0]!;
         Assert.Equal("touch", pointer["parameters"]!["pointerType"]!.GetValue<string>());
+
         var actions = pointer["actions"]!.AsArray();
         Assert.Equal(new[] { "pointerMove", "pointerDown", "pause", "pointerUp" },
             actions.Select(action => action!["type"]!.GetValue<string>()));
@@ -53,6 +55,7 @@ public sealed class IosPhysicalDeviceAppiumClientTests
         using var client = new IosPhysicalDeviceAppiumClient(
             new IosPhysicalDeviceAppiumOptions(null, null, null, null, null), handler);
         await client.PrepareMonitoringAsync("physical-udid", "com.example.target", CancellationToken.None);
+
         switch (suffix)
         {
             case "/execute/sync":
@@ -65,9 +68,11 @@ public sealed class IosPhysicalDeviceAppiumClientTests
                 Assert.Equal("<AppiumAUT />", (await client.GetPageSourceAsync("physical-udid", "com.example.target", CancellationToken.None)).Source);
                 break;
         }
+
         Assert.Equal(2, handler.SessionRequests);
         Assert.Equal("appium-session-2", client.GetSessionId("physical-udid", "com.example.target"));
         Assert.Contains($"/session/appium-session-2{suffix}", handler.Paths);
+
         using var request = JsonDocument.Parse(handler.SessionRequestBody!);
         Assert.False(request.RootElement.GetProperty("capabilities").GetProperty("alwaysMatch")
             .GetProperty("appium:autoLaunch").GetBoolean());
@@ -91,7 +96,9 @@ public sealed class IosPhysicalDeviceAppiumClientTests
     {
         var handler = new RecordingAppiumHandler
         {
-            FailedPathSuffix = "/source", FailuresRemaining = 1, FailureError = "no such element"
+            FailedPathSuffix = "/source",
+            FailuresRemaining = 1,
+            FailureError = "no such element"
         };
         using var client = new IosPhysicalDeviceAppiumClient(
             new IosPhysicalDeviceAppiumOptions(null, null, null, null, null), handler);
@@ -155,6 +162,7 @@ public sealed class IosPhysicalDeviceAppiumClientTests
                 "/wd/hub/session/appium-session/actions"
             ],
             handler.Paths);
+
         using var request = JsonDocument.Parse(handler.SessionRequestBody!);
         var capabilities = request.RootElement
             .GetProperty("capabilities")
@@ -204,9 +212,11 @@ public sealed class IosPhysicalDeviceAppiumClientTests
             new IosPhysicalDeviceAppiumOptions(null, null, null, null, null), handler);
 
         await client.PrepareMonitoringAsync("physical-udid", "com.example.target", CancellationToken.None);
+
         var screenshot = await client.GetScreenshotAsync("physical-udid", "com.example.target", CancellationToken.None);
 
         Assert.Equal([1, 2, 3], screenshot);
+
         using var request = JsonDocument.Parse(handler.SessionRequestBody!);
         Assert.False(request.RootElement.GetProperty("capabilities").GetProperty("alwaysMatch")
             .GetProperty("appium:autoLaunch").GetBoolean());
@@ -223,6 +233,7 @@ public sealed class IosPhysicalDeviceAppiumClientTests
         Assert.False(await client.IsApplicationForegroundAsync("physical-udid", "com.example.target", CancellationToken.None));
         handler.ActiveBundleId = "com.example.target";
         Assert.True(await client.IsApplicationForegroundAsync("physical-udid", "com.example.target", CancellationToken.None));
+
         using var request = JsonDocument.Parse(handler.SessionRequestBody!);
         Assert.False(request.RootElement.GetProperty("capabilities").GetProperty("alwaysMatch")
             .GetProperty("appium:autoLaunch").GetBoolean());
@@ -237,7 +248,6 @@ public sealed class IosPhysicalDeviceAppiumClientTests
 
         public string? SessionRequestBody { get; private set; }
         public string? ActionsRequestBody { get; private set; }
-
         public string ActiveBundleId { get; set; } = "com.example.target";
         public int SessionRequests { get; private set; }
         public string? FailedPathSuffix { get; init; }
@@ -249,15 +259,24 @@ public sealed class IosPhysicalDeviceAppiumClientTests
             CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
-            lock (Paths) Paths.Add(path);
+
+            lock (Paths)
+            {
+                Paths.Add(path);
+            }
+
             if (request.Method == HttpMethod.Post && path.EndsWith("/session", StringComparison.Ordinal))
             {
                 await Task.Yield();
                 SessionRequests++;
                 SessionRequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+
                 return JsonResponse(JsonSerializer.Serialize(new
                 {
-                    value = new { sessionId = SessionRequests == 1 ? "appium-session" : $"appium-session-{SessionRequests}" }
+                    value = new
+                    {
+                        sessionId = SessionRequests == 1 ? "appium-session" : $"appium-session-{SessionRequests}"
+                    }
                 }));
             }
 
@@ -265,16 +284,24 @@ public sealed class IosPhysicalDeviceAppiumClientTests
                 && FailuresRemaining > 0)
             {
                 FailuresRemaining--;
+
                 var response = JsonResponse(JsonSerializer.Serialize(new
                 {
-                    value = new { error = FailureError, message = "Session expired" }
+                    value = new
+                    {
+                        error = FailureError,
+                        message = "Session expired"
+                    }
                 }));
                 response.StatusCode = HttpStatusCode.NotFound;
+
                 return response;
             }
 
             if (request.Method == HttpMethod.Post && path.EndsWith("/actions", StringComparison.Ordinal))
+            {
                 ActionsRequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            }
 
             if (path.EndsWith("/window/rect", StringComparison.Ordinal))
             {
@@ -293,7 +320,13 @@ public sealed class IosPhysicalDeviceAppiumClientTests
 
             if (path.EndsWith("/execute/sync", StringComparison.Ordinal))
             {
-                return JsonResponse(JsonSerializer.Serialize(new { value = new { bundleId = ActiveBundleId } }));
+                return JsonResponse(JsonSerializer.Serialize(new
+                {
+                    value = new
+                    {
+                        bundleId = ActiveBundleId
+                    }
+                }));
             }
 
             return JsonResponse("""{"value":null}""");

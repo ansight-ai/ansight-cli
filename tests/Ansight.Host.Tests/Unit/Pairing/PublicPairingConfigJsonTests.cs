@@ -67,6 +67,7 @@ public sealed class PublicPairingConfigJsonTests
     private static PairingConfig CreateInvite()
     {
         var now = DateTimeOffset.UtcNow;
+
         return new PairingConfig
         {
             Schema = PairingConfig.SchemaName,

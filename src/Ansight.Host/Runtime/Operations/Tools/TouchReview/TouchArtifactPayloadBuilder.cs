@@ -15,6 +15,7 @@ internal static class TouchArtifactPayloadBuilder
         var endUtc = targetEndUtc >= targetStartUtc ? targetEndUtc : targetStartUtc;
         var rangeStartUtc = startUtc.Subtract(window);
         var rangeEndUtc = endUtc.Add(window);
+
         return new JsonObject
         {
             ["rangeStartUtc"] = rangeStartUtc,
@@ -138,11 +139,12 @@ internal static class TouchArtifactPayloadBuilder
             .ThenBy(annotation => annotation.AnnotationId, StringComparer.Ordinal)
             .Take(limit)
             .Select(annotation =>
-            {
-                var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
-                payload["deltaMs"] = TouchReviewGeometry.CalculateDistanceMilliseconds(annotation.StartUtc, targetStartUtc, targetEndUtc);
-                return (JsonNode?)payload;
-            }));
+                {
+                    var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
+                    payload["deltaMs"] = TouchReviewGeometry.CalculateDistanceMilliseconds(annotation.StartUtc, targetStartUtc, targetEndUtc);
+
+                    return (JsonNode?)payload;
+                }));
     }
 
     private static JsonArray BuildNearestVisualTreesArray(
@@ -159,11 +161,12 @@ internal static class TouchArtifactPayloadBuilder
             .ThenBy(visualTree => visualTree.SnapshotId, StringComparer.Ordinal)
             .Take(limit)
             .Select(visualTree =>
-            {
-                var payload = PayloadJson.BuildSessionVisualTreeSnapshotSummaryPayload(snapshot, visualTree);
-                payload["deltaMs"] = TouchReviewGeometry.CalculateDistanceMilliseconds(visualTree.CapturedAtUtc, targetStartUtc, targetEndUtc);
-                return (JsonNode?)payload;
-            }));
+                {
+                    var payload = PayloadJson.BuildSessionVisualTreeSnapshotSummaryPayload(snapshot, visualTree);
+                    payload["deltaMs"] = TouchReviewGeometry.CalculateDistanceMilliseconds(visualTree.CapturedAtUtc, targetStartUtc, targetEndUtc);
+
+                    return (JsonNode?)payload;
+                }));
     }
 
     private static JsonArray BuildNearestArtifactSnapshotsArray(

@@ -14,10 +14,11 @@ internal static class LiveUiNodeQuery
         VisualTreeTypeRegistry typeRegistry)
     {
         var seenNodeIds = new HashSet<string>(StringComparer.Ordinal);
+
         return Enumerate(root, typeRegistry)
             .Where(candidate => selector.Matches(candidate))
             .Where(candidate => ReadString(candidate.Node, "id") is not { } nodeId
-                                || seenNodeIds.Add(nodeId))
+                || seenNodeIds.Add(nodeId))
             .ToArray();
     }
 
@@ -26,6 +27,7 @@ internal static class LiveUiNodeQuery
         VisualTreeTypeRegistry typeRegistry)
     {
         var ancestors = new List<JsonObject>();
+
         return EnumerateCore(root, ancestors, typeRegistry).ToArray();
     }
 
@@ -46,11 +48,12 @@ internal static class LiveUiNodeQuery
         }
 
         var hasActivePageContext = LiveUiMauiContext.HasActivePageContext(payload);
+
         return matches
             .Select((match, index) => new LiveUiRankedNodeMatch(match, index))
             .OrderByDescending(candidate => IsActionReady(candidate.Match, viewport))
             .ThenByDescending(candidate => hasActivePageContext
-                                           && LiveUiMauiContext.IsInActivePage(candidate.Match, payload))
+                && LiveUiMauiContext.IsInActivePage(candidate.Match, payload))
             .ThenByDescending(candidate => HasUsableBoundsInViewport(candidate.Match, viewport))
             .ThenBy(candidate => candidate.Index)
             .Select(candidate => candidate.Match)
@@ -62,6 +65,7 @@ internal static class LiveUiNodeQuery
         if (node["bounds"] is JsonArray boundsArray)
         {
             var offset = boundsArray.Count >= 8 ? 4 : 0;
+
             if (boundsArray.Count < offset + 4
                 || !TryReadDouble(boundsArray, offset, out var arrayX)
                 || !TryReadDouble(boundsArray, offset + 1, out var arrayY)
@@ -80,17 +84,18 @@ internal static class LiveUiNodeQuery
         }
 
         var hasAbsoluteBounds = bounds["absoluteX"] is not null
-                                && bounds["absoluteY"] is not null
-                                && bounds["absoluteWidth"] is not null
-                                && bounds["absoluteHeight"] is not null;
+            && bounds["absoluteY"] is not null
+            && bounds["absoluteWidth"] is not null
+            && bounds["absoluteHeight"] is not null;
         var xName = hasAbsoluteBounds ? "absoluteX" : "x";
         var yName = hasAbsoluteBounds ? "absoluteY" : "y";
         var widthName = hasAbsoluteBounds ? "absoluteWidth" : "width";
         var heightName = hasAbsoluteBounds ? "absoluteHeight" : "height";
+
         return TryReadDouble(bounds, xName, out var x)
-               && TryReadDouble(bounds, yName, out var y)
-               && TryReadDouble(bounds, widthName, out var width)
-               && TryReadDouble(bounds, heightName, out var height)
+            && TryReadDouble(bounds, yName, out var y)
+            && TryReadDouble(bounds, widthName, out var width)
+            && TryReadDouble(bounds, heightName, out var height)
             ? new LiveUiBounds(x, y, width, height)
             : null;
     }
@@ -137,12 +142,18 @@ internal static class LiveUiNodeQuery
     {
         foreach (var candidate in new[]
         {
-            node["value"], (node["visual"] as JsonObject)?["value"],
-            (node["properties"] as JsonObject)?["value"], (node["props"] as JsonObject)?["value"]
+            node["value"],
+            (node["visual"] as JsonObject)?["value"],
+            (node["properties"] as JsonObject)?["value"],
+            (node["props"] as JsonObject)?["value"]
         })
         {
-            if (candidate is JsonValue scalar && scalar.TryGetValue<string>(out var value)) return value;
+            if (candidate is JsonValue scalar && scalar.TryGetValue<string>(out var value))
+            {
+                return value;
+            }
         }
+
         return null; // A label or placeholder never establishes an input value.
     }
 
@@ -151,6 +162,7 @@ internal static class LiveUiNodeQuery
         var explicitRole = FirstString(
             ReadString(node, "role"),
             ReadNestedString(node, "props", "accessibilityRole"));
+
         return explicitRole?.ToLowerInvariant() ?? InferRole(typeRegistry.Resolve(node));
     }
 
@@ -188,25 +200,25 @@ internal static class LiveUiNodeQuery
     public static bool IsEffectivelyVisible(LiveUiNodeMatch match)
     {
         return ReadBoolean(match.Node, "visible", fallback: true, match.TypeRegistry)
-               && match.Ancestors.All(ancestor =>
-                   ReadBoolean(ancestor, "visible", fallback: true, match.TypeRegistry));
+            && match.Ancestors.All(ancestor =>
+                       ReadBoolean(ancestor, "visible", fallback: true, match.TypeRegistry));
     }
 
     public static bool IsEffectivelyEnabled(LiveUiNodeMatch match)
     {
         return ReadBoolean(match.Node, "enabled", fallback: true, match.TypeRegistry)
-               && match.Ancestors.All(ancestor =>
-                   ReadBoolean(ancestor, "enabled", fallback: true, match.TypeRegistry));
+            && match.Ancestors.All(ancestor =>
+                       ReadBoolean(ancestor, "enabled", fallback: true, match.TypeRegistry));
     }
 
     public static bool HasUsableBoundsInViewport(LiveUiNodeMatch match, LiveUiBounds viewport)
         => ReadBounds(match.Node) is { Width: > 0, Height: > 0 } bounds
-           && LiveUiBounds.Intersection(bounds, viewport) is not null;
+            && LiveUiBounds.Intersection(bounds, viewport) is not null;
 
     public static string? ReadString(JsonObject node, string propertyName)
     {
         return node[propertyName] is JsonValue value
-               && value.TryGetValue<string>(out var text)
+            && value.TryGetValue<string>(out var text)
             ? Normalize(text)
             : null;
     }
@@ -235,6 +247,7 @@ internal static class LiveUiNodeQuery
             ["role"] = ReadRole(ancestor, match.TypeRegistry),
             ["type"] = match.TypeRegistry.Resolve(ancestor)
         }).ToArray());
+
         return result;
     }
 
@@ -249,12 +262,14 @@ internal static class LiveUiNodeQuery
         }
 
         yield return new LiveUiNodeMatch(node, ancestors.ToArray(), typeRegistry);
+
         if (node["children"] is not JsonArray children)
         {
             yield break;
         }
 
         ancestors.Add(node);
+
         foreach (var child in children.OfType<JsonObject>())
         {
             foreach (var descendant in EnumerateCore(child, ancestors, typeRegistry))
@@ -270,13 +285,13 @@ internal static class LiveUiNodeQuery
         JsonObject node,
         VisualTreeTypeRegistry typeRegistry)
         => string.Equals(
-               typeRegistry.Resolve(node),
-               AndroidUiEvidenceOverlayType,
-               StringComparison.Ordinal)
-           || string.Equals(
-               ReadAutomationId(node),
-               SdkOverlayAutomationId,
-               StringComparison.Ordinal);
+            typeRegistry.Resolve(node),
+            AndroidUiEvidenceOverlayType,
+            StringComparison.Ordinal)
+            || string.Equals(
+                ReadAutomationId(node),
+                SdkOverlayAutomationId,
+                StringComparison.Ordinal);
 
     private static string? ReadNestedString(JsonObject node, string objectName, string propertyName)
         => node[objectName] is JsonObject nested ? ReadString(nested, propertyName) : null;
@@ -284,6 +299,7 @@ internal static class LiveUiNodeQuery
     private static bool TryReadDouble(JsonObject node, string propertyName, out double value)
     {
         value = 0;
+
         if (node[propertyName] is not JsonValue jsonValue)
         {
             return false;
@@ -300,12 +316,14 @@ internal static class LiveUiNodeQuery
         }
 
         value = integer;
+
         return true;
     }
 
     private static bool TryReadDouble(JsonArray array, int index, out double value)
     {
         value = 0;
+
         if (index < 0 || index >= array.Count || array[index] is not JsonValue jsonValue)
         {
             return false;
@@ -322,12 +340,14 @@ internal static class LiveUiNodeQuery
         }
 
         value = integer;
+
         return true;
     }
 
     private static string InferRole(string? type)
     {
         var normalized = type?.ToLowerInvariant() ?? string.Empty;
+
         if (normalized.Contains("button", StringComparison.Ordinal)
             || normalized.Contains("gesture", StringComparison.Ordinal)
             || normalized.Contains("inkwell", StringComparison.Ordinal))
@@ -381,62 +401,6 @@ internal static class LiveUiNodeQuery
 
     private static bool IsActionReady(LiveUiNodeMatch match, LiveUiBounds viewport)
         => IsEffectivelyVisible(match)
-           && IsEffectivelyEnabled(match)
-           && HasUsableBoundsInViewport(match, viewport);
-}
-
-internal sealed record LiveUiRankedNodeMatch(LiveUiNodeMatch Match, int Index);
-
-internal sealed record LiveUiNodeMatch(
-    JsonObject Node,
-    IReadOnlyList<JsonObject> Ancestors,
-    VisualTreeTypeRegistry TypeRegistry);
-
-internal sealed record LiveUiBounds(
-    double X,
-    double Y,
-    double Width,
-    double Height)
-{
-    public double CenterX => X + (Width / 2);
-
-    public double CenterY => Y + (Height / 2);
-
-    public JsonObject ToJson()
-        => new()
-        {
-            ["x"] = X,
-            ["y"] = Y,
-            ["width"] = Width,
-            ["height"] = Height
-        };
-
-    public static LiveUiBounds? Union(IReadOnlyList<LiveUiBounds> bounds)
-    {
-        if (bounds.Count == 0)
-        {
-            return null;
-        }
-
-        var left = bounds.Min(candidate => candidate.X);
-        var top = bounds.Min(candidate => candidate.Y);
-        var right = bounds.Max(candidate => candidate.X + candidate.Width);
-        var bottom = bounds.Max(candidate => candidate.Y + candidate.Height);
-        return new LiveUiBounds(left, top, right - left, bottom - top);
-    }
-
-    public static LiveUiBounds? Intersection(LiveUiBounds left, LiveUiBounds right)
-    {
-        var intersectionLeft = Math.Max(left.X, right.X);
-        var intersectionTop = Math.Max(left.Y, right.Y);
-        var intersectionRight = Math.Min(left.X + left.Width, right.X + right.Width);
-        var intersectionBottom = Math.Min(left.Y + left.Height, right.Y + right.Height);
-        return intersectionRight > intersectionLeft && intersectionBottom > intersectionTop
-            ? new LiveUiBounds(
-                intersectionLeft,
-                intersectionTop,
-                intersectionRight - intersectionLeft,
-                intersectionBottom - intersectionTop)
-            : null;
-    }
+            && IsEffectivelyEnabled(match)
+            && HasUsableBoundsInViewport(match, viewport);
 }

@@ -47,16 +47,22 @@ public sealed class SimulatorAgentUiContextTests
         Assert.Equal("duplicate-toggle", model["matches"]![0]!["automationId"]!.GetValue<string>());
         Assert.Equal("[8,48.5,48,48]", model["matches"]![0]!["bounds"]!.ToJsonString());
         Assert.DoesNotContain(first, model.ToJsonString());
+
         var firstAlias = model["matches"]![0]!["id"]!.GetValue<string>();
         var secondAlias = model["matches"]![1]!["id"]!.GetValue<string>();
         Assert.NotEqual(firstAlias, secondAlias);
         Assert.Equal(firstAlias, model["matches"]![0]!["tapHint"]!["selector"]!["nodeId"]!.GetValue<string>());
-        var arguments = new JsonObject { ["steps"] = new JsonArray(
-            new JsonObject { ["nodeId"] = firstAlias }, new JsonObject { ["nodeId"] = secondAlias }) };
+
+        var arguments = new JsonObject
+        {
+            ["steps"] = new JsonArray(
+                new JsonObject { ["nodeId"] = firstAlias }, new JsonObject { ["nodeId"] = secondAlias })
+        };
         Assert.True(context.TryResolveSelectors(arguments, out _));
         Assert.Equal(first, arguments["steps"]![0]!["nodeId"]!.GetValue<string>());
         Assert.Equal(second, arguments["steps"]![1]!["nodeId"]!.GetValue<string>());
         context.Invalidate();
+
         var fresh = context.Project(normalized);
         Assert.NotEqual(firstAlias, fresh["matches"]![0]!["id"]!.GetValue<string>());
         Assert.False(context.TryResolveSelectors(new JsonObject { ["nodeId"] = firstAlias }, out var error));
@@ -81,6 +87,7 @@ public sealed class SimulatorAgentUiContextTests
         Assert.Equal(before, tree.ToJsonString());
         Assert.Null(nested["nodes"]);
         Assert.DoesNotContain("ancestorPath", nested.ToJsonString());
+
         var containers = Assert.IsType<JsonArray>(nested["root"]!["children"]);
         Assert.Equal(2, containers.Count);
         Assert.Equal("container-a", containers[0]!["id"]!.GetValue<string>());

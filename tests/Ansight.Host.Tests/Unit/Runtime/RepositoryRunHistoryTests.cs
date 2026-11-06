@@ -12,6 +12,7 @@ public sealed class RepositoryRunHistoryTests
         var run = CreateAutomationRun();
         var automationPath = Path.Combine(directory.Path, "automation");
         Directory.CreateDirectory(automationPath);
+
         var filePath = Path.Combine(automationPath, "trigger-runs.jsonl");
         var oversized = run with
         {
@@ -24,8 +25,10 @@ public sealed class RepositoryRunHistoryTests
         store.Append(oversized);
 
         Assert.True(new FileInfo(filePath).Length <= BoundedRunHistory.MaximumFileBytes);
+
         var recent = store.GetRecent(run.AppId, 1);
         Assert.True(Assert.Single(recent).Output?["truncated"]?.GetValue<bool>());
+
         if (!OperatingSystem.IsWindows())
         {
             Assert.Equal(
@@ -37,6 +40,7 @@ public sealed class RepositoryRunHistoryTests
     private static AutomationRunCompletedEvent CreateAutomationRun()
     {
         var now = DateTimeOffset.UtcNow;
+
         return new AutomationRunCompletedEvent(
             "run-1", 1, 1, false, null, "/tmp/repository", "com.example.app",
             "session-1", "trigger-1", "automation-1", "task", "task-1",

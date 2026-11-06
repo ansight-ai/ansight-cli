@@ -54,9 +54,11 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         }
 
         var host = new CliLocalSimulatorHost(runtime, options, reportStatus, mode);
+
         try
         {
             await host.StartCoreAsync(mode, cancellationToken).ConfigureAwait(false);
+
             return host;
         }
         catch
@@ -74,10 +76,12 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         }
 
         disposed = true;
+
         if (hostedAccess is not null)
         {
             await hostedAccess.DisposeAsync().ConfigureAwait(false);
         }
+
         runtime.LocalSimulatorControl = null;
 
         if (testingSource is not null)
@@ -101,12 +105,14 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         {
             await trackedRuntime.DisposeAsync().ConfigureAwait(false);
         }
+
         trackedRuntimes.Clear();
 
         foreach (var frameResource in frameResources.AsEnumerable().Reverse())
         {
             frameResource.Dispose();
         }
+
         frameResources.Clear();
 
         deviceDriver?.Dispose();
@@ -127,6 +133,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         var simCtlResolution = await SimCtlToolLocator.ResolveAsync(
             options.XcodePath,
             cancellationToken).ConfigureAwait(false);
+
         if (simCtlResolution.IsFound)
         {
             var simulatorTracker = new SimulatorTracker(new SimCtlClient(simCtlResolution));
@@ -149,6 +156,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         }
 
         var adbResolution = AdbToolLocator.Resolve(options.AdbPath);
+
         if (adbResolution.IsFound)
         {
             var adbClient = new AdbClient(adbResolution.AdbPath);
@@ -175,6 +183,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             {
                 var scrcpyResolution = await ScrcpyToolLocator.ResolveAsync(
                     cancellationToken: cancellationToken).ConfigureAwait(false);
+
                 if (scrcpyResolution.IsFound)
                 {
                     androidWebRtcFactory = new CliAndroidWebRtcSessionFactory(
@@ -207,11 +216,13 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             : new CompositeRemoteRuntimeSource(runtimeSources);
         var frameSource = new RoutedSimulatorFrameSource(runtimeSource, frameSources);
         inputSink = new RoutedSimulatorInputSink(runtimeSource, inputSinks);
+
         var hasWebRtcBackend = iosWebRtcFactory is not null || androidWebRtcFactory is not null;
         var webRtcFactory = hasWebRtcBackend
             ? new SelectiveSimulatorWebRtcSessionFactory(runtimeSource, iosWebRtcFactory, androidWebRtcFactory)
             : null;
         deviceDriver = new HeadlessHostDeviceDriver(runtime.Devices, options);
+
         var lifecycleSource = new CliRemoteDeviceLifecycleSource(deviceDriver);
         var annotationSource = new CliRemoteAnnotationSource(runtime);
         var locationSource = new CliRemoteDeviceLocationSource(runtime.Devices, runtimeSource);
@@ -234,12 +245,12 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
         reportStatus($"Companion simulator host is ready on local port {server.Port}. {string.Join(' ', startupMessages)}");
 
         runtime.LocalSimulatorControl = server;
+
         if (hostedAccess is not null)
         {
             var access = await hostedAccess.StartAsync(server, cancellationToken).ConfigureAwait(false);
             reportStatus($"Companion access ({FormatMode(access.Mode)}): {access.Status}");
         }
-
     }
 
     private static string FormatMode(CompanionAccessMode mode)

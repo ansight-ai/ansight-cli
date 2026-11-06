@@ -10,11 +10,19 @@ public sealed class MonitoredSessionExecutionTests
     {
         using var fixture = new Fixture();
         var service = fixture.Runtime.WorkspaceTests;
+
         using (service.ReserveSession(fixture.Session))
+        {
             Assert.Contains("already reserved", Assert.Throws<InvalidOperationException>(
                 () => service.ReserveSession(fixture.Session)).Message);
+        }
+
         Assert.True(fixture.Runtime.IsSessionLive(fixture.Session.SessionId));
-        using (service.ReserveSession(fixture.Session)) { }
+
+        using (service.ReserveSession(fixture.Session))
+        {
+        }
+
         fixture.State.EndDeviceSession(fixture.Session.SessionId);
         Assert.Contains("no longer live", Assert.Throws<InvalidOperationException>(
             () => service.ReserveSession(fixture.Session)).Message);
@@ -25,6 +33,7 @@ public sealed class MonitoredSessionExecutionTests
     {
         using var fixture = new Fixture();
         var service = fixture.Service(new Gateway());
+
         await using (var result = await service.LaunchAppAndWaitForReservedSessionAsync(
             fixture.Session.AppId, fixture.Request, null, null, null, CancellationToken.None))
         {
@@ -34,7 +43,9 @@ public sealed class MonitoredSessionExecutionTests
             Assert.NotNull(result.SessionClaim);
             Assert.Throws<InvalidOperationException>(() => service.ReserveSession(fixture.Session));
         }
+
         Assert.True(fixture.Runtime.IsSessionLive(fixture.Session.SessionId));
+
         using var next = service.ReserveSession(fixture.Session);
         Assert.Equal(0, fixture.Launcher.Stops);
     }
@@ -53,24 +64,35 @@ public sealed class MonitoredSessionExecutionTests
         {
             // An explicit attachment is reserved first. Automatic target resolution
             // now overlaps preparation, so its reservation is established later.
-            if (!explicitSession) return;
+            if (!explicitSession)
+            {
+                return;
+            }
+
             Assert.Throws<InvalidOperationException>(() => service.ReserveSession(fixture.Session));
             fixture.State.TryGetSessionSnapshot(fixture.Session.SessionId, out var running);
+
             var properties = running!.CustomProperties!["ui-test"]!;
             Assert.Equal("Notes", properties["testName"]!.GetValue<string>());
             Assert.Equal("running", properties["status"]!.GetValue<string>());
             Assert.Equal("agent", properties["executionKind"]!.GetValue<string>());
         };
+
         var request = new WorkspaceTestRunRequest(fixture.Workspace, "notes",
             SessionId: explicitSession ? fixture.Session.SessionId : null,
             Target: fixture.Request, EnableWorkspaceTools: false);
-        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunAsync(request));
+
+        if (cancel)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RunAsync(request));
+        }
         else
         {
             var result = await service.RunAsync(request);
             Assert.Equal("test preparation reached", result.Message);
             Assert.Equal(fixture.Session.SessionId, result.SessionId);
         }
+
         Assert.Equal(1, gateway.Calls);
         fixture.State.TryGetSessionSnapshot(fixture.Session.SessionId, out var completed);
         Assert.Equal(cancel ? "cancelled" : "failed", completed!.CustomProperties!["ui-test"]!["status"]!.GetValue<string>());
@@ -78,6 +100,7 @@ public sealed class MonitoredSessionExecutionTests
         Assert.Equal(explicitSession ? 0 : 1, fixture.Launcher.Launches);
         Assert.Equal(0, fixture.Launcher.Stops);
         Assert.True(fixture.Runtime.IsSessionLive(fixture.Session.SessionId));
+
         using var next = service.ReserveSession(fixture.Session);
     }
 
@@ -104,8 +127,13 @@ public sealed class MonitoredSessionExecutionTests
         var request = new WorkspaceTestRunRequest(fixture.Workspace, "notes", fixture.Session.SessionId,
             SessionWaitTimeout: TimeSpan.Zero, EnableWorkspaceTools: false);
         Assert.Equal("test preparation reached", (await service.RunAsync(request)).Message);
-        var wrongPlatform = await service.RunAsync(request with { Target = new WorkspaceTestTargetRequest(Platform: "android") });
+
+        var wrongPlatform = await service.RunAsync(request with
+        {
+            Target = new WorkspaceTestTargetRequest(Platform: "android")
+        });
         Assert.Contains("platform does not match", wrongPlatform.Message);
+
         var wrongAppPath = Path.Combine(fixture.Workspace, "ansight", "tests", "notes.json");
         File.WriteAllText(wrongAppPath, File.ReadAllText(wrongAppPath).Replace("test.notes", "test.other"));
         Assert.False((await service.RunAsync(request)).IsSuccess);
@@ -120,6 +148,7 @@ public sealed class MonitoredSessionExecutionTests
         var gateway = new Gateway();
         var service = fixture.Service(gateway);
         fixture.State.EndDeviceSession(fixture.Session.SessionId);
+
         var result = await service.RunAsync(new WorkspaceTestRunRequest(fixture.Workspace, "notes", fixture.Session.SessionId,
             SessionWaitTimeout: TimeSpan.Zero, EnableWorkspaceTools: false));
         Assert.False(result.IsSuccess);
@@ -131,7 +160,10 @@ public sealed class MonitoredSessionExecutionTests
     public void BatchKeepsDeviceModeWhenPinningAnAutomaticallySelectedTarget()
     {
         var target = new WorkspaceTestTarget("ios", "sim", "Phone", "test.notes", false, false, false)
-        { ExecutionMode = "device", DeviceKind = DeviceKinds.Simulator };
+        {
+            ExecutionMode = "device",
+            DeviceKind = DeviceKinds.Simulator
+        };
         Assert.Equal("device", WorkspaceTestService.PinBatchTarget(null, target)!.ExecutionMode);
     }
 
@@ -151,12 +183,17 @@ public sealed class MonitoredSessionExecutionTests
                 new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
             State = composition.Get<IRuntimeState>();
             Runtime = composition.Get<RuntimeCoordinator>();
+
             var target = new WorkspaceTestTarget("ios", "monitor-sim", "Phone", "test.notes", false, false, false)
-            { ExecutionMode = "device", DeviceKind = DeviceKinds.Simulator };
+            {
+                ExecutionMode = "device",
+                DeviceKind = DeviceKinds.Simulator
+            };
             var id = State.CreateDeviceSession(target);
             State.TryGetSessionSnapshot(id, out var session);
             Session = session!;
             Launcher = new ReusingLauncher(target, Session);
+
             var directory = Path.Combine(Workspace, "ansight", "tests");
             Directory.CreateDirectory(directory);
             File.WriteAllText(Path.Combine(directory, "notes.json"), """
@@ -166,22 +203,43 @@ public sealed class MonitoredSessionExecutionTests
         }
 
         public WorkspaceTestService Service(Gateway gateway) => new(Runtime, Runtime.SimulatorAgent, Launcher, gateway);
-        public void Dispose() { Runtime.Dispose(); environment.Dispose(); }
+
+        public void Dispose()
+        {
+            Runtime.Dispose();
+            environment.Dispose();
+        }
     }
 
-    private sealed class ReusingLauncher(WorkspaceTestTarget target, AppSessionSnapshot session) : IWorkspaceTestTargetLauncher
+    private sealed class ReusingLauncher : IWorkspaceTestTargetLauncher
     {
+        private readonly WorkspaceTestTarget target;
+        private readonly AppSessionSnapshot session;
+
+        public ReusingLauncher(WorkspaceTestTarget target, AppSessionSnapshot session)
+        {
+            this.target = target;
+            this.session = session;
+        }
+
         public int Launches { get; private set; }
         public int Stops { get; private set; }
+
         public Task<WorkspaceTestTargetLaunchResult> LaunchAsync(string appId, WorkspaceTestTargetRequest? request,
             IProgress<WorkspaceTestRunProgress>? progress, CancellationToken cancellationToken)
         {
             Launches++;
-            return Task.FromResult(WorkspaceTestTargetLaunchResult.Success(target) with { ExistingSession = session });
+
+            return Task.FromResult(WorkspaceTestTargetLaunchResult.Success(target) with
+            {
+                ExistingSession = session
+            });
         }
+
         public Task<DeviceOperationResult> StopAsync(WorkspaceTestTarget target, CancellationToken cancellationToken)
         {
             Stops++;
+
             return Task.FromResult(DeviceOperationResult.Success("terminate-app", target.Platform, target.DeviceIdentifier, "Stopped."));
         }
     }
@@ -191,14 +249,21 @@ public sealed class MonitoredSessionExecutionTests
         public int Calls { get; private set; }
         public bool Cancel { get; init; }
         public Action? BeforePrepare { get; set; }
+
         public Task<WorkspaceTestRunPreparation> PrepareAsync(WorkspaceTestRunPreparationRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
             BeforePrepare?.Invoke();
-            if (Cancel) throw new OperationCanceledException();
+
+            if (Cancel)
+            {
+                throw new OperationCanceledException();
+            }
+
             return Task.FromResult(WorkspaceTestRunPreparation.Failure("test preparation reached"));
         }
+
         public Task<WorkspaceTestRunMeterResult> CompleteAsync(WorkspaceTestRunMeterCompletion completion, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("Preparation failed; there should be no metering completion.");
+                    => throw new InvalidOperationException("Preparation failed; there should be no metering completion.");
     }
 }

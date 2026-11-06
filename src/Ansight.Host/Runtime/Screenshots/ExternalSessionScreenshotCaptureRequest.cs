@@ -18,14 +18,15 @@ internal sealed record ExternalSessionScreenshotCaptureRequest(int? MaxWidth, in
         }
 
         var maxWidthNode = capture["maxWidth"];
+
         if (maxWidthNode is null)
         {
             return new ExternalSessionScreenshotCaptureRequest((int?)null);
         }
 
         return maxWidthNode is JsonValue maxWidthValue
-               && maxWidthValue.TryGetValue<int>(out var maxWidth)
-               && maxWidth > 0
+            && maxWidthValue.TryGetValue<int>(out var maxWidth)
+            && maxWidth > 0
             ? new ExternalSessionScreenshotCaptureRequest(Math.Min(maxWidth, maximumAllowedWidth))
             : Default;
     }

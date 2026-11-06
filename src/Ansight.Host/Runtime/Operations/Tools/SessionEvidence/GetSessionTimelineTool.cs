@@ -30,6 +30,7 @@ internal sealed class GetSessionTimelineTool : Operation
         }
 
         var categoryFilters = ArgumentReader.ReadStringSet(arguments, "categories");
+
         if (!TryReadPageOffset(arguments, out var offset, out errorMessage))
         {
             return Task.FromResult(ToolError(errorMessage ?? "Invalid timeline cursor."));
@@ -38,12 +39,13 @@ internal sealed class GetSessionTimelineTool : Operation
         var actionId = NormalizeOptionalString(arguments?["actionId"]?.GetValue<string>());
         var events = SessionTimelineBuilder.BuildEvents(snapshot!, startUtc, endUtc)
             .Where(timelineEvent => categoryFilters.Count == 0
-                                    || categoryFilters.Contains(timelineEvent.Payload["category"]?.GetValue<string>() ?? string.Empty))
+                || categoryFilters.Contains(timelineEvent.Payload["category"]?.GetValue<string>() ?? string.Empty))
             .Where(timelineEvent => actionId is null || IsCorrelatedWithAction(snapshot!, timelineEvent, actionId))
             .ToArray();
         var returnedEvents = events.Skip(offset).Take(limit).ToArray();
         var nextOffset = offset + returnedEvents.Length;
         var hasMore = nextOffset < events.Length;
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -89,6 +91,7 @@ internal sealed class GetSessionTimelineTool : Operation
         properties["cursor"] = ToolSchema.String("Opaque cursor returned by a previous page.", nullable: true);
         properties["offset"] = ToolSchema.Integer("Zero-based page offset when no cursor is supplied.", nullable: true);
         properties["actionId"] = ToolSchema.String("Return the correlated action, before/after trees, screenshots, and action-tagged logs.", nullable: true);
+
         return properties;
     }
 
@@ -96,14 +99,18 @@ internal sealed class GetSessionTimelineTool : Operation
     {
         offset = 0;
         errorMessage = null;
+
         var cursor = NormalizeOptionalString(arguments?["cursor"]?.GetValue<string>());
+
         if (cursor is not null)
         {
             try
             {
                 var encoded = cursor.Replace('-', '+').Replace('_', '/');
                 encoded = encoded.PadRight(encoded.Length + ((4 - (encoded.Length % 4)) % 4), '=');
+
                 var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+
                 if (!decoded.StartsWith("timeline:v1:", StringComparison.Ordinal)
                     || !int.TryParse(decoded["timeline:v1:".Length..], out offset)
                     || offset < 0)
@@ -116,6 +123,7 @@ internal sealed class GetSessionTimelineTool : Operation
             catch (FormatException)
             {
                 errorMessage = "cursor is not a valid Ansight timeline cursor.";
+
                 return false;
             }
         }
@@ -125,6 +133,7 @@ internal sealed class GetSessionTimelineTool : Operation
             if (!offsetValue.TryGetValue<int>(out offset) || offset < 0)
             {
                 errorMessage = "offset must be a non-negative integer.";
+
                 return false;
             }
         }
@@ -135,6 +144,7 @@ internal sealed class GetSessionTimelineTool : Operation
     internal static string EncodeCursor(int offset)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes($"timeline:v1:{offset}");
+
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
@@ -145,6 +155,7 @@ internal sealed class GetSessionTimelineTool : Operation
     {
         var category = timelineEvent.Payload["category"]?.GetValue<string>();
         var details = timelineEvent.Payload["details"] as JsonObject;
+
         if (string.Equals(details?["actionId"]?.GetValue<string>(), actionId, StringComparison.Ordinal)
             || string.Equals(details?["eventId"]?.GetValue<string>(), actionId, StringComparison.Ordinal))
         {
@@ -157,8 +168,9 @@ internal sealed class GetSessionTimelineTool : Operation
         }
 
         var frameId = details?["frameId"]?.GetValue<string>();
+
         return snapshot.VisualTreeSnapshots.Any(visualTree =>
             string.Equals(visualTree.ActionId, actionId, StringComparison.Ordinal)
-            && string.Equals(visualTree.ScreenshotFrameId, frameId, StringComparison.Ordinal));
+                && string.Equals(visualTree.ScreenshotFrameId, frameId, StringComparison.Ordinal));
     }
 }

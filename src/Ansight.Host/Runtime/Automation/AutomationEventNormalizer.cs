@@ -44,6 +44,7 @@ internal static class AutomationEventNormalizer
         if (!TryGetTriggerIndex(runtimeEvent, out var index))
         {
             envelope = null;
+
             return false;
         }
 
@@ -164,6 +165,7 @@ internal static class AutomationEventNormalizer
         var eventId = string.IsNullOrWhiteSpace(sourceEventId)
             ? Guid.CreateVersion7().ToString("N")
             : sourceEventId.Trim();
+
         return new AutomationEventEnvelope
         {
             EventId = eventId,

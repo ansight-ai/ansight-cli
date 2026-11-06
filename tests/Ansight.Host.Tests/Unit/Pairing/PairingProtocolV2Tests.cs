@@ -22,6 +22,7 @@ public sealed class EnrollmentProtocolTests
         var enrollment = cache.AuthorizeConnection(attempt, hostIdentity);
 
         Assert.True(enrollment.Accepted, enrollment.ReasonMessage);
+
         var registration = Assert.IsType<PairingClientGrant>(enrollment.Grant);
         Assert.Equal("device-1", registration.DeviceId);
         Assert.Equal("read", registration.MaxToolPolicy);
@@ -36,12 +37,16 @@ public sealed class EnrollmentProtocolTests
         Assert.Equal(registration.GrantId, reconnect.Grant?.GrantId);
 
         var otherInstallation = cache.AuthorizeConnection(
-            attempt with { DeviceId = "device-2" },
+            attempt with
+            {
+                DeviceId = "device-2"
+            },
             hostIdentity);
         Assert.False(otherInstallation.Accepted);
         Assert.Equal("EnrollmentConsumed", otherInstallation.ReasonCode);
 
         Assert.True(cache.RevokeGrant(registration.GrantId, "unit test"));
+
         var revokedReconnect = cache.AuthorizeConnection(attempt, hostIdentity);
         Assert.False(revokedReconnect.Accepted);
         Assert.Equal("RegistrationExpired", revokedReconnect.ReasonCode);
@@ -80,6 +85,7 @@ public sealed class EnrollmentProtocolTests
     private static PairingConfig CreateConfig(RuntimeIdentity hostIdentity)
     {
         var now = DateTimeOffset.UtcNow;
+
         return new PairingConfig
         {
             Schema = PairingConfig.SchemaName,
@@ -110,6 +116,7 @@ public sealed class EnrollmentProtocolTests
     private static RuntimeIdentity CreateHostIdentity()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
         return RuntimeIdentity.FromPrivateKey("Host", key.ExportPkcs8PrivateKey());
     }
 }

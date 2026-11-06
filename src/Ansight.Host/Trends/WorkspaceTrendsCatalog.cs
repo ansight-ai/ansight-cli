@@ -8,14 +8,15 @@ public static class WorkspaceTrendsCatalog
 {
     private const int MaximumDefinitionCount = 512;
     private const long MaximumDefinitionBytes = 1_048_576;
-    private static readonly TimeSpan MaximumSpanDuration = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaximumObservationTail = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan maximumSpanDuration = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan maximumObservationTail = TimeSpan.FromSeconds(60);
 
     public static WorkspaceTrendsCatalogResult Load(
         string workspacePath,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspacePath);
+
         var fullWorkspacePath = Path.GetFullPath(workspacePath.Trim());
         var warnings = new List<string>();
         var definitions = LoadDefinitions(
@@ -56,15 +57,18 @@ public static class WorkspaceTrendsCatalog
         using var document = ParseDocument(source, "trends");
         var root = document.RootElement;
         ValidateSchemaVersion(root, "trends");
+
         var trendsId = ReadDefinitionId(root, definitionsDirectoryPath, filePath);
         var appId = ReadRequiredString(root, "appId");
         var spanElement = ReadRequiredObject(root, "span");
         var maximumDuration = TimeSpan.FromMilliseconds(
             ReadOptionalInt(spanElement, "maximumDurationMs") ?? 120_000);
-        if (maximumDuration <= TimeSpan.Zero || maximumDuration > MaximumSpanDuration)
+
+        if (maximumDuration <= TimeSpan.Zero || maximumDuration > maximumSpanDuration)
         {
             throw new InvalidDataException("span.maximumDurationMs must be between 1 and 1,800,000.");
         }
+
         var span = new WorkspaceTrendsSpanDefinition(
             ReadAnchor(spanElement, "start"),
             ReadAnchor(spanElement, "end"),
@@ -72,6 +76,7 @@ public static class WorkspaceTrendsCatalog
             maximumDuration);
         var required = ReadOptionalBool(root, "required") ?? true;
         var missingDataOutcome = (ReadOptionalString(root, "missingDataOutcome") ?? "inconclusive").ToLowerInvariant();
+
         if (missingDataOutcome is not ("inconclusive" or "fail" or "warn"))
         {
             throw new InvalidDataException("missingDataOutcome must be inconclusive, fail, or warn.");
@@ -86,6 +91,7 @@ public static class WorkspaceTrendsCatalog
         var metrics = metricsElement.EnumerateArray()
             .Select(ReadMetric)
             .ToArray();
+
         if (metrics.Length == 0)
         {
             throw new InvalidDataException("metrics must be a non-empty array.");
@@ -155,6 +161,7 @@ public static class WorkspaceTrendsCatalog
                 policy.Absolute,
                 policy.ConfirmRuns);
         var display = metric.Display;
+
         return new WorkspaceTrendsHistoryDefinition(
             metricKey,
             metricKey,
@@ -211,6 +218,7 @@ public static class WorkspaceTrendsCatalog
         CancellationToken cancellationToken)
     {
         var directoryPath = Path.Combine(workspacePath, "ansight", directoryName);
+
         if (!Directory.Exists(directoryPath))
         {
             return [];
@@ -218,6 +226,7 @@ public static class WorkspaceTrendsCatalog
 
         var definitions = new List<TDefinition>();
         IEnumerable<string> paths;
+
         try
         {
             paths = Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.AllDirectories)
@@ -228,12 +237,14 @@ public static class WorkspaceTrendsCatalog
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             warnings.Add($"Definitions could not be read from '{directoryPath}': {exception.Message}");
+
             return definitions;
         }
 
         foreach (var path in paths)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             if (definitions.Count >= MaximumDefinitionCount)
             {
                 warnings.Add($"Only the first {MaximumDefinitionCount:N0} {directoryName} definitions were loaded.");
@@ -243,6 +254,7 @@ public static class WorkspaceTrendsCatalog
             try
             {
                 var file = new FileInfo(path);
+
                 if (!file.Exists || file.Length > MaximumDefinitionBytes)
                 {
                     throw new InvalidDataException("The definition is missing or larger than 1 MB.");
@@ -251,9 +263,9 @@ public static class WorkspaceTrendsCatalog
                 definitions.Add(parser(directoryPath, path, File.ReadAllText(path)));
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or InvalidDataException
-                                               or JsonException)
+                or UnauthorizedAccessException
+                or InvalidDataException
+                or JsonException)
             {
                 warnings.Add($"{Path.GetRelativePath(workspacePath, path)}: {exception.Message}");
             }
@@ -271,25 +283,30 @@ public static class WorkspaceTrendsCatalog
 
         var metricId = ReadRequiredString(element, "id");
         var platform = ReadOptionalString(element, "platform")?.ToLowerInvariant();
+
         if (platform is not null
             && platform is not ("android" or "ios" or "macos" or "windows" or "other"))
         {
             throw new InvalidDataException(
                 "metric.platform must be android, ios, macos, windows, or other.");
         }
+
         var channelElement = ReadRequiredObject(element, "channel");
         var channelMatch = ReadOptionalString(channelElement, "match") ?? "exactlyOne";
+
         if (!channelMatch.Equals("exactlyOne", StringComparison.OrdinalIgnoreCase)
             && !channelMatch.Equals("any", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("metric.channel.match must be exactlyOne or any.");
         }
+
         var selector = new WorkspaceTrendsMetricSelector(
             ReadOptionalString(channelElement, "type"),
             ReadOptionalString(channelElement, "name"),
             ReadOptionalString(channelElement, "source"),
             ReadOptionalString(channelElement, "kind"),
             !string.Equals(channelMatch, "any", StringComparison.OrdinalIgnoreCase));
+
         if (selector is { Type: null, Name: null, Source: null, Kind: null })
         {
             throw new InvalidDataException("metric.channel must select type, name, source, or kind.");
@@ -299,9 +316,11 @@ public static class WorkspaceTrendsCatalog
         {
             throw new InvalidDataException("metric.statistic is required.");
         }
+
         string statistic;
         double? statisticThreshold = null;
         var statisticWasObject = false;
+
         if (statisticElement.ValueKind == JsonValueKind.String)
         {
             statistic = statisticElement.GetString()?.Trim() ?? string.Empty;
@@ -319,18 +338,31 @@ public static class WorkspaceTrendsCatalog
 
         var supportedStatistics = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "min", "max", "average", "p05", "p10", "p50", "p95", "timeBelowRatio",
-            "memoryPeakIncreaseMiB", "memoryRetainedIncreaseMiB", "tailSlopeMiBPerSecond", "tailSpreadMiB"
+            "min",
+            "max",
+            "average",
+            "p05",
+            "p10",
+            "p50",
+            "p95",
+            "timeBelowRatio",
+            "memoryPeakIncreaseMiB",
+            "memoryRetainedIncreaseMiB",
+            "tailSlopeMiBPerSecond",
+            "tailSpreadMiB"
         };
+
         if (!supportedStatistics.Contains(statistic))
         {
             throw new InvalidDataException($"Unsupported metric statistic '{statistic}'.");
         }
+
         if (string.Equals(statistic, "timeBelowRatio", StringComparison.OrdinalIgnoreCase)
             && !statisticThreshold.HasValue)
         {
             throw new InvalidDataException("timeBelowRatio requires statistic.threshold.");
         }
+
         if (statisticWasObject
             && !string.Equals(statistic, "timeBelowRatio", StringComparison.OrdinalIgnoreCase))
         {
@@ -342,6 +374,7 @@ public static class WorkspaceTrendsCatalog
             ReadOptionalDouble(budgetElement, "gte"),
             ReadOptionalDouble(budgetElement, "lte"),
             ReadOptionalDouble(budgetElement, "absoluteLte"));
+
         if (budget is { GreaterThanOrEqual: null, LessThanOrEqual: null, AbsoluteLessThanOrEqual: null })
         {
             throw new InvalidDataException("metric.budget must contain gte, lte, or absoluteLte.");
@@ -351,16 +384,19 @@ public static class WorkspaceTrendsCatalog
         var maximumGap = TimeSpan.FromMilliseconds(ReadOptionalInt(element, "maximumSampleGapMs") ?? 5_000);
         var baseline = TimeSpan.FromMilliseconds(ReadOptionalInt(element, "baselineBeforeStartMs") ?? 2_000);
         var tail = TimeSpan.FromMilliseconds(ReadOptionalInt(element, "tailAfterEndMs") ?? 0);
+
         if (minimumSamples is < 1 or > 100_000)
         {
             throw new InvalidDataException("minimumSamples must be between 1 and 100,000.");
         }
+
         if (maximumGap <= TimeSpan.Zero || maximumGap > TimeSpan.FromMinutes(5))
         {
             throw new InvalidDataException("maximumSampleGapMs must be between 1 and 300,000.");
         }
-        if (baseline < TimeSpan.Zero || baseline > MaximumObservationTail
-            || tail < TimeSpan.Zero || tail > MaximumObservationTail)
+
+        if (baseline < TimeSpan.Zero || baseline > maximumObservationTail
+            || tail < TimeSpan.Zero || tail > maximumObservationTail)
         {
             throw new InvalidDataException("baselineBeforeStartMs and tailAfterEndMs must be between 0 and 60,000.");
         }
@@ -390,6 +426,7 @@ public static class WorkspaceTrendsCatalog
         {
             return null;
         }
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             throw new InvalidDataException("metric.regression must be a JSON object.");
@@ -397,11 +434,13 @@ public static class WorkspaceTrendsCatalog
 
         var regressionPercent = ReadOptionalDouble(element, "percent");
         var regressionAbsolute = ReadOptionalDouble(element, "absolute");
+
         if (!regressionPercent.HasValue && !regressionAbsolute.HasValue)
         {
             throw new InvalidDataException(
                 "metric.regression must configure percent or absolute.");
         }
+
         if (regressionPercent is < 0 || regressionAbsolute is < 0)
         {
             throw new InvalidDataException("metric.regression regression thresholds must be zero or greater.");
@@ -410,10 +449,12 @@ public static class WorkspaceTrendsCatalog
         var confirmRuns = ReadOptionalInt(element, "confirmRuns") ?? 2;
         var baselineRuns = ReadOptionalInt(element, "baselineRuns") ?? 10;
         var minimumBaselineRuns = ReadOptionalInt(element, "minimumBaselineRuns") ?? 5;
+
         if (confirmRuns is < 1 or > 20)
         {
             throw new InvalidDataException("metric.regression.confirmRuns must be between 1 and 20.");
         }
+
         if (baselineRuns is < 1 or > 200
             || minimumBaselineRuns is < 1 or > 200
             || minimumBaselineRuns > baselineRuns)
@@ -428,16 +469,21 @@ public static class WorkspaceTrendsCatalog
             : ["platform", "deviceModel", "operatingSystemMajor"];
         var supportedSeriesDimensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "buildNumber", "platform", "deviceModel",
-            "operatingSystemMajor", "buildConfiguration"
+            "buildNumber",
+            "platform",
+            "deviceModel",
+            "operatingSystemMajor",
+            "buildConfiguration"
         };
         var unsupportedDimension = seriesBy.FirstOrDefault(
             dimension => !supportedSeriesDimensions.Contains(dimension));
+
         if (unsupportedDimension is not null)
         {
             throw new InvalidDataException(
                 $"Unsupported metric.regression series dimension '{unsupportedDimension}'.");
         }
+
         seriesBy = seriesBy
             .OrderBy(static dimension => dimension, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -474,6 +520,7 @@ public static class WorkspaceTrendsCatalog
         {
             return WorkspaceTrendsRegressionDirection.Lower;
         }
+
         if (budget.LessThanOrEqual.HasValue
             && !budget.GreaterThanOrEqual.HasValue
             && !budget.AbsoluteLessThanOrEqual.HasValue)
@@ -491,6 +538,7 @@ public static class WorkspaceTrendsCatalog
         {
             return null;
         }
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             throw new InvalidDataException("metric.display must be a JSON object.");
@@ -503,6 +551,7 @@ public static class WorkspaceTrendsCatalog
         var minimum = ReadOptionalDouble(element, "minimum");
         var maximum = ReadOptionalDouble(element, "maximum");
         var includeZero = ReadOptionalBool(element, "includeZero");
+
         if (title is null
             && unit is null
             && scale is null
@@ -513,14 +562,17 @@ public static class WorkspaceTrendsCatalog
         {
             throw new InvalidDataException("metric.display must configure at least one property.");
         }
+
         if (scale is <= 0)
         {
             throw new InvalidDataException("metric.display.scale must be greater than zero.");
         }
+
         if (fractionDigits is < 0 or > 6)
         {
             throw new InvalidDataException("metric.display.fractionDigits must be between 0 and 6.");
         }
+
         if (minimum.HasValue && maximum.HasValue && minimum.Value >= maximum.Value)
         {
             throw new InvalidDataException("metric.display.minimum must be less than metric.display.maximum.");
@@ -541,37 +593,60 @@ public static class WorkspaceTrendsCatalog
         var anchorElement = ReadRequiredObject(root, propertyName);
         var hasEvent = anchorElement.TryGetProperty("event", out _);
         var hasLog = anchorElement.TryGetProperty("log", out _);
+
         if (hasEvent == hasLog)
+        {
             throw new InvalidDataException($"span.{propertyName} must select exactly one of event or log.");
+        }
+
         if (hasLog)
         {
             var log = ReadRequiredObject(anchorElement, "log");
             string[] allowed = ["streamId", "message", "match", "priority", "source", "tag", "processId"];
+
             if (log.EnumerateObject().Any(property => !allowed.Contains(property.Name)))
+            {
                 throw new InvalidDataException($"span.{propertyName}.log contains an unsupported selector field.");
+            }
+
             var streamId = ReadRequiredString(log, "streamId");
             var message = ReadRequiredString(log, "message");
             var match = ReadOptionalString(log, "match") ?? "exact";
+
             if (match is not ("exact" or "contains"))
+            {
                 throw new InvalidDataException($"span.{propertyName}.log.match must be exact or contains.");
+            }
+
             var priority = ReadOptionalString(log, "priority");
+
             if (priority is not null && !Enum.GetNames<LogPriority>().Contains(priority))
+            {
                 throw new InvalidDataException($"span.{propertyName}.log.priority must be a log priority name.");
+            }
+
             var processId = ReadOptionalInt(log, "processId");
+
             if (processId < 1)
+            {
                 throw new InvalidDataException($"span.{propertyName}.log.processId must be positive.");
+            }
+
             return new WorkspaceEventAnchor(message)
             {
                 Log = new WorkspaceTrendsLogSelector(streamId, message, match, priority,
                     ReadOptionalString(log, "source"), ReadOptionalString(log, "tag"), processId)
             };
         }
+
         var eventElement = ReadRequiredObject(anchorElement, "event");
         var channelValue = ReadOptionalInt(eventElement, "channelId");
+
         if (channelValue is < byte.MinValue or > byte.MaxValue)
         {
             throw new InvalidDataException($"{propertyName}.event.channelId must be between 0 and 255.");
         }
+
         return new WorkspaceEventAnchor(
             ReadRequiredString(eventElement, "label"),
             ReadOptionalString(eventElement, "eventType"),
@@ -580,13 +655,13 @@ public static class WorkspaceTrendsCatalog
 
     private static WorkspaceTrendsSpanSelection ParseSpanSelection(string value)
         => value.Trim().ToLowerInvariant() switch
-    {
-        "firstcompleted" => WorkspaceTrendsSpanSelection.FirstCompleted,
-        "lastcompleted" => WorkspaceTrendsSpanSelection.LastCompleted,
-        "exactlyone" => WorkspaceTrendsSpanSelection.ExactlyOne,
-        "all" => WorkspaceTrendsSpanSelection.All,
-        _ => throw new InvalidDataException("selection must be firstCompleted, lastCompleted, exactlyOne, or all.")
-    };
+        {
+            "firstcompleted" => WorkspaceTrendsSpanSelection.FirstCompleted,
+            "lastcompleted" => WorkspaceTrendsSpanSelection.LastCompleted,
+            "exactlyone" => WorkspaceTrendsSpanSelection.ExactlyOne,
+            "all" => WorkspaceTrendsSpanSelection.All,
+            _ => throw new InvalidDataException("selection must be firstCompleted, lastCompleted, exactlyOne, or all.")
+        };
 
     private static JsonDocument ParseDocument(string source, string definitionName)
     {
@@ -595,17 +670,20 @@ public static class WorkspaceTrendsCatalog
             AllowTrailingCommas = true,
             CommentHandling = JsonCommentHandling.Skip
         });
+
         if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
             document.Dispose();
             throw new InvalidDataException($"The {definitionName} definition must be a JSON object.");
         }
+
         return document;
     }
 
     private static void ValidateSchemaVersion(JsonElement root, string definitionName)
     {
         var schemaVersion = ReadOptionalInt(root, "schemaVersion") ?? 1;
+
         if (schemaVersion != 1)
         {
             throw new InvalidDataException($"{definitionName} schemaVersion must be 1.");
@@ -616,6 +694,7 @@ public static class WorkspaceTrendsCatalog
     {
         var relativePath = Path.GetRelativePath(definitionsDirectoryPath, filePath).Replace('\\', '/');
         var inferred = Path.ChangeExtension(relativePath, null)?.Replace('/', '.') ?? relativePath;
+
         return ReadOptionalString(root, "id") ?? inferred;
     }
 
@@ -625,37 +704,38 @@ public static class WorkspaceTrendsCatalog
         {
             throw new InvalidDataException($"{propertyName} must be a JSON object.");
         }
+
         return value;
     }
 
     private static string ReadRequiredString(JsonElement element, string propertyName)
         => ReadOptionalString(element, propertyName)
-           ?? throw new InvalidDataException($"{propertyName} is required.");
+            ?? throw new InvalidDataException($"{propertyName} is required.");
 
     private static string? ReadOptionalString(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value)
-           && value.ValueKind == JsonValueKind.String
-           && !string.IsNullOrWhiteSpace(value.GetString())
+            && value.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(value.GetString())
             ? value.GetString()!.Trim()
             : null;
 
     private static int? ReadOptionalInt(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value)
-           && value.ValueKind == JsonValueKind.Number
-           && value.TryGetInt32(out var result)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out var result)
             ? result
             : null;
 
     private static double? ReadOptionalDouble(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value)
-           && value.ValueKind == JsonValueKind.Number
-           && value.TryGetDouble(out var result)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetDouble(out var result)
             ? result
             : null;
 
     private static bool? ReadOptionalBool(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value)
-           && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
             : null;
 
@@ -665,19 +745,24 @@ public static class WorkspaceTrendsCatalog
         {
             return [];
         }
+
         if (value.ValueKind != JsonValueKind.Array)
         {
             throw new InvalidDataException($"{propertyName} must be an array of strings.");
         }
+
         var values = new List<string>();
+
         foreach (var item in value.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
             {
                 throw new InvalidDataException($"{propertyName} must contain only non-empty strings.");
             }
+
             values.Add(item.GetString()!.Trim());
         }
+
         return values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
@@ -694,15 +779,15 @@ public static class WorkspaceTrendsCatalog
         ICollection<string> warnings)
     {
         foreach (var group in definitions.GroupBy(
-                     static definition => definition.DefinitionId,
-                     StringComparer.OrdinalIgnoreCase).Where(static group => group.Count() > 1))
+            static definition => definition.DefinitionId,
+            StringComparer.OrdinalIgnoreCase).Where(static group => group.Count() > 1))
         {
             warnings.Add(
                 $"Duplicate {definitionKind} ID '{group.Key}' was found in "
-                + string.Join(
-                    ", ",
-                    group.Select(definition => Path.GetRelativePath(workspacePath, definition.FilePath)))
-                + ".");
+                    + string.Join(
+                        ", ",
+                        group.Select(definition => Path.GetRelativePath(workspacePath, definition.FilePath)))
+                    + ".");
         }
     }
 

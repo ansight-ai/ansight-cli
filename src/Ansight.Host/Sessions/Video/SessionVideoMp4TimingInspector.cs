@@ -9,14 +9,17 @@ internal static partial class SessionVideoMp4TimingInspector
     public static IReadOnlyList<long> ReadPresentationTimesUs(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
         var bytes = ReadMovieBox(filePath, out _);
         var rootBoxes = ReadBoxes(bytes, 0, bytes.Length);
         var movieBox = FindBox(rootBoxes, "moov");
+
         foreach (var trackBox in ReadBoxes(bytes, movieBox.PayloadOffset, movieBox.EndOffset)
-                     .Where(static box => box.Type == "trak"))
+            .Where(static box => box.Type == "trak"))
         {
             var mediaBox = FindBox(ReadBoxes(bytes, trackBox.PayloadOffset, trackBox.EndOffset), "mdia");
             var mediaBoxes = ReadBoxes(bytes, mediaBox.PayloadOffset, mediaBox.EndOffset);
+
             if (!IsVideoHandler(bytes, FindBox(mediaBoxes, "hdlr")))
             {
                 continue;
@@ -36,12 +39,14 @@ internal static partial class SessionVideoMp4TimingInspector
                 .Select((decodeTime, index) => checked(decodeTime + compositionOffsets[index]))
                 .Order()
                 .ToArray();
+
             if (presentationTimes.Length == 0)
             {
                 throw new InvalidDataException("The MP4 video track contains no samples.");
             }
 
             var firstPresentationTime = presentationTimes[0];
+
             return presentationTimes
                 .Select(value => ConvertToMicroseconds(value - firstPresentationTime, timeScale))
                 .ToArray();
@@ -55,54 +60,76 @@ internal static partial class SessionVideoMp4TimingInspector
     {
         using var stream = File.OpenRead(filePath);
         Span<byte> header = stackalloc byte[16];
+
         while (stream.Position < stream.Length)
         {
             var offset = stream.Position;
             stream.ReadExactly(header[..8]);
+
             long size = BinaryPrimitives.ReadUInt32BigEndian(header);
             var headerSize = 8;
+
             if (size == 1)
             {
                 stream.ReadExactly(header[8..]);
                 size = checked((long)BinaryPrimitives.ReadUInt64BigEndian(header[8..]));
                 headerSize = 16;
             }
-            else if (size == 0) size = stream.Length - offset;
+            else if (size == 0)
+            {
+                size = stream.Length - offset;
+            }
+
             if (size < headerSize || size > stream.Length - offset)
+            {
                 throw new InvalidDataException("The MP4 contains an invalid or incomplete box.");
+            }
+
             if (header.Slice(4, 4).SequenceEqual("moov"u8))
             {
                 movieOffset = offset;
-                if (size > 64 * 1024 * 1024) throw new InvalidDataException("The MP4 index exceeds the supported size.");
+
+                if (size > 64 * 1024 * 1024)
+                {
+                    throw new InvalidDataException("The MP4 index exceeds the supported size.");
+                }
+
                 var bytes = new byte[(int)size];
                 header[..headerSize].CopyTo(bytes);
                 stream.ReadExactly(bytes.AsSpan(headerSize));
+
                 return bytes;
             }
+
             stream.Position = offset + size;
         }
+
         throw new InvalidDataException("The MP4 recording has no finalized movie index.");
     }
 
     private static bool IsVideoHandler(byte[] bytes, Mp4Box handlerBox)
     {
         EnsurePayloadSize(handlerBox, 12);
+
         return ReadType(bytes, handlerBox.PayloadOffset + 8) == "vide";
     }
 
     private static uint ReadMediaTimeScale(byte[] bytes, Mp4Box mediaHeaderBox)
     {
         EnsurePayloadSize(mediaHeaderBox, 24);
+
         var version = bytes[mediaHeaderBox.PayloadOffset];
         var timeScaleOffset = version == 1
             ? mediaHeaderBox.PayloadOffset + 20
             : mediaHeaderBox.PayloadOffset + 12;
+
         if (timeScaleOffset + sizeof(uint) > mediaHeaderBox.EndOffset)
         {
             throw new InvalidDataException("The MP4 media header is truncated.");
         }
 
         var timeScale = ReadUInt32(bytes, timeScaleOffset);
+
         return timeScale == 0
             ? throw new InvalidDataException("The MP4 video track has an invalid time scale.")
             : timeScale;
@@ -111,15 +138,19 @@ internal static partial class SessionVideoMp4TimingInspector
     private static IReadOnlyList<long> ReadDecodeTimes(byte[] bytes, Mp4Box timeToSampleBox)
     {
         EnsurePayloadSize(timeToSampleBox, 8);
+
         var entryCount = ReadUInt32(bytes, timeToSampleBox.PayloadOffset + 4);
         var offset = timeToSampleBox.PayloadOffset + 8;
         var decodeTimes = new List<long>();
         long decodeTime = 0;
+
         for (uint entryIndex = 0; entryIndex < entryCount; entryIndex++)
         {
             EnsureAvailable(timeToSampleBox, offset, 8);
+
             var sampleCount = ReadUInt32(bytes, offset);
             var sampleDelta = ReadUInt32(bytes, offset + 4);
+
             if (sampleCount > 10_000_000 || decodeTimes.Count + sampleCount > 10_000_000)
             {
                 throw new InvalidDataException("The MP4 video track declares an unreasonable sample count.");
@@ -143,18 +174,22 @@ internal static partial class SessionVideoMp4TimingInspector
         int expectedSampleCount)
     {
         EnsurePayloadSize(compositionTimeBox, 8);
+
         var version = bytes[compositionTimeBox.PayloadOffset];
         var entryCount = ReadUInt32(bytes, compositionTimeBox.PayloadOffset + 4);
         var offset = compositionTimeBox.PayloadOffset + 8;
         var compositionOffsets = new List<long>(expectedSampleCount);
+
         for (uint entryIndex = 0; entryIndex < entryCount; entryIndex++)
         {
             EnsureAvailable(compositionTimeBox, offset, 8);
+
             var sampleCount = ReadUInt32(bytes, offset);
             var rawCompositionOffset = ReadUInt32(bytes, offset + 4);
             long compositionOffset = version == 1
                 ? unchecked((int)rawCompositionOffset)
                 : rawCompositionOffset;
+
             if (sampleCount > 10_000_000 || compositionOffsets.Count + sampleCount > 10_000_000)
             {
                 throw new InvalidDataException("The MP4 video track declares an unreasonable composition sample count.");
@@ -180,12 +215,14 @@ internal static partial class SessionVideoMp4TimingInspector
     {
         var boxes = new List<Mp4Box>();
         var offset = startOffset;
+
         while (offset + 8 <= endOffset)
         {
             var size32 = ReadUInt32(bytes, offset);
             var type = ReadType(bytes, offset + 4);
             long size = size32;
             var headerSize = 8;
+
             if (size32 == 1)
             {
                 if (offset + 16 > endOffset)
@@ -226,17 +263,20 @@ internal static partial class SessionVideoMp4TimingInspector
             if (candidate.Type == type)
             {
                 box = candidate;
+
                 return true;
             }
         }
 
         box = default;
+
         return false;
     }
 
     private static long ConvertToMicroseconds(long value, uint timeScale)
     {
         var scaled = (decimal)value * MicrosecondsPerSecond / timeScale;
+
         return checked((long)Math.Round(scaled, MidpointRounding.AwayFromZero));
     }
 

@@ -35,20 +35,27 @@ internal sealed class AgentToolCatalog
             .Where(tool => tool["name"] is JsonValue)
             .ToDictionary(tool => tool["name"]!.GetValue<string>(), tool => tool, StringComparer.Ordinal);
         InitialTools = new JsonArray();
+
         foreach (var name in coreToolNames)
         {
-            if (deferTaskDiscovery && name == "ansight_list_tasks") continue;
+            if (deferTaskDiscovery && name == "ansight_list_tasks")
+            {
+                continue;
+            }
+
             if (definitions.TryGetValue(name, out var definition))
             {
                 InitialTools.Add(definition.DeepClone());
                 loadedToolNames.Add(name);
             }
         }
+
         InitialTools.Add(BuildLoaderDefinition(definitions.ContainsKey("ansight_declare_uncovered_step")));
         loadedToolNames.Add(LoadToolName);
 
         var deferredNames = bundleToolNames.Values.SelectMany(names => names).ToHashSet(StringComparer.Ordinal);
         InitialAdditionalTools = new JsonArray();
+
         foreach (var name in definitions.Keys.Order(StringComparer.Ordinal))
         {
             if (!loadedToolNames.Contains(name) && !deferredNames.Contains(name))
@@ -64,14 +71,17 @@ internal sealed class AgentToolCatalog
     public JsonArray FullTools { get; }
     public JsonArray InitialTools { get; }
     public JsonArray InitialAdditionalTools { get; }
-
     public JsonArray LoadedTools => new(FullTools.OfType<JsonObject>()
         .Where(tool => loadedToolNames.Contains(tool["name"]!.GetValue<string>()))
         .Select(tool => tool.DeepClone()).ToArray());
 
     public void BeginContextGeneration(int generation)
     {
-        if (contextGeneration == generation) return;
+        if (contextGeneration == generation)
+        {
+            return;
+        }
+
         contextGeneration = generation;
         refreshedBundles.Clear();
     }
@@ -85,9 +95,11 @@ internal sealed class AgentToolCatalog
     {
         var bundle = arguments["bundle"] is JsonValue value && value.TryGetValue<string>(out var name)
             ? name : null;
+
         if (bundle is null || !bundleToolNames.ContainsKey(bundle))
         {
             var message = $"Choose one bundle: {string.Join(", ", bundleToolNames.Keys)}.";
+
             return new(new ToolCallResult(true,
                 new JsonObject { ["isError"] = true, ["message"] = message }.ToJsonString(), message), [], string.Empty);
         }
@@ -97,13 +109,16 @@ internal sealed class AgentToolCatalog
         var additionalTools = new JsonArray();
         var guidance = new List<string>();
         var wasLoaded = loadedBundles.Contains(bundle);
+
         foreach (var selectedBundle in bundles)
         {
             if (!loadedBundles.Add(selectedBundle))
             {
                 continue;
             }
+
             var before = additionalTools.Count;
+
             foreach (var toolName in bundleToolNames[selectedBundle])
             {
                 if (definitions.TryGetValue(toolName, out var definition) && loadedToolNames.Add(toolName))
@@ -111,22 +126,31 @@ internal sealed class AgentToolCatalog
                     additionalTools.Add(definition.DeepClone());
                 }
             }
+
             if (additionalTools.Count > before)
             {
                 guidance.Add(ReadGuidance(selectedBundle));
             }
         }
+
         var callable = bundles.SelectMany(selected => bundleToolNames[selected])
             .Where(loadedToolNames.Contains).ToArray();
         // A reload after compaction repairs the model registration, not the host permission set.
         var refresh = wasLoaded && contextGeneration > 0 && callable.Length > 0 && refreshedBundles.Add(bundle);
+
         if (refresh)
         {
             foreach (var toolName in callable.Distinct(StringComparer.Ordinal))
+            {
                 if (!additionalTools.OfType<JsonObject>().Any(tool => tool["name"]?.GetValue<string>() == toolName))
+                {
                     additionalTools.Add(definitions[toolName].DeepClone());
+                }
+            }
+
             guidance.AddRange(bundles.Select(ReadGuidance));
         }
+
         var messageText = additionalTools.Count > 0
             ? refresh ? "Refreshed tool registrations after compaction. No app action was performed."
                 : $"Loaded {additionalTools.Count} tool(s). No app action was performed."
@@ -140,6 +164,7 @@ internal sealed class AgentToolCatalog
             ["tools"] = new JsonArray(callable.Select(tool => (JsonNode?)JsonValue.Create(tool)).ToArray()),
             ["message"] = messageText
         }.ToJsonString();
+
         return new(new ToolCallResult(callable.Length == 0, output, messageText),
             additionalTools, string.Join("\n\n", guidance.Distinct(StringComparer.Ordinal)))
         {
@@ -148,7 +173,12 @@ internal sealed class AgentToolCatalog
     }
 
     public static JsonObject CreateAdditionalToolsInput(JsonArray tools)
-        => new() { ["type"] = "additional_tools", ["role"] = "developer", ["tools"] = tools.DeepClone() };
+        => new()
+        {
+            ["type"] = "additional_tools",
+            ["role"] = "developer",
+            ["tools"] = tools.DeepClone()
+        };
 
     public static string ReadGuidance(string bundle)
         => bundle switch
@@ -167,7 +197,8 @@ internal sealed class AgentToolCatalog
     private static JsonObject BuildLoaderDefinition(bool hasTaskDeclaration)
         => new()
         {
-            ["type"] = "function", ["name"] = LoadToolName,
+            ["type"] = "function",
+            ["name"] = LoadToolName,
             ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; app-tools: domain tools; evidence: screenshots/visual assessment/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: discovery/details for a concrete gap in preloaded tasks. No app action. Accepted manual-step declarations load manual-ui automatically.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
@@ -183,7 +214,8 @@ internal sealed class AgentToolCatalog
                             .Select(name => (JsonNode?)JsonValue.Create(name)).ToArray())
                     }
                 },
-                ["required"] = new JsonArray("bundle"), ["additionalProperties"] = false
+                ["required"] = new JsonArray("bundle"),
+                ["additionalProperties"] = false
             }
         };
 }

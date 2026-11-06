@@ -10,6 +10,5 @@ internal sealed class PersistedSnapshotDocumentCollectionState
     public HashSet<string> FilePaths { get; } = new(StringComparer.Ordinal);
 
     public object? PersistedSource { get; set; }
-
     public int PersistedSnapshotCount { get; set; }
 }

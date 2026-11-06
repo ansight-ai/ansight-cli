@@ -33,13 +33,13 @@ public sealed class RepositoryTaskSearchMatcherTests
         Assert.Contains(
             completeMatch.Evidence,
             evidence => evidence.QueryTerm == "go"
-                        && evidence.IndexedTerm == "open"
-                        && evidence.Kind == RepositoryTaskSearchMatchKind.Synonym);
+                && evidence.IndexedTerm == "open"
+                && evidence.Kind == RepositoryTaskSearchMatchKind.Synonym);
         Assert.Contains(
             completeMatch.Evidence,
             evidence => evidence.QueryTerm == "select"
-                        && evidence.IndexedTerm == "select"
-                        && evidence.Kind == RepositoryTaskSearchMatchKind.Exact);
+                && evidence.IndexedTerm == "select"
+                && evidence.Kind == RepositoryTaskSearchMatchKind.Exact);
         Assert.Contains("siuana", completeMatch.UnmatchedQueryTerms);
         Assert.Contains("pati", completeMatch.UnmatchedQueryTerms);
     }
@@ -57,6 +57,7 @@ public sealed class RepositoryTaskSearchMatcherTests
         var match = RepositoryTaskSearchMatcher.Match(task, "search Siuana area");
 
         Assert.NotNull(match);
+
         var fuzzyEvidence = Assert.Single(match.Evidence, evidence => evidence.QueryTerm == "siuana");
         Assert.Equal("siurana", fuzzyEvidence.IndexedTerm);
         Assert.Equal(RepositoryTaskSearchMatchKind.Fuzzy, fuzzyEvidence.Kind);

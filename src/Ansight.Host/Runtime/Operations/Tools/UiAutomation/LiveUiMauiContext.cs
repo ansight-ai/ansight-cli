@@ -11,13 +11,13 @@ internal static class LiveUiMauiContext
 
     public static bool HasActivePageContext(JsonObject payload)
         => IsMauiPayload(payload)
-           && (string.Equals(
-                   LiveUiNodeQuery.ReadString(payload, "rootScope"),
-                   MauiVisualTreeRootScope.CurrentPage,
-                   StringComparison.Ordinal)
-               || payload["currentPage"] is JsonObject
-               || payload["flagBits"] is JsonObject flagBits
-               && (flagBits["currentPage"] is not null || flagBits["activePage"] is not null));
+            && (string.Equals(
+                LiveUiNodeQuery.ReadString(payload, "rootScope"),
+                MauiVisualTreeRootScope.CurrentPage,
+                StringComparison.Ordinal)
+                || payload["currentPage"] is JsonObject
+                || payload["flagBits"] is JsonObject flagBits
+                    && (flagBits["currentPage"] is not null || flagBits["activePage"] is not null));
 
     public static bool IsInActivePage(LiveUiNodeMatch match, JsonObject payload)
     {
@@ -27,9 +27,9 @@ internal static class LiveUiMauiContext
         }
 
         if (string.Equals(
-                LiveUiNodeQuery.ReadString(payload, "rootScope"),
-                MauiVisualTreeRootScope.CurrentPage,
-                StringComparison.Ordinal))
+            LiveUiNodeQuery.ReadString(payload, "rootScope"),
+            MauiVisualTreeRootScope.CurrentPage,
+            StringComparison.Ordinal))
         {
             return true;
         }
@@ -37,8 +37,9 @@ internal static class LiveUiMauiContext
         var currentPageId = payload["currentPage"] is JsonObject currentPage
             ? LiveUiNodeQuery.ReadString(currentPage, "id")
             : null;
+
         return IsActivePageNode(match.Node, currentPageId, match.TypeRegistry)
-               || match.Ancestors.Any(ancestor =>
+            || match.Ancestors.Any(ancestor =>
                    IsActivePageNode(ancestor, currentPageId, match.TypeRegistry));
     }
 
@@ -55,10 +56,11 @@ internal static class LiveUiMauiContext
             ? null
             : LiveUiNodeQuery.ReadRole(target.Node, target.TypeRegistry);
         var targetCanHostGesture = targetIntersection is not null
-                                   && (string.Equals(targetRole, "scrollview", StringComparison.Ordinal)
-                                       || targetIntersection.Width >= viewport.Width * 0.25
-                                       && targetIntersection.Height >= viewport.Height * 0.25);
+            && (string.Equals(targetRole, "scrollview", StringComparison.Ordinal)
+                || targetIntersection.Width >= viewport.Width * 0.25
+                    && targetIntersection.Height >= viewport.Height * 0.25);
         var gestureSurface = targetCanHostGesture ? targetIntersection! : viewport;
+
         if (!IsMauiPayload(payload))
         {
             return gestureSurface;
@@ -81,6 +83,7 @@ internal static class LiveUiMauiContext
             viewport.Y + (viewport.Height * (hasTabbedPage
                 ? MauiTabbedBottomGestureLimit
                 : MauiBottomGestureLimit)));
+
         return maximumX > minimumX && maximumY > minimumY
             ? new LiveUiBounds(minimumX, minimumY, maximumX - minimumX, maximumY - minimumY)
             : gestureSurface;
@@ -99,6 +102,7 @@ internal static class LiveUiMauiContext
 
         var beforePage = ReadCurrentPage(beforePayload, beforeTypeRegistry);
         var afterPage = ReadCurrentPage(afterPayload, afterTypeRegistry);
+
         if (beforePage is null || afterPage is null || beforePage.IsSamePage(afterPage))
         {
             return null;
@@ -110,22 +114,22 @@ internal static class LiveUiMauiContext
     private static bool IsMauiPayload(JsonObject payload)
         => LiveUiNodeQuery.ReadString(payload, "format")
                ?.Contains(".maui.", StringComparison.OrdinalIgnoreCase) == true
-           || string.Equals(
-               LiveUiNodeQuery.ReadString(payload, "source"),
-               "maui",
-               StringComparison.OrdinalIgnoreCase);
+            || string.Equals(
+                LiveUiNodeQuery.ReadString(payload, "source"),
+                "maui",
+                StringComparison.OrdinalIgnoreCase);
 
     private static bool IsActivePageNode(
         JsonObject node,
         string? currentPageId,
         VisualTreeTypeRegistry typeRegistry)
         => !string.IsNullOrWhiteSpace(currentPageId)
-           && string.Equals(
-               LiveUiNodeQuery.ReadString(node, "id"),
-               currentPageId,
-               StringComparison.Ordinal)
-           || LiveUiNodeQuery.ReadBoolean(node, "currentPage", fallback: false, typeRegistry)
-           || LiveUiNodeQuery.ReadBoolean(node, "activePage", fallback: false, typeRegistry);
+            && string.Equals(
+                LiveUiNodeQuery.ReadString(node, "id"),
+                currentPageId,
+                StringComparison.Ordinal)
+            || LiveUiNodeQuery.ReadBoolean(node, "currentPage", fallback: false, typeRegistry)
+            || LiveUiNodeQuery.ReadBoolean(node, "activePage", fallback: false, typeRegistry);
 
     private static LiveUiPageIdentity? ReadCurrentPage(
         JsonObject payload,
@@ -144,6 +148,7 @@ internal static class LiveUiMauiContext
         var currentMatch = LiveUiNodeQuery.Enumerate(root, typeRegistry)
             .FirstOrDefault(match =>
                 LiveUiNodeQuery.ReadBoolean(match.Node, "currentPage", fallback: false, typeRegistry));
+
         return currentMatch is null
             ? null
             : LiveUiPageIdentity.Create(currentMatch.Node, typeRegistry);
@@ -158,11 +163,11 @@ internal static class LiveUiMauiContext
         public static LiveUiPageIdentity Create(
             JsonObject node,
             VisualTreeTypeRegistry typeRegistry)
-            => new(
-                LiveUiNodeQuery.ReadString(node, "id"),
-                LiveUiNodeQuery.ReadAutomationId(node),
-                LiveUiNodeQuery.ReadText(node),
-                typeRegistry.Resolve(node));
+                => new(
+                    LiveUiNodeQuery.ReadString(node, "id"),
+                    LiveUiNodeQuery.ReadAutomationId(node),
+                    LiveUiNodeQuery.ReadText(node),
+                    typeRegistry.Resolve(node));
 
         public bool IsSamePage(LiveUiPageIdentity other)
         {
@@ -178,9 +183,9 @@ internal static class LiveUiMauiContext
             }
 
             return EqualsWhenBothPresent(Type, other.Type)
-                   && (Text is null
-                       || other.Text is null
-                       || string.Equals(Text, other.Text, StringComparison.Ordinal));
+                && (Text is null
+                    || other.Text is null
+                    || string.Equals(Text, other.Text, StringComparison.Ordinal));
         }
 
         public string Describe()
@@ -188,7 +193,7 @@ internal static class LiveUiMauiContext
 
         private static bool EqualsWhenBothPresent(string? left, string? right)
             => !string.IsNullOrWhiteSpace(left)
-               && !string.IsNullOrWhiteSpace(right)
-               && string.Equals(left, right, StringComparison.Ordinal);
+                && !string.IsNullOrWhiteSpace(right)
+                && string.Equals(left, right, StringComparison.Ordinal);
     }
 }

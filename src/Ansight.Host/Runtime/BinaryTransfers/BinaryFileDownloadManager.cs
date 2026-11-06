@@ -56,12 +56,14 @@ public sealed class BinaryFileDownloadManager : IDisposable
         ThrowIfDisposed();
 
         var requestId = envelope.ReplyTo;
+
         if (string.IsNullOrWhiteSpace(requestId))
         {
             return false;
         }
 
         BinaryFileDownloadOperation? operation;
+
         lock (gate)
         {
             if (!pendingByRequestId.TryGetValue(requestId, out operation))
@@ -94,6 +96,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
         }
 
         ActiveBinaryFileDownload? activeDownload;
+
         lock (gate)
         {
             if (!activeByTransfer.TryGetValue(new TransferKey(sessionId.Trim(), frame.Header.TransferId), out activeDownload))
@@ -104,6 +107,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
         }
 
         HandleBinaryFrame(activeDownload!, frame);
+
         return true;
     }
 
@@ -116,6 +120,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
 
         List<BinaryFileDownloadOperation> pendingOperations;
         List<ActiveBinaryFileDownload> activeDownloads;
+
         lock (gate)
         {
             if (disposed)
@@ -153,6 +158,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
             string.IsNullOrWhiteSpace(error.Code)
                 ? error.Message
                 : $"{error.Code}: {error.Message}"));
+
         return true;
     }
 
@@ -166,6 +172,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
             }
 
             var toolId = ReadRequiredString(payload, "toolId");
+
             if (!string.Equals(toolId, BeginBinaryDownloadToolId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
@@ -186,6 +193,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
             _ = ReadRequiredString(resultPayload, "deliveryMode");
 
             Directory.CreateDirectory(operation.DestinationDirectoryPath);
+
             var destinationPath = AllocateDestinationPath(operation.DestinationDirectoryPath, remoteFileName, downloadId);
             var stream = new FileStream(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             var activeDownload = new ActiveBinaryFileDownload(
@@ -216,6 +224,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
             }
 
             operation.TrySetException(exception);
+
             return true;
         }
     }
@@ -226,6 +235,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
         {
             FailActiveDownload(activeDownload, new InvalidOperationException(
                 $"Expected ASFT sequence {activeDownload.ExpectedSequence} but received {frame.Header.Sequence}."));
+
             return;
         }
 
@@ -233,6 +243,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
         {
             FailActiveDownload(activeDownload, new InvalidOperationException(
                 $"Expected ASFT offset {activeDownload.BytesWritten} but received {frame.Header.OffsetBytes}."));
+
             return;
         }
 
@@ -251,13 +262,11 @@ public sealed class BinaryFileDownloadManager : IDisposable
                     {
                         throw new InvalidOperationException("ASFT complete frames must not include payload bytes.");
                     }
-
                     if (activeDownload.BytesWritten != activeDownload.SizeBytes)
                     {
                         throw new InvalidOperationException(
                             $"ASFT transfer '{activeDownload.TransferId}' completed with {activeDownload.BytesWritten} bytes written, expected {activeDownload.SizeBytes}.");
                     }
-
                     CompleteActiveDownload(activeDownload);
                     break;
 
@@ -333,12 +342,14 @@ public sealed class BinaryFileDownloadManager : IDisposable
     private static string AllocateDestinationPath(string destinationDirectoryPath, string remoteFileName, string downloadId)
     {
         var safeFileName = SanitizeFileName(remoteFileName);
+
         if (string.IsNullOrWhiteSpace(safeFileName))
         {
             safeFileName = downloadId;
         }
 
         var candidatePath = Path.Combine(destinationDirectoryPath, safeFileName);
+
         if (!File.Exists(candidatePath))
         {
             return candidatePath;
@@ -346,9 +357,11 @@ public sealed class BinaryFileDownloadManager : IDisposable
 
         var baseName = Path.GetFileNameWithoutExtension(safeFileName);
         var extension = Path.GetExtension(safeFileName);
+
         for (var attempt = 1; attempt < 1000; attempt++)
         {
             candidatePath = Path.Combine(destinationDirectoryPath, $"{baseName}-{attempt}{extension}");
+
             if (!File.Exists(candidatePath))
             {
                 return candidatePath;
@@ -383,6 +396,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
     private static string ReadRequiredString(JsonObject payload, string propertyName)
     {
         var value = ReadOptionalString(payload, propertyName);
+
         if (string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"Binary download payload is missing '{propertyName}'.");
@@ -397,6 +411,7 @@ public sealed class BinaryFileDownloadManager : IDisposable
     private static long ReadRequiredInt64(JsonObject payload, string propertyName)
     {
         var node = payload[propertyName];
+
         if (node is null)
         {
             throw new InvalidOperationException($"Binary download payload is missing '{propertyName}'.");
@@ -457,27 +472,16 @@ public sealed class BinaryFileDownloadManager : IDisposable
         }
 
         internal BinaryFileDownloadOperation Operation { get; }
-
         internal string TransferId { get; }
-
         internal string DownloadId { get; }
-
         internal string RemoteFileName { get; }
-
         internal string? RemoteFileExtension { get; }
-
         internal string MimeType { get; }
-
         internal long SizeBytes { get; }
-
         internal string Version { get; }
-
         internal string LocalFilePath { get; }
-
         internal FileStream Stream { get; }
-
         internal int ExpectedSequence { get; set; }
-
         internal long BytesWritten { get; set; }
     }
 }

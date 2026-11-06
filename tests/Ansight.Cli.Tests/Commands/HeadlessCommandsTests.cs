@@ -18,11 +18,12 @@ public sealed class HeadlessCommandsTests
     public void HeadlessIsBooleanBeforeOrAfterPositionals(string command)
     {
         var positionals = command.Split(' ');
+
         foreach (var arguments in new[]
-                 {
-                     CliArguments.Parse(["--headless", .. positionals]),
-                     CliArguments.Parse([.. positionals, "--headless"])
-                 })
+        {
+            CliArguments.Parse(["--headless", .. positionals]),
+            CliArguments.Parse([.. positionals, "--headless"])
+        })
         {
             Assert.True(arguments.HasFlag("headless"));
             Assert.Equal(positionals, arguments.Positionals);
@@ -51,10 +52,10 @@ public sealed class HeadlessCommandsTests
     public void ExecuteAppliesWindowPreferenceToEveryTarget(bool headless)
     {
         string[] args =
-        [
-            "app", "execute", "--app-id", "com.example.app",
+            [
+                "app", "execute", "--app-id", "com.example.app",
             "--device-id", "DEVICE-1", "--device-id", "DEVICE-2", "--prompt", "Open settings"
-        ];
+            ];
         var targets = AppExecutionService.ResolveTargets(
             CliArguments.Parse(headless ? [.. args, "--headless"] : args));
 
@@ -97,9 +98,11 @@ public sealed class HeadlessCommandsTests
     {
         using var output = new ContextRecordingWriter();
         using var error = new StringWriter();
+
         foreach (var headless in new[] { true, false })
         {
             output.Preferences.Clear();
+
             string[] args = [.. command.Split(' '), "--help"];
             var exitCode = await CliApplication.RunParsedAsync(
                 CliArguments.Parse(headless ? [.. args, "--headless"] : args),
@@ -132,6 +135,7 @@ public sealed class HeadlessCommandsTests
                 Assert.True(received.HasFlag("headless"));
                 Assert.Equal(["device", "boot", "ios", "DEVICE-1"], received.Positionals);
                 forwarded = true;
+
                 return Task.FromResult<int?>(CliExitCodes.Success);
             });
 

@@ -42,13 +42,9 @@ internal abstract class Operation : IOperation
     }
 
     public abstract string Name { get; }
-
     protected abstract string Title { get; }
-
     protected abstract string Description { get; }
-
     protected abstract JsonObject InputSchema { get; }
-
     public JsonObject Definition => PayloadJson.CreateToolDefinition(Name, Title, Description, InputSchema);
 
     public abstract Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId);

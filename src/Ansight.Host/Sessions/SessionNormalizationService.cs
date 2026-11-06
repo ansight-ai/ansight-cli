@@ -29,6 +29,7 @@ internal sealed class SessionNormalizationService
 
         var resolvedOptions = options ?? new SessionOptimizationOptions();
         var selectedVisualTrees = visualTrees.Where(resolvedOptions.ShouldOptimizeVisualTree).ToArray();
+
         return new SessionNormalizationPlan(
             resolvedOptions.OptimizeScreenshots
                 ? FindSequentialDuplicateImages(appId.Trim(), sessionId.Trim(), images, report, cancellationToken)
@@ -50,26 +51,27 @@ internal sealed class SessionNormalizationService
             .ToHashSet(StringComparer.Ordinal);
         var imageReplacements = plan.ImageReplacements
             .Where(replacement => currentImageIds.Contains(replacement.Key)
-                                  && currentImageIds.Contains(replacement.Value))
+                && currentImageIds.Contains(replacement.Value))
             .ToDictionary(
-                static replacement => replacement.Key,
-                static replacement => replacement.Value,
-                StringComparer.Ordinal);
+            static replacement => replacement.Key,
+            static replacement => replacement.Value,
+            StringComparer.Ordinal);
         var currentVisualTreeIds = session.VisualTreeSnapshots
             .Select(static snapshot => snapshot.SnapshotId)
             .ToHashSet(StringComparer.Ordinal);
         var visualTreeReplacements = plan.VisualTreeReplacements
             .Where(replacement => currentVisualTreeIds.Contains(replacement.Key)
-                                  && currentVisualTreeIds.Contains(replacement.Value))
+                && currentVisualTreeIds.Contains(replacement.Value))
             .ToDictionary(
-                static replacement => replacement.Key,
-                static replacement => replacement.Value,
-                StringComparer.Ordinal);
+            static replacement => replacement.Key,
+            static replacement => replacement.Value,
+            StringComparer.Ordinal);
 
         var removedScreenshotCount = session.Images.RemoveAll(frame =>
             imageReplacements.ContainsKey(frame.FrameId));
         var removedVisualTreeSnapshotCount = session.VisualTreeSnapshots.RemoveAll(snapshot =>
             visualTreeReplacements.ContainsKey(snapshot.SnapshotId));
+
         if (removedScreenshotCount == 0 && removedVisualTreeSnapshotCount == 0)
         {
             return SessionNormalizationChanges.None;
@@ -77,6 +79,7 @@ internal sealed class SessionNormalizationService
 
         RemapEvidenceReferences(session, imageReplacements, visualTreeReplacements);
         session.MarkAllContentChanged();
+
         return new SessionNormalizationChanges(
             removedScreenshotCount,
             removedVisualTreeSnapshotCount);
@@ -100,9 +103,11 @@ internal sealed class SessionNormalizationService
             .ToArray();
         const string message = "Checking screenshots for duplicates…";
         report?.Invoke(new(message, 0, orderedFrames.Length));
+
         for (var index = 0; index < orderedFrames.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var frame = orderedFrames[index];
             var filePath = SessionImageArtifactPath.ResolveCapturedImagePath(
                 capturesRootPath,
@@ -110,6 +115,7 @@ internal sealed class SessionNormalizationService
                 sessionId,
                 frame);
             var fingerprint = TryComputeFileFingerprint(filePath);
+
             if (fingerprint is not null
                 && previousFingerprint is not null
                 && previousRetainedFrame is not null
@@ -141,12 +147,15 @@ internal sealed class SessionNormalizationService
             .ToArray();
         const string message = "Checking visual trees for duplicates…";
         report?.Invoke(new(message, 0, orderedSnapshots.Length));
+
         for (var index = 0; index < orderedSnapshots.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var snapshot = orderedSnapshots[index];
             var type = VisualTreeType.FromSnapshot(snapshot);
             var fingerprint = VisualTreeSnapshotContentFingerprint.Compute(snapshot);
+
             if (lastRetainedByType.TryGetValue(type, out var previous)
                 && string.Equals(previous.Fingerprint, fingerprint, StringComparison.Ordinal))
             {
@@ -169,7 +178,9 @@ internal sealed class SessionNormalizationService
         int total)
     {
         if (report is null || (completed < total && completed % Math.Max(1, total / 100) != 0))
+        {
             return;
+        }
 
         report(new(message, completed, total));
     }
@@ -185,6 +196,7 @@ internal sealed class SessionNormalizationService
                 FileShare.Read,
                 bufferSize: 64 * 1024,
                 FileOptions.SequentialScan);
+
             return Convert.ToHexString(SHA256.HashData(stream));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -202,6 +214,7 @@ internal sealed class SessionNormalizationService
         {
             var snapshot = session.VisualTreeSnapshots[index];
             var screenshotFrameId = RemapOptionalId(snapshot.ScreenshotFrameId, imageReplacements);
+
             if (!string.Equals(snapshot.ScreenshotFrameId, screenshotFrameId, StringComparison.Ordinal))
             {
                 session.VisualTreeSnapshots[index] = CloneVisualTreeWithScreenshotFrameId(
@@ -377,25 +390,12 @@ internal sealed class SessionNormalizationService
         string RootScope)
     {
         public static VisualTreeType FromSnapshot(SessionVisualTreeSnapshot snapshot)
-            => new(
-                snapshot.VisualTreeKind,
-                snapshot.VisualTreeFormat,
-                snapshot.RuntimePlatform,
-                snapshot.RootScope);
+                => new(
+                    snapshot.VisualTreeKind,
+                    snapshot.VisualTreeFormat,
+                    snapshot.RuntimePlatform,
+                    snapshot.RootScope);
     }
 
     private readonly record struct RetainedVisualTree(string SnapshotId, string Fingerprint);
-}
-
-internal sealed record SessionNormalizationPlan(
-    IReadOnlyDictionary<string, string> ImageReplacements,
-    IReadOnlyDictionary<string, string> VisualTreeReplacements);
-
-internal readonly record struct SessionNormalizationChanges(
-    int RemovedScreenshotCount,
-    int RemovedVisualTreeSnapshotCount)
-{
-    public static SessionNormalizationChanges None => new(0, 0);
-
-    public bool HasChanges => RemovedScreenshotCount > 0 || RemovedVisualTreeSnapshotCount > 0;
 }

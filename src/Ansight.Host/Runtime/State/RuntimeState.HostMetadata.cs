@@ -12,10 +12,15 @@ internal sealed partial class RuntimeState
     private void BeginHostMetadataCapture(SessionState session, string? platform = null)
     {
         session.HostMetadata = SessionHostMetadataCollector.CreateSnapshot(platform);
+
         if (hostMetadataCollector is null)
         {
-            session.HostMetadata = session.HostMetadata with { Status = "not-checked" };
+            session.HostMetadata = session.HostMetadata with
+            {
+                Status = "not-checked"
+            };
         }
+
         session.ShouldCollectHostMetadata = true;
     }
 
@@ -23,6 +28,7 @@ internal sealed partial class RuntimeState
     {
         SessionHostMetadata snapshot;
         var collector = hostMetadataCollector;
+
         if (collector is null)
         {
             return;
@@ -33,6 +39,7 @@ internal sealed partial class RuntimeState
             var canCollect = sessionsById.TryGetValue(sessionId, out var candidate)
                 && candidate.ShouldCollectHostMetadata
                 && candidate.HostMetadata is not null;
+
             if (!canCollect)
             {
                 return;
@@ -40,6 +47,7 @@ internal sealed partial class RuntimeState
 
             var session = sessionsById[sessionId];
             var targetPlatform = SessionHostMetadataCollector.NormalizePlatform(platform);
+
             if (targetPlatform is not null)
             {
                 if (session.HostMetadata!.TargetPlatform == targetPlatform)
@@ -47,7 +55,11 @@ internal sealed partial class RuntimeState
                     return;
                 }
 
-                session.HostMetadata = session.HostMetadata! with { TargetPlatform = targetPlatform, Status = "collecting" };
+                session.HostMetadata = session.HostMetadata! with
+                {
+                    TargetPlatform = targetPlatform,
+                    Status = "collecting"
+                };
             }
 
             snapshot = session.HostMetadata!;
@@ -57,13 +69,18 @@ internal sealed partial class RuntimeState
         _ = Task.Run(async () =>
         {
             SessionHostMetadata result;
+
             try
             {
                 result = await collector.CollectAsync(snapshot).ConfigureAwait(false);
             }
             catch (Exception)
             {
-                result = snapshot with { Status = "partial", CollectionCompletedUtc = DateTimeOffset.UtcNow };
+                result = snapshot with
+                {
+                    Status = "partial",
+                    CollectionCompletedUtc = DateTimeOffset.UtcNow
+                };
             }
 
             lock (gate)

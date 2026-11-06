@@ -104,6 +104,7 @@ internal sealed class GetSessionArtifactsTool : Operation
     private static HashSet<string> ReadRequestedTypes(JsonObject? arguments)
     {
         var types = ArgumentReader.ReadStringSet(arguments, "types");
+
         if (types.Count == 0 || types.Contains("all"))
         {
             return new HashSet<string>(["logs", "screenshots", "visualTrees", "annotations", "telemetry", "artifactSnapshots", "analyses"], StringComparer.OrdinalIgnoreCase);
@@ -127,6 +128,7 @@ internal sealed class GetSessionArtifactsTool : Operation
             .OrderBy(entry => entry.Log.TimestampUtc)
             .ThenBy(entry => entry.Index)
             .ToArray();
+
         return new JsonObject
         {
             ["matchedCount"] = matched.Length,
@@ -185,7 +187,9 @@ internal sealed class GetSessionArtifactsTool : Operation
             .Select(group =>
             {
                 channelMap.TryGetValue(group.Key, out var channel);
+
                 var samples = group.OrderBy(sample => sample.CapturedAtUtc).ToArray();
+
                 return (JsonNode?)new JsonObject
                 {
                     ["channelId"] = group.Key,
@@ -203,6 +207,7 @@ internal sealed class GetSessionArtifactsTool : Operation
                     ["lastValue"] = samples[^1].Value
                 };
             });
+
         return BuildCategory(channels, limit);
     }
 
@@ -230,7 +235,7 @@ internal sealed class GetSessionArtifactsTool : Operation
     private static JsonObject BuildAnalyses(AppSessionSnapshot snapshot, DateTimeOffset? startUtc, DateTimeOffset? endUtc, int limit)
         => BuildCategory(snapshot.Analyses
             .Where(analysis => PayloadJson.MatchesTimestamp(analysis.StartedUtc, startUtc, endUtc)
-                               || (analysis.CompletedUtc.HasValue && PayloadJson.MatchesTimestamp(analysis.CompletedUtc.Value, startUtc, endUtc)))
+                || (analysis.CompletedUtc.HasValue && PayloadJson.MatchesTimestamp(analysis.CompletedUtc.Value, startUtc, endUtc)))
             .OrderBy(analysis => analysis.StartedUtc)
             .ThenBy(analysis => analysis.AnalysisId, StringComparer.Ordinal)
             .Select(analysis => (JsonNode?)new JsonObject
@@ -251,6 +256,7 @@ internal sealed class GetSessionArtifactsTool : Operation
     private static JsonObject BuildCategory(IEnumerable<JsonNode?> items, int limit)
     {
         var itemArray = items.ToArray();
+
         return new JsonObject
         {
             ["matchedCount"] = itemArray.Length,

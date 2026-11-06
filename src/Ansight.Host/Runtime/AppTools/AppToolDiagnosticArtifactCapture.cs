@@ -67,6 +67,7 @@ internal static class AppToolDiagnosticArtifactCapture
         try
         {
             Directory.CreateDirectory(sourceDirectoryPath);
+
             var document = new JsonObject
             {
                 ["schemaVersion"] = 1,
@@ -111,6 +112,7 @@ internal static class AppToolDiagnosticArtifactCapture
             };
 
             var result = sessionIngestion.AddSessionArtifactSnapshot(sessionId, snapshot, sourceDirectoryPath);
+
             return result.IsSuccess
                 ? new AppToolDiagnosticArtifactCaptureResult(
                     IsSupported: true,
@@ -124,9 +126,9 @@ internal static class AppToolDiagnosticArtifactCapture
                     Message: result.Message);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or JsonException
-                                           or InvalidDataException)
+            or UnauthorizedAccessException
+            or JsonException
+            or InvalidDataException)
         {
             return new AppToolDiagnosticArtifactCaptureResult(
                 IsSupported: true,
@@ -143,9 +145,10 @@ internal static class AppToolDiagnosticArtifactCapture
     private static DateTimeOffset ResolveCapturedAtUtc(JsonObject payload)
     {
         var value = payload["result"]?["capturedAtUtc"] is JsonValue capturedAtValue
-                    && capturedAtValue.TryGetValue<string>(out var capturedAtText)
+            && capturedAtValue.TryGetValue<string>(out var capturedAtText)
             ? capturedAtText
             : null;
+
         return DateTimeOffset.TryParse(
             value,
             CultureInfo.InvariantCulture,
@@ -158,8 +161,8 @@ internal static class AppToolDiagnosticArtifactCapture
     private static bool IsExplicitFailure(JsonObject payload)
     {
         return payload["success"] is JsonValue successValue
-               && successValue.TryGetValue<bool>(out var success)
-               && !success;
+            && successValue.TryGetValue<bool>(out var success)
+            && !success;
     }
 
     private static void TryDeleteDirectory(string directoryPath)
@@ -182,17 +185,4 @@ internal static class AppToolDiagnosticArtifactCapture
         string FileName,
         string Name,
         string Kind);
-}
-
-internal sealed record AppToolDiagnosticArtifactCaptureResult(
-    bool IsSupported,
-    bool IsCaptured,
-    string? SnapshotId,
-    string? Message)
-{
-    public static AppToolDiagnosticArtifactCaptureResult NotSupported { get; } = new(
-        IsSupported: false,
-        IsCaptured: false,
-        SnapshotId: null,
-        Message: null);
 }

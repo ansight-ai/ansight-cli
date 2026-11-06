@@ -7,6 +7,7 @@ internal static class VisualTreePayloadPruner
     public static JsonObject Prune(JsonObject payload, int? maxDepth)
     {
         var clone = payload.DeepClone() as JsonObject ?? new JsonObject();
+
         if (!maxDepth.HasValue || maxDepth.Value < 0)
         {
             return clone;
@@ -30,6 +31,7 @@ internal static class VisualTreePayloadPruner
             }
 
             node.Remove("children");
+
             return;
         }
 

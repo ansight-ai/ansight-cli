@@ -7,17 +7,6 @@ using Ansight.Host.Explorer.TaskExtraction;
 
 namespace Ansight.Host.Runtime.Tasks;
 
-/// <summary>A reviewable Ansight workspace test derived from a recorded session interval.</summary>
-public sealed record WorkspaceTestExtraction(
-    string SuggestedName,
-    string Source,
-    int GeneratedActionCount,
-    IReadOnlyList<string> Diagnostics)
-{
-    public string? TestName { get; init; }
-    public IReadOnlyList<string> AutomationIds { get; init; } = [];
-}
-
 public static class WorkspaceTestExtractor
 {
     public static WorkspaceTestExtraction Extract(
@@ -30,19 +19,22 @@ public static class WorkspaceTestExtractor
         IReadOnlyList<string>? taskSectionIds = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         var journey = TimelineTaskExtractor.Extract(
             snapshot, startUtc, endUtc, title, includeCoordinateFallbackTaps: true);
         var diagnostics = new List<string>(journey.Diagnostics);
         var outcomes = assertions?
             .Where(static assertion => !string.IsNullOrWhiteSpace(assertion))
-            .Select(static assertion => assertion.Trim())
-            .Distinct(StringComparer.Ordinal)
-            .ToArray() ?? [];
+                .Select(static assertion => assertion.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray() ?? [];
         var needsOutcomeReview = false;
+
         if (outcomes.Length == 0)
         {
             var observedOutcome = FindNewFinalLabel(
                 snapshot, startUtc, endUtc, journey.ReplaySteps.LastOrDefault()?.CapturedAtUtc);
+
             if (observedOutcome is not null)
             {
                 outcomes = [$"The final screen visibly shows {JsonSerializer.Serialize(observedOutcome)}."];
@@ -59,6 +51,7 @@ public static class WorkspaceTestExtractor
         var prompt = new StringBuilder();
         var hasSelectedSections = taskSectionIds is { Count: > 0 };
         SessionAnnotation[] sections = [];
+
         if (hasSelectedSections)
         {
             var selectedIds = taskSectionIds!.ToHashSet(StringComparer.Ordinal);
@@ -70,11 +63,13 @@ public static class WorkspaceTestExtractor
                     && !string.IsNullOrWhiteSpace(annotation.Label))
                 .OrderBy(annotation => annotation.StartUtc)
                 .ToArray();
+
             if (sections.Length != selectedIds.Count)
             {
                 throw new ArgumentException("Every selected task section must be a labelled range annotation inside the test period.");
             }
         }
+
         if (journey.ReplaySteps.Count == 0 && !hasSelectedSections)
         {
             prompt.AppendLine("Review the selected replay and add the missing journey steps before running this test.");
@@ -83,6 +78,7 @@ public static class WorkspaceTestExtractor
         else if (journey.ReplaySteps.Count > 0)
         {
             prompt.AppendLine("Use the recorded controls as a guide to complete the entire selected journey:");
+
             for (var index = 0; index < journey.ReplaySteps.Count; index++)
             {
                 var step = journey.ReplaySteps[index];
@@ -95,6 +91,7 @@ public static class WorkspaceTestExtractor
                     _ => step.Instruction
                 };
                 prompt.Append(index + 1).Append(". ").AppendLine(instruction);
+
                 if (step.Kind == "input" && !IsAnnotated(step.CapturedAtUtc))
                 {
                     diagnostics.Add($"Input at {step.CapturedAtUtc:O} needs a test value; captured text was omitted from the YAML test.");
@@ -104,25 +101,38 @@ public static class WorkspaceTestExtractor
 
         if (hasSelectedSections)
         {
-            if (prompt.Length > 0) prompt.AppendLine();
+            if (prompt.Length > 0)
+            {
+                prompt.AppendLine();
+            }
+
             prompt.AppendLine("Use these selected annotations to clarify the corresponding parts of the journey; retain the recorded steps before, between, and after them:");
+
             foreach (var section in sections)
             {
                 prompt.Append("- ").Append(section.Label.Trim());
-                if (!string.IsNullOrWhiteSpace(section.Notes)) prompt.Append(" — ").Append(section.Notes.Trim());
+
+                if (!string.IsNullOrWhiteSpace(section.Notes))
+                {
+                    prompt.Append(" — ").Append(section.Notes.Trim());
+                }
+
                 prompt.Append(" (Recorded range: ").Append(section.StartUtc.ToString("O"))
                     .Append(" to ").Append(section.EndUtc!.Value.ToString("O")).AppendLine(")");
             }
         }
 
         bool IsAnnotated(DateTimeOffset? time) => time.HasValue && sections.Any(section => time >= section.StartUtc && time <= section.EndUtc);
+
         var hasOmittedInput = journey.ReplaySteps.Any(step => step.Kind == "input" && !IsAnnotated(step.CapturedAtUtc));
         var hasUnresolvedNavigation = journey.ReplaySteps.Any(step => !IsAnnotated(step.CapturedAtUtc)
             && (step.Kind == "swipe" || step.Instruction.StartsWith("Replay the recorded tap", StringComparison.Ordinal)));
+
         if (hasUnresolvedNavigation)
         {
             diagnostics.Add("Some recorded gestures lack a semantic target; describe their purpose before running this test.");
         }
+
         var source = new StringBuilder()
             .AppendLine("# REVIEW: Confirm the starting state, recorded steps, and final-state assertions before running.")
             .Append(hasOmittedInput ? "# REVIEW: Recorded input values were omitted; supply suitable test values or secret aliases.\n" : string.Empty)
@@ -134,22 +144,39 @@ public static class WorkspaceTestExtractor
             .Append("id: ").AppendLine(Quote(journey.SuggestedName))
             .Append("name: ").AppendLine(Quote(title.Trim()))
             .Append("appId: ").AppendLine(Quote(snapshot.AppId));
+
         if (string.IsNullOrWhiteSpace(validationPrompt) && assertions is not { Count: > 0 })
         {
             prompt.AppendLine().AppendLine("Verify through Ansight evidence:");
-            foreach (var outcome in outcomes) prompt.Append("- ").AppendLine(outcome);
+
+            foreach (var outcome in outcomes)
+            {
+                prompt.Append("- ").AppendLine(outcome);
+            }
         }
+
         AppendBlock(source, "prompt", prompt.ToString().TrimEnd());
+
         if (!string.IsNullOrWhiteSpace(validationPrompt) || assertions is { Count: > 0 })
         {
             source.AppendLine("validation:");
-            if (!string.IsNullOrWhiteSpace(validationPrompt)) AppendBlock(source, "  prompt", validationPrompt.Trim());
+
+            if (!string.IsNullOrWhiteSpace(validationPrompt))
+            {
+                AppendBlock(source, "  prompt", validationPrompt.Trim());
+            }
+
             source.AppendLine("  assertions:");
-            foreach (var outcome in outcomes) source.Append("    - ").AppendLine(Quote(outcome));
+
+            foreach (var outcome in outcomes)
+            {
+                source.Append("    - ").AppendLine(Quote(outcome));
+            }
         }
 
         // Parse with the same contract used by workspace test discovery.
         WorkspaceTestCatalog.Parse("ansight/tests", $"ansight/tests/{journey.SuggestedName}.yaml", source.ToString());
+
         return new WorkspaceTestExtraction(journey.SuggestedName, source.ToString(), journey.ReplaySteps.Count, diagnostics)
         {
             TestName = title.Trim(),
@@ -164,16 +191,31 @@ public static class WorkspaceTestExtractor
         DateTimeOffset endUtc,
         DateTimeOffset? lastActionUtc)
     {
-        if (lastActionUtc is null) return null;
+        if (lastActionUtc is null)
+        {
+            return null;
+        }
+
         var trees = snapshot.VisualTreeSnapshots
             .Where(tree => tree.CapturedAtUtc >= startUtc && tree.CapturedAtUtc <= endUtc)
             .OrderBy(tree => tree.CapturedAtUtc)
             .ToArray();
-        if (trees.Length < 2) return null;
+
+        if (trees.Length < 2)
+        {
+            return null;
+        }
+
         var finalTree = trees.LastOrDefault(tree => tree.CapturedAtUtc >= lastActionUtc.Value);
-        if (finalTree is null) return null;
+
+        if (finalTree is null)
+        {
+            return null;
+        }
+
         var beforeAction = trees.LastOrDefault(tree => tree.CapturedAtUtc <= lastActionUtc.Value) ?? trees[0];
         var priorLabels = ReadLabels(beforeAction.Payload).ToHashSet(StringComparer.Ordinal);
+
         return ReadLabels(finalTree.Payload)
             .Where(label => !priorLabels.Contains(label))
             .OrderByDescending(static label => label.Length)
@@ -190,6 +232,7 @@ public static class WorkspaceTestExtractor
             {
                 yield break;
             }
+
             foreach (var key in new[] { "label", "text" })
             {
                 if (value[key] is JsonValue labelValue
@@ -202,17 +245,28 @@ public static class WorkspaceTestExtractor
                     yield return label.Trim();
                 }
             }
+
             foreach (var child in value)
             {
-                if (child.Key is "visual" or "properties") continue;
-                foreach (var label in ReadLabels(child.Value)) yield return label;
+                if (child.Key is "visual" or "properties")
+                {
+                    continue;
+                }
+
+                foreach (var label in ReadLabels(child.Value))
+                {
+                    yield return label;
+                }
             }
         }
         else if (node is JsonArray array)
         {
             foreach (var child in array)
             {
-                foreach (var label in ReadLabels(child)) yield return label;
+                foreach (var label in ReadLabels(child))
+                {
+                    yield return label;
+                }
             }
         }
     }
@@ -221,6 +275,7 @@ public static class WorkspaceTestExtractor
     {
         var indentation = new string(' ', key.Length - key.TrimStart().Length + 2);
         source.Append(key).AppendLine(": |-");
+
         foreach (var line in value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n'))
         {
             source.Append(indentation).AppendLine(line);

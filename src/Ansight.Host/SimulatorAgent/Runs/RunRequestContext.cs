@@ -10,9 +10,9 @@ internal static class RunRequestContext
 
     public static bool IsTestRunCorrelationId(string? correlationId)
         => !string.IsNullOrWhiteSpace(correlationId)
-           && correlationId.StartsWith(correlationIdPrefix, StringComparison.Ordinal);
+            && correlationId.StartsWith(correlationIdPrefix, StringComparison.Ordinal);
 
     public static bool AllowsScreenshotOcr(string? correlationId)
         => string.IsNullOrWhiteSpace(correlationId)
-           || !correlationId.StartsWith(semanticOnlyCorrelationIdPrefix, StringComparison.Ordinal);
+            || !correlationId.StartsWith(semanticOnlyCorrelationIdPrefix, StringComparison.Ordinal);
 }

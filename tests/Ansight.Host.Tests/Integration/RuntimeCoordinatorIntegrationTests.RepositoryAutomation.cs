@@ -24,11 +24,13 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
 
         await runtime.StartAsync();
+
         var connection = runtime.RepositoryAutomations.Connect(appId, repositoryPath);
         Assert.True(connection.IsConnected, string.Join(Environment.NewLine, connection.Warnings));
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(
             new Uri($"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}"),
@@ -39,6 +41,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The newly paired app should appear as a connected tool session.");
@@ -54,6 +57,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await SendCatalogResponseAsync(socket, catalogRequest, sessionId!, policy: "read");
 
         var toolRequest = await ReceiveJsonAsync(socket);
+
         // Session evidence capture and the automation may each request the catalog.
         // Both must finish discovery before the automation dispatches its tool.
         if (toolRequest["type"]?.GetValue<string>() == ToolProtocolMessageTypes.QueryType)
@@ -63,6 +67,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             await SendCatalogResponseAsync(socket, toolRequest, sessionId!, policy: "read");
             toolRequest = await ReceiveJsonAsync(socket);
         }
+
         Assert.Equal(ToolProtocolMessageTypes.CallType, toolRequest["type"]?.GetValue<string>());
         Assert.Equal(sessionId, toolRequest["sessionId"]?.GetValue<string>());
         Assert.Equal("artifacts.request", toolRequest["payload"]?["toolId"]?.GetValue<string>());
@@ -99,11 +104,13 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
 
         await runtime.StartAsync();
+
         var connection = runtime.RepositoryAutomations.Connect(appId, repositoryPath);
         Assert.True(connection.IsConnected, string.Join(Environment.NewLine, connection.Warnings));
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(
             new Uri($"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}"),
@@ -114,6 +121,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The newly paired app should appear as a connected tool session.");
@@ -142,6 +150,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             definitionRevision: "definition-1");
 
         var initialCallRequest = await ReceiveJsonAsync(socket);
+
         // Capability discovery and execution preflight may each query the index when
         // startup capture finishes before either caller waits on the catalog lock.
         if (initialCallRequest["type"]?.GetValue<string>() == ToolProtocolMessageTypes.QueryType)
@@ -151,6 +160,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             await SendVersionedIndexResponseAsync(socket, initialCallRequest, sessionId!, "catalog-1", "definition-1");
             initialCallRequest = await ReceiveJsonAsync(socket);
         }
+
         Assert.Equal(ToolProtocolMessageTypes.CallType, initialCallRequest["type"]?.GetValue<string>());
         await SendToolErrorAsync(
             socket,
@@ -216,11 +226,13 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
 
         await runtime.StartAsync();
+
         var connection = runtime.RepositoryAutomations.Connect(appId, repositoryPath);
         Assert.True(connection.IsConnected, string.Join(Environment.NewLine, connection.Warnings));
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(
             new Uri($"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}"),
@@ -231,17 +243,20 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The newly paired app should appear as a connected tool session.");
 
         await OpenClientSessionAsync(socket);
+
         // Answer startup evidence capture before testing the automation's own discovery.
         var catalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, catalogRequest["type"]?.GetValue<string>());
         await SendCatalogResponseAsync(socket, catalogRequest, sessionId!, policy: "critical");
 
         await SendRepositoryAutomationEventAsync(socket, "automation-event-denied");
+
         var automationCatalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, automationCatalogRequest["type"]?.GetValue<string>());
         await SendCatalogResponseAsync(socket, automationCatalogRequest, sessionId!, policy: "critical");
@@ -284,6 +299,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
               });
             }
             """);
+
         return repositoryPath;
     }
 
@@ -313,6 +329,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     {
         var requestId = request["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.CatalogType,
@@ -344,6 +361,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     {
         var requestId = request["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.ResultType,
@@ -371,6 +389,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     {
         var requestId = request["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.CatalogType,
@@ -405,6 +424,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     {
         var requestId = request["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.CatalogType,
@@ -423,8 +443,8 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                         ["id"] = "artifacts.request",
                         ["policy"] = "read",
                         ["definitionRevision"] = definitionRevision,
-                        ["argumentsSchema"] = new JsonObject { ["type"] = "object" },
-                        ["resultSchema"] = new JsonObject { ["type"] = "object" }
+                        ["argumentsSchema"] = new JsonObject {["type"] = "object" },
+                        ["resultSchema"] = new JsonObject {["type"] = "object" }
                     }
                 }
             }
@@ -439,6 +459,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     {
         var requestId = request["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.ErrorType,

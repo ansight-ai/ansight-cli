@@ -30,6 +30,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
                 GetClient(Endpoint.Resolve(serial)),
                 CreateImageFormatRequest(),
                 MaximumGrpcMessageLength));
+
         try
         {
             return await stream.GetLatestFrameAsync(cancellationToken).ConfigureAwait(false);
@@ -53,6 +54,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceSerial);
         ArgumentNullException.ThrowIfNull(touches);
+
         if (touches.Count == 0)
         {
             throw new ArgumentException("At least one Android touch contact is required.", nameof(touches));
@@ -67,6 +69,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+
         var responseBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         ValidateUnaryResponse(response, responseBytes);
     }
@@ -79,21 +82,26 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
         }
 
         disposed = true;
+
         foreach (var stream in frameStreams.Values)
         {
             stream.Dispose();
         }
+
         frameStreams.Clear();
+
         foreach (var client in clients.Values)
         {
             client.Dispose();
         }
+
         clients.Clear();
     }
 
     private HttpClient GetClient(Endpoint endpoint)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         return clients.GetOrAdd(endpoint.Port, static port =>
         {
             var handler = new SocketsHttpHandler
@@ -102,6 +110,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
                 PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
                 ConnectTimeout = TimeSpan.FromSeconds(1),
             };
+
             return new HttpClient(handler)
             {
                 BaseAddress = new Uri($"http://127.0.0.1:{port}"),
@@ -125,6 +134,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/grpc");
         request.Headers.TryAddWithoutValidation("te", "trailers");
         request.Headers.TryAddWithoutValidation("grpc-accept-encoding", "identity");
+
         return request;
     }
 
@@ -136,6 +146,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
     private static void ValidateUnaryResponse(HttpResponseMessage response, byte[] responseBytes)
     {
         var grpcStatus = ReadGrpcHeader(response, "grpc-status");
+
         if (!string.IsNullOrWhiteSpace(grpcStatus) && grpcStatus != "0")
         {
             var message = ReadGrpcHeader(response, "grpc-message");
@@ -151,6 +162,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
         }
 
         var messageLength = BinaryPrimitives.ReadInt32BigEndian(responseBytes.AsSpan(1, 4));
+
         if (messageLength < 0 || responseBytes.Length != messageLength + 5)
         {
             throw new InvalidOperationException("Android Emulator gRPC returned a truncated unary response.");
@@ -196,7 +208,9 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
         public async Task<byte[]> GetLatestFrameAsync(CancellationToken cancellationToken)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
+
             var streamFailure = Volatile.Read(ref failure);
+
             if (streamFailure is not null)
             {
                 throw new InvalidOperationException(
@@ -205,6 +219,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
             }
 
             var current = Volatile.Read(ref latestFrame);
+
             if (current is not null)
             {
                 return current;
@@ -242,13 +257,16 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
+
                 await using var content = await response.Content
                     .ReadAsStreamAsync(cancellationToken)
                     .ConfigureAwait(false);
                 var header = new byte[5];
+
                 while (true)
                 {
                     var hasHeader = await TryReadExactlyAsync(content, header, cancellationToken).ConfigureAwait(false);
+
                     if (!hasHeader)
                     {
                         break;
@@ -260,6 +278,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
                     }
 
                     var messageLength = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(1, 4));
+
                     if (messageLength <= 0 || messageLength > maximumMessageLength)
                     {
                         throw new InvalidOperationException("Android Emulator gRPC returned an invalid frame length.");
@@ -267,7 +286,9 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
 
                     var message = new byte[messageLength];
                     await content.ReadExactlyAsync(message, cancellationToken).ConfigureAwait(false);
+
                     var png = MessageCodec.DecodeImagePng(message);
+
                     if (png.Length == 0)
                     {
                         continue;
@@ -278,6 +299,7 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
                 }
 
                 var grpcStatus = ReadGrpcHeader(response, "grpc-status");
+
                 if (!string.IsNullOrWhiteSpace(grpcStatus) && grpcStatus != "0")
                 {
                     throw new InvalidOperationException(
@@ -304,9 +326,11 @@ public sealed class AndroidEmulatorGrpcController : IAndroidEmulatorController, 
             CancellationToken cancellationToken)
         {
             var offset = 0;
+
             while (offset < destination.Length)
             {
                 var read = await stream.ReadAsync(destination[offset..], cancellationToken).ConfigureAwait(false);
+
                 if (read == 0)
                 {
                     return offset == 0

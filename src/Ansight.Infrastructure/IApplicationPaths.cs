@@ -6,8 +6,6 @@ namespace Ansight.Infrastructure;
 public interface IApplicationPaths
 {
     string ApplicationDataPath { get; }
-
     string ApplicationLogsPath { get; }
-
     string ApplicationTempPath { get; }
 }

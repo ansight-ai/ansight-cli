@@ -27,7 +27,7 @@ public sealed class AdbLogcatStreamTests
     {
         await using var stream = new AdbLogcatStream(new CompletedAdbProcess(
             "--------- beginning of main\n"
-            + "2026-08-19 08:57:46.582280 +0000 1250 1250 D WifiHAL: message\n"));
+                + "2026-08-19 08:57:46.582280 +0000 1250 1250 D WifiHAL: message\n"));
         var entries = new List<AdbLogEntry>();
 
         await foreach (var entry in stream.ReadEntriesAsync())
@@ -50,7 +50,6 @@ public sealed class AdbLogcatStreamTests
         public Stream StandardInput { get; } = new MemoryStream();
 
         public Stream StandardOutput { get; }
-
         public Stream StandardError { get; } = new MemoryStream();
 
         public Task<int> Completion { get; } = Task.FromResult(0);
@@ -64,6 +63,7 @@ public sealed class AdbLogcatStreamTests
             StandardInput.Dispose();
             StandardOutput.Dispose();
             StandardError.Dispose();
+
             return ValueTask.CompletedTask;
         }
     }

@@ -45,6 +45,7 @@ public sealed class AutomationEvidenceTaskTests
         Assert.True(result.Status == RepositoryTaskRunStatus.Passed, result.Message + result.StandardError);
         Assert.Equal(9, result.ToolCalls.Count);
         Assert.All(result.ToolCalls, call => Assert.False(call.IsError));
+
         var createCall = Assert.Single(result.ToolCalls, call => call.ToolName == "ansight_create_annotation");
         var createPayload = JsonNode.Parse(createCall.Result!.Content)!;
         Assert.Equal(result.Output!["annotationId"]!.GetValue<string>(), createPayload["annotationId"]!.GetValue<string>());
@@ -86,13 +87,16 @@ public sealed class AutomationEvidenceTaskTests
                 && annotation.Notes == "Response inspection failed"),
             because: "The host should persist annotation edits even when a later task assertion fails.");
         Assert.True(fixture.Store.TryLoad("current", out var saved));
+
         var annotation = Assert.Single(saved!.Annotations);
         Assert.Equal("retained-evidence", annotation.AnnotationId);
         Assert.Equal("Response inspection failed", annotation.Notes);
         Assert.Equal("frame-current", Assert.Single(annotation.Geometry).FrameId);
+
         var events = SessionTimelineBuilder.BuildEvents(saved, null, null);
         Assert.Contains(events, item => item.Payload["category"]!.GetValue<string>() == "annotation"
             && item.Payload["details"]!["annotationId"]!.GetValue<string>() == annotation.AnnotationId);
+
         var patchResult = JsonNode.Parse(result.ToolCalls[3].Result!.Content)!;
         Assert.Equal(annotation.Notes, patchResult["annotation"]!["notes"]!.GetValue<string>());
         Assert.True(fixture.Store.TryLoad("foreign", out var foreign));
@@ -105,10 +109,12 @@ public sealed class AutomationEvidenceTaskTests
         using var directory = TestDirectory.Create();
         var fixture = new Fixture(directory.Path);
         Assert.True(fixture.Store.TryLoad("current", out var snapshot));
+
         var request = Assert.Single(snapshot!.NetworkRequests);
         var atStart = SessionTimelineBuilder.BuildEvents(snapshot, request.StartedAtUtc, request.StartedAtUtc);
         var captured = Assert.Single(atStart, item => item.Payload["category"]!.GetValue<string>() == "networkRequest");
         Assert.Equal(request.StartedAtUtc, captured.TimestampUtc);
+
         var details = captured.Payload["details"]!.AsObject();
         Assert.Equal(request.Id, details["requestId"]!.GetValue<string>());
         Assert.Equal(request.CompletedAtUtc, details["completedAtUtc"]!.GetValue<DateTimeOffset>());
@@ -125,12 +131,15 @@ public sealed class AutomationEvidenceTaskTests
         public Fixture(string rootPath)
         {
             this.rootPath = rootPath;
+
             var paths = new DataToolApplicationPaths(rootPath);
             Store = new SessionCaptureStore(paths);
+
             var state = new RuntimeState(Store);
             Seed(state, "current");
             Seed(state, "foreign");
             router = new RepositoryTaskRouter(rootPath);
+
             var bridge = new UnusedAppBridge();
             var catalog = new ToolCatalog(state, paths, new KnownAppStore(paths),
                 new UnusedPairingService(), new EmptyPairingCache(), bridge, null,
@@ -151,11 +160,15 @@ public sealed class AutomationEvidenceTaskTests
                 export const task = { "schemaVersion": 1, "title": "Inspect captured evidence", "description": "Inspect and annotate captured HTTP failure evidence.", "maximumActions": 20, "timeoutSeconds": 20, "requires": { "capabilities": ["evidence.read"] } };
                 export default async function run({ ansight, expect, run }: TaskInvocation) {
                 """ + body + "\n}");
+
             var loaded = router.Load(rootPath, "com.example.app");
             Assert.True(loaded.Warnings.Count == 0, string.Join(Environment.NewLine, loaded.Warnings));
+
             var task = Assert.Single(loaded.Tasks);
             Assert.Empty(task.DeclaredHostTools);
+
             using var trace = RepositoryTaskTraceScope.Begin(true);
+
             return await router.ExecuteAsync(task, "current", new JsonObject(), "evidence-test", CancellationToken.None);
         }
 
@@ -165,22 +178,39 @@ public sealed class AutomationEvidenceTaskTests
             var image = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6fWQAAAAASUVORK5CYII=");
             var snapshot = new AppSessionSnapshot
             {
-                SessionId = sessionId, AppId = "com.example.app", ClientName = "Evidence Test",
-                RemoteAddress = "127.0.0.1", CreatedUtc = timestamp, ConfigId = null,
-                Status = "WebSocket Closed", LastUpdatedUtc = timestamp.AddSeconds(1), IsHistorical = true,
-                MetricChannels = [], Metrics = [],
+                SessionId = sessionId,
+                AppId = "com.example.app",
+                ClientName = "Evidence Test",
+                RemoteAddress = "127.0.0.1",
+                CreatedUtc = timestamp,
+                ConfigId = null,
+                Status = "WebSocket Closed",
+                LastUpdatedUtc = timestamp.AddSeconds(1),
+                IsHistorical = true,
+                MetricChannels = [],
+                Metrics = [],
                 Images = [new SessionImageFrame
                 {
-                    FrameId = $"frame-{sessionId}", CapturedAtUtc = timestamp.AddMilliseconds(150),
-                    Format = "png", Width = 1, Height = 1, Quality = 100, ByteCount = image.Length
+                    FrameId = $"frame-{sessionId}",
+                    CapturedAtUtc = timestamp.AddMilliseconds(150),
+                    Format = "png",
+                    Width = 1,
+                    Height = 1,
+                    Quality = 100,
+                    ByteCount = image.Length
                 }],
                 NetworkRequests = [new SessionNetworkRequest
                 {
-                    Id = $"request-{sessionId}", Source = "test", StartedAtUtc = timestamp,
-                    CompletedAtUtc = timestamp.AddMilliseconds(100), DurationMilliseconds = 100,
-                    Method = "POST", Url = "https://example.test/checkout", StatusCode = 503,
-                    ResponseHeaders = [new SessionNetworkHeader { Name = "X-Trace", Value = "first" }, new SessionNetworkHeader { Name = "X-Trace", Value = "second" }],
-                    ResponseBody = new SessionNetworkBody { Encoding = "utf8", Data = "failure", CapturedBytes = 7, TotalBytes = 7, Truncated = false }
+                    Id = $"request-{sessionId}",
+                    Source = "test",
+                    StartedAtUtc = timestamp,
+                    CompletedAtUtc = timestamp.AddMilliseconds(100),
+                    DurationMilliseconds = 100,
+                    Method = "POST",
+                    Url = "https://example.test/checkout",
+                    StatusCode = 503,
+                    ResponseHeaders = [new SessionNetworkHeader {Name = "X-Trace", Value = "first" }, new SessionNetworkHeader {Name = "X-Trace", Value = "second" }],
+                    ResponseBody = new SessionNetworkBody {Encoding = "utf8", Data = "failure", CapturedBytes = 7, TotalBytes = 7, Truncated = false }
                 }]
             };
             var imported = state.ImportSessionSnapshot(snapshot, new Dictionary<string, byte[]> { [$"frame-{sessionId}"] = image });
@@ -190,11 +220,24 @@ public sealed class AutomationEvidenceTaskTests
 
     private sealed class UnusedAppBridge : IAppToolBridge
     {
-        public event EventHandler? ConnectionsChanged { add { } remove { } }
+        public event EventHandler? ConnectionsChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public IReadOnlyList<string> GetConnectedSessionIds() => [];
+
         public bool IsSessionConnected(string sessionId) => false;
+
         public OperationResult ForceDisconnectSession(string sessionId) => throw new NotSupportedException();
+
         public Task<AppToolBridgeResponse> QueryToolsAsync(string sessionId, CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null) => throw new NotSupportedException();
+
         public Task<AppToolBridgeResponse> CallToolAsync(string sessionId, string toolId, JsonObject? arguments, CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null) => throw new NotSupportedException();
     }
 
@@ -205,10 +248,18 @@ public sealed class AutomationEvidenceTaskTests
 
     private sealed class EmptyPairingCache : IPairingConfigCache
     {
-        public void Add(PairingConfig config) { }
-        public void Add(CachedPairingConfig config) { }
+        public void Add(PairingConfig config)
+        {
+        }
+
+        public void Add(CachedPairingConfig config)
+        {
+        }
+
         public IReadOnlyList<CachedPairingConfig> GetSnapshot() => [];
+
         public CachedPairingConfig? Find(string configId) => null;
+
         public bool Remove(string configId) => false;
     }
 }

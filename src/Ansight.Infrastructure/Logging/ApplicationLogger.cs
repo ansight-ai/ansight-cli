@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 
 namespace Ansight.Infrastructure.Logging;
@@ -88,7 +88,6 @@ public class ApplicationLogger : ILogger
             shouldFormat = !isSuspended;
         }
 
-
         var now = DateTime.Now;
         var threadId = Thread.CurrentThread.ManagedThreadId;
 
@@ -171,7 +170,6 @@ public class ApplicationLogger : ILogger
 
     protected virtual void OnException(Exception ex)
     {
-
     }
 
     public void Property(string key, string value, string group = "")
@@ -187,6 +185,7 @@ public class ApplicationLogger : ILogger
         }
 
         var tag = Tags.PropertyTag;
+
         if (!string.IsNullOrEmpty(group))
         {
             tag = $"{tag}.{group.Trim()}";
@@ -194,7 +193,6 @@ public class ApplicationLogger : ILogger
 
         Log(RemoveWhitespace(tag), $"{key.Trim()}='{value}'", LogLevel.Information);
     }
-
 
     private static string RemoveWhitespace(string @string)
     {
@@ -222,7 +220,6 @@ public class ApplicationLogger : ILogger
 
     protected virtual void OnEvent(string eventName, IReadOnlyDictionary<string, object?>? properties = null)
     {
-
     }
 
     public void Event(string eventName, params LogEventParameter[] parameters)
@@ -257,7 +254,6 @@ public class ApplicationLogger : ILogger
             suspendLogFormattingScope = newScope;
         }
 
-
         return newScope;
     }
 
@@ -283,16 +279,19 @@ public class ApplicationLogger : ILogger
         var parameters = properties
             .Select(pair => new LogEventParameter(pair.Key, pair.Value))
             .ToArray();
+
         return BuildEventMessage(eventName, parameters);
     }
 
     private static string BuildEventMessage(string eventName, IReadOnlyList<LogEventParameter> parameters)
     {
         var builder = new StringBuilder(eventName.Trim());
+
         for (var i = 0; i < parameters.Count; i++)
         {
             var parameter = parameters[i];
             var parameterName = parameter.Name;
+
             if (string.IsNullOrWhiteSpace(parameterName))
             {
                 continue;

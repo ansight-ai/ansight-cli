@@ -20,12 +20,23 @@ public sealed partial class AppInteractionBackendTests
         var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null,
             """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
+
         var screenshotPath = Path.Combine(environment.RootPath, "screenshot.png");
+
         using (var bitmap = new SKBitmap(30, 60))
-        using (var image = SKImage.FromBitmap(bitmap))
-        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-        using (var stream = File.Create(screenshotPath))
-            data.SaveTo(stream);
+        {
+            using (var image = SKImage.FromBitmap(bitmap))
+            {
+                using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+                {
+                    using (var stream = File.Create(screenshotPath))
+                    {
+                        data.SaveTo(stream);
+                    }
+                }
+            }
+        }
+
         var tasksDirectory = Path.Combine(environment.RootPath, "ansight", "tasks");
         Directory.CreateDirectory(tasksDirectory);
         File.WriteAllText(Path.Combine(tasksDirectory, "verify.ts"), $$$"""
@@ -40,6 +51,7 @@ public sealed partial class AppInteractionBackendTests
               return { label: input.label };
             }
             """);
+
         var bridge = new ScreenshotBridge(sessionId, screenshotPath);
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -49,10 +61,13 @@ public sealed partial class AppInteractionBackendTests
             composition.Get<NativeProfilingService>(), bridge);
         dispatcher.ConfigureRepositoryTaskRuntime("node");
         dispatcher.ConfigureUiInputDriver(new InputDriver());
+
         var context = dispatcher.CreateAppInteractionContext(sessionId, environment.RootPath);
         await context.ExecuteAsync(new("ready", "snapshot"));
+
         var catalog = await context.ExecuteAsync(new("list", "tasks"));
         Assert.Equal("verify", Assert.Single(catalog.TaskCatalog!.Tasks).TaskId);
+
         var result = await context.ExecuteAsync(new("run", "task", TaskId: "verify",
             Input: new JsonObject { ["label"] = "private task input" }));
 
@@ -67,9 +82,11 @@ public sealed partial class AppInteractionBackendTests
         Assert.True(bridge.Probes > 2);
         Assert.Equal("unchanged", result.Screenshot!.Settling!.Status);
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var snapshot));
+
         var events = snapshot!.ApplicationEvents.Where(item => item.EventType == "ansight.interaction").ToArray();
         Assert.Equal(2, events.Length);
         Assert.DoesNotContain(events, item => item.Details.Contains("private task input", StringComparison.Ordinal));
+
         var rejected = await context.ExecuteAsync(new("missing", "task", TaskId: "missing"));
         Assert.Equal(RepositoryTaskRunStatus.Rejected, rejected.Task!.Status);
         Assert.False(rejected.Succeeded);
@@ -84,17 +101,29 @@ public sealed partial class AppInteractionBackendTests
         var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null,
             """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
+
         var screenshotPath = Path.Combine(environment.RootPath, "screenshot.png");
+
         using (var bitmap = new SKBitmap(30, 60))
-        using (var image = SKImage.FromBitmap(bitmap))
-        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-        using (var stream = File.Create(screenshotPath))
-            data.SaveTo(stream);
+        {
+            using (var image = SKImage.FromBitmap(bitmap))
+            {
+                using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+                {
+                    using (var stream = File.Create(screenshotPath))
+                    {
+                        data.SaveTo(stream);
+                    }
+                }
+            }
+        }
+
         var bridge = new ScreenshotBridge(sessionId, screenshotPath);
         var driver = new InputDriver();
         var router = new UiInputRouter();
         router.Configure(driver);
         router.ConfigureAccessibility(driver);
+
         var session = new AppInteractionContext(new AppInteractionBackend(
             state, environment.ApplicationPaths, bridge, router, sessionId));
 
@@ -115,9 +144,11 @@ public sealed partial class AppInteractionBackendTests
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var snapshot));
         Assert.Equal(3, snapshot!.Images.Count);
         Assert.Equal(3, snapshot.VisualTreeSnapshots.Count);
+
         var events = snapshot.ApplicationEvents.Where(item => item.EventType == "ansight.interaction").ToArray();
         Assert.Equal(3, events.Length);
         Assert.DoesNotContain(events, item => item.Details.Contains("private test text", StringComparison.Ordinal));
+
         var hostInputs = snapshot.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
         Assert.Equal(new[] { "tap", "type" }, hostInputs.Select(action => action.Kind));
         Assert.All(hostInputs, action => Assert.Equal("succeeded", action.Status));
@@ -133,16 +164,29 @@ public sealed partial class AppInteractionBackendTests
         var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null,
             """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
+
         var screenshotPath = Path.Combine(environment.RootPath, "screenshot.png");
+
         using (var bitmap = new SKBitmap(30, 60))
-        using (var image = SKImage.FromBitmap(bitmap))
-        using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-        using (var stream = File.Create(screenshotPath)) data.SaveTo(stream);
+        {
+            using (var image = SKImage.FromBitmap(bitmap))
+            {
+                using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
+                {
+                    using (var stream = File.Create(screenshotPath))
+                    {
+                        data.SaveTo(stream);
+                    }
+                }
+            }
+        }
+
         var bridge = new ScreenshotBridge(sessionId, screenshotPath);
         var driver = new InputDriver();
         var router = new UiInputRouter();
         router.Configure(driver);
         router.ConfigureAccessibility(driver);
+
         var context = new AppInteractionContext(new AppInteractionBackend(
             state, environment.ApplicationPaths, bridge, router, sessionId));
         var ready = await context.ExecuteAsync(new("ready", "snapshot"));
@@ -150,6 +194,7 @@ public sealed partial class AppInteractionBackendTests
         Assert.Equal("search-field", Assert.Single(ready.Ui.Nodes).AutomationId);
         Assert.NotNull(ready.Ui.SnapshotId);
         driver.TargetX = 0.65; // Move after observation: no cached coordinate may be used.
+
         var typed = await context.ExecuteAsync(new("type", "type", Value: "query",
             Target: new(AutomationId: "search-field")));
         Assert.True(typed.Succeeded);
@@ -160,22 +205,27 @@ public sealed partial class AppInteractionBackendTests
         Assert.Equal(3, driver.TreeCaptures); // ready, fresh target resolution, after action
         driver.TargetAutomationId = new string('a', 400);
         driver.TargetText = new string('t', 400);
+
         var longTarget = await context.ExecuteAsync(new("long-target", "snapshot"));
         var observedTarget = Assert.Single(longTarget.Ui!.Nodes);
         Assert.Equal(driver.TargetAutomationId, observedTarget.AutomationId);
         Assert.Equal(driver.TargetText, observedTarget.Text);
+
         var tappedLongTarget = await context.ExecuteAsync(new("tap-long-target", "tap",
             Target: new(AutomationId: observedTarget.AutomationId, Text: observedTarget.Text)));
         Assert.True(tappedLongTarget.Succeeded);
         driver.TargetAutomationId = "search-field";
         driver.TargetText = "Search";
+
         var taps = driver.Taps;
         driver.DuplicateTarget = true;
+
         var ambiguous = await context.ExecuteAsync(new("ambiguous", "tap", Target: new(Text: "Search", Role: "textbox")));
         Assert.False(ambiguous.Succeeded);
         Assert.Equal(taps, driver.Taps);
         Assert.Contains("matched 2", ambiguous.Message);
         driver.TreeUnavailable = true;
+
         var unavailable = await context.ExecuteAsync(new("missing", "tap", Target: new(AutomationId: "search-field")));
         Assert.False(unavailable.Succeeded);
         Assert.Equal(taps, driver.Taps);
@@ -204,6 +254,7 @@ public sealed partial class AppInteractionBackendTests
 
         Assert.NotNull(capture);
         Assert.Equal("available", tree.Latest!.Status);
+
         var node = Assert.Single(tree.Latest.Nodes, node => node.AutomationId == "search-field");
         Assert.Equal(expectedValue, node.Value);
         Assert.Equal("search-field", node.AutomationId);
@@ -237,52 +288,93 @@ public sealed partial class AppInteractionBackendTests
         state.SetSessionDeviceProfile(sessionId, null,
             """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
+
         var router = new UiInputRouter();
         router.Configure(driver);
         router.ConfigureAccessibility(driver);
+
         return new AppInteractionTree(state, new ScreenshotBridge(sessionId, string.Empty), router, session!);
     }
 
-    private sealed class ScreenshotBridge(string sessionId, string path, bool strictSettling = true) : IAppToolBridge
+    private sealed class ScreenshotBridge : IAppToolBridge
     {
+        private readonly string sessionId;
+        private readonly string path;
+        private readonly bool strictSettling;
+
+        public ScreenshotBridge(string sessionId, string path, bool strictSettling = true)
+        {
+            this.sessionId = sessionId;
+            this.path = path;
+            this.strictSettling = strictSettling;
+        }
+
         public int Captures { get; private set; }
         public int FullCaptures { get; private set; }
         public int Probes { get; private set; }
         public int CatalogQueries { get; private set; }
-        public event EventHandler? ConnectionsChanged { add { } remove { } }
+        public event EventHandler? ConnectionsChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
+
         public bool IsSessionConnected(string id) => id == sessionId;
+
         public OperationResult ForceDisconnectSession(string id) => throw new NotSupportedException();
+
         public Task<AppToolBridgeResponse> QueryToolsAsync(string id, CancellationToken cancellationToken,
             AppToolBridgeRequestContext? requestContext = null)
         {
             CatalogQueries++;
+
             return strictSettling ? Task.FromResult(AppToolBridgeResponse.FromFailure("No SDK tree available."))
                 : Task.FromResult(AppToolBridgeResponse.FromSuccess("Catalog", new ToolProtocolEnvelope
                 {
-                    Type = ToolProtocolMessageTypes.CatalogType, Id = "catalog",
+                    Type = ToolProtocolMessageTypes.CatalogType,
+                    Id = "catalog",
                     Payload = new JsonObject { ["tools"] = new JsonArray(new JsonObject { ["id"] = RemoteAppToolIds.UiGetScreenshot, ["executable"] = true }) }
                 }));
         }
+
         public Task<AppToolBridgeResponse> CallToolAsync(string id, string toolId, JsonObject? arguments,
             CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
         {
             Assert.Equal(sessionId, id);
             Assert.Equal(RemoteAppToolIds.UiGetScreenshot, toolId);
-            if (strictSettling) Assert.True(arguments!["afterScreenUpdates"]!.GetValue<bool>());
+
+            if (strictSettling)
+            {
+                Assert.True(arguments!["afterScreenUpdates"]!.GetValue<bool>());
+            }
+
             Captures++;
-            if (arguments!["maxWidth"]!.GetValue<int>() == 1024 || !strictSettling) FullCaptures++;
+
+            if (arguments!["maxWidth"]!.GetValue<int>() == 1024 || !strictSettling)
+            {
+                FullCaptures++;
+            }
             else
             {
                 Assert.Equal(256, arguments["maxWidth"]!.GetValue<int>());
                 Probes++;
             }
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess("Captured.", new ToolProtocolEnvelope
             {
-                Type = ToolProtocolMessageTypes.ResultType, Id = "capture", SessionId = id,
+                Type = ToolProtocolMessageTypes.ResultType,
+                Id = "capture",
+                SessionId = id,
                 Payload = new JsonObject
                 {
-                    ["toolId"] = toolId, ["success"] = true,
+                    ["toolId"] = toolId,
+                    ["success"] = true,
                     ["result"] = new JsonObject { ["artifactPath"] = path, ["format"] = "png", ["capturedAtUtc"] = DateTimeOffset.UtcNow }
                 }
             }));
@@ -306,49 +398,75 @@ public sealed partial class AppInteractionBackendTests
         public JsonNode? CapturedValue { get; set; }
         public string? RootNodeId { get; set; }
         public string? RootAutomationId { get; set; }
+
         public UiInputAvailability GetAvailability(string deviceIdentifier) => new(true, "test", "Ready.");
+
         public Task<UiInputResult> PrepareForInputAsync(UiInputPreflightRequest request, CancellationToken cancellationToken = default)
         {
             Preflights++;
+
             return Task.FromResult(new UiInputResult(true, "test", "Ready."));
         }
+
         public Task<UiInputResult> TapAsync(UiTapRequest request, CancellationToken cancellationToken = default)
         {
             Assert.Equal("simulator-001", request.DeviceIdentifier);
             Assert.Equal("test.app", request.ApplicationIdentifier);
             LastTap = request;
             Taps++;
+
             return Task.FromResult(new UiInputResult(true, "test", "Tapped."));
         }
+
         public Task<UiInputResult> TypeTextAsync(UiTextRequest request, CancellationToken cancellationToken = default)
         {
             ReplaceExisting = request.ReplaceExisting;
             TypedText = request.Text;
+
             return Task.FromResult(new UiInputResult(true, "test", "Typed."));
         }
+
         public Task<UiInputResult> SwipeAsync(UiSwipeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> PinchAsync(UiPinchRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> PressButtonAsync(UiButtonRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(UiAccessibilityRequest request, CancellationToken cancellationToken = default)
         {
             Assert.False(request.AllowCached);
             TreeCaptures++;
-            if (TreeUnavailable) return Task.FromResult(new UiAccessibilityResult(false, "test", "Tree unavailable.", null));
+
+            if (TreeUnavailable)
+            {
+                return Task.FromResult(new UiAccessibilityResult(false, "test", "Tree unavailable.", null));
+            }
+
             var target = new JsonObject
             {
-                ["typeId"] = 1, ["automationId"] = TargetAutomationId, ["role"] = "textbox",
-                ["text"] = TargetText, ["value"] = CapturedValue?.DeepClone() ?? JsonValue.Create(TypedText), ["flags"] = 3,
+                ["typeId"] = 1,
+                ["automationId"] = TargetAutomationId,
+                ["role"] = "textbox",
+                ["text"] = TargetText,
+                ["value"] = CapturedValue?.DeepClone() ?? JsonValue.Create(TypedText),
+                ["flags"] = 3,
                 ["bounds"] = new JsonArray(TargetX, 0.55, 0.2, 0.1),
                 ["supportedActions"] = new JsonArray("tap", "typeText")
             };
             var children = new JsonArray(target);
+
             for (var index = 1; index < TargetCount; index++)
             {
                 var additional = target.DeepClone().AsObject();
                 additional["automationId"] = $"{TargetAutomationId}-{index}";
                 children.Add(additional);
             }
-            if (DuplicateTarget) children.Add(target.DeepClone());
+
+            if (DuplicateTarget)
+            {
+                children.Add(target.DeepClone());
+            }
+
             return Task.FromResult(new UiAccessibilityResult(true, "test", "Captured.", new JsonObject
             {
                 ["format"] = "ansight.device-accessibility.compact.v2",
@@ -356,8 +474,12 @@ public sealed partial class AppInteractionBackendTests
                 ["coordinateSpace"] = new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 1, ["height"] = 1 },
                 ["root"] = new JsonObject
                 {
-                    ["id"] = RootNodeId, ["automationId"] = RootAutomationId,
-                    ["typeId"] = 0, ["flags"] = 3, ["bounds"] = new JsonArray(0, 0, 1, 1), ["children"] = children
+                    ["id"] = RootNodeId,
+                    ["automationId"] = RootAutomationId,
+                    ["typeId"] = 0,
+                    ["flags"] = 3,
+                    ["bounds"] = new JsonArray(0, 0, 1, 1),
+                    ["children"] = children
                 }
             }));
         }

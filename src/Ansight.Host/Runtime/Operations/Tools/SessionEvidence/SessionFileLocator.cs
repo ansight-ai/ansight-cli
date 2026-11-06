@@ -7,12 +7,14 @@ internal static class SessionFileLocator
     public static string ResolveSessionDirectoryPath(IApplicationPaths applicationPaths, AppSessionSnapshot snapshot)
     {
         var rootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);
+
         return SessionImageArtifactPath.ResolveSessionDirectoryPath(rootPath, snapshot.AppId, snapshot.SessionId);
     }
 
     public static string ResolveScreenshotPath(IApplicationPaths applicationPaths, AppSessionSnapshot snapshot, SessionImageFrame frame)
     {
         var rootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);
+
         return SessionImageArtifactPath.ResolveCapturedImagePath(rootPath, snapshot.AppId, snapshot.SessionId, frame);
     }
 
@@ -37,6 +39,7 @@ internal static class SessionFileLocator
         out string filePath)
     {
         filePath = string.Empty;
+
         var snapshotDirectoryPath = ResolveArtifactSnapshotDirectoryPath(applicationPaths, session, artifactSnapshot);
         var relativePath = NormalizeArtifactPath(entry.ArchiveRelativePath);
         var candidatePath = string.IsNullOrWhiteSpace(relativePath)
@@ -45,6 +48,7 @@ internal static class SessionFileLocator
 
         var fullCandidatePath = Path.GetFullPath(candidatePath);
         var fullSnapshotDirectoryPath = Path.GetFullPath(snapshotDirectoryPath);
+
         if (!fullCandidatePath.StartsWith(fullSnapshotDirectoryPath + Path.DirectorySeparatorChar, StringComparison.Ordinal)
             && !string.Equals(fullCandidatePath, fullSnapshotDirectoryPath, StringComparison.Ordinal))
         {
@@ -52,6 +56,7 @@ internal static class SessionFileLocator
         }
 
         filePath = fullCandidatePath;
+
         return true;
     }
 

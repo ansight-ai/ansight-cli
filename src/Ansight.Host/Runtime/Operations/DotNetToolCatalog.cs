@@ -33,17 +33,22 @@ internal sealed class DotNetToolCatalog
     public OperationRegistry HostToolRegistry => tools;
 
     public JsonObject BuildToolsListResult()
-        => new() { ["tools"] = tools.BuildDefinitions() };
+        => new()
+        {
+            ["tools"] = tools.BuildDefinitions()
+        };
 
     public Task<RequestResult> HandleToolsCallAsync(JsonObject? parameters, string? correlationId = null)
     {
         var toolName = parameters?["name"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(toolName))
         {
             return Task.FromResult(RequestResult.Error(-32602, "tools/call requires a non-empty tool name."));
         }
 
         var arguments = parameters?["arguments"] as JsonObject;
+
         return tools.TryGet(toolName, out var tool)
             ? tool!.ExecuteAsync(arguments, correlationId)
             : Task.FromResult(RequestResult.Error(-32602, $"Unknown .NET tool '{toolName}'."));

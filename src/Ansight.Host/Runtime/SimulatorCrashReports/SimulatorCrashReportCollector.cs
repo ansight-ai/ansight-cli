@@ -10,7 +10,7 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
     private const string ArtifactSource = "ansight.simulator.crash-report";
     private const string ArtifactRootAlias = "simulator-crash-reports";
     private static readonly ILogger log = Logger.Create();
-    private static readonly TimeSpan[] PollDelays =
+    private static readonly TimeSpan[] pollDelays =
     [
         TimeSpan.Zero,
         TimeSpan.FromSeconds(1),
@@ -69,6 +69,7 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
         out SimulatorCrashReportMatchContext? context)
     {
         context = null;
+
         if (string.IsNullOrWhiteSpace(sessionId)
             || !runtimeState.TryGetSessionSnapshot(sessionId.Trim(), out var snapshot)
             || snapshot?.DeviceProfile is not { } profile
@@ -86,15 +87,17 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
             disconnectedAtUtc.ToUniversalTime(),
             NullIfWhiteSpace(profile.App.VersionName),
             NullIfWhiteSpace(profile.App.BuildNumber ?? profile.App.VersionCode));
+
         return true;
     }
 
     private async Task SearchAndAttachAsync(string sessionId, SimulatorCrashReportMatchContext context)
     {
         var processedIncidentIds = new HashSet<string>(StringComparer.Ordinal);
+
         try
         {
-            foreach (var delay in PollDelays)
+            foreach (var delay in pollDelays)
             {
                 if (delay > TimeSpan.Zero)
                 {
@@ -102,6 +105,7 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
                 }
 
                 var reports = SimulatorCrashReportFinder.FindMatches(diagnosticReportsDirectoryPath, context);
+
                 foreach (var report in reports)
                 {
                     if (!processedIncidentIds.Add(report.IncidentId))
@@ -125,6 +129,7 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
     internal bool AttachReport(string sessionId, SimulatorCrashReport report)
     {
         var snapshotId = $"simulator-crash-{FileNameUtil.Sanitize(report.IncidentId)}";
+
         if (runtimeState.TryGetSessionSnapshot(sessionId, out var currentSnapshot)
             && currentSnapshot?.ArtifactSnapshots.Any(snapshot =>
                 string.Equals(snapshot.SnapshotId, snapshotId, StringComparison.Ordinal)) == true)
@@ -139,16 +144,19 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
             FileNameUtil.Sanitize(sessionId),
             artifactDirectoryName);
         var reportFileName = Path.GetFileName(report.FilePath);
+
         if (string.IsNullOrWhiteSpace(reportFileName))
         {
             reportFileName = $"{artifactDirectoryName}.ips";
         }
+
         var sourceFilePath = Path.Combine(sourceDirectoryPath, reportFileName);
 
         try
         {
             Directory.CreateDirectory(sourceDirectoryPath);
             File.Copy(report.FilePath, sourceFilePath, overwrite: true);
+
             var sourceFileInfo = new FileInfo(sourceFilePath);
             var entry = new SessionArtifactEntry
             {
@@ -182,9 +190,11 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
             };
 
             var result = runtimeState.AddSessionArtifactSnapshot(sessionId, snapshot, sourceDirectoryPath);
+
             if (!result.IsSuccess)
             {
                 log.Info($"simulator_crash_report_attach_failed sessionId={sessionId} incidentId={report.IncidentId} message={FormatLogValue(result.Message)}");
+
                 return false;
             }
 
@@ -192,11 +202,13 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
                 sessionId,
                 $"Attached Simulator crash report '{reportFileName}' for process {report.ProcessId}.");
             log.Info($"simulator_crash_report_attached sessionId={sessionId} incidentId={report.IncidentId} processId={report.ProcessId} simulatorUdid={FormatLogValue(report.SimulatorUdid)}");
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             log.Info($"simulator_crash_report_attach_failed sessionId={sessionId} incidentId={report.IncidentId} message={FormatLogValue(ex.Message)}");
+
             return false;
         }
         finally
@@ -208,13 +220,14 @@ internal sealed class SimulatorCrashReportCollector : ISimulatorCrashReportColle
     private static bool IsIosSimulator(DeviceAppProfile profile)
     {
         var device = profile.Device;
+
         if (device?.IsEmulator != true && device?.IsVirtual != true)
         {
             return false;
         }
 
         return string.Equals(device.OsName, "ios", StringComparison.OrdinalIgnoreCase)
-               || profile.Runtime?.Stack?.Any(entry =>
+            || profile.Runtime?.Stack?.Any(entry =>
                    string.Equals(entry.Name, "ios", StringComparison.OrdinalIgnoreCase)) == true;
     }
 

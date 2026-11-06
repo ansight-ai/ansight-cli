@@ -24,6 +24,7 @@ public sealed class HostCommandsTests
             accessAuthorizer: TestAccessAuthorizer.Deny);
 
         Assert.Equal(CliExitCodes.HostUnavailable, code);
+
         var result = JsonNode.Parse(output.ToString())!.AsObject();
         Assert.Equal("host_unavailable", result["code"]!.GetValue<string>());
         Assert.DoesNotContain("product access", output.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -45,10 +46,12 @@ public sealed class HostCommandsTests
                 "--port", explorerPort.ToString(), "--disable-repository-automations"]),
             new CliOutput(false, output, output), cancellation.Token,
             allowResidentHostForwarding: false, accessAuthorizer: authorizer, timeProvider: clock);
+
         try
         {
             await WaitUntilAsync(() => task.IsCompleted || output.ToString().Contains("Explorer:"));
             Assert.False(task.IsCompleted, output.ToString());
+
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
             var url = $"http://127.0.0.1:{explorerPort}/local-test/";
             Assert.Contains("Ansight Local Replay", await client.GetStringAsync(url));
@@ -76,10 +79,12 @@ public sealed class HostCommandsTests
                 "--websocket-port", GetAvailableTcpPort().ToString(), "--serve-port", "0",
                 "--disable-repository-automations"]), new CliOutput(false, output, output), cancellation.Token,
             allowResidentHostForwarding: false, accessAuthorizer: authorizer, timeProvider: clock);
+
         try
         {
             var metadata = await WaitForHostMetadataAsync(directory.Path, task);
             Assert.NotNull(metadata.ControlPipeName);
+
             using var client = new HttpClient { BaseAddress = new Uri(metadata.ExplorerUrl!), Timeout = TimeSpan.FromSeconds(5) };
             var access = JsonNode.Parse(await client.GetStringAsync("api/access"))!.AsObject();
             Assert.True(access["isAuthorized"]!.GetValue<bool>());
@@ -109,9 +114,10 @@ public sealed class HostCommandsTests
         string[] args = ["host", "run", "--data-dir", directory.Path,
             "--discovery-port", GetAvailableUdpPort().ToString(),
             "--websocket-port", GetAvailableTcpPort().ToString(), "--disable-repository-automations",
-            .. noServe ? new[] { "--no-serve" } : new[] { "--serve-port", "0" }];
+            .. noServe ? new[] {"--no-serve" }: new[] {"--serve-port", "0" }];
         var host = CliApplication.RunParsedAsync(CliArguments.Parse(args),
             new CliOutput(false, hostOutput, hostOutput), cancellation.Token, allowResidentHostForwarding: false);
+
         try
         {
             var metadata = await WaitForHostMetadataAsync(directory.Path, host);
@@ -140,8 +146,10 @@ public sealed class HostCommandsTests
                 Assert.Equal(CliExitCodes.Success, stopped);
                 Assert.True(JsonNode.Parse(stopOutput.ToString())!["isStopped"]!.GetValue<bool>());
             }
+
             Assert.Equal(CliExitCodes.Success, await host.WaitAsync(TimeSpan.FromSeconds(10)));
             Assert.Null(CliRuntime.ReadMetadata(directory.Path));
+
             using var releasedLock = CliDataDirectoryLock.Acquire(directory.Path);
         }
         finally
@@ -161,11 +169,14 @@ public sealed class HostCommandsTests
             CliLocalAccessAuthorizer.Instance, stopHost: shutdown.Cancel, startupArguments: startup);
         server.Start();
         await CliRuntime.WriteRecoveryMetadataAsync(directory.Path, null, null, CancellationToken.None, server.PipeName);
+
         var metadata = CliRuntime.ReadMetadata(directory.Path)!;
+
         using (var pipe = new System.IO.Pipes.NamedPipeClientStream(".", server.PipeName,
-                   System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous))
+            System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous))
         {
             await pipe.ConnectAsync(3000);
+
             await using var writer = new StreamWriter(pipe, leaveOpen: true);
             using var reader = new StreamReader(pipe, leaveOpen: true);
             var request = new ControlRequest(ControlProtocol.RequestSchema,
@@ -174,10 +185,12 @@ public sealed class HostCommandsTests
                 ExpectedProcessStartedUtc: metadata.ProcessStartedUtc!.Value.AddMinutes(-1));
             await writer.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(request, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
             await writer.FlushAsync();
+
             var response = JsonNode.Parse((await reader.ReadLineAsync())!)!;
             Assert.NotEqual(CliExitCodes.Success, response["exitCode"]!.GetValue<int>());
             Assert.False(shutdown.IsCancellationRequested);
         }
+
         using var output = new StringWriter();
         var stop = await ControlClient.TryRunHostCommandAsync(CliArguments.Parse(
             ["host", "stop", "--data-dir", directory.Path]), new CliOutput(false, output, output), CancellationToken.None);
@@ -293,9 +306,10 @@ public sealed class HostCommandsTests
         Uri? explorerUrl = null;
         new LocalSettingsStore(dataDirectory).SetExplorerPath("cli-explorer");
         new LocalSettingsStore(dataDirectory).SetExplorerPort(explorerPort.ToString());
+
         var hostTask = CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "host", "run",
                 "--data-dir", dataDirectory,
                 "--discovery-port", discoveryPort.ToString(),
@@ -323,8 +337,10 @@ public sealed class HostCommandsTests
                 "Ansight Local Replay",
                 await httpClient.GetStringAsync(explorerUrl),
                 StringComparison.Ordinal);
+
             var settings = JsonNode.Parse(
                 await httpClient.GetStringAsync(new Uri(explorerUrl, "api/settings")))!.AsObject();
+
             if (OperatingSystem.IsMacOS())
             {
                 Assert.False(settings["companionAccessAvailable"]!.GetValue<bool>());
@@ -393,7 +409,7 @@ public sealed class HostCommandsTests
         using var cancellation = new CancellationTokenSource();
         var hostTask = CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "host", "run", "--no-serve", "--json",
                 "--data-dir", dataDirectory,
                 "--discovery-port", discoveryPort.ToString(),
@@ -416,6 +432,7 @@ public sealed class HostCommandsTests
         }
 
         Assert.Equal(CliExitCodes.Success, await hostTask.WaitAsync(TimeSpan.FromSeconds(15)));
+
         var started = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("ansight.host/v1", started["schema"]!.GetValue<string>());
         Assert.Equal(CliReleaseIdentity.Current.Version, started["cliVersion"]!.GetValue<string>());
@@ -430,12 +447,14 @@ public sealed class HostCommandsTests
         var dataDirectory = Path.Combine(directory.Path, "host-state");
         var logDirectory = Path.Combine(dataDirectory, "logs");
         Directory.CreateDirectory(logDirectory);
+
         var olderLog = Path.Combine(logDirectory, "host-2026-08-25T01-00-00-100.log");
         var latestLog = Path.Combine(logDirectory, "host-2026-08-26T01-00-00-200.log");
         await File.WriteAllTextAsync(olderLog, "older");
         await File.WriteAllTextAsync(latestLog, "latest");
         File.SetLastWriteTimeUtc(olderLog, new DateTime(2026, 8, 25, 1, 0, 0, DateTimeKind.Utc));
         File.SetLastWriteTimeUtc(latestLog, new DateTime(2026, 8, 26, 1, 0, 0, DateTimeKind.Utc));
+
         using var standardOutput = new StringWriter();
         using var standardError = new StringWriter();
 
@@ -507,9 +526,11 @@ public sealed class HostCommandsTests
         Task<int> hostTask)
     {
         var timeoutAtUtc = DateTimeOffset.UtcNow.AddSeconds(15);
+
         while (DateTimeOffset.UtcNow < timeoutAtUtc)
         {
             var metadata = CliRuntime.ReadMetadata(dataDirectory);
+
             if (metadata is not null)
             {
                 return metadata;
@@ -532,8 +553,10 @@ public sealed class HostCommandsTests
         {
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
+
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             listener.Stop();
+
             if (!excluding.Contains(port)
                 && (port < ProtocolDefaults.WebSocketSessionPortRangeStart
                     || port > ProtocolDefaults.WebSocketSessionPortRangeEnd))
@@ -546,13 +569,18 @@ public sealed class HostCommandsTests
     private static int GetAvailableUdpPort()
     {
         using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+
         return ((IPEndPoint)client.Client.LocalEndPoint!).Port;
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while (!condition()) await Task.Delay(10, timeout.Token);
+
+        while (!condition())
+        {
+            await Task.Delay(10, timeout.Token);
+        }
     }
 
     private static TestDirectory CreateHostTestDirectory()
@@ -561,9 +589,11 @@ public sealed class HostCommandsTests
         var key = Path.Combine(directory.Path, "test-key");
         FileEncryptionKeyProvider.CreateKeyFile(key);
         new LocalSettingsStore(directory.Path).SetCredentials(new CredentialSettings("protected-file", key, Path.Combine(directory.Path, "test-store.json")));
+
         var hostState = Path.Combine(directory.Path, "host-state");
         Directory.CreateDirectory(hostState);
         new LocalSettingsStore(hostState).SetCredentials(new CredentialSettings("protected-file", key, Path.Combine(hostState, "test-store.json")));
+
         return directory;
     }
 }

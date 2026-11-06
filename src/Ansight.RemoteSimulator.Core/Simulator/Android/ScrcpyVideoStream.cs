@@ -35,6 +35,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     {
         this.adbClient = adbClient ?? throw new ArgumentNullException(nameof(adbClient));
         this.toolResolution = toolResolution ?? throw new ArgumentNullException(nameof(toolResolution));
+
         if (!toolResolution.IsFound)
         {
             throw new ArgumentException(toolResolution.Message, nameof(toolResolution));
@@ -60,6 +61,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(receivePacketAsync);
+
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             lifetimeCancellation.Token,
             cancellationToken);
@@ -73,6 +75,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
             await PushServerAsync(remoteServerPath, activeCancellation).ConfigureAwait(false);
             forwardedPort = await CreateForwardAsync(socketName, activeCancellation).ConfigureAwait(false);
             StartServer(remoteServerPath, socketIdentifier);
+
             var connection = await ConnectVideoSocketAsync(forwardedPort, activeCancellation).ConfigureAwait(false);
             videoClient = connection.Client;
             videoClient.NoDelay = true;
@@ -93,6 +96,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         catch (Exception ex)
         {
             serverProcess?.Terminate(force: true);
+
             if (serverProcess is not null)
             {
                 try
@@ -106,6 +110,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
                 {
                 }
             }
+
             var diagnostic = await ReadServerDiagnosticAsync().ConfigureAwait(false);
             throw new InvalidOperationException(
                 string.IsNullOrWhiteSpace(diagnostic)
@@ -137,6 +142,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var header = new byte[12];
+
         if (!await TryReadExactlyAsync(stream, header, cancellationToken).ConfigureAwait(false))
         {
             return null;
@@ -144,6 +150,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
 
         var presentationTimestampAndFlags = BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(0, 8));
         var packetSize = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(8, 4));
+
         if (packetSize is 0 or > MaximumPacketSize)
         {
             throw new InvalidDataException($"scrcpy sent an invalid H.264 packet size ({packetSize}).");
@@ -151,6 +158,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
 
         var data = new byte[packetSize];
         await stream.ReadExactlyAsync(data, cancellationToken).ConfigureAwait(false);
+
         return new ScrcpyVideoPacketData(
             data,
             (presentationTimestampAndFlags & ConfigurationPacketFlag) != 0,
@@ -170,6 +178,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var result = await adbClient.RunAsync(
             ["-s", deviceSerial, "push", "--sync", toolResolution.ServerPath, remoteServerPath],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildAdbFailure("install the matching scrcpy server", result));
@@ -181,16 +190,17 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var result = await adbClient.RunAsync(
             ["-s", deviceSerial, "forward", "tcp:0", $"localabstract:{socketName}"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildAdbFailure("create the scrcpy video tunnel", result));
         }
 
         if (!int.TryParse(
-                result.StandardOutput.Trim(),
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var port)
+            result.StandardOutput.Trim(),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var port)
             || port is <= 0 or > 65535)
         {
             throw new InvalidOperationException(
@@ -203,8 +213,8 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private void StartServer(string remoteServerPath, int socketIdentifier)
     {
         serverProcess = adbClient.StartProcess(
-        [
-            "-s", deviceSerial,
+            [
+                "-s", deviceSerial,
             "shell",
             $"CLASSPATH={remoteServerPath}",
             "app_process", "/", "com.genymobile.scrcpy.Server", toolResolution.Version,
@@ -234,23 +244,28 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         Exception? lastError = null;
+
         for (var attempt = 0; attempt < 60; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             if (serverProcess?.Completion.IsCompleted == true)
             {
                 throw new InvalidOperationException(await BuildServerStartFailureAsync().ConfigureAwait(false));
             }
 
             var client = new TcpClient(AddressFamily.InterNetwork);
+
             try
             {
                 await client.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
+
                 var codecHeader = new byte[12];
+
                 if (await TryReadExactlyAsync(
-                        client.GetStream(),
-                        codecHeader,
-                        cancellationToken).ConfigureAwait(false))
+                    client.GetStream(),
+                    codecHeader,
+                    cancellationToken).ConfigureAwait(false))
                 {
                     return new ScrcpyVideoConnection(client, codecHeader);
                 }
@@ -281,6 +296,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var codecIdentifier = BinaryPrimitives.ReadUInt32BigEndian(codecHeader.AsSpan(0, 4));
         var width = BinaryPrimitives.ReadUInt32BigEndian(codecHeader.AsSpan(4, 4));
         var height = BinaryPrimitives.ReadUInt32BigEndian(codecHeader.AsSpan(8, 4));
+
         if (codecIdentifier != H264CodecIdentifier)
         {
             throw new InvalidDataException($"scrcpy selected unsupported video codec 0x{codecIdentifier:x8}; H.264 is required.");
@@ -292,9 +308,11 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         }
 
         byte[]? configurationPacket = null;
+
         while (!cancellationToken.IsCancellationRequested)
         {
             var packet = await ReadPacketAsync(stream, cancellationToken).ConfigureAwait(false);
+
             if (packet is null)
             {
                 return;
@@ -326,11 +344,14 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     {
         videoClient?.Dispose();
         videoClient = null;
+
         var activeProcess = serverProcess;
         serverProcess = null;
+
         if (activeProcess is not null)
         {
             activeProcess.Terminate(force: true);
+
             try
             {
                 await activeProcess.Completion.ConfigureAwait(false);
@@ -339,19 +360,22 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
             {
                 System.Diagnostics.Trace.TraceWarning(suppressedException.ToString());
             }
+
             try
             {
                 await Task.WhenAll(
-                        serverOutputTask ?? Task.FromResult(string.Empty),
-                        serverErrorTask ?? Task.FromResult(string.Empty))
+                    serverOutputTask ?? Task.FromResult(string.Empty),
+                    serverErrorTask ?? Task.FromResult(string.Empty))
                     .ConfigureAwait(false);
             }
             catch (Exception suppressedException)
             {
                 System.Diagnostics.Trace.TraceWarning(suppressedException.ToString());
             }
+
             await activeProcess.DisposeAsync().ConfigureAwait(false);
         }
+
         serverOutputTask = null;
         serverErrorTask = null;
 
@@ -359,6 +383,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         {
             var port = forwardedPort;
             forwardedPort = 0;
+
             try
             {
                 using var cleanupCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -375,6 +400,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private async Task<string> BuildServerStartFailureAsync()
     {
         var detail = await ReadServerDiagnosticAsync().ConfigureAwait(false);
+
         return string.IsNullOrWhiteSpace(detail)
             ? $"scrcpy {toolResolution.Version} exited before its video tunnel became ready."
             : $"scrcpy {toolResolution.Version} failed to start: {detail}";
@@ -383,6 +409,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private async Task<string> BuildUnexpectedEndMessageAsync()
     {
         var detail = await ReadServerDiagnosticAsync().ConfigureAwait(false);
+
         return string.IsNullOrWhiteSpace(detail)
             ? "The scrcpy H.264 video stream ended unexpectedly."
             : $"The scrcpy H.264 video stream ended unexpectedly: {detail}";
@@ -398,6 +425,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var error = serverErrorTask is null ? string.Empty : await serverErrorTask.ConfigureAwait(false);
         var output = serverOutputTask is null ? string.Empty : await serverOutputTask.ConfigureAwait(false);
         var detail = string.IsNullOrWhiteSpace(error) ? output : error;
+
         return CollapseWhitespace(detail);
     }
 
@@ -407,15 +435,19 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var offset = 0;
+
         while (offset < buffer.Length)
         {
             var read = await stream.ReadAsync(buffer[offset..], cancellationToken).ConfigureAwait(false);
+
             if (read == 0)
             {
                 return offset == 0 ? false : throw new EndOfStreamException("The scrcpy packet header ended unexpectedly.");
             }
+
             offset += read;
         }
+
         return true;
     }
 
@@ -424,6 +456,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var combined = new byte[checked(prefix.Length + suffix.Length)];
         prefix.CopyTo(combined, 0);
         suffix.CopyTo(combined, prefix.Length);
+
         return combined;
     }
 
@@ -432,6 +465,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
         var detail = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput.Trim()
             : result.StandardError.Trim();
+
         return string.IsNullOrWhiteSpace(detail)
             ? $"ADB failed to {operation} with exit code {result.ExitCode}."
             : $"ADB failed to {operation}: {CollapseWhitespace(detail)}";
@@ -440,10 +474,12 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private static string SanitizeVersion(string version)
     {
         var builder = new StringBuilder(version.Length);
+
         foreach (var character in version)
         {
             builder.Append(char.IsAsciiLetterOrDigit(character) || character is '.' or '-' ? character : '_');
         }
+
         return builder.Length == 0 ? "unknown" : builder.ToString();
     }
 
@@ -453,6 +489,7 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private static async Task<string> ReadTextAsync(Stream stream)
     {
         using var reader = new StreamReader(stream);
+
         return await reader.ReadToEndAsync().ConfigureAwait(false);
     }
 }

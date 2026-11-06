@@ -18,22 +18,30 @@ public sealed class HostArtifactComparisonTests
         var item = Assert.Single(listed.Items);
         Assert.Equal($"{baseline.SessionId}/capture", item.Reference);
         Assert.Empty((await runtime.ArtifactComparisons.ListAsync(new(baseline.SessionId, Provider: "absent"))).Items);
+
         var start = await runtime.SessionReplays.StartAsync(new SessionReplayStartRequest(baseline.SessionId));
         Assert.True(start.IsSuccess, start.Message);
+
         using var client = new HttpClient();
         var url = Assert.IsType<Uri>(start.ReplayUrl);
         using var listingResponse = await client.PostAsJsonAsync(new Uri(url, "api/artifacts/list"), new ArtifactListRequest(baseline.SessionId));
         Assert.Equal(HttpStatusCode.OK, listingResponse.StatusCode);
+
         var request = new ArtifactDiffRequest([new(baseline.SessionId, "capture"), new(rerun.SessionId, "capture"), new(baseline.SessionId, "capture")]);
         using var response = await client.PostAsJsonAsync(new Uri(url, "api/artifacts/diff"), request);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
         var result = (await response.Content.ReadFromJsonAsync<ArtifactDiffResult>())!;
         Assert.True(result.IsComplete);
         Assert.Equal(2, result.Hops.Count);
         Assert.Contains("returned to its initial content", result.Summary);
         Assert.Equal("12", Assert.Single(Assert.Single(result.Hops[0].Files).Changes).After);
         Assert.Equal("0", Assert.Single(Assert.Single(result.Hops[1].Files).Changes).After);
-        using var invalid = await client.PostAsJsonAsync(new Uri(url, "api/artifacts/diff"), request with { Artifacts = [new(baseline.SessionId, "capture"), new("nonexistent", "capture")] });
+
+        using var invalid = await client.PostAsJsonAsync(new Uri(url, "api/artifacts/diff"), request with
+        {
+            Artifacts = [new(baseline.SessionId, "capture"), new("nonexistent", "capture")]
+        });
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
     }
 
@@ -46,6 +54,7 @@ public sealed class HostArtifactComparisonTests
         var missing = await Import(runtime, environment.RootPath, "missing", "{}");
         var path = SessionFileLocator.ResolveArtifactSnapshotDirectoryPath(runtime.ApplicationPaths, missing, Assert.Single(missing.ArtifactSnapshots));
         File.Delete(Path.Combine(path, "scene.json"));
+
         var result = await runtime.ArtifactComparisons.CompareAsync(new([new(first.SessionId, "capture"), new(missing.SessionId, "capture"), new(first.SessionId, "capture")]));
         Assert.False(result.IsComplete);
         Assert.Equal(2, result.Hops.Count);
@@ -57,25 +66,45 @@ public sealed class HostArtifactComparisonTests
         var timestamp = DateTimeOffset.UtcNow;
         var snapshot = new AppSessionSnapshot
         {
-            SessionId = id, AppId = "test.artifacts", ClientName = id, RemoteAddress = "127.0.0.1", CreatedUtc = timestamp,
-            ConfigId = null, Status = "Complete", LastUpdatedUtc = timestamp, IsHistorical = true, MetricChannels = [], Metrics = [],
+            SessionId = id,
+            AppId = "test.artifacts",
+            ClientName = id,
+            RemoteAddress = "127.0.0.1",
+            CreatedUtc = timestamp,
+            ConfigId = null,
+            Status = "Complete",
+            LastUpdatedUtc = timestamp,
+            IsHistorical = true,
+            MetricChannels = [],
+            Metrics = [],
             ArtifactSnapshots = [new SessionArtifactSnapshot
             {
-                SnapshotId = "capture", CapturedAtUtc = timestamp, Source = "test", RootAlias = "player", RelativePath = "scene", Name = "Scene",
-                Kind = "file", ArtifactDirectoryName = "capture", FileCount = 1, ByteCount = json.Length,
-                Entries = [new SessionArtifactEntry { Name = "scene.json", RootAlias = "player", RelativePath = "scene", SnapshotRelativePath = "scene.json", ArchiveRelativePath = "scene.json", Kind = "file", FileExtension = ".json", MimeType = "application/json", SizeBytes = json.Length }]
+                SnapshotId = "capture",
+                CapturedAtUtc = timestamp,
+                Source = "test",
+                RootAlias = "player",
+                RelativePath = "scene",
+                Name = "Scene",
+                Kind = "file",
+                ArtifactDirectoryName = "capture",
+                FileCount = 1,
+                ByteCount = json.Length,
+                Entries = [new SessionArtifactEntry {Name = "scene.json", RootAlias = "player", RelativePath = "scene", SnapshotRelativePath = "scene.json", ArchiveRelativePath = "scene.json", Kind = "file", FileExtension = ".json", MimeType = "application/json", SizeBytes = json.Length }]
             }]
         };
         var archivePath = Path.Combine(directory, id + ".zip");
+
         using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
         {
             await using var content = archive.CreateEntry("session.json").Open();
             await JsonSerializer.SerializeAsync(content, new SessionCaptureDocument { SavedAtUtc = timestamp, Session = snapshot }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         }
+
         var imported = Assert.IsType<AppSessionSnapshot>((await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath)).ImportedSession);
         var artifactDirectory = SessionFileLocator.ResolveArtifactSnapshotDirectoryPath(runtime.ApplicationPaths, imported, Assert.Single(imported.ArtifactSnapshots));
         Directory.CreateDirectory(artifactDirectory);
         await File.WriteAllTextAsync(Path.Combine(artifactDirectory, "scene.json"), json);
+
         return imported;
     }
 }

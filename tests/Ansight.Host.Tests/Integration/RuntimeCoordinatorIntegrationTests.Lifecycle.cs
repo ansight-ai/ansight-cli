@@ -33,6 +33,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             Socket.OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork,
             SocketType.Dgram,
             ProtocolType.Udp);
+
         if (occupiedSocket.AddressFamily == AddressFamily.InterNetworkV6)
         {
             occupiedSocket.DualMode = true;
@@ -49,6 +50,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var exception = await Record.ExceptionAsync(() => runtime.StartAsync());
 
         Assert.Null(exception);
+
         var warning = Assert.Single(runtime.StartupWarnings);
         Assert.Contains("enrollment listener", warning, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"UDP port {ProtocolDefaults.DiscoveryPort}", warning, StringComparison.Ordinal);

@@ -17,10 +17,8 @@ internal sealed record DotNetProfilingApplicationManifest
 
     [JsonPropertyName("diagnosticPort")]
     public int DiagnosticPort { get; init; }
-
     [JsonPropertyName("diagnosticSuspend")]
     public bool DiagnosticSuspend { get; init; }
-
     [JsonPropertyName("diagnosticListenMode")]
     public string DiagnosticListenMode { get; init; } = string.Empty;
 

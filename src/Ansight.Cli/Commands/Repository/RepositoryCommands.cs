@@ -16,11 +16,12 @@ internal static class RepositoryCommands
 
         var area = arguments.RequirePositional(1, "repository command").ToLowerInvariant();
         var isTaskRun = area == "task"
-                        && arguments.Positionals.Count > 2
-                        && string.Equals(
-                            arguments.Positionals[2],
-                            "run",
-                            StringComparison.OrdinalIgnoreCase);
+            && arguments.Positionals.Count > 2
+            && string.Equals(
+                arguments.Positionals[2],
+                "run",
+                StringComparison.OrdinalIgnoreCase);
+
         if (isTaskRun)
         {
             arguments.EnsurePositionalCount(
@@ -34,6 +35,7 @@ internal static class RepositoryCommands
             options,
             start: false,
             cancellationToken).ConfigureAwait(false);
+
         if (isTaskRun)
         {
             return await RepositoryTaskExecutionCommand.RunAsync(
@@ -66,6 +68,7 @@ internal static class RepositoryCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight repo tasks <app-id> <repository-path>");
+
         var appId = arguments.RequirePositional(2, "app identifier");
         var repositoryPath = Path.GetFullPath(arguments.RequirePositional(3, "repository path"));
         var catalog = runtime.InspectRepositoryTasks(appId, repositoryPath);
@@ -77,8 +80,9 @@ internal static class RepositoryCommands
                     Environment.NewLine,
                     catalog.Tasks.Select(task =>
                         $"{task.TaskId}\t{task.Title}\t{task.Description}"
-                        + (task.Enabled ? string.Empty : "\tdisabled")))
-                  + RenderWarnings(catalog.Warnings));
+                            + (task.Enabled ? string.Empty : "\tdisabled")))
+                    + RenderWarnings(catalog.Warnings));
+
         return catalog.Warnings.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -88,6 +92,7 @@ internal static class RepositoryCommands
         CliOutput output)
     {
         var action = arguments.RequirePositional(2, "automation action").ToLowerInvariant();
+
         return action switch
         {
             "inspect" => InspectAutomation(runtime, arguments, output),
@@ -108,9 +113,11 @@ internal static class RepositoryCommands
         arguments.EnsurePositionalCount(
             5,
             "ansight repo automation inspect <app-id> <repository-path>");
+
         var result = runtime.RepositoryAutomations.Inspect(
             arguments.RequirePositional(3, "app identifier"),
             Path.GetFullPath(arguments.RequirePositional(4, "repository path")));
+
         return WriteConnection("inspect", result, output);
     }
 
@@ -122,6 +129,7 @@ internal static class RepositoryCommands
         arguments.EnsurePositionalCount(
             5,
             "ansight repo automation connect <app-id> <repository-path>");
+
         if (CliCommandContext.Current is null)
         {
             throw new CliHostUnavailableException(
@@ -131,6 +139,7 @@ internal static class RepositoryCommands
         var result = runtime.RepositoryAutomations.Connect(
             arguments.RequirePositional(3, "app identifier"),
             Path.GetFullPath(arguments.RequirePositional(4, "repository path")));
+
         return WriteConnection("connect", result, output);
     }
 
@@ -142,6 +151,7 @@ internal static class RepositoryCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight repo automation disconnect <app-id>");
+
         if (CliCommandContext.Current is null)
         {
             throw new CliHostUnavailableException(
@@ -159,6 +169,7 @@ internal static class RepositoryCommands
             () => disconnected
                 ? $"Disconnected repository automations for '{appId}'."
                 : $"No repository automations were connected for '{appId}'.");
+
         return disconnected ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -168,6 +179,7 @@ internal static class RepositoryCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight repo automation list");
+
         var triggers = runtime.RepositoryAutomations.GetTriggers();
         output.Write(
             new RepositoryAutomationListOutput("ansight.repository-automations/v1", triggers),
@@ -177,7 +189,8 @@ internal static class RepositoryCommands
                     Environment.NewLine,
                     triggers.Select(trigger =>
                         $"{trigger.AppId}\t{trigger.TriggerId}\t{trigger.EventKind}\t{trigger.ActionKind}"
-                        + (trigger.Enabled ? string.Empty : "\tdisabled"))));
+                            + (trigger.Enabled ? string.Empty : "\tdisabled"))));
+
         return CliExitCodes.Success;
     }
 
@@ -189,6 +202,7 @@ internal static class RepositoryCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight repo automation runs <app-id> [--limit <count>]");
+
         var appId = arguments.RequirePositional(3, "app identifier");
         var runs = runtime.RepositoryAutomations.GetRecentRuns(
             appId,
@@ -204,6 +218,7 @@ internal static class RepositoryCommands
                     Environment.NewLine,
                     runs.Select(run =>
                         $"{run.RunId}\t{run.Status}\t{run.TriggerId}\t{run.CompletedAtUtc:O}")));
+
         return CliExitCodes.Success;
     }
 
@@ -218,8 +233,9 @@ internal static class RepositoryCommands
                 operation,
                 result),
             () => $"Repository automations: available={result.IsAvailable}, connected={result.IsConnected}, "
-                  + $"triggers={result.Triggers.Count}"
-                  + RenderWarnings(result.Warnings));
+                + $"triggers={result.Triggers.Count}"
+                + RenderWarnings(result.Warnings));
+
         return result.IsAvailable && (operation != "connect" || result.IsConnected)
             ? result.Warnings.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure
             : CliExitCodes.Failure;
@@ -229,7 +245,7 @@ internal static class RepositoryCommands
         => warnings.Count == 0
             ? string.Empty
             : Environment.NewLine
-              + string.Join(Environment.NewLine, warnings.Select(warning => $"Warning: {warning}"));
+                + string.Join(Environment.NewLine, warnings.Select(warning => $"Warning: {warning}"));
 
     private static string BuildHelp()
         => """
@@ -271,5 +287,4 @@ internal static class RepositoryCommands
            Use `--disable-repository-automations` to start a host without trigger execution.
            Inspection does not execute triggers.
            """;
-
 }

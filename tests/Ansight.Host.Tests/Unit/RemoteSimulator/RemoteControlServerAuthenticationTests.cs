@@ -26,17 +26,23 @@ public sealed class RemoteControlServerAuthenticationTests
     {
         var client = new HttpClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+
         return client;
     }
 
     private static string Endpoint(RemoteControlServer server)
         => $"http://127.0.0.1:{server.Port}/api/state?token={SessionToken}";
 
-    private sealed class FakeRemoteAccessAuthorizer(RemoteAccessAuthorization authorization)
-        : IRemoteAccessAuthorizer
+    private sealed class FakeRemoteAccessAuthorizer : IRemoteAccessAuthorizer
     {
-        public int CallCount { get; private set; }
+        private readonly RemoteAccessAuthorization authorization;
 
+        public FakeRemoteAccessAuthorizer(RemoteAccessAuthorization authorization)
+        {
+            this.authorization = authorization;
+        }
+
+        public int CallCount { get; private set; }
         public string LastBearerToken { get; private set; } = string.Empty;
 
         public ValueTask<RemoteAccessAuthorization> AuthorizeAsync(
@@ -45,6 +51,7 @@ public sealed class RemoteControlServerAuthenticationTests
         {
             CallCount++;
             LastBearerToken = bearerToken;
+
             return ValueTask.FromResult(authorization);
         }
     }
@@ -56,5 +63,4 @@ public sealed class RemoteControlServerAuthenticationTests
             Array.Empty<RemoteRuntimeDevice>(),
             null);
     }
-
 }

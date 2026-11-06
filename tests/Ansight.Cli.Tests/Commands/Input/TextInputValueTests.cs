@@ -18,7 +18,7 @@ public sealed class TextInputValueTests
     public void QualifiedReferenceCarriesAppAndAliasSeparately()
     {
         var input = TextInputValue.Parse(CliArguments.Parse([
-            "ui", "type", "--value", "@secret:com.example.app/login.password"]));
+                "ui", "type", "--value", "@secret:com.example.app/login.password"]));
         Assert.Equal("com.example.app", input.AppId);
         Assert.Equal("login.password", input.SecretAlias);
         Assert.Null(input.Value);

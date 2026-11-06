@@ -31,6 +31,7 @@ internal sealed class OpenAiWebSocketConnection : IOpenAiWebSocketConnection
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(message);
+
         var bytes = Encoding.UTF8.GetBytes(message);
         await socket.SendAsync(
             new ArraySegment<byte>(bytes),
@@ -42,27 +43,33 @@ internal sealed class OpenAiWebSocketConnection : IOpenAiWebSocketConnection
     public async Task<string?> ReceiveTextAsync(CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var buffer = new byte[BufferSize];
         using var message = new MemoryStream();
+
         while (true)
         {
             var result = await socket.ReceiveAsync(
                 new ArraySegment<byte>(buffer),
                 cancellationToken).ConfigureAwait(false);
+
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 return null;
             }
+
             if (result.MessageType != WebSocketMessageType.Text)
             {
                 throw new InvalidDataException("OpenAI returned a non-text WebSocket message.");
             }
 
             message.Write(buffer, 0, result.Count);
+
             if (message.Length > MaximumMessageBytes)
             {
                 throw new InvalidDataException("OpenAI returned an oversized WebSocket message.");
             }
+
             if (result.EndOfMessage)
             {
                 return Encoding.UTF8.GetString(
@@ -81,9 +88,11 @@ internal sealed class OpenAiWebSocketConnection : IOpenAiWebSocketConnection
         }
 
         disposed = true;
+
         if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
         {
             using var closeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
             try
             {
                 await socket.CloseOutputAsync(
@@ -92,7 +101,7 @@ internal sealed class OpenAiWebSocketConnection : IOpenAiWebSocketConnection
                     closeTimeout.Token).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is WebSocketException
-                                              or OperationCanceledException)
+                or OperationCanceledException)
             {
                 // Disposal must not replace the result of the completed agent run.
             }

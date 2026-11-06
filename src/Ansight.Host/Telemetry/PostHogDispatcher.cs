@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 
 namespace Ansight.Host.Telemetry;
 
@@ -41,6 +41,7 @@ public sealed class PostHogDispatcher
         }
 
         var retrySeconds = 5;
+
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -72,18 +73,21 @@ public sealed class PostHogDispatcher
         {
             legacyMigration.Migrate();
             analytics.Flush();
+
             if (!settings.IsDetailedTrackingActive)
             {
                 outbox.RemoveDetailedEvents();
             }
 
             var pending = outbox.Load(BatchSize);
+
             foreach (var item in pending.Where(item => !HasCurrentCaptureConsent(item.Envelope)))
             {
                 outbox.Remove(item.Path);
             }
 
             pending = pending.Where(item => HasCurrentCaptureConsent(item.Envelope)).ToArray();
+
             var activeAccount = AnalyticsAccount.ReadPersisted(analytics.DataDirectoryPath);
 
             foreach (var item in pending.Where(item => !MatchesActiveAccount(item.Envelope, activeAccount)))
@@ -92,6 +96,7 @@ public sealed class PostHogDispatcher
             }
 
             pending = pending.Where(item => MatchesActiveAccount(item.Envelope, activeAccount)).ToArray();
+
             if (pending.Count == 0)
             {
                 return true;
@@ -115,19 +120,26 @@ public sealed class PostHogDispatcher
                     ["$process_person_profile"] = false
                 }
             }).ToArray();
+
             if (batch.Length == 0)
             {
                 return true;
             }
 
             using var response = await httpClient.PostAsJsonAsync(batchUrl,
-                new { api_key = apiKey, batch }, cancellationToken).ConfigureAwait(false);
+                new
+                {
+                    api_key = apiKey,
+                    batch
+                }, cancellationToken).ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
             {
                 return false;
             }
 
             using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+
             if (!result.RootElement.TryGetProperty("status", out var status))
             {
                 return false;
@@ -146,6 +158,7 @@ public sealed class PostHogDispatcher
             }
 
             new LocalCaptureUsage(analytics.DataDirectoryPath).Acknowledge(pending.Select(item => item.Envelope));
+
             foreach (var item in pending)
             {
                 outbox.Remove(item.Path);

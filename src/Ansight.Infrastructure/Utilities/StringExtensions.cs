@@ -92,6 +92,7 @@ public static class StringExtensions
             {
                 output += " ";
             }
+
             output += s;
         }
 
@@ -130,6 +131,7 @@ public static class StringExtensions
         writer.Write(s);
         writer.Flush();
         stream.Position = 0;
+
         return stream;
     }
 
@@ -146,6 +148,7 @@ public static class StringExtensions
         }
 
         stream.Position = 0;
+
         using (var reader = new StreamReader(stream, Encoding.UTF8))
         {
             return reader.ReadToEnd();
@@ -201,6 +204,7 @@ public static class StringExtensions
         foreach (var c in normalizedString)
         {
             var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+
             if (unicodeCategory != UnicodeCategory.NonSpacingMark)
             {
                 stringBuilder.Append(c);
@@ -289,9 +293,11 @@ public static class StringExtensions
         }
 
         var indexes = new List<int>();
+
         for (var index = 0; ; index += value.Length)
         {
             index = input.IndexOf(value, index);
+
             if (index == -1)
             {
                 return indexes;

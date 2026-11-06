@@ -12,18 +12,22 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void Validate_UsesTheSameTextAsLiveSelectorMatchingInsteadOfSecondaryPlaceholderOrValue()
     {
         var evidence = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree("search-entered", new JsonObject
-            {
-                ["automationId"] = "area-search-text", ["visible"] = true,
-                ["children"] = new JsonArray(new JsonObject
+            [
+                CreateTree("search-entered", new JsonObject
                 {
-                    ["id"] = "search-input", ["label"] = "Appr", ["role"] = "textbox", ["visible"] = true,
-                    ["visual"] = new JsonObject { ["text"] = "Search areas, routes and about", ["value"] = "Approach" },
-                    ["properties"] = new JsonObject { ["placeholder"] = "Search areas, routes and about" }
+                    ["automationId"] = "area-search-text",
+                    ["visible"] = true,
+                    ["children"] = new JsonArray(new JsonObject
+                    {
+                        ["id"] = "search-input",
+                        ["label"] = "Appr",
+                        ["role"] = "textbox",
+                        ["visible"] = true,
+                        ["visual"] = new JsonObject {["text"] = "Search areas, routes and about", ["value"] = "Approach" },
+                        ["properties"] = new JsonObject {["placeholder"] = "Search areas, routes and about" }
+                    })
                 })
-            })
-        ]);
+            ]);
         const string source = """
             await ansight.ui.waitFor({ text: "Search areas, routes and about", role: "textbox", ancestorAutomationId: "area-search-text" });
             await ansight.ui.typeText({ text: "Approach", role: "textbox", ancestorAutomationId: "area-search-text", value: "Approach" });
@@ -41,14 +45,16 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void Validate_AcceptsVisualTextWhenItIsTheRuntimeTextButNotUnmatchedProperties()
     {
         var evidence = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree("search-empty", new JsonObject
-            {
-                ["id"] = "search-input", ["role"] = "textbox", ["visible"] = true,
-                ["visual"] = new JsonObject { ["text"] = "Search areas" },
-                ["properties"] = new JsonObject { ["placeholder"] = "Other placeholder" }
-            })
-        ]);
+            [
+                CreateTree("search-empty", new JsonObject
+                {
+                    ["id"] = "search-input",
+                    ["role"] = "textbox",
+                    ["visible"] = true,
+                    ["visual"] = new JsonObject {["text"] = "Search areas" },
+                    ["properties"] = new JsonObject {["placeholder"] = "Other placeholder" }
+                })
+            ]);
 
         Assert.Empty(LocalTaskSelectorEvidence.Validate(
             "await ansight.ui.find({ text: \"Search areas\", role: \"textbox\" });", evidence));
@@ -60,25 +66,31 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void Create_CollectsAllDistinctIdsAcrossTreesIncludingHiddenNodesAndAncestors()
     {
         var evidence = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree("framework", new JsonObject
-            {
-                ["automationId"] = "page",
-                ["visible"] = true,
-                ["children"] = new JsonArray(new JsonObject { ["automationId"] = "hidden", ["visible"] = false })
-            }),
+            [
+                CreateTree("framework", new JsonObject
+                {
+                    ["automationId"] = "page",
+                    ["visible"] = true,
+                    ["children"] = new JsonArray(new JsonObject {["automationId"] = "hidden", ["visible"] = false })
+                }),
             CreateTree("native",
-                new JsonObject { ["accessibilityIdentifier"] = "save", ["visible"] = true },
-                new JsonObject { ["automationId"] = "page", ["visible"] = true },
-                new JsonObject { ["props"] = new JsonObject { ["testID"] = "react-button" }, ["visible"] = true })
-        ]);
+                new JsonObject {["accessibilityIdentifier"] = "save", ["visible"] = true },
+                new JsonObject {["automationId"] = "page", ["visible"] = true },
+                new JsonObject {["props"] = new JsonObject {["testID"] = "react-button" }, ["visible"] = true })
+            ]);
 
         Assert.Equal(["hidden", "page", "react-button", "save"], evidence.AutomationIds);
         Assert.DoesNotContain(evidence.Nodes, node => node.AutomationId == "hidden");
+
         var augmented = evidence.WithOcrBlocks(new SessionImageFrame
         {
-            FrameId = "ocr", CapturedAtUtc = DateTimeOffset.UtcNow,
-            Format = "png", Width = 10, Height = 10, Quality = 100, ByteCount = 100
+            FrameId = "ocr",
+            CapturedAtUtc = DateTimeOffset.UtcNow,
+            Format = "png",
+            Width = 10,
+            Height = 10,
+            Quality = 100,
+            ByteCount = 100
         }, []);
         Assert.Equal(evidence.AutomationIds, augmented.AutomationIds);
     }
@@ -87,30 +99,30 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void Validate_AcceptsSelectorsObservedInVisibleVisualTreeNodes()
     {
         var evidence = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree(
-                "after-open",
-                new JsonObject
-                {
-                    ["id"] = "close",
-                    ["type"] = "MauiButton",
-                    ["automationId"] = "area-filters-close-button",
-                    ["label"] = "Close",
-                    ["role"] = "button",
-                    ["visible"] = true,
-                    ["supportedActions"] = new JsonArray("tap"),
-                    ["children"] = new JsonArray()
-                },
-                new JsonObject
-                {
-                    ["id"] = "title",
-                    ["type"] = "MauiLabel",
-                    ["text"] = "Area filters",
-                    ["role"] = "text",
-                    ["visible"] = true,
-                    ["children"] = new JsonArray()
-                })
-        ]);
+            [
+                CreateTree(
+                    "after-open",
+                    new JsonObject
+                    {
+                        ["id"] = "close",
+                        ["type"] = "MauiButton",
+                        ["automationId"] = "area-filters-close-button",
+                        ["label"] = "Close",
+                        ["role"] = "button",
+                        ["visible"] = true,
+                        ["supportedActions"] = new JsonArray("tap"),
+                        ["children"] = new JsonArray()
+                    },
+                    new JsonObject
+                    {
+                        ["id"] = "title",
+                        ["type"] = "MauiLabel",
+                        ["text"] = "Area filters",
+                        ["role"] = "text",
+                        ["visible"] = true,
+                        ["children"] = new JsonArray()
+                    })
+            ]);
         const string source = """
                               await ansight.ui.find({ automationId: "area-filters-close-button", visible: true });
                               await ansight.ui.waitFor({ text: "Area filters", role: "text", visible: true });
@@ -123,19 +135,19 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void Validate_RejectsFrameworkTypeThatWasNotExposedByUiEvidence()
     {
         var evidence = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree(
-                "after-open",
-                new JsonObject
-                {
-                    ["id"] = "title",
-                    ["type"] = "MauiLabel",
-                    ["text"] = "Area filters",
-                    ["role"] = "text",
-                    ["visible"] = true,
-                    ["children"] = new JsonArray()
-                })
-        ]);
+            [
+                CreateTree(
+                    "after-open",
+                    new JsonObject
+                    {
+                        ["id"] = "title",
+                        ["type"] = "MauiLabel",
+                        ["text"] = "Area filters",
+                        ["role"] = "text",
+                        ["visible"] = true,
+                        ["children"] = new JsonArray()
+                    })
+            ]);
         const string source = """
                               await ansight.ui.waitFor({ type: "AreaFiltersSheet", visible: true });
                               """;
@@ -162,8 +174,8 @@ public sealed class LocalTaskSelectorEvidenceTests
         };
         var evidence = LocalTaskSelectorEvidence.Create([], screenshotFrameCount: 1)
             .WithOcrBlocks(
-                frame,
-                [
+            frame,
+            [
                     new SessionScreenshotTextBlock(
                         "Area filters",
                         96,
@@ -199,20 +211,20 @@ public sealed class LocalTaskSelectorEvidenceTests
     public void SuggestSelectors_PrioritizesNewlyObservedAutomationIdsRelatedToFailure()
     {
         var before = LocalTaskSelectorEvidence.Create(
-        [
-            CreateTree(
-                "before-open",
-                new JsonObject
-                {
-                    ["id"] = "open",
-                    ["type"] = "MauiButton",
-                    ["automationId"] = "map-open-filters-button",
-                    ["visible"] = true,
-                    ["children"] = new JsonArray()
-                })
-        ]);
+            [
+                CreateTree(
+                    "before-open",
+                    new JsonObject
+                    {
+                        ["id"] = "open",
+                        ["type"] = "MauiButton",
+                        ["automationId"] = "map-open-filters-button",
+                        ["visible"] = true,
+                        ["children"] = new JsonArray()
+                    })
+            ]);
         var after = LocalTaskSelectorEvidence.Create(
-        [
+            [
             CreateTree(
                 "after-open",
                 new JsonObject

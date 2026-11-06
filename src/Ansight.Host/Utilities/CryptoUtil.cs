@@ -5,12 +5,14 @@ internal static class CryptoUtil
     public static string Sha256Hex(byte[] data)
     {
         var hash = SHA256.HashData(data);
+
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     public static string CreateBase64UrlRandom(int byteCount)
     {
         var bytes = RandomNumberGenerator.GetBytes(byteCount);
+
         try
         {
             return ToBase64Url(bytes);
@@ -35,6 +37,7 @@ internal static class CryptoUtil
 
         var normalized = value.Trim().Replace('-', '+').Replace('_', '/');
         var remainder = normalized.Length % 4;
+
         if (remainder != 0)
         {
             normalized = normalized.PadRight(normalized.Length + (4 - remainder), '=');
@@ -47,6 +50,7 @@ internal static class CryptoUtil
     {
         byte[] expectedBytes;
         byte[] actualBytes;
+
         try
         {
             expectedBytes = FromBase64Url(expected);
@@ -60,7 +64,7 @@ internal static class CryptoUtil
         try
         {
             return expectedBytes.Length == actualBytes.Length
-                   && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
+                && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
         }
         finally
         {

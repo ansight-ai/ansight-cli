@@ -44,10 +44,11 @@ public static class ApplicationPathsFactory
     public static string ResolveBaseFolderPath(IApplicationPaths applicationPaths)
     {
         ArgumentNullException.ThrowIfNull(applicationPaths);
+
         return applicationPaths is DataToolApplicationPaths dataToolApplicationPaths
             ? dataToolApplicationPaths.BaseFolderPath
             : Path.GetDirectoryName(applicationPaths.ApplicationDataPath)
-              ?? applicationPaths.ApplicationDataPath;
+                ?? applicationPaths.ApplicationDataPath;
     }
 
     public static string ResolveDefaultBaseFolderPath()
@@ -55,12 +56,14 @@ public static class ApplicationPathsFactory
         if (OperatingSystem.IsLinux())
         {
             var stateHome = Environment.GetEnvironmentVariable("XDG_STATE_HOME");
+
             if (!string.IsNullOrWhiteSpace(stateHome))
             {
                 return Path.GetFullPath(Path.Combine(stateHome.Trim(), "ansight"));
             }
 
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
             if (!string.IsNullOrWhiteSpace(userProfile))
             {
                 return Path.Combine(userProfile, ".local", "state", "ansight");
@@ -77,6 +80,7 @@ public static class ApplicationPathsFactory
         }
 
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
         if (!string.IsNullOrWhiteSpace(localApplicationData))
         {
             return Path.Combine(localApplicationData, CompanyFolderName);
@@ -120,6 +124,7 @@ public static class ApplicationPathsFactory
     private static string ResolveLegacyLocalApplicationDataBaseFolderPath(string folderName)
     {
         var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
         if (string.IsNullOrWhiteSpace(localApplicationData))
         {
             localApplicationData = AppContext.BaseDirectory;
@@ -132,6 +137,7 @@ public static class ApplicationPathsFactory
     {
         Directory.CreateDirectory(destinationDirectoryPath);
         CopySecureStorageBundle(sourceDirectoryPath, destinationDirectoryPath);
+
         foreach (var sourceFilePath in Directory.EnumerateFiles(sourceDirectoryPath))
         {
             if (IsSecureStorageBundleFile(sourceFilePath))
@@ -140,6 +146,7 @@ public static class ApplicationPathsFactory
             }
 
             var destinationFilePath = Path.Combine(destinationDirectoryPath, Path.GetFileName(sourceFilePath));
+
             if (ShouldCopyFile(sourceFilePath, destinationFilePath))
             {
                 File.Copy(sourceFilePath, destinationFilePath, overwrite: true);
@@ -160,6 +167,7 @@ public static class ApplicationPathsFactory
     {
         var sourceStorageFilePath = Path.Combine(sourceDirectoryPath, SecureStorageFileName);
         var destinationStorageFilePath = Path.Combine(destinationDirectoryPath, SecureStorageFileName);
+
         if (!File.Exists(sourceStorageFilePath)
             || !ShouldCopyFile(sourceStorageFilePath, destinationStorageFilePath))
         {
@@ -168,6 +176,7 @@ public static class ApplicationPathsFactory
 
         var sourceKeyFilePath = Path.Combine(sourceDirectoryPath, SecureStorageKeyFileName);
         var destinationKeyFilePath = Path.Combine(destinationDirectoryPath, SecureStorageKeyFileName);
+
         if (File.Exists(sourceKeyFilePath))
         {
             File.Copy(sourceKeyFilePath, destinationKeyFilePath, overwrite: true);
@@ -179,8 +188,9 @@ public static class ApplicationPathsFactory
     private static bool IsSecureStorageBundleFile(string filePath)
     {
         var fileName = Path.GetFileName(filePath);
+
         return string.Equals(fileName, SecureStorageFileName, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(fileName, SecureStorageKeyFileName, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(fileName, SecureStorageKeyFileName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ShouldCopyFile(string sourceFilePath, string destinationFilePath)
@@ -200,6 +210,7 @@ public static class ApplicationPathsFactory
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
+
         return string.Equals(normalizedLeft, normalizedRight, comparison);
     }
 
@@ -231,6 +242,7 @@ public static class ApplicationPathsFactory
             }
 
             userHomeFolderPath = NormalizeMacUserHomeFolderPath(candidate);
+
             if (!string.IsNullOrWhiteSpace(userHomeFolderPath))
             {
                 return true;
@@ -238,6 +250,7 @@ public static class ApplicationPathsFactory
         }
 
         userHomeFolderPath = string.Empty;
+
         return false;
     }
 
@@ -245,6 +258,7 @@ public static class ApplicationPathsFactory
     {
         var normalizedPath = NormalizePath(folderPath);
         var folderName = Path.GetFileName(normalizedPath);
+
         if (string.Equals(folderName, "Documents", StringComparison.OrdinalIgnoreCase))
         {
             return Path.GetDirectoryName(normalizedPath) ?? normalizedPath;

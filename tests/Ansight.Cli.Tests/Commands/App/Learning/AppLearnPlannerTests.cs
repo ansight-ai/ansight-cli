@@ -25,6 +25,7 @@ public sealed class AppLearnPlannerTests
         var graph = AppLearnTestData.Definition();
         var evidence = AppLearnTestData.Evidence(graph);
         evidence["bindingCandidates"]![0]!["mechanism"] = "app_tool";
+
         var plan = AppLearnPlanner.Build(graph, evidence, new HashSet<string>(), 10);
         Assert.Equal("Map", Assert.Single(plan.Candidates).To);
         Assert.Contains(plan.Diagnostics, value => value.Contains("open-catalog"));
@@ -37,7 +38,12 @@ public sealed class AppLearnPlannerTests
     {
         var graph = AppLearnTestData.Definition();
         var evidence = AppLearnTestData.Evidence(graph);
-        foreach (var binding in evidence["bindingCandidates"]!.AsArray()) binding!["configuration"]!["action"] = action;
+
+        foreach (var binding in evidence["bindingCandidates"]!.AsArray())
+        {
+            binding!["configuration"]!["action"] = action;
+        }
+
         Assert.Empty(AppLearnPlanner.Build(graph, evidence, new HashSet<string>(), 10).Candidates);
     }
 
@@ -46,8 +52,10 @@ public sealed class AppLearnPlannerTests
     {
         var graph = AppLearnTestData.Definition();
         graph["edges"]![0]!["parameters"] = new JsonArray("query");
+
         var evidence = AppLearnTestData.Evidence(graph);
         evidence["bindingCandidates"]![4]!["configuration"]!["selector"]!["automationId"] = "invented";
+
         var plan = AppLearnPlanner.Build(graph, evidence, new HashSet<string>(), 10);
         Assert.Empty(plan.Candidates);
         Assert.Contains(plan.Diagnostics, value => value.Contains("No new reusable"));
@@ -58,13 +66,23 @@ public sealed class AppLearnPlannerTests
     {
         var graph = AppLearnTestData.Definition();
         var first = AppLearnPlanner.Build(graph, AppLearnTestData.Evidence(graph), new HashSet<string>(), 10);
-        foreach (var node in graph["nodes"]!.AsArray()) node!["id"] = "new-" + node["id"]!.GetValue<string>();
+
+        foreach (var node in graph["nodes"]!.AsArray())
+        {
+            node!["id"] = "new-" + node["id"]!.GetValue<string>();
+        }
+
         foreach (var edge in graph["edges"]!.AsArray())
         {
-            foreach (var property in new[] { "id", "from", "to" }) edge![property] = "new-" + edge[property]!.GetValue<string>();
+            foreach (var property in new[] { "id", "from", "to" })
+            {
+                edge![property] = "new-" + edge[property]!.GetValue<string>();
+            }
         }
+
         var next = AppLearnPlanner.Build(graph, AppLearnTestData.Evidence(graph), new HashSet<string>(), 10);
         Assert.Equal(first.Candidates.Select(candidate => candidate.TaskId), next.Candidates.Select(candidate => candidate.TaskId));
+
         var repeated = AppLearnPlanner.Build(graph, AppLearnTestData.Evidence(graph),
             first.Candidates.Select(candidate => candidate.TaskId).ToHashSet(), 10);
         Assert.Empty(repeated.Candidates);
@@ -87,6 +105,7 @@ public sealed class AppLearnPlannerTests
     {
         var graph = AppLearnTestData.Definition();
         graph["nodes"]![0]!["purpose"] = new string('x', 8_000);
+
         var plan = AppLearnPlanner.Build(graph, AppLearnTestData.Evidence(graph), new HashSet<string>(), 3);
         Assert.Empty(plan.Candidates);
         Assert.Contains(plan.Diagnostics, message => message.Contains("handoff limit"));

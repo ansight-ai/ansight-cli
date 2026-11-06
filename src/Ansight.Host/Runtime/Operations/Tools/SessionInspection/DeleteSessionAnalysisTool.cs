@@ -29,6 +29,7 @@ internal sealed class DeleteSessionAnalysisTool : Operation
         }
 
         var analysisId = NormalizeOptionalString(arguments?["analysisId"]?.GetValue<string>());
+
         if (analysisId is null)
         {
             return Task.FromResult(ToolError("analysisId is required."));
@@ -36,18 +37,21 @@ internal sealed class DeleteSessionAnalysisTool : Operation
 
         var existingAnalysis = snapshot!.Analyses.FirstOrDefault(analysis =>
             string.Equals(analysis.AnalysisId, analysisId, StringComparison.Ordinal));
+
         if (existingAnalysis is null)
         {
             return Task.FromResult(ToolError($"Analysis '{analysisId}' was not found for session '{snapshot.SessionId}'."));
         }
 
         var expectedAgentId = NormalizeOptionalString(arguments?["expectedAgentId"]?.GetValue<string>());
+
         if (expectedAgentId is not null && !string.Equals(existingAnalysis.AgentId, expectedAgentId, StringComparison.Ordinal))
         {
             return Task.FromResult(ToolError($"Analysis '{analysisId}' agentId is '{existingAnalysis.AgentId}', not '{expectedAgentId}'."));
         }
 
         var result = runtimeState.DeleteSessionAnalysis(snapshot.SessionId, analysisId);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));
@@ -70,6 +74,7 @@ internal sealed class DeleteSessionAnalysisTool : Operation
         var properties = SessionReviewToolSchemas.ReviewSessionProperties();
         properties["analysisId"] = ToolSchema.String("Required analysis id to delete.");
         properties["expectedAgentId"] = ToolSchema.String("Optional agent id guard; the delete is rejected if the analysis agent differs.", nullable: true);
+
         return properties;
     }
 

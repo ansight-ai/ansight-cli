@@ -32,17 +32,20 @@ public sealed class CrashReportReceiverTests : IDisposable
 
         var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
         Assert.True(restartedStore.TryLoad(previousSession, out var retained));
+
         var artifact = Assert.Single(retained!.ArtifactSnapshots);
         Assert.Equal("crash-report", artifact.Kind);
         Assert.Equal("sdk.native.crash-report", artifact.Source);
         Assert.Equal(2, artifact.FileCount);
         Assert.Equal("native trace", File.ReadAllText(Directory.GetFiles(
             environment.RootPath, "native.trace", SearchOption.AllDirectories).Single()));
+
         var reportPath = Directory.GetFiles(environment.RootPath, "report.json", SearchOption.AllDirectories).Single();
         Assert.Equal(previousProcess, JsonNode.Parse(File.ReadAllText(reportPath))!["previousProcessSessionId"]!.GetValue<string>());
 
         var restartedState = new RuntimeState(restartedStore);
         restartedState.CreateSession("com.example.app", "Example", IPAddress.Loopback, "registration", currentProcess);
+
         var restartedReceiver = new CrashReportReceiver(restartedState, restartedStore, environment.ApplicationPaths);
         Assert.True(restartedReceiver.Receive(currentSession, payload).IsSuccess);
         Assert.True(restartedState.TryGetSessionSnapshot(previousSession, out var duplicate));
@@ -85,6 +88,7 @@ public sealed class CrashReportReceiverTests : IDisposable
         payload["targetProcessSessionId"] = otherProcess;
         payload["report"]!["previousProcessSessionId"] = otherProcess;
         Assert.False(receiver.Receive(currentSession, payload).IsSuccess);
+
         var otherRegistration = state.CreateSession("com.example.app", "Other", IPAddress.Loopback, "other-registration", otherProcess);
         payload["targetSessionId"] = otherRegistration;
         Assert.False(receiver.Receive(currentSession, payload).IsSuccess);
@@ -116,6 +120,7 @@ public sealed class CrashReportReceiverTests : IDisposable
         var blockedPath = Path.Combine(environment.ApplicationPaths.ApplicationTempPath, "native-crashes");
         Directory.CreateDirectory(environment.ApplicationPaths.ApplicationTempPath);
         File.WriteAllText(blockedPath, "block directory creation");
+
         var payload = CreatePayload();
         Assert.False(receiver.Receive(currentSession, payload).IsSuccess);
         File.Delete(blockedPath);
@@ -127,10 +132,12 @@ public sealed class CrashReportReceiverTests : IDisposable
     {
         Assert.True(state.TryGetSessionSnapshot(previousSession, out var snapshot));
         store.Save(snapshot!);
+
         var summaryPath = Directory.GetFiles(environment.RootPath, "session.json", SearchOption.AllDirectories)
             .Single(path => path.Contains(previousSession, StringComparison.Ordinal));
         File.Delete(summaryPath);
         Directory.CreateDirectory(summaryPath);
+
         var payload = CreatePayload();
         Assert.False(receiver.Receive(currentSession, payload).IsSuccess);
         Assert.True(state.TryGetSessionSnapshot(previousSession, out var pending));

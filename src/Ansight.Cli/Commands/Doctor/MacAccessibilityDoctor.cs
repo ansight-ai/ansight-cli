@@ -12,9 +12,11 @@ internal static class MacAccessibilityDoctor
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(5));
+
         try
         {
             var response = await IosAudioHelper.RunAsync(["accessibility"], timeout.Token).ConfigureAwait(false);
+
             return FromResponse(response);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -30,7 +32,9 @@ internal static class MacAccessibilityDoctor
     internal static DoctorCheck FromResponse(JsonObject response)
     {
         if (response["accessibilityGranted"] is not JsonValue value || !value.TryGetValue<bool>(out var granted))
+        {
             return Unavailable("not-checked", "The Ansight process did not report its Accessibility permission. Reinstall the matching Ansight build.");
+        }
 
         return granted
             ? new DoctorCheck(CheckName, "granted", true, false,

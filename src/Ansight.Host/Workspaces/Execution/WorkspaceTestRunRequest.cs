@@ -15,30 +15,21 @@ public sealed record WorkspaceTestRunRequest(
     bool EnableWorkspaceTools = true)
 {
     internal Ansight.Host.Runtime.Operations.OperationExecutionContext? OperationContext { get; init; }
-
     public string Reasoning { get; init; } = AgentReasoningModes.Fast;
 
     public string? BatchRunId { get; init; }
-
     public int? BatchIndex { get; init; }
-
     public int? BatchCount { get; init; }
-
     public bool CaptureTrace { get; init; } = true;
 
     public TestVideoOptions? Video { get; init; }
-
     public SimulatorAgentOpenAiProtocol OpenAiProtocol { get; init; } = SimulatorAgentOpenAiProtocol.Http;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public Func<string, string?>? SecretResolver { get; init; }
-
     [System.Text.Json.Serialization.JsonIgnore]
     internal WorkspaceTestRunStartParticipant? StartParticipant { get; init; }
-
     internal string? DraftSource { get; init; }
-
     internal string? DraftTaskRootPath { get; init; }
-
     internal IReadOnlyList<string> PreferredTaskIds { get; init; } = [];
 }

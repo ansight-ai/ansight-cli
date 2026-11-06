@@ -13,6 +13,7 @@ public sealed class AndroidTextInputTests
         {
             Assert.Equal(["-s", "emulator-5554", "shell", "-T"], arguments);
             commands.Add(input);
+
             return Task.FromResult(new AdbCommandResult(0, string.Empty, string.Empty));
         }, CancellationToken.None);
         Assert.Equal(new[] { "input 'text' '%sa'\"'\"'b$()'\n", "input 'text' '%'\n", "input 'text' 's%s'\n" }, commands);
@@ -26,6 +27,7 @@ public sealed class AndroidTextInputTests
             "emulator-5554", "secret%s", (_, _, _) =>
             {
                 calls++;
+
                 return Task.FromResult(new AdbCommandResult(1, "secret", "secret"));
             }, CancellationToken.None));
         Assert.Equal(1, calls);

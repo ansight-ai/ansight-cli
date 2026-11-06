@@ -6,8 +6,11 @@ using Ansight.Host;
 internal interface ISessionLifecycle
 {
     string CreateDeviceSession(WorkspaceTestTarget target);
+
     bool IsDeviceSessionActive(string sessionId);
+
     IReadOnlyList<string> GetActiveDeviceSessionIds();
+
     void EndDeviceSession(string sessionId);
 
     string ReserveSessionId(string appId, string? processSessionId);
@@ -21,7 +24,9 @@ internal interface ISessionLifecycle
         string? reservedSessionId = null);
 
     int BeginSessionConnection(string sessionId);
+
     void SetSessionStatus(string sessionId, string status, string? message = null);
+
     void SetSessionAppState(string sessionId, AppLifecycleState state, DateTimeOffset? changedAtUtc = null);
 
     SessionImportResult ImportSessionSnapshot(

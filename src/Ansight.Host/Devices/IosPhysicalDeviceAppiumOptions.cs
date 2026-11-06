@@ -10,6 +10,7 @@ internal sealed record IosPhysicalDeviceAppiumOptions(
     public static IosPhysicalDeviceAppiumOptions Resolve(RuntimeOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         return new IosPhysicalDeviceAppiumOptions(
             FirstNonEmpty(
                 options.IosPhysicalDeviceAppiumServerUrl,

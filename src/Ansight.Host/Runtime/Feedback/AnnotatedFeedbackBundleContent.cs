@@ -42,7 +42,8 @@ internal sealed class AnnotatedFeedbackBundleContent
     public SessionAnnotation CreateAnnotation(string? screenshotFrameId)
     {
         var label = Feedback?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
-                    ?? "Annotated feedback";
+            ?? "Annotated feedback";
+
         if (label.Length > 120)
         {
             label = $"{label[..117].TrimEnd()}...";
@@ -96,6 +97,7 @@ internal sealed class AnnotatedFeedbackBundleContent
         return VisualTrees.Select(tree =>
         {
             var payload = tree.Payload.DeepClone() as JsonObject ?? new JsonObject();
+
             return new SessionVisualTreeSnapshot
             {
                 SnapshotId = tree.SnapshotId,
@@ -120,12 +122,14 @@ internal sealed class AnnotatedFeedbackBundleContent
     public SessionArtifactSnapshot? CreateArtifactSnapshot()
     {
         var captured = Artifacts.Where(artifact => artifact.Bytes is { Length: > 0 }).ToArray();
+
         if (captured.Length == 0)
         {
             return null;
         }
 
         var directoryName = $"annotated-feedback-{AnnotationId}";
+
         return new SessionArtifactSnapshot
         {
             SnapshotId = directoryName,

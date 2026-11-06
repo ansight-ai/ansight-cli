@@ -28,6 +28,7 @@ internal sealed class SessionVisualTreeSnapshotHeader
     public static SessionVisualTreeSnapshotHeader Create(SessionVisualTreeSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         return new SessionVisualTreeSnapshotHeader
         {
             SnapshotId = snapshot.SnapshotId,

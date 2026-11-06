@@ -58,12 +58,14 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
             var result = await shake(arguments, cancellationToken).ConfigureAwait(false);
             var payload = result.Payload?["structuredContent"] as JsonObject;
             var succeeded = !result.IsError && result.Payload?["isError"]?.GetValue<bool>() != true;
+
             return new RemoteDeviceTestingResult(
                 succeeded,
                 payload?["message"]?.GetValue<string>() ?? result.ErrorMessage ?? "Shake request completed.");
         }
 
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             return await ExecuteNetworkAsync(request, arguments, cancellationToken).ConfigureAwait(false);
@@ -96,6 +98,7 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
         }
 
         var followsPhone = request.Action is "network-follow" or "network-heartbeat";
+
         if (followsPhone && request.Online is null)
         {
             return new RemoteDeviceTestingResult(false, "The phone connection state is required.");
@@ -114,6 +117,7 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
         if (action is "get" or "reset" || request.LeaseId is not null)
         {
             var ownsLease = MatchesLease(activeLease, request);
+
             if (!ownsLease)
             {
                 return new RemoteDeviceTestingResult(false, "This network lease does not belong to the selected companion target.");
@@ -130,8 +134,8 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
         if (action == "set")
         {
             var profile = followsPhone
-                ? new JsonObject { ["blocked"] = request.Online != true }
-                : CreateProfile(request.Preset);
+                ? new JsonObject { ["blocked"] = request.Online != true } : CreateProfile(request.Preset);
+
             if (profile is null)
             {
                 return new RemoteDeviceTestingResult(false, "Choose slow, high-latency, stalled, or blocked.");
@@ -142,6 +146,7 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
         }
 
         var result = await network.ExecuteAsync(action, arguments, cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             return new RemoteDeviceTestingResult(
@@ -156,6 +161,7 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
                 result.Payload["leaseId"]!.GetValue<string>(),
                 request.DeviceUdid,
                 request.AppId!);
+
             if (followsPhone)
             {
                 StartFollowingPhone(activeLease, request.Online == true, result.Payload);
@@ -208,9 +214,10 @@ internal sealed partial class CompanionDeviceTestingService : IRemoteDeviceTesti
     private static bool MatchesLease(CompanionLease? lease, RemoteDeviceTestingRequest request)
     {
         var matches = lease is not null
-                      && lease.Id == request.LeaseId
-                      && lease.DeviceId == request.DeviceUdid
-                      && lease.AppId == request.AppId;
+            && lease.Id == request.LeaseId
+            && lease.DeviceId == request.DeviceUdid
+            && lease.AppId == request.AppId;
+
         return matches;
     }
 

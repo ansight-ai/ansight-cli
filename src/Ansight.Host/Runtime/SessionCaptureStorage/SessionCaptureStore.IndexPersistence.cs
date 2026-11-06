@@ -15,12 +15,14 @@ internal sealed partial class SessionCaptureStore
     private bool TryGetSummaryFilePath(string sessionId, bool reloadIndex, out string filePath)
     {
         filePath = string.Empty;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
         }
 
         string? archiveFilePath = null;
+
         lock (indexGate)
         {
             if (reloadIndex)
@@ -36,6 +38,7 @@ internal sealed partial class SessionCaptureStore
                 && filePathBySessionId.TryGetValue(sessionId.Trim(), out var resolvedFilePath))
             {
                 filePath = resolvedFilePath;
+
                 return true;
             }
 
@@ -43,7 +46,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         return !string.IsNullOrWhiteSpace(archiveFilePath)
-               && TryExpandSessionArchive(sessionId.Trim(), archiveFilePath, out filePath);
+            && TryExpandSessionArchive(sessionId.Trim(), archiveFilePath, out filePath);
     }
 
     private void ReloadIndex()
@@ -54,6 +57,7 @@ internal sealed partial class SessionCaptureStore
         summaryBySessionId = new Dictionary<string, SessionCaptureSummary>(StringComparer.Ordinal);
         summarySnapshotBySessionId = new Dictionary<string, AppSessionSnapshot>(StringComparer.Ordinal);
         lastIndexRefreshUtc = DateTimeOffset.UtcNow;
+
         if (!Directory.Exists(capturesRootPath))
         {
             return;
@@ -67,6 +71,7 @@ internal sealed partial class SessionCaptureStore
             }
 
             var summary = SessionSnapshotReader.TryLoadDocument<SessionCaptureSummaryDocument>(filePath)?.Session;
+
             if (summary is null || string.IsNullOrWhiteSpace(summary.SessionId))
             {
                 continue;
@@ -75,11 +80,14 @@ internal sealed partial class SessionCaptureStore
             var sessionId = summary.SessionId;
             filePathBySessionId[sessionId] = filePath;
             summaryBySessionId[sessionId] = summary;
+
             var summarySnapshot = SessionSnapshotReader.LoadSummary(filePath, summary);
+
             if (summarySnapshot is not null)
             {
                 summarySnapshotBySessionId[sessionId] = summarySnapshot;
             }
+
             if (summary.CacheSizeBytes > 0 && !IsRecordingStatus(summary.Status))
             {
                 cacheSizeBytesBySessionId[sessionId] = summary.CacheSizeBytes;
@@ -87,12 +95,13 @@ internal sealed partial class SessionCaptureStore
         }
 
         foreach (var archiveFilePath in Directory.EnumerateDirectories(capturesRootPath)
-                     .SelectMany(appDirectoryPath => Directory.EnumerateFiles(
-                         appDirectoryPath,
-                         $"*{SessionCacheArchiveSuffix}",
-                         SearchOption.TopDirectoryOnly)))
+            .SelectMany(appDirectoryPath => Directory.EnumerateFiles(
+                appDirectoryPath,
+                $"*{SessionCacheArchiveSuffix}",
+                SearchOption.TopDirectoryOnly)))
         {
             var archiveSummary = SessionCaptureArchiveCodec.TryLoadSessionArchiveSummary(archiveFilePath);
+
             if (archiveSummary is null
                 || string.IsNullOrWhiteSpace(archiveSummary.SessionId)
                 || summaryBySessionId.ContainsKey(archiveSummary.SessionId))
@@ -131,13 +140,14 @@ internal sealed partial class SessionCaptureStore
     private void RefreshIndexIfStale()
     {
         var capturesWriteUtc = GetCapturesIndexWriteUtc();
+
         if (filePathBySessionId is null
             || archivePathBySessionId is null
             || cacheSizeBytesBySessionId is null
             || summaryBySessionId is null
             || summarySnapshotBySessionId is null
             || capturesWriteUtc != lastObservedCapturesWriteUtc
-            || DateTimeOffset.UtcNow - lastIndexRefreshUtc >= IndexRefreshInterval)
+            || DateTimeOffset.UtcNow - lastIndexRefreshUtc >= indexRefreshInterval)
         {
             ReloadIndex();
         }
@@ -173,6 +183,7 @@ internal sealed partial class SessionCaptureStore
         await foreach (var sessionId in pendingSnapshotQueue.Reader.ReadAllAsync())
         {
             AppSessionSnapshot? snapshot;
+
             lock (pendingSnapshotGate)
             {
                 pendingSnapshotsBySessionId.Remove(sessionId, out snapshot);
@@ -209,12 +220,14 @@ internal sealed partial class SessionCaptureStore
         while (await pendingLogBatchQueue.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
             var keys = new HashSet<SessionLogPersistenceKey>();
+
             while (pendingLogBatchQueue.Reader.TryRead(out var queuedKey))
             {
                 keys.Add(queuedKey);
             }
 
-            await Task.Delay(LogPersistenceBatchInterval).ConfigureAwait(false);
+            await Task.Delay(logPersistenceBatchInterval).ConfigureAwait(false);
+
             while (pendingLogBatchQueue.Reader.TryRead(out var coalescedKey))
             {
                 keys.Add(coalescedKey);
@@ -223,6 +236,7 @@ internal sealed partial class SessionCaptureStore
             foreach (var key in keys)
             {
                 SessionLogPersistenceBatch? batch;
+
                 lock (pendingLogBatchGate)
                 {
                     pendingLogBatches.Remove(key, out batch);
@@ -279,6 +293,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var key = new SessionLogPersistenceKey(batch.SessionId, batch.StreamId);
+
         if (!persistedLogCountByStream.TryGetValue(key, out var persistedStreamEntryCount))
         {
             persistedStreamEntryCount = SessionSnapshotReader.LoadLogs(layout.LogsFilePath, layout.LogSegmentsDirectoryPath)
@@ -286,6 +301,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var firstUnpersistedIndex = Math.Max(0, persistedStreamEntryCount - batch.StartEntryIndex);
+
         if (firstUnpersistedIndex < batch.Entries.Count)
         {
             Directory.CreateDirectory(layout.SessionDirectoryPath);
@@ -302,6 +318,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         persistedLogCountByStream[key] = Math.Max(persistedStreamEntryCount, batch.StreamEntryCount);
+
         if (incrementalPersistenceStateBySessionId.TryGetValue(batch.SessionId, out var persistenceState))
         {
             persistenceState.PersistedLogCount = Math.Max(
@@ -326,25 +343,33 @@ internal sealed partial class SessionCaptureStore
 
             var previousStatus = ResolvePersistedStatus(snapshot);
             SaveSnapshot(snapshot);
+
             if (!snapshot.IsHistorical && snapshot.Status is "Connected" or "WebSocket Open"
                 && previousStatus != snapshot.Status)
             {
                 analytics.TrackAcquisition("cli_first_app_connected", once: true);
             }
+
             if (LocalSessionCaptureAnalytics.ShouldReportRecordedCapture(previousStatus, snapshot))
             {
                 analytics.RecordUsage("capture",
-                        outcome: LocalSessionCaptureAnalytics.CaptureUsageOutcome(snapshot),
-                        durationSeconds: Math.Max(0, (snapshot.LastUpdatedUtc - snapshot.CreatedUtc).TotalSeconds),
-                        hasEvidence: LocalSessionCaptureAnalytics.CreateCompletionProperties(snapshot)["hasEvidence"] is true);
+                    outcome: LocalSessionCaptureAnalytics.CaptureUsageOutcome(snapshot),
+                    durationSeconds: Math.Max(0, (snapshot.LastUpdatedUtc - snapshot.CreatedUtc).TotalSeconds),
+                    hasEvidence: LocalSessionCaptureAnalytics.CreateCompletionProperties(snapshot)["hasEvidence"] is true);
+
                 // Historical imports and empty connections are not activation.
                 if (LocalSessionCaptureAnalytics.ShouldReportActivation(previousStatus, snapshot))
+                {
                     analytics.TrackAcquisition("cli_first_session_captured", once: true);
+                }
             }
+
             if (LocalSessionCaptureAnalytics.ShouldReportCompletion(previousStatus, snapshot))
+            {
                 log.Event(
                     LocalSessionCaptureAnalytics.CompletedEventName,
                     LocalSessionCaptureAnalytics.CreateCompletionProperties(snapshot));
+            }
         });
     }
 
@@ -356,6 +381,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var layout = GetSessionLayout(snapshot.AppId, snapshot.SessionId);
+
         return SessionSnapshotReader
             .TryLoadDocument<SessionCaptureSummaryDocument>(layout.SummaryFilePath)?
             .Session?
@@ -369,12 +395,14 @@ internal sealed partial class SessionCaptureStore
             var keys = pendingLogBatches.Keys
                 .Where(key => string.Equals(key.SessionId, sessionId, StringComparison.Ordinal))
                 .ToArray();
+
             if (keys.Length == 0)
             {
                 return Array.Empty<SessionLogPersistenceBatch>();
             }
 
             var batches = new List<SessionLogPersistenceBatch>(keys.Length);
+
             foreach (var key in keys)
             {
                 if (pendingLogBatches.Remove(key, out var batch))

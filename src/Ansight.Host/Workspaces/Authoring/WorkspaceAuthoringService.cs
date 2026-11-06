@@ -15,13 +15,16 @@ public sealed class WorkspaceAuthoringService
     public WorkspaceAuthoringResult Initialize(WorkspaceInitializeRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var createdFiles = new List<string>();
         var updatedFiles = new List<string>();
         var existingFiles = new List<string>();
+
         try
         {
             EnsureWorkspaceDirectory(workspacePath);
+
             var taskDirectoryPath = Path.Combine(workspacePath, "ansight", "tasks");
             var testDirectoryPath = Path.Combine(workspacePath, "ansight", "tests");
             var triggerDirectoryPath = Path.Combine(workspacePath, "ansight", "triggers");
@@ -157,13 +160,15 @@ public sealed class WorkspaceAuthoringService
     public WorkspaceAuthoringResult AddTask(WorkspaceTaskCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var taskId = NormalizeDefinitionId(request.TaskId, "task ID", maximumLength: 160);
         var definitionPath = Path.Combine(workspacePath, "ansight", "tasks", $"{taskId}.ts");
         var title = NormalizeOptional(request.Title) ?? Humanize(taskId);
         var description = NormalizeOptional(request.Description)
-                          ?? "Describe the repeatable workflow and its expected result.";
+            ?? "Describe the repeatable workflow and its expected result.";
         var source = CreateTaskSource(title, description, NormalizeOptional(request.AppId));
+
         return AddDefinition(
             workspacePath,
             definitionPath,
@@ -175,13 +180,16 @@ public sealed class WorkspaceAuthoringService
     public WorkspaceAuthoringResult AddTest(WorkspaceTestCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var testId = NormalizeDefinitionId(request.TestId, "test ID", maximumLength: 160);
         var appId = NormalizeRequired(request.AppId, "app ID");
         var definitionPath = Path.Combine(workspacePath, "ansight", "tests", $"{testId}.yaml");
+
         foreach (var extension in new[] { ".json", ".yml" })
         {
             var existingPath = Path.ChangeExtension(definitionPath, extension);
+
             if (File.Exists(existingPath))
             {
                 return WorkspaceAuthoringResult.Failure(
@@ -191,11 +199,13 @@ public sealed class WorkspaceAuthoringService
                     existingFiles: [existingPath]);
             }
         }
+
         var source = CreateTestSource(request, testId, appId);
         WorkspaceTestCatalog.Parse(
             Path.Combine(workspacePath, "ansight", "tests"),
             definitionPath,
             source);
+
         return AddDefinition(
             workspacePath,
             definitionPath,
@@ -207,11 +217,13 @@ public sealed class WorkspaceAuthoringService
     public WorkspaceAuthoringResult AddTrigger(WorkspaceTriggerCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var triggerId = NormalizeDefinitionId(request.TriggerId, "trigger ID", maximumLength: 120);
         var eventKind = NormalizeRequired(request.EventKind, "event kind");
         var definitionPath = Path.Combine(workspacePath, "ansight", "triggers", $"{triggerId}.ts");
         var source = CreateTriggerSource(eventKind, NormalizeOptional(request.AppId));
+
         return AddDefinition(
             workspacePath,
             definitionPath,
@@ -223,10 +235,12 @@ public sealed class WorkspaceAuthoringService
     public WorkspaceAuthoringResult AddSanitizer(WorkspaceSanitizerCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var workspacePath = NormalizeWorkspacePath(request.WorkspacePath);
         var sanitizerId = NormalizeDefinitionId(request.SanitizerId, "sanitizer ID", maximumLength: 120);
         var definitionPath = Path.Combine(workspacePath, "ansight", "sanitizers", $"{sanitizerId}.ts");
         var source = SessionSanitizerModuleContractArtifacts.GetDefaultModuleSource();
+
         return AddDefinition(
             workspacePath,
             definitionPath,
@@ -252,6 +266,7 @@ public sealed class WorkspaceAuthoringService
         }
 
         var initialization = Initialize(new WorkspaceInitializeRequest(workspacePath));
+
         if (!initialization.IsSuccess)
         {
             return initialization;
@@ -260,6 +275,7 @@ public sealed class WorkspaceAuthoringService
         var createdFiles = initialization.CreatedFiles.ToList();
         var updatedFiles = initialization.UpdatedFiles.ToList();
         var existingFiles = initialization.ExistingFiles.ToList();
+
         try
         {
             WriteDefinitionFile(
@@ -268,6 +284,7 @@ public sealed class WorkspaceAuthoringService
                 overwrite,
                 createdFiles,
                 updatedFiles);
+
             return WorkspaceAuthoringResult.Success(
                 successMessage,
                 workspacePath,
@@ -293,6 +310,7 @@ public sealed class WorkspaceAuthoringService
         var appIdProperty = appId is null
             ? string.Empty
             : $"  \"appId\": {JsonSerializer.Serialize(appId)},\n";
+
         return EmbeddedTextResource.Render(
             "Workspaces/Authoring/Resources/task-template.ts",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -317,25 +335,39 @@ public sealed class WorkspaceAuthoringService
         source.AppendLine($"name: {JsonSerializer.Serialize(NormalizeOptional(request.Name) ?? Humanize(testId))}");
         source.AppendLine($"appId: {JsonSerializer.Serialize(appId)}");
         AppendYamlBlock(source, "prompt", NormalizeOptional(request.Prompt) ?? "Describe the actions and the observable outcomes to verify using Ansight tools.");
+
         var validationPrompt = NormalizeOptional(request.ValidationPrompt);
-        if (validationPrompt is not null || assertions.Count > 0) source.AppendLine("validation:");
-        if (validationPrompt is not null) AppendYamlBlock(source, "  prompt", validationPrompt);
+
+        if (validationPrompt is not null || assertions.Count > 0)
+        {
+            source.AppendLine("validation:");
+        }
+
+        if (validationPrompt is not null)
+        {
+            AppendYamlBlock(source, "  prompt", validationPrompt);
+        }
+
         if (assertions.Count > 0)
         {
             source.AppendLine("  assertions:");
+
             foreach (var assertion in assertions)
             {
                 source.AppendLine($"    - {JsonSerializer.Serialize(assertion)}");
             }
         }
+
         if (requiredSecrets.Count > 0)
         {
             source.AppendLine("requiredSecrets:");
+
             foreach (var alias in requiredSecrets)
             {
                 source.AppendLine($"  - {JsonSerializer.Serialize(alias)}");
             }
         }
+
         return source.ToString().TrimEnd();
     }
 
@@ -343,6 +375,7 @@ public sealed class WorkspaceAuthoringService
     {
         var indentation = new string(' ', key.Length - key.TrimStart().Length + 2);
         source.AppendLine($"{key}: |-");
+
         foreach (var line in value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n'))
         {
             source.Append(indentation).AppendLine(line);
@@ -354,6 +387,7 @@ public sealed class WorkspaceAuthoringService
         var appIdProperty = appId is null
             ? string.Empty
             : $"  \"appId\": {JsonSerializer.Serialize(appId)},\n";
+
         return EmbeddedTextResource.Render(
             "Workspaces/Authoring/Resources/trigger-template.ts",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -378,17 +412,20 @@ public sealed class WorkspaceAuthoringService
         ICollection<string> existingFiles)
     {
         var normalizedSource = EnsureTrailingNewline(source);
+
         if (File.Exists(filePath))
         {
             if (string.Equals(File.ReadAllText(filePath), normalizedSource, StringComparison.Ordinal)
                 || !overwrite)
             {
                 existingFiles.Add(filePath);
+
                 return;
             }
 
             WriteAtomically(filePath, normalizedSource);
             updatedFiles.Add(filePath);
+
             return;
         }
 
@@ -404,12 +441,14 @@ public sealed class WorkspaceAuthoringService
         ICollection<string> updatedFiles)
     {
         var existed = File.Exists(filePath);
+
         if (existed && !overwrite)
         {
             throw new IOException($"Definition '{filePath}' already exists.");
         }
 
         WriteAtomically(filePath, EnsureTrailingNewline(source));
+
         if (existed)
         {
             updatedFiles.Add(filePath);
@@ -423,9 +462,11 @@ public sealed class WorkspaceAuthoringService
     private static void WriteAtomically(string filePath, string source)
     {
         var parentPath = Path.GetDirectoryName(filePath)
-                         ?? throw new IOException($"A parent directory could not be resolved for '{filePath}'.");
+            ?? throw new IOException($"A parent directory could not be resolved for '{filePath}'.");
         Directory.CreateDirectory(parentPath);
+
         var temporaryPath = Path.Combine(parentPath, $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
+
         try
         {
             File.WriteAllText(
@@ -446,6 +487,7 @@ public sealed class WorkspaceAuthoringService
     private static string NormalizeWorkspacePath(string workspacePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspacePath);
+
         return Path.GetFullPath(workspacePath.Trim());
     }
 
@@ -462,16 +504,17 @@ public sealed class WorkspaceAuthoringService
     private static string NormalizeDefinitionId(string value, string description, int maximumLength)
     {
         var normalized = NormalizeRequired(value, description);
+
         if (normalized.Length > maximumLength
             || !char.IsLetterOrDigit(normalized[0])
             || !char.IsLetterOrDigit(normalized[^1])
             || normalized.Contains("..", StringComparison.Ordinal)
             || normalized.Any(character => !(char.IsLetterOrDigit(character)
-                                              || character is '-' or '_' or '.')))
+                || character is '-' or '_' or '.')))
         {
             throw new ArgumentException(
                 $"{description} must start and end with a letter or digit and contain only letters, digits, "
-                + $"hyphen, underscore, and period, up to {maximumLength} characters.",
+                    + $"hyphen, underscore, and period, up to {maximumLength} characters.",
                 description);
         }
 
@@ -498,6 +541,7 @@ public sealed class WorkspaceAuthoringService
     {
         var words = value.Replace('.', ' ').Replace('-', ' ').Replace('_', ' ')
             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
         return words.Length == 0
             ? value
             : string.Join(' ', words.Select(static word => char.ToUpperInvariant(word[0]) + word[1..]));

@@ -24,6 +24,7 @@ internal sealed record MemorySpikeTelemetryAnalysisOptions(
         MemorySpikeAnalysisOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         return new MemorySpikeTelemetryAnalysisOptions(
             options.MinimumIncreaseMegabytes * BytesPerMegabyte,
             options.MinimumIncreasePercent / 100d);

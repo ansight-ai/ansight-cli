@@ -20,8 +20,8 @@ internal static class LiveUiActionEvidence
         IExternalSessionScreenshotCaptureManager? externalScreenshots = null)
     {
         var screenshot = !captureScreenshot
-                         || RunRequestContext.IsTestRunCorrelationId(correlationId)
-                            && string.Equals(phase, "before", StringComparison.Ordinal)
+            || RunRequestContext.IsTestRunCorrelationId(correlationId)
+                && string.Equals(phase, "before", StringComparison.Ordinal)
             ? null
             : await CaptureScreenshotAsync(
                 runtimeState,
@@ -44,6 +44,7 @@ internal static class LiveUiActionEvidence
         SessionActivityOperation.Current?.AddEvidence(screenshot?.Frame.FrameId);
         SessionActivityOperation.Current?.SetEvidenceStatus(!persistedTree.IsSuccess ? "unavailable"
             : captureScreenshot && screenshot is null ? "partial" : "captured");
+
         return new ActionEvidenceCapture(
             phase,
             persistedTree.Snapshot?.SnapshotId,
@@ -63,8 +64,7 @@ internal static class LiveUiActionEvidence
             {
                 ["persisted"] = false,
                 ["message"] = "Evidence capture was unavailable."
-            }
-            : new JsonObject
+            } : new JsonObject
             {
                 ["phase"] = capture.Phase,
                 ["persisted"] = capture.Persisted,
@@ -92,10 +92,18 @@ internal static class LiveUiActionEvidence
             || externalScreenshots?.IsPeriodicCaptureSuspended(session.SessionId) == true)
         {
             var screenshot = await ReadExternalScreenshotAsync(externalScreenshots, session, 1024, cancellationToken).ConfigureAwait(false);
+
             if (screenshot is not null)
+            {
                 return await PersistAppScreenshotAsync(runtimeState, session, screenshot, applicationPaths).ConfigureAwait(false);
-            if (session.CaptureSource == WorkspaceExecutionModes.Device) return null;
+            }
+
+            if (session.CaptureSource == WorkspaceExecutionModes.Device)
+            {
+                return null;
+            }
         }
+
         if (RunRequestContext.IsTestRunCorrelationId(correlationId)
             && UsesHostManagedTestCapture(session)
             && externalScreenshots?.IsPeriodicCaptureSuspended(session.SessionId) != true)
@@ -106,6 +114,7 @@ internal static class LiveUiActionEvidence
                 session,
                 waitForFreshFrame: afterScreenUpdates || string.Equals(phase, "after", StringComparison.Ordinal),
                 cancellationToken);
+
             if (managedScreenshot is not null)
             {
                 return managedScreenshot;
@@ -126,10 +135,11 @@ internal static class LiveUiActionEvidence
     private static bool UsesHostManagedTestCapture(AppSessionSnapshot session)
     {
         var device = session.DeviceProfile?.Device;
+
         return device is null
-               || device.IsVirtual == true
-               || device.IsEmulator == true
-               || string.Equals(device.OsName, "android", StringComparison.OrdinalIgnoreCase);
+            || device.IsVirtual == true
+            || device.IsEmulator == true
+            || string.Equals(device.OsName, "android", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<PersistedScreenshotEvidence?> CaptureAppManagedScreenshotAsync(
@@ -144,6 +154,7 @@ internal static class LiveUiActionEvidence
     {
         var screenshot = await ReadAppScreenshotAsync(appToolBridge, session, actionId, phase,
             correlationId, cancellationToken, afterScreenUpdates, 1_024).ConfigureAwait(false);
+
         return screenshot is null ? null
             : await PersistAppScreenshotAsync(runtimeState, session, screenshot).ConfigureAwait(false);
     }
@@ -152,17 +163,37 @@ internal static class LiveUiActionEvidence
         IExternalSessionScreenshotCaptureManager? screenshots, AppSessionSnapshot session,
         int maxWidth, CancellationToken cancellationToken)
     {
-        if (screenshots is null) return null;
+        if (screenshots is null)
+        {
+            return null;
+        }
+
         var bytes = await screenshots.CaptureFrameAsync(session.SessionId, cancellationToken).ConfigureAwait(false);
         var capturedAtUtc = DateTimeOffset.UtcNow;
-        if (bytes is null) return null;
+
+        if (bytes is null)
+        {
+            return null;
+        }
+
         using var bitmap = SKBitmap.Decode(bytes);
-        if (bitmap is null) return null;
+
+        if (bitmap is null)
+        {
+            return null;
+        }
+
         var width = Math.Min(bitmap.Width, maxWidth);
         var height = Math.Max(1, (int)Math.Round(bitmap.Height * (double)width / bitmap.Width));
         using var resized = bitmap.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
-        if (resized is null) return null;
+
+        if (resized is null)
+        {
+            return null;
+        }
+
         using var encoded = resized.Encode(SKEncodedImageFormat.Png, 100);
+
         return new AppScreenshot(string.Empty, encoded.ToArray(), capturedAtUtc, "png", width, height);
     }
 
@@ -190,6 +221,7 @@ internal static class LiveUiActionEvidence
             after: null,
             cancellationToken,
             new AppToolBridgeRequestContext("host-ui", $"{actionId}:{phase}", correlationId));
+
         if (!response.Success
             || response.Envelope?.Payload is not JsonObject payload
             || payload["result"] is not JsonObject result)
@@ -198,6 +230,7 @@ internal static class LiveUiActionEvidence
         }
 
         var artifactPath = LiveUiNodeQuery.ReadString(result, "artifactPath");
+
         if (artifactPath is null || !File.Exists(artifactPath))
         {
             return null;
@@ -205,6 +238,7 @@ internal static class LiveUiActionEvidence
 
         var bytes = await File.ReadAllBytesAsync(artifactPath, cancellationToken);
         using var bitmap = SKBitmap.Decode(bytes);
+
         if (bitmap is null)
         {
             return null;
@@ -216,6 +250,7 @@ internal static class LiveUiActionEvidence
             ? parsedCapturedAtUtc.ToUniversalTime()
             : DateTimeOffset.UtcNow;
         var format = LiveUiNodeQuery.ReadString(result, "format") ?? "png";
+
         return new AppScreenshot(artifactPath, bytes, capturedAtUtc, format, bitmap.Width, bitmap.Height, ScreenshotGeometry.Validate(result["geometry"]));
     }
 
@@ -231,6 +266,7 @@ internal static class LiveUiActionEvidence
             screenshot.Height,
             quality: 100,
             screenshot.Bytes, screenshot.Geometry);
+
         return frame is null
             ? null
             : new PersistedScreenshotEvidence(
@@ -253,6 +289,7 @@ internal static class LiveUiActionEvidence
             session.CaptureSource == WorkspaceExecutionModes.Device ? 2500 : 650);
         AppSessionSnapshot? currentSession = null;
         SessionImageFrame? frame = null;
+
         do
         {
             if (runtimeState.TryGetSessionSnapshot(session.SessionId, out currentSession)
@@ -261,6 +298,7 @@ internal static class LiveUiActionEvidence
                 frame = currentSession.Images
                     .OrderBy(candidate => candidate.CapturedAtUtc)
                     .LastOrDefault();
+
                 if (frame is not null
                     && (!waitForFreshFrame || frame.CapturedAtUtc >= minimumCapturedAtUtc))
                 {
@@ -290,111 +328,17 @@ internal static class LiveUiActionEvidence
             applicationPaths,
             currentSession,
             frame);
+
         if (!File.Exists(artifactPath))
         {
             return null;
         }
 
         var bytes = await File.ReadAllBytesAsync(artifactPath, cancellationToken);
+
         return new PersistedScreenshotEvidence(
             frame,
             Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
             artifactPath);
     }
-}
-
-internal sealed record AppScreenshot(
-    string ArtifactPath, byte[] Bytes, DateTimeOffset CapturedAtUtc, string Format, int Width, int Height, JsonObject? Geometry = null);
-
-internal static class LiveUiEvidenceCapture
-{
-    public static async Task<AfterActionCapture> CaptureAfterAsync(
-        IRuntimeState runtimeState,
-        IApplicationPaths applicationPaths,
-        IAppToolBridge appToolBridge,
-        UiInputRouter uiInputRouter,
-        LiveUiTreeCapture beforeCapture,
-        string actionId,
-        string capability,
-        string toolName,
-        string? correlationId,
-        int settleMilliseconds = 200,
-        CancellationToken cancellationToken = default,
-        bool captureScreenshot = true,
-        IExternalSessionScreenshotCaptureManager? externalScreenshots = null,
-        LiveUiSelector? scrollSelector = null)
-    {
-        if (settleMilliseconds > 0)
-        {
-            await Task.Delay(settleMilliseconds, cancellationToken);
-        }
-
-        var captureResult = scrollSelector is null
-            ? await LiveUiTreeCapture.CaptureAsync(
-                beforeCapture.Session,
-                appToolBridge,
-                uiInputRouter,
-                toolName,
-                correlationId,
-                cancellationToken)
-            : await LiveUiTreeCapture.CaptureForSelectorAsync(
-                beforeCapture.Session, appToolBridge, uiInputRouter, toolName, correlationId,
-                scrollSelector, cancellationToken, allowCached: false, targetSource: beforeCapture.ToolId);
-        var scrollSettled = true;
-        if (scrollSelector is not null && captureResult.IsSuccess)
-        {
-            var settled = await LiveUiScrollSettlement.CaptureAsync(captureResult, scrollSelector,
-                token => LiveUiTreeCapture.CaptureForSelectorAsync(
-                    beforeCapture.Session, appToolBridge, uiInputRouter, toolName, correlationId,
-                    scrollSelector, token, allowCached: false, targetSource: beforeCapture.ToolId),
-                cancellationToken).ConfigureAwait(false);
-            captureResult = settled.Result;
-            scrollSettled = settled.IsSettled;
-        }
-
-        if (!captureResult.IsSuccess || captureResult.Capture is null)
-        {
-            return new AfterActionCapture(
-                new ActionEvidenceCapture(
-                    "after",
-                    VisualTreeSnapshotId: null,
-                    TreeHash: null,
-                    ScreenshotFrameId: null,
-                    ScreenshotHash: null,
-                    Persisted: false,
-                    captureResult.Message),
-                Capture: null);
-        }
-
-        var evidence = await LiveUiActionEvidence.CaptureAsync(
-            runtimeState,
-            applicationPaths,
-            appToolBridge,
-            captureResult.Capture,
-            actionId,
-            capability,
-            "after",
-            correlationId,
-            cancellationToken,
-            captureScreenshot, externalScreenshots);
-        return new AfterActionCapture(evidence, captureResult.Capture) { ScrollSettled = scrollSettled };
-    }
-}
-
-internal sealed record ActionEvidenceCapture(
-    string Phase,
-    string? VisualTreeSnapshotId,
-    string? TreeHash,
-    string? ScreenshotFrameId,
-    string? ScreenshotHash,
-    bool Persisted,
-    string Message,
-    string? ScreenshotArtifactPath = null,
-    string? ScreenshotFormat = null);
-
-internal sealed record AfterActionCapture(
-    ActionEvidenceCapture Evidence,
-    LiveUiTreeCapture? Capture)
-{
-    public bool ScrollSettled { get; init; } = true;
 }

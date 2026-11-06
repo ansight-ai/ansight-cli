@@ -35,18 +35,21 @@ internal sealed partial class LogReviewActions
         }
 
         var eventId = NormalizeOptionalString(arguments?["eventId"]?.GetValue<string>());
+
         if (!logIndex.HasValue && eventId is null && !timestampUtc.HasValue)
         {
             return CreateToolError("One of logIndex, eventId, or timestampUtc is required.");
         }
 
         var logs = BuildIndexedLogs(session!.Snapshot).ToArray();
+
         if (logs.Length == 0)
         {
             return CreateToolError($"Session '{session.Snapshot.SessionId}' has no captured logs.");
         }
 
         var target = ResolveLogContextTarget(logs, logIndex, eventId, timestampUtc, out var targetSelector, out errorMessage);
+
         if (target is null)
         {
             return CreateToolError(errorMessage ?? "Target log was not found.");
@@ -269,25 +272,31 @@ internal sealed partial class LogReviewActions
     {
         session = null;
         errorMessage = null;
+
         if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var snapshot, out var resolutionError))
         {
             errorMessage = resolutionError;
+
             return false;
         }
 
         var liveSessionIds = sessionResolver.GetLiveSessionIds();
         var liveOnly = arguments?["liveOnly"]?.GetValue<bool>() ?? false;
+
         if (liveOnly && !liveSessionIds.Contains(snapshot!.SessionId))
         {
             errorMessage = $"Session '{snapshot.SessionId}' is not currently connected.";
+
             return false;
         }
 
         var platformFilters = SessionPlatformFilters.Read(arguments);
         var platformKey = SessionPlatformFilters.ResolveSessionPlatformKey(snapshot!);
+
         if (platformFilters.Count > 0 && !platformFilters.Contains(platformKey))
         {
             errorMessage = $"Session '{snapshot!.SessionId}' platform '{platformKey}' does not match the requested platform filters.";
+
             return false;
         }
 
@@ -296,6 +305,7 @@ internal sealed partial class LogReviewActions
             liveSessionIds.Contains(snapshot!.SessionId),
             platformKey,
             SessionPlatformFilters.ResolveSessionOperatingSystem(snapshot!));
+
         return true;
     }
 
@@ -306,6 +316,7 @@ internal sealed partial class LogReviewActions
         out string? errorMessage)
     {
         errorMessage = null;
+
         var sessionId = NormalizeOptionalString(arguments?["sessionId"]?.GetValue<string>());
         var appId = NormalizeOptionalString(arguments?["appId"]?.GetValue<string>());
         var includeHistorical = arguments?["includeHistorical"]?.GetValue<bool>() ?? true;
@@ -330,9 +341,11 @@ internal sealed partial class LogReviewActions
             .ToArray();
 
         var resolvedSessions = new List<LogReviewSession>();
+
         foreach (var resolvedSnapshot in sessionResolver.LoadResolvedSnapshots(candidateSessions))
         {
             var platformKey = SessionPlatformFilters.ResolveSessionPlatformKey(resolvedSnapshot);
+
             if (platformFilters.Count > 0 && !platformFilters.Contains(platformKey))
             {
                 continue;
@@ -346,12 +359,14 @@ internal sealed partial class LogReviewActions
         }
 
         sessions = resolvedSessions;
+
         return true;
     }
 
     public static bool TryReadLogReviewFilters(JsonObject? arguments, out LogReviewFilters filters, out string? errorMessage)
     {
         filters = new LogReviewFilters(null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), null);
+
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "startUtc", out var startUtc, out errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out var endUtc, out errorMessage)
             || !ArgumentReader.TryReadMinimumVerbosity(arguments, out var minimumVerbosity, out errorMessage))
@@ -362,6 +377,7 @@ internal sealed partial class LogReviewActions
         if (startUtc.HasValue && endUtc.HasValue && startUtc.Value > endUtc.Value)
         {
             errorMessage = "startUtc must be before or equal to endUtc.";
+
             return false;
         }
 
@@ -373,7 +389,7 @@ internal sealed partial class LogReviewActions
             ArgumentReader.ReadStringSet(arguments, "tags").ToArray(),
             ArgumentReader.ReadStringSet(arguments, "sources").ToArray(),
             NormalizeOptionalString(arguments?["query"]?.GetValue<string>()));
+
         return true;
     }
-
 }

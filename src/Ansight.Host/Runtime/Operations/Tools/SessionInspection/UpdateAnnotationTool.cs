@@ -54,6 +54,7 @@ internal sealed class UpdateAnnotationTool : Operation
         }
 
         var annotationId = NormalizeOptionalString(arguments?["annotationId"]?.GetValue<string>());
+
         if (annotationId is null)
         {
             return Task.FromResult(ToolError("annotationId is required."));
@@ -61,12 +62,14 @@ internal sealed class UpdateAnnotationTool : Operation
 
         var existingAnnotation = snapshot!.Annotations.FirstOrDefault(annotation =>
             string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
+
         if (existingAnnotation is null)
         {
             return Task.FromResult(ToolError($"Annotation '{annotationId}' was not found for session '{snapshot.SessionId}'."));
         }
 
         var expectedSource = NormalizeOptionalString(arguments?["expectedSource"]?.GetValue<string>());
+
         if (expectedSource is not null && !string.Equals(existingAnnotation.Source, expectedSource, StringComparison.Ordinal))
         {
             return Task.FromResult(ToolError($"Annotation '{annotationId}' source is '{existingAnnotation.Source}', not '{expectedSource}'."));
@@ -98,6 +101,7 @@ internal sealed class UpdateAnnotationTool : Operation
                 : existingAnnotation.Status;
 
         var updatedGeometry = existingAnnotation.Geometry;
+
         if (arguments?["geometries"] is not null)
         {
             if (!SessionAnnotationArgumentReader.TryReadGeometries(arguments, updatedStartUtc, out updatedGeometry, out errorMessage))
@@ -107,6 +111,7 @@ internal sealed class UpdateAnnotationTool : Operation
         }
 
         var updatedTarget = existingAnnotation.Target;
+
         if (clearTarget == true)
         {
             updatedTarget = null;
@@ -137,6 +142,7 @@ internal sealed class UpdateAnnotationTool : Operation
         };
 
         var result = runtimeState.UpsertSessionAnnotation(snapshot.SessionId, updatedAnnotation);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));
@@ -149,6 +155,7 @@ internal sealed class UpdateAnnotationTool : Operation
 
         var savedAnnotation = updatedSnapshot.Annotations.FirstOrDefault(annotation =>
             string.Equals(annotation.AnnotationId, updatedAnnotation.AnnotationId, StringComparison.Ordinal)) ?? updatedAnnotation;
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {

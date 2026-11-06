@@ -28,18 +28,20 @@ internal static class ListenerPortWarning
         if (!IsPortInUse(exception))
         {
             message = string.Empty;
+
             return false;
         }
 
         message =
             $"Ansight couldn't start the {listenerName} on {portDescription} because another app is already using that port. Close the other app or free the port, then restart Ansight.";
+
         return true;
     }
 
     public static bool IsPortWarningMessage(string? message)
     {
         return !string.IsNullOrWhiteSpace(message)
-               && message.Contains(PortInUsePhrase, StringComparison.OrdinalIgnoreCase);
+            && message.Contains(PortInUsePhrase, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPortInUse(Exception exception)
@@ -49,7 +51,7 @@ internal static class ListenerPortWarning
             SocketException socketException when socketException.SocketErrorCode == SocketError.AddressAlreadyInUse => true,
             HttpListenerException httpListenerException
                 when IsPortInUseNativeError(httpListenerException.NativeErrorCode)
-                     || IsPortInUseNativeError(httpListenerException.ErrorCode) => true,
+                    || IsPortInUseNativeError(httpListenerException.ErrorCode) => true,
             _ => exception.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
         };
     }
@@ -57,8 +59,8 @@ internal static class ListenerPortWarning
     private static bool IsPortInUseNativeError(int errorCode)
     {
         return errorCode is
-            MacOsAddressAlreadyInUseErrorCode or
-            LinuxAddressAlreadyInUseErrorCode or
-            WindowsAddressAlreadyInUseErrorCode;
+                MacOsAddressAlreadyInUseErrorCode or
+                LinuxAddressAlreadyInUseErrorCode or
+                WindowsAddressAlreadyInUseErrorCode;
     }
 }

@@ -30,6 +30,7 @@ internal sealed class DeleteSessionTool : Operation
     public override Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         var sessionId = NormalizeOptionalString(arguments?["sessionId"]?.GetValue<string>());
+
         if (sessionId is null)
         {
             return Task.FromResult(ToolError("sessionId is required."));
@@ -52,18 +53,21 @@ internal sealed class DeleteSessionTool : Operation
         }
 
         var expectedAppId = NormalizeOptionalString(arguments?["expectedAppId"]?.GetValue<string>());
+
         if (expectedAppId is not null && !string.Equals(snapshot!.AppId, expectedAppId, StringComparison.Ordinal))
         {
             return Task.FromResult(ToolError($"Session '{snapshot.SessionId}' appId is '{snapshot.AppId}', not '{expectedAppId}'."));
         }
 
         var expectedName = NormalizeOptionalString(arguments?["expectedName"]?.GetValue<string>());
+
         if (expectedName is not null && !string.Equals(snapshot!.Name, expectedName, StringComparison.Ordinal))
         {
             return Task.FromResult(ToolError($"Session '{snapshot.SessionId}' name is '{snapshot.Name}', not '{expectedName}'."));
         }
 
         var result = runtimeState.DeleteSession(snapshot!.SessionId);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));

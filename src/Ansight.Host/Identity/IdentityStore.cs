@@ -51,6 +51,7 @@ internal sealed class IdentityStore : IIdentityStore
         Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
 
         var storedJson = encryptedStorage.Get(storageKey);
+
         if (TryCreateIdentity(storedJson, out var current))
         {
             return current;
@@ -62,10 +63,12 @@ internal sealed class IdentityStore : IIdentityStore
             try
             {
                 var legacyJson = File.ReadAllText(legacyPath);
+
                 if (TryCreateIdentity(legacyJson, out current))
                 {
                     encryptedStorage.Set(storageKey, legacyJson);
                     File.Delete(legacyPath);
+
                     return current;
                 }
             }
@@ -90,6 +93,7 @@ internal sealed class IdentityStore : IIdentityStore
         };
 
         encryptedStorage.Set(storageKey, JsonSerializer.Serialize(document, JsonUtil.Pretty));
+
         return identity;
     }
 
@@ -98,18 +102,21 @@ internal sealed class IdentityStore : IIdentityStore
         if (string.IsNullOrWhiteSpace(json))
         {
             identity = null!;
+
             return false;
         }
 
         try
         {
             var existing = JsonSerializer.Deserialize<IdentityDocument>(json, JsonUtil.Compact);
+
             if (existing is not null &&
                 !string.IsNullOrWhiteSpace(existing.PrivateKeyPkcs8) &&
                 !string.IsNullOrWhiteSpace(existing.HostName))
             {
                 var privateKey = Convert.FromBase64String(existing.PrivateKeyPkcs8);
                 identity = RuntimeIdentity.FromPrivateKey(existing.HostName, privateKey);
+
                 return true;
             }
         }
@@ -119,6 +126,7 @@ internal sealed class IdentityStore : IIdentityStore
         }
 
         identity = null!;
+
         return false;
     }
 }

@@ -24,12 +24,14 @@ public static class PublicPairingConfigJson
         try
         {
             using var document = JsonDocument.Parse(json);
+
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }
 
             var schema = JsonUtil.TryGetString(document.RootElement, "schema");
+
             if (string.Equals(schema, PairingConfig.SchemaName, StringComparison.Ordinal))
             {
                 return ReturnWhenEnabled(JsonSerializer.Deserialize<PairingConfig>(json, JsonUtil.Compact));

@@ -53,6 +53,7 @@ public static class VisualTreeContract
         string? format)
     {
         var normalizedToolId = Normalize(toolId);
+
         if (normalizedToolId is MauiToolId)
         {
             return MauiKind;
@@ -84,6 +85,7 @@ public static class VisualTreeContract
         }
 
         var normalizedKind = Normalize(reportedKind);
+
         if (normalizedKind is AccessibilityKind
             or MauiKind
             or ReactComponentKind
@@ -107,6 +109,7 @@ public static class VisualTreeContract
         }
 
         var normalizedSource = Normalize(source);
+
         if (normalizedSource is "device-accessibility" or "core-simulator-ax-service")
         {
             return AccessibilityKind;

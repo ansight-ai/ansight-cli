@@ -9,47 +9,66 @@ public sealed class SimulatorAgentVisualTreeObservationTests
     {
         var root = new JsonObject
         {
-            ["id"] = "page", ["typeId"] = 0, ["automationId"] = "AccountPage",
-            ["flags"] = 3, ["bounds"] = CompactBounds(0, 0, 390, 844), ["children"] = new JsonArray()
+            ["id"] = "page",
+            ["typeId"] = 0,
+            ["automationId"] = "AccountPage",
+            ["flags"] = 3,
+            ["bounds"] = CompactBounds(0, 0, 390, 844),
+            ["children"] = new JsonArray()
         };
         var parent = root;
+
         for (var index = 0; index < 3; index++)
         {
             var section = new JsonObject
             {
-                ["id"] = $"section-{index}", ["typeId"] = 1,
-                ["automationId"] = $"account-section-{index}", ["label"] = new string((char)('a' + index), 100),
-                ["flags"] = 3, ["bounds"] = CompactBounds(0, 0, 390, 844), ["children"] = new JsonArray()
+                ["id"] = $"section-{index}",
+                ["typeId"] = 1,
+                ["automationId"] = $"account-section-{index}",
+                ["label"] = new string((char)('a' + index), 100),
+                ["flags"] = 3,
+                ["bounds"] = CompactBounds(0, 0, 390, 844),
+                ["children"] = new JsonArray()
             };
             parent["children"]!.AsArray().Add(section);
             parent = section;
         }
+
         for (var index = 0; index < 10; index++)
         {
             parent["children"]!.AsArray().Add(new JsonObject
             {
-                ["id"] = $"control-{index}", ["typeId"] = 2,
+                ["id"] = $"control-{index}",
+                ["typeId"] = 2,
                 ["automationId"] = $"account-control-{index}",
                 ["label"] = index == 9 ? "Roles and Permissions" : $"Control {index}",
-                ["flags"] = 3, ["bounds"] = CompactBounds(10, 30 * index, 200, 25), ["children"] = new JsonArray()
+                ["flags"] = 3,
+                ["bounds"] = CompactBounds(10, 30 * index, 200, 25),
+                ["children"] = new JsonArray()
             });
         }
+
         var tree = new JsonObject
         {
             ["format"] = "ansight.maui.visual-tree.compact.v2",
             ["types"] = new JsonArray("ContentPage", "Grid", "Button"),
             ["flagBits"] = new JsonObject { ["visible"] = 1, ["enabled"] = 2 },
-            ["coordinateSpace"] = Bounds(0, 0, 390, 844), ["root"] = root
+            ["coordinateSpace"] = Bounds(0, 0, 390, 844),
+            ["root"] = root
         };
 
         var observation = Assert.IsType<JsonObject>(VisualTreeObservation.Build(
             tree, "session", "app", "maui.get_visual_tree",
             // Include the per-control provider/fingerprint handles in the fixture budget.
-            UiProjectionOptions.Model with { MaximumCharacters = 6500 }));
+            UiProjectionOptions.Model with
+            {
+                MaximumCharacters = 6500
+            }));
 
         Assert.Equal(13, observation["returnedNodeCount"]!.GetValue<int>());
         Assert.InRange(observation.ToJsonString().Length, 1, 6500);
         Assert.False(observation["truncated"]!.GetValue<bool>());
+
         var nodes = Descendants(observation["root"]!.AsObject()).ToArray();
         Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == "Roles and Permissions");
         Assert.All(nodes, node =>
@@ -64,6 +83,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
     public void Build_ReturnsBoundedCompactDigestWithoutRawNodePayloads()
     {
         var children = new JsonArray();
+
         for (var index = 0; index < 100; index++)
         {
             children.Add(new JsonObject
@@ -114,6 +134,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
         Assert.NotNull(observation);
         Assert.Equal(original, visualTree.ToJsonString());
         Assert.Null(observation["nodes"]);
+
         var nodes = Descendants(Assert.IsType<JsonObject>(observation["root"])).ToArray();
         Assert.InRange(nodes.Length, 1, 40);
         Assert.Equal(nodes.Length, observation["returnedNodeCount"]?.GetValue<int>());
@@ -133,6 +154,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
     public void Build_PrioritizesOnScreenMauiActionAfterManyOffscreenNodes()
     {
         var children = new JsonArray();
+
         for (var index = 0; index < 80; index++)
         {
             children.Add(new JsonObject
@@ -157,6 +179,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
             ["bounds"] = CompactBounds(104, 697, 181, 44),
             ["children"] = new JsonArray()
         });
+
         var visualTree = new JsonObject
         {
             ["format"] = "ansight.maui.visual-tree.compact.v2",
@@ -246,6 +269,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
             "maui.get_visual_tree"));
 
         Assert.Equal("maui", observation["framework"]?.GetValue<string>());
+
         var structureNodes = Assert.IsType<JsonArray>(observation["structureNodes"]);
         Assert.Contains(structureNodes.OfType<JsonObject>(), node =>
             node["type"]?.GetValue<string>().Contains("Shell", StringComparison.Ordinal) == true);
@@ -272,6 +296,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
             .ToArray();
         Assert.Equal(["ios-uikit", "ios-swiftui"], frameworks);
         Assert.Null(observation["graphStructureGuidance"]);
+
         var controllers = Assert.IsType<JsonArray>(observation["graphStructureControllers"]);
         Assert.Equal(frameworks, controllers.Select(controller => controller!["framework"]!.GetValue<string>()));
         Assert.All(controllers, controller => Assert.Null(controller!["guidance"]));
@@ -296,6 +321,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
             .ToArray();
         Assert.Equal(["android-views", "android-compose"], frameworks);
         Assert.Null(observation["graphStructureGuidance"]);
+
         var controllers = Assert.IsType<JsonArray>(observation["graphStructureControllers"]);
         Assert.Equal(frameworks, controllers.Select(controller => controller!["framework"]!.GetValue<string>()));
         Assert.All(controllers, controller => Assert.Null(controller!["guidance"]));
@@ -354,8 +380,10 @@ public sealed class SimulatorAgentVisualTreeObservationTests
             VisualTreeContract.NativeToolId);
 
         Assert.Equal("macos-appkit", Assert.Single(appKit).Framework);
+
         var unknownController = Assert.Single(unknown);
         Assert.Equal("native-unknown", unknownController.Framework);
+
         var guidance = NavigationGuidance.Read(unknownController.Framework);
         Assert.DoesNotContain("MAUI", guidance, StringComparison.Ordinal);
         Assert.DoesNotContain("Treat .NET", guidance, StringComparison.Ordinal);
@@ -401,6 +429,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
         foreach (var child in children.OfType<JsonObject>())
         {
             yield return child;
+
             foreach (var descendant in Descendants(child))
             {
                 yield return descendant;
@@ -426,6 +455,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
         params string[] typeNames)
     {
         var children = new JsonArray();
+
         for (var index = 1; index < typeNames.Length; index++)
         {
             children.Add(new JsonObject
@@ -436,6 +466,7 @@ public sealed class SimulatorAgentVisualTreeObservationTests
                 ["children"] = new JsonArray()
             });
         }
+
         return new JsonObject
         {
             ["format"] = VisualTreeContract.NativeFormat,

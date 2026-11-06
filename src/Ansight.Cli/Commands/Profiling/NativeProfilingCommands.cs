@@ -21,6 +21,7 @@ internal static class NativeProfilingCommands
             options,
             start: false,
             cancellationToken).ConfigureAwait(false);
+
         return action switch
         {
             "tools" or "requirements" => await ShowToolchainAsync(
@@ -57,7 +58,7 @@ internal static class NativeProfilingCommands
                 cancellationToken),
             _ => throw new CliUsageException(
                 $"Unknown {platform} native profiling action '{action}'. "
-                + $"Run 'ansight profile {platform} help' for available commands.")
+                    + $"Run 'ansight profile {platform} help' for available commands.")
         };
     }
 
@@ -69,6 +70,7 @@ internal static class NativeProfilingCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(3, $"ansight profile {platform} tools");
+
         var toolchain = await runtime.NativeProfiling.GetToolchainAsync(platform, cancellationToken)
             .ConfigureAwait(false);
         var inspectionToolchain = platform == "android"
@@ -81,14 +83,15 @@ internal static class NativeProfilingCommands
                 toolchain,
                 inspectionToolchain),
             () => $"Platform: {toolchain.Platform}\n"
-                  + $"Engine: {toolchain.Engine}\n"
-                  + $"Capture tool: {toolchain.CaptureToolPath ?? "not found"}\n"
-                  + $"Version: {toolchain.CaptureToolVersion ?? "not available"}\n"
-                  + (inspectionToolchain is null
-                      ? string.Empty
-                      : $"Trace Processor: {inspectionToolchain.ToolPath ?? "not found"}\n"
+                + $"Engine: {toolchain.Engine}\n"
+                + $"Capture tool: {toolchain.CaptureToolPath ?? "not found"}\n"
+                + $"Version: {toolchain.CaptureToolVersion ?? "not available"}\n"
+                + (inspectionToolchain is null
+                    ? string.Empty
+                    : $"Trace Processor: {inspectionToolchain.ToolPath ?? "not found"}\n"
                         + $"Trace Processor version: {inspectionToolchain.Version ?? "not available"}\n")
-                  + toolchain.Message);
+                + toolchain.Message);
+
         return toolchain.IsAvailable ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -102,7 +105,9 @@ internal static class NativeProfilingCommands
         arguments.EnsurePositionalCount(
             4,
             $"ansight profile {platform} start <app-path> --app-id <id> --device-id <id> [--wait] [options]");
+
         var wait = arguments.HasFlag("wait");
+
         if (CliCommandContext.Current is null && !wait)
         {
             throw new CliHostUnavailableException(
@@ -110,6 +115,7 @@ internal static class NativeProfilingCommands
         }
 
         var applicationPath = Path.GetFullPath(arguments.RequirePositional(3, "application path"));
+
         if (!File.Exists(applicationPath) && !Directory.Exists(applicationPath))
         {
             throw new CliUsageException($"Application artifact '{applicationPath}' was not found.");
@@ -126,6 +132,7 @@ internal static class NativeProfilingCommands
             Headless: arguments.HasFlag("headless"));
         var captureId = await runtime.NativeProfiling.StartCaptureAsync(request, cancellationToken)
             .ConfigureAwait(false);
+
         if (!wait)
         {
             return WriteCapture(
@@ -137,12 +144,15 @@ internal static class NativeProfilingCommands
         }
 
         string? previousPhase = null;
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var snapshot = runtime.NativeProfiling.GetCapture(captureId)
-                           ?? throw new InvalidOperationException(
-                               $"Capture '{captureId}' disappeared from the native profiling service.");
+                ?? throw new InvalidOperationException(
+                    $"Capture '{captureId}' disappeared from the native profiling service.");
+
             if (!string.Equals(previousPhase, snapshot.Phase, StringComparison.Ordinal))
             {
                 previousPhase = snapshot.Phase;
@@ -165,7 +175,9 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, $"ansight profile {platform} status <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
+
         return WriteCapture(
             platform,
             "status",
@@ -181,9 +193,10 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, $"ansight profile {platform} cancel <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var cancelled = GetPlatformCapture(platform, runtime, captureId) is not null
-                        && runtime.NativeProfiling.CancelCapture(captureId);
+            && runtime.NativeProfiling.CancelCapture(captureId);
         output.Write(
             new NativeProfilingCancellationOutput(
                 "ansight.native-capture-cancel/v1",
@@ -192,6 +205,7 @@ internal static class NativeProfilingCommands
             () => cancelled
                 ? $"Cancellation requested for capture '{captureId}'."
                 : $"Capture '{captureId}' is not an active {platform} native capture.");
+
         return cancelled ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -202,6 +216,7 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, $"ansight profile {platform} list [--limit <count>]");
+
         var limit = arguments.GetIntOption("limit", 100, 1, 1_000);
         var captures = runtime.NativeProfiling.ListCaptures()
             .Where(capture => string.Equals(capture.Platform, platform, StringComparison.Ordinal))
@@ -219,6 +234,7 @@ internal static class NativeProfilingCommands
                     Environment.NewLine,
                     captures.Select(capture =>
                         $"{capture.CaptureId}\t{capture.State}\t{capture.Preset}\t{capture.ApplicationPath}\t{capture.CreatedUtc:O}")));
+
         return CliExitCodes.Success;
     }
 
@@ -229,8 +245,10 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, $"ansight profile {platform} manifest <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var manifest = runtime.NativeProfiling.GetManifest(captureId);
+
         if (manifest is not null
             && !string.Equals(manifest.Platform, platform, StringComparison.Ordinal))
         {
@@ -246,10 +264,11 @@ internal static class NativeProfilingCommands
             () => manifest is null
                 ? $"{platform} native capture '{captureId}' was not found."
                 : $"{manifest.CaptureId}\t{manifest.State}\t{manifest.Engine}\t{manifest.Preset}\n"
-                  + string.Join(
-                      Environment.NewLine,
-                      manifest.Artifacts.Select(artifact =>
+                    + string.Join(
+                        Environment.NewLine,
+                        manifest.Artifacts.Select(artifact =>
                           $"{artifact.Kind}\t{artifact.Length}\t{artifact.RelativePath}")));
+
         return manifest is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -260,8 +279,10 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, $"ansight profile {platform} artifact <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var artifact = runtime.NativeProfiling.GetArtifact(captureId);
+
         if (artifact is not null
             && !string.Equals(artifact.Platform, platform, StringComparison.Ordinal))
         {
@@ -277,6 +298,7 @@ internal static class NativeProfilingCommands
             () => artifact is null
                 ? $"{platform} native capture '{captureId}' or its authoritative artifact was not found."
                 : artifact.Path);
+
         return artifact is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -288,9 +310,11 @@ internal static class NativeProfilingCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(4, $"ansight profile {platform} overview <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var manifest = runtime.NativeProfiling.GetManifest(captureId);
         NativeProfileCaptureInspection? inspection = null;
+
         if (manifest is not null
             && string.Equals(manifest.Platform, platform, StringComparison.Ordinal))
         {
@@ -308,6 +332,7 @@ internal static class NativeProfilingCommands
             () => inspection is null
                 ? $"{platform} native capture '{captureId}' was not found."
                 : FormatInspection(inspection));
+
         return inspection is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -317,10 +342,11 @@ internal static class NativeProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, "ansight profile ios toc <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var manifest = runtime.NativeProfiling.GetManifest(captureId);
         var toc = manifest is not null
-                  && string.Equals(manifest.Platform, "ios", StringComparison.Ordinal)
+            && string.Equals(manifest.Platform, "ios", StringComparison.Ordinal)
             ? runtime.NativeProfiling.InspectInstrumentsToc(captureId)
             : null;
         output.Write(
@@ -332,9 +358,10 @@ internal static class NativeProfilingCommands
             () => toc is null
                 ? $"iOS native capture '{captureId}' was not found."
                 : $"TOC: {toc.Path}\nRuns: {toc.RunCount}\nTables: {toc.TableCount}\n"
-                  + string.Join(
-                      Environment.NewLine,
-                      toc.Schemas.Select(schema => $"{schema.Schema}\t{schema.Occurrences}")));
+                    + string.Join(
+                        Environment.NewLine,
+                        toc.Schemas.Select(schema => $"{schema.Schema}\t{schema.Occurrences}")));
+
         return toc is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -347,6 +374,7 @@ internal static class NativeProfilingCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight profile android query <capture-id> --sql <read-only-query> [--limit <rows>]");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var maximumRows = arguments.GetIntOption("limit", 1_000, 1, 10_000);
         var query = await runtime.NativeProfiling.QueryPerfettoAsync(
@@ -360,6 +388,7 @@ internal static class NativeProfilingCommands
                 captureId,
                 query),
             () => FormatPerfettoQuery(query));
+
         return CliExitCodes.Success;
     }
 
@@ -375,6 +404,7 @@ internal static class NativeProfilingCommands
             $"Requested duration: {inspection.RequestedDurationSeconds}s",
             $"Artifact: {inspection.AuthoritativeArtifact?.Path ?? "not found"}"
         };
+
         if (inspection.CaptureElapsedSeconds is not null)
         {
             lines.Add($"Capture job elapsed: {inspection.CaptureElapsedSeconds:F3}s");
@@ -391,6 +421,7 @@ internal static class NativeProfilingCommands
         {
             lines.Add($"Perfetto data sources: {string.Join(", ", inspection.Perfetto.DataSources)}");
             lines.Add($"Trace Processor: {inspection.Perfetto.Toolchain.ToolPath ?? "not found"}");
+
             if (inspection.Perfetto.TraceOverview is not null)
             {
                 lines.Add(FormatPerfettoQuery(inspection.Perfetto.TraceOverview));
@@ -408,6 +439,7 @@ internal static class NativeProfilingCommands
     private static string FormatPerfettoQuery(PerfettoQueryInspection query)
     {
         var lines = new List<string>();
+
         if (query.Columns.Count > 0)
         {
             lines.Add(string.Join('\t', query.Columns));
@@ -416,6 +448,7 @@ internal static class NativeProfilingCommands
         lines.AddRange(query.Rows.Select(row => string.Join(
             '\t',
             row.Select(static value => value ?? "NULL"))));
+
         if (query.WasTruncated)
         {
             lines.Add($"Results truncated after {query.RowCount} rows.");
@@ -447,9 +480,10 @@ internal static class NativeProfilingCommands
             () => snapshot is null
                 ? $"{platform} native capture '{captureId}' was not found."
                 : $"{snapshot.CaptureId}\t{snapshot.State}\t{snapshot.Phase}"
-                  + (string.IsNullOrWhiteSpace(snapshot.FailureMessage)
-                      ? string.Empty
-                      : $"\n{snapshot.FailureMessage}"));
+                    + (string.IsNullOrWhiteSpace(snapshot.FailureMessage)
+                        ? string.Empty
+                        : $"\n{snapshot.FailureMessage}"));
+
         return snapshot is null || snapshot.State is "failed" or "cancelled"
             ? CliExitCodes.Failure
             : CliExitCodes.Success;
@@ -461,8 +495,9 @@ internal static class NativeProfilingCommands
         string captureId)
     {
         var snapshot = runtime.NativeProfiling.GetCapture(captureId);
+
         return snapshot is not null
-               && string.Equals(snapshot.Manifest.Platform, platform, StringComparison.Ordinal)
+            && string.Equals(snapshot.Manifest.Platform, platform, StringComparison.Ordinal)
             ? snapshot
             : null;
     }
@@ -478,6 +513,7 @@ internal static class NativeProfilingCommands
             "android" => preset is "launch" or "system" or "memory" or "native-heap" or "managed-heap",
             _ => false
         };
+
         return isSupported
             ? preset
             : throw new CliUsageException(
@@ -488,10 +524,10 @@ internal static class NativeProfilingCommands
 
     private static bool IsHelpAt(CliArguments arguments, int position)
         => arguments.Positionals.Count > position
-           && string.Equals(
-               arguments.Positionals[position],
-               "help",
-               StringComparison.OrdinalIgnoreCase);
+            && string.Equals(
+                arguments.Positionals[position],
+                "help",
+                StringComparison.OrdinalIgnoreCase);
 
     private static string BuildHelp(string platform)
         => platform == "ios"

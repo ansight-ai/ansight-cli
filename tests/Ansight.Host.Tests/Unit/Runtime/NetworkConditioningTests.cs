@@ -45,17 +45,29 @@ public sealed class NetworkConditioningTests
         var events = new List<string>();
         var manager = Manager(backend, events);
         string id;
+
         await using (NetworkConditioningScope.Begin("task-a"))
         {
-            var lease = await manager.SetAsync(target, new() { DownloadKbps = 100 }, [], [], 5000, null, default);
+            var lease = await manager.SetAsync(target, new()
+            {
+                DownloadKbps = 100
+            }, [], [], 5000, null, default);
             id = lease["leaseId"]!.GetValue<string>();
             await Assert.ThrowsAsync<InvalidOperationException>(() => manager.SetAsync(target, new(), [], [], 5000, null, default));
+
             await using (NetworkConditioningScope.Begin("task-b"))
+            {
                 await Assert.ThrowsAsync<InvalidOperationException>(() => manager.ResetAsync(id));
-            await manager.SetAsync(target, new() { Stall = true }, [], [], 300000, id, default);
+            }
+
+            await manager.SetAsync(target, new()
+            {
+                Stall = true
+            }, [], [], 300000, id, default);
             Assert.Equal(lease["expiresAtUtc"]!.ToJsonString(), (await manager.GetAsync(id, default))["expiresAtUtc"]!.ToJsonString());
             Assert.False(backend.Disposed);
         }
+
         Assert.True(backend.Disposed);
         Assert.Contains("task-ended", events);
         await manager.ResetAsync(id); // idempotent after expiration/task cleanup
@@ -89,15 +101,33 @@ public sealed class NetworkConditioningTests
     {
         var cleaned = false;
         var scope = NetworkConditioningScope.Begin("task");
-        scope.Register(() => { cleaned = true; return Task.CompletedTask; });
+        scope.Register(() =>
+        {
+            cleaned = true;
+
+            return Task.CompletedTask;
+        }
+);
         scope.Register(() => throw new IOException("cleanup error"));
         await Assert.ThrowsAsync<AggregateException>(() => scope.DisposeAsync().AsTask());
         Assert.True(cleaned);
     }
 
     private static NetworkConditioningManager Manager(FakeBackend backend, List<string> events)
-        => new(Path.GetTempPath(), (_, name, _) => { lock (events) events.Add(name); },
-            (_, _) => Task.FromResult(123), (_, _, expires) => { backend.ExpiresAtUtc = expires; return backend; });
+        => new(Path.GetTempPath(), (_, name, _) =>
+        {
+            lock (events)
+            {
+                events.Add(name);
+            }
+        },
+            (_, _) => Task.FromResult(123), (_, _, expires) =>
+            {
+                backend.ExpiresAtUtc = expires;
+
+                return backend;
+            }
+);
 
     private sealed class FakeBackend : INetworkConditioningBackend
     {
@@ -106,13 +136,27 @@ public sealed class NetworkConditioningTests
         public bool Fail { get; set; }
         public bool Disposed { get; private set; }
         public TaskCompletionSource Stopped { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public Task ApplyAsync(NetworkConditionProfile profile, IReadOnlyList<NetworkConditionStep> steps, CancellationToken token)
         {
-            if (Fail) throw new IOException("start failed");
+            if (Fail)
+            {
+                throw new IOException("start failed");
+            }
+
             token.ThrowIfCancellationRequested();
+
             return Task.CompletedTask;
         }
+
         public JsonObject Status() => new() { ["status"] = "ready" };
-        public ValueTask DisposeAsync() { Disposed = true; Stopped.TrySetResult(); return ValueTask.CompletedTask; }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            Stopped.TrySetResult();
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

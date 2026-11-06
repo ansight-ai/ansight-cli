@@ -12,7 +12,10 @@ internal static class DeviceCommands
         CancellationToken cancellationToken)
     {
         if (arguments.Positionals.Count > 1 && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase))
+        {
             return await DeviceNetworkCommands.RunAsync(arguments, output, cancellationToken);
+        }
+
         if (CliCommandHelp.IsRequested(arguments))
         {
             return CliCommandHelp.Write(output, BuildHelp());
@@ -20,18 +23,22 @@ internal static class DeviceCommands
 
         var runtimeOptions = CliRuntime.ResolveOptions(arguments);
         var service = new DeviceService(CliRuntime.CreateHostOptions(runtimeOptions));
+
         if (IsImplicitListInvocation(arguments))
         {
             var exitCode = await ListAsync(service, arguments, output, cancellationToken);
+
             if (!output.IsJson)
             {
                 output.WriteText(
                     $"Run 'ansight {arguments.Positionals[0]} help' to see available device actions and options.{Environment.NewLine}");
             }
+
             return exitCode;
         }
 
         var subcommand = arguments.RequirePositional(1, "device subcommand").ToLowerInvariant();
+
         return subcommand switch
         {
             "list" => await ListAsync(service, arguments, output, cancellationToken),
@@ -98,24 +105,26 @@ internal static class DeviceCommands
         var applicationFilter = applicationIdentifier is null
             ? new DeviceApplicationFilterResult(filteredDevices, [], [], [])
             : await FilterDevicesByApplicationAsync(
-                    filteredDevices,
-                    applicationIdentifier,
-                    async (device, token) =>
+                filteredDevices,
+                applicationIdentifier,
+                async (device, token) =>
                     {
                         var application = await service.GetInstalledApplicationAsync(
-                                device.Platform,
-                                device.Identifier,
-                                applicationIdentifier,
-                                token)
+                            device.Platform,
+                            device.Identifier,
+                            applicationIdentifier,
+                            token)
                             .ConfigureAwait(false);
+
                         return application is null
                             ? Array.Empty<InstalledApplication>()
                             : [application];
                     },
-                    cancellationToken,
-                    applicationVersion,
-                    applicationBuildVersion)
+                cancellationToken,
+                applicationVersion,
+                applicationBuildVersion)
                 .ConfigureAwait(false);
+
         if (arguments.IsVerbose)
         {
             WriteApplicationInspectionDiagnostics(output, applicationFilter.Failures);
@@ -141,6 +150,7 @@ internal static class DeviceCommands
                 includeOffline,
                 applicationIdentifier,
                 applicationFilter.Matches) + Environment.NewLine);
+
         return CliExitCodes.Success;
     }
 
@@ -164,15 +174,15 @@ internal static class DeviceCommands
         return devices
             .Where(device => includeOffline || device.IsBooted)
             .Where(device => !hasPlatformFilter
-                             || (includeAndroid && IsPlatform(device, DevicePlatforms.Android))
-                             || (includeIos && IsPlatform(device, DevicePlatforms.Ios)))
+                || (includeAndroid && IsPlatform(device, DevicePlatforms.Android))
+                || (includeIos && IsPlatform(device, DevicePlatforms.Ios)))
             .Where(device => !hasKindFilter
-                             || (includeEmulators && IsAndroidVirtualDevice(device))
-                             || (includeSimulators && IsIosVirtualDevice(device))
-                             || (includePhysicalDevices && device.IsPhysical))
+                || (includeEmulators && IsAndroidVirtualDevice(device))
+                || (includeSimulators && IsIosVirtualDevice(device))
+                || (includePhysicalDevices && device.IsPhysical))
             .Where(device => !hasFormFactorFilter
-                             || (includePhones && DeviceFormFactors.IsPhone(device.FormFactor))
-                             || (includeTablets && DeviceFormFactors.IsTablet(device.FormFactor)))
+                || (includePhones && DeviceFormFactors.IsPhone(device.FormFactor))
+                || (includeTablets && DeviceFormFactors.IsTablet(device.FormFactor)))
             .ToArray();
     }
 
@@ -202,9 +212,11 @@ internal static class DeviceCommands
             {
                 var device = devices[index];
                 var unavailableReason = GetApplicationInspectionUnavailableReason(device);
+
                 if (unavailableReason is not null)
                 {
                     failures[index] = CreateApplicationInspectionFailure(device, unavailableReason);
+
                     return;
                 }
 
@@ -215,6 +227,7 @@ internal static class DeviceCommands
                         application.Identifier,
                         applicationIdentifier,
                         StringComparison.OrdinalIgnoreCase));
+
                     if (application is not null
                         && MatchesApplicationMetadata(
                             application,
@@ -246,6 +259,7 @@ internal static class DeviceCommands
         var inspectionFailures = failures
             .OfType<DeviceApplicationInspectionFailure>()
             .ToArray();
+
         if (inspectionFailures.Length == 0)
         {
             return new DeviceApplicationFilterResult(matchingDevices, [], [], applicationMatches);
@@ -253,12 +267,13 @@ internal static class DeviceCommands
 
         var deviceLabel = inspectionFailures.Length == 1 ? "device" : "devices";
         var devicePronoun = inspectionFailures.Length == 1 ? "it" : "them";
+
         return new DeviceApplicationFilterResult(
             matchingDevices,
             [
                 $"Application search skipped {inspectionFailures.Length} {deviceLabel} that could not be inspected. "
-                + $"Results may be incomplete; start or reconnect {devicePronoun} and retry. "
-                + "Pass --verbose for details."
+                    + $"Results may be incomplete; start or reconnect {devicePronoun} and retry. "
+                    + "Pass --verbose for details."
             ],
             inspectionFailures,
             applicationMatches);
@@ -306,6 +321,7 @@ internal static class DeviceCommands
         }
 
         var applicationIdentifier = arguments.RequireOption("app-id").Trim();
+
         if (applicationIdentifier.Length == 0)
         {
             throw new CliUsageException("--app-id must be a non-empty bundle or package identifier.");
@@ -330,6 +346,7 @@ internal static class DeviceCommands
         }
 
         var value = arguments.RequireOption(optionName).Trim();
+
         return value.Length == 0
             ? throw new CliUsageException($"--{optionName} must be non-empty.")
             : value;
@@ -341,6 +358,7 @@ internal static class DeviceCommands
     {
         var hasCanonicalOption = arguments.HasFlag("app-version");
         var hasAlias = arguments.HasFlag("version");
+
         if (hasCanonicalOption && hasAlias)
         {
             throw new CliUsageException(
@@ -359,10 +377,10 @@ internal static class DeviceCommands
         string? applicationBuildVersion)
         => (applicationVersion is null
             || MatchesApplicationMetadataPattern(application.Version, applicationVersion))
-           && (applicationBuildVersion is null
-               || MatchesApplicationMetadataPattern(
-                   application.BuildVersion,
-                   applicationBuildVersion));
+            && (applicationBuildVersion is null
+                || MatchesApplicationMetadataPattern(
+                    application.BuildVersion,
+                    applicationBuildVersion));
 
     private static bool MatchesApplicationMetadataPattern(string? value, string pattern)
     {
@@ -421,7 +439,8 @@ internal static class DeviceCommands
                     Environment.NewLine,
                     applications.Select(application =>
                         $"{application.Identifier}\t{application.Name}"
-                        + RenderApplicationMetadata(application))));
+                            + RenderApplicationMetadata(application))));
+
         return CliExitCodes.Success;
     }
 
@@ -433,6 +452,7 @@ internal static class DeviceCommands
         CancellationToken cancellationToken)
     {
         var action = arguments.RequirePositional(2, "location action").ToLowerInvariant();
+
         if (action is "play" or "replay")
         {
             return await PlayLocationRouteAsync(runtimeOptions, arguments, output, cancellationToken)
@@ -442,17 +462,20 @@ internal static class DeviceCommands
         if (action is "status")
         {
             arguments.EnsurePositionalCount(3, "ansight device location status");
+
             await using var lease = await CliRuntimeLease.CreateAsync(
                 runtimeOptions,
                 start: false,
                 cancellationToken).ConfigureAwait(false);
             var snapshot = lease.Runtime.DeviceLocationPlayback.GetSnapshot();
+
             return WriteLocationPlayback(snapshot, output);
         }
 
         if (action is "stop")
         {
             arguments.EnsurePositionalCount(3, "ansight device location stop");
+
             await using var lease = await CliRuntimeLease.CreateAsync(
                 runtimeOptions,
                 start: false,
@@ -465,11 +488,13 @@ internal static class DeviceCommands
                     result,
                     lease.Runtime.DeviceLocationPlayback.GetSnapshot()),
                 () => result.Message);
+
             return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
         }
 
         var platform = arguments.RequirePositional(3, "platform");
         var deviceIdentifier = arguments.RequirePositional(4, "device identifier");
+
         return action switch
         {
             "set" => await RunOperationAsync(
@@ -497,7 +522,9 @@ internal static class DeviceCommands
         arguments.EnsurePositionalCount(
             6,
             "ansight device location play <ios|android> <device-id> <route.gpx|route.kml> [options]");
+
         var routePath = Path.GetFullPath(arguments.RequirePositional(5, "route file"));
+
         if (!File.Exists(routePath))
         {
             throw new CliUsageException($"Route file '{routePath}' was not found.");
@@ -530,6 +557,7 @@ internal static class DeviceCommands
                 fixedSpeedKph,
                 arguments.HasFlag("loop")),
             cancellationToken).ConfigureAwait(false);
+
         if (!startResult.IsSuccess)
         {
             output.Write(
@@ -537,6 +565,7 @@ internal static class DeviceCommands
                     "ansight.device-location-playback-start/v1",
                     startResult),
                 () => startResult.Message);
+
             return CliExitCodes.Failure;
         }
 
@@ -547,14 +576,18 @@ internal static class DeviceCommands
                     "ansight.device-location-playback-start/v1",
                     startResult),
                 () => $"{startResult.Playback.Message} Run: {startResult.Playback.RunId}");
+
             return CliExitCodes.Success;
         }
 
         var lastPointIndex = -1;
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var snapshot = lease.Runtime.DeviceLocationPlayback.GetSnapshot();
+
             if (arguments.IsVerbose && snapshot.CurrentPointIndex != lastPointIndex)
             {
                 lastPointIndex = snapshot.CurrentPointIndex;
@@ -580,10 +613,11 @@ internal static class DeviceCommands
                 "ansight.device-location-playback/v1",
                 snapshot),
             () => $"{snapshot.Status}: {snapshot.Message}"
-                  + (string.IsNullOrWhiteSpace(snapshot.RunId)
-                      ? string.Empty
-                      : $"{Environment.NewLine}Run: {snapshot.RunId}"
+                + (string.IsNullOrWhiteSpace(snapshot.RunId)
+                    ? string.Empty
+                    : $"{Environment.NewLine}Run: {snapshot.RunId}"
                         + $"{Environment.NewLine}Point: {snapshot.CurrentPointIndex + 1}/{snapshot.PointCount}"));
+
         return string.Equals(snapshot.Status, "failed", StringComparison.OrdinalIgnoreCase)
             ? CliExitCodes.Failure
             : CliExitCodes.Success;
@@ -618,9 +652,10 @@ internal static class DeviceCommands
             ? ".png"
             : ".jpg";
         var outputPath = arguments.GetOption("output")
-                         ?? Path.Combine(
-                             Environment.CurrentDirectory,
-                             $"ansight-{deviceIdentifier}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}{defaultExtension}");
+            ?? Path.Combine(
+                Environment.CurrentDirectory,
+                $"ansight-{deviceIdentifier}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}{defaultExtension}");
+
         return RunOperationAsync(
             service.CaptureScreenshotAsync(
                 platform,
@@ -638,6 +673,7 @@ internal static class DeviceCommands
         output.Write(
             new DeviceOperationOutput("ansight.device-operation/v1", result),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -648,6 +684,7 @@ internal static class DeviceCommands
         IReadOnlyList<DeviceApplicationMatchOutput> applicationMatches)
     {
         var lines = new List<string>();
+
         if (inventory.Devices.Count == 0)
         {
             lines.Add(applicationIdentifier is null
@@ -669,12 +706,14 @@ internal static class DeviceCommands
                     device.State,
                     device.Name
                 };
+
                 if (matchesByDeviceIdentifier.TryGetValue(device.Identifier, out var match))
                 {
                     columns.AddRange(RenderApplicationMetadataColumns(
                         match.Application,
                         includeUnknownVersion: true));
                 }
+
                 return columns;
             }).ToArray();
             lines.AddRange(RenderColumns(rows));
@@ -685,13 +724,15 @@ internal static class DeviceCommands
             lines.Add(string.Empty);
             lines.AddRange(inventory.Warnings.Select(warning => $"Warning: {warning}"));
         }
+
         if (!includesOfflineDevices)
         {
             lines.Add(string.Empty);
             lines.Add(
                 "By default, only live devices are shown. Pass --all (alias: --offline) to include "
-                + "offline, shut down, unauthorized, and unavailable devices.");
+                    + "offline, shut down, unauthorized, and unavailable devices.");
         }
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -722,6 +763,7 @@ internal static class DeviceCommands
         var values = RenderApplicationMetadataColumns(application)
             .Where(static value => value.Length > 0)
             .ToArray();
+
         return values.Length == 0 ? string.Empty : $"\t{string.Join('\t', values)}";
     }
 
@@ -729,6 +771,7 @@ internal static class DeviceCommands
     {
         var columnCount = rows.Max(static row => row.Count);
         var columnWidths = new int[columnCount];
+
         foreach (var row in rows)
         {
             for (var index = 0; index < row.Count; index++)
@@ -738,10 +781,10 @@ internal static class DeviceCommands
         }
 
         return rows.Select(row => string.Join(
-                "  ",
-                row.Select((value, index) => index == row.Count - 1
-                    ? value
-                    : value.PadRight(columnWidths[index]))).TrimEnd())
+            "  ",
+            row.Select((value, index) => index == row.Count - 1
+                ? value
+                : value.PadRight(columnWidths[index]))).TrimEnd())
             .ToArray();
     }
 
@@ -827,5 +870,4 @@ internal static class DeviceCommands
              ansight device start ios 3CED9C5A-33E7-438D-90B2-DBE09009CDB1
              ansight device launch ios 3CED9C5A-33E7-438D-90B2-DBE09009CDB1 com.example.app
            """;
-
 }

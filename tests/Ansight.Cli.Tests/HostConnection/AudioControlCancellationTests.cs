@@ -30,6 +30,7 @@ public sealed class AudioControlCancellationTests
         Assert.True(pipe.Client.IsConnected);
 
         cleanupAllowed.SetResult();
+
         var response = await client.WaitAsync(deadline.Token);
         await remote.WaitAsync(deadline.Token);
         Assert.True(cleanedUp);
@@ -43,6 +44,7 @@ public sealed class AudioControlCancellationTests
             cancellationObserved.SetResult();
             await cleanupAllowed.Task.WaitAsync(deadline.Token);
             cleanedUp = true;
+
             var response = new ControlResponse(ControlProtocol.ResponseSchema, CliExitCodes.Cancelled,
                 "audio-cleanup-complete", string.Empty);
             await pipe.ServerWriter.WriteLineAsync(JsonSerializer.Serialize(response, jsonOptions).AsMemory(), deadline.Token);
@@ -64,6 +66,7 @@ public sealed class AudioControlCancellationTests
 
         cancelled.Cancel();
         await cancellationSignal.WaitAsync(deadline.Token);
+
         var exception = await Assert.ThrowsAsync<CliHostUnavailableException>(
             () => client.WaitAsync(deadline.Token));
         Assert.Contains("did not confirm operation cancellation cleanup", exception.Message);
@@ -154,11 +157,13 @@ public sealed class AudioControlCancellationTests
             var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
             var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+
             try
             {
                 var accepted = server.WaitForConnectionAsync(token);
                 await client.ConnectAsync(token);
                 await accepted;
+
                 return new ControlPipePair(server, client);
             }
             catch
@@ -173,8 +178,13 @@ public sealed class AudioControlCancellationTests
         {
             foreach (var resource in new IDisposable[] { ClientWriter, ServerWriter, ClientReader, ServerReader, Client, Server })
             {
-                try { resource.Dispose(); }
-                catch (Exception exception) when (exception is ObjectDisposedException or IOException) { }
+                try
+                {
+                    resource.Dispose();
+                }
+                catch (Exception exception) when (exception is ObjectDisposedException or IOException)
+                {
+                }
             }
         }
     }

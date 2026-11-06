@@ -10,8 +10,11 @@ internal sealed class MacSessionVideoTranscoder : ISessionVideoTranscoder
     public Task TranscodeAsync(string sourcePath, string outputPath, TimeSpan duration) => Task.Run(() =>
     {
         var error = new StringBuilder(4096);
+
         if (Transcode(sourcePath, outputPath, 1280, 24, 1_200_000, duration.Ticks / 10, error, error.Capacity) == 0)
+        {
             throw new IOException($"Native video compression failed: {error}");
+        }
     });
 
     [DllImport("libAnsightSessionVideoMac.dylib", EntryPoint = "AnsightSessionVideoMac_Transcode")]

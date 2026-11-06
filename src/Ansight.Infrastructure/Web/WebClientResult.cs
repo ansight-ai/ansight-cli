@@ -13,11 +13,8 @@ public sealed class WebClientResult<T>
     }
 
     public bool IsSuccess { get; }
-
     public T? Data { get; }
-
     public string Message { get; }
-
     public HttpStatusCode? StatusCode { get; }
 
     public static WebClientResult<T> Success(T? data, HttpStatusCode statusCode = HttpStatusCode.OK)

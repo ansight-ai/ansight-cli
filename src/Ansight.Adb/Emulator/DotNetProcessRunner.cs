@@ -11,6 +11,7 @@ internal sealed class DotNetProcessRunner : IProcessRunner
         CancellationToken cancellationToken = default)
     {
         using var process = CreateProcess(executablePath, arguments, redirectOutput: true);
+
         if (!process.Start())
         {
             return new AdbCommandResult(-1, string.Empty, "Android Emulator could not be started.");
@@ -22,6 +23,7 @@ internal sealed class DotNetProcessRunner : IProcessRunner
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+
             return new AdbCommandResult(process.ExitCode, outputTask.Result, errorTask.Result);
         }
         catch (OperationCanceledException)
@@ -34,6 +36,7 @@ internal sealed class DotNetProcessRunner : IProcessRunner
     public int Launch(string executablePath, IReadOnlyList<string> arguments)
     {
         using var process = CreateProcess(executablePath, arguments, redirectOutput: false);
+
         if (!process.Start())
         {
             throw new InvalidOperationException("Android Emulator could not be started.");
@@ -56,6 +59,7 @@ internal sealed class DotNetProcessRunner : IProcessRunner
             RedirectStandardOutput = redirectOutput,
             RedirectStandardError = redirectOutput,
         };
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);

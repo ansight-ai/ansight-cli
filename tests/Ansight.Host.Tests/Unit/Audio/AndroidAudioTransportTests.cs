@@ -81,28 +81,44 @@ public sealed class AndroidAudioTransportTests
         {
             Method = method.FullName;
             Options = options;
+
             var response = Error is null ? Task.FromResult((TResponse)(object)new Empty()) : Task.FromException<TResponse>(Error);
+
             return new(new CapturingWriter<TRequest>(this), response, Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess, () => new Metadata(), () => Disposed = true);
         }
 
         public override TResponse BlockingUnaryCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request) => throw new NotSupportedException();
+
         public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request) => throw new NotSupportedException();
+
         public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request) => throw new NotSupportedException();
+
         public override AsyncDuplexStreamingCall<TRequest, TResponse> AsyncDuplexStreamingCall<TRequest, TResponse>(Method<TRequest, TResponse> method, string? host, CallOptions options) => throw new NotSupportedException();
     }
 
-    private sealed class CapturingWriter<T>(CapturingInvoker invoker) : IClientStreamWriter<T>
+    private sealed class CapturingWriter<T> : IClientStreamWriter<T>
     {
+        private readonly CapturingInvoker invoker;
+
+        public CapturingWriter(CapturingInvoker invoker)
+        {
+            this.invoker = invoker;
+        }
+
         public WriteOptions? WriteOptions { get; set; }
+
         public Task WriteAsync(T message)
         {
             invoker.Packets.Add(((AudioPacket)(object)message!).Clone());
+
             return Task.CompletedTask;
         }
+
         public Task CompleteAsync()
         {
             invoker.Completed = true;
+
             return Task.CompletedTask;
         }
     }

@@ -78,6 +78,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         await captureStore.SaveManifestAsync(manifest, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(disposed, this);
+
         lock (jobsGate)
         {
             jobs.Add(captureId, job);
@@ -88,12 +89,14 @@ internal sealed class DotNetProfilingEngine : IDisposable
             Path.Combine(capturePath, "diagnostics", "capture.log"),
             $"Capture queued for artifact '{Path.GetFileName(applicationPath)}' on device '{request.DeviceId.Trim()}'.");
         job.WorkTask = Task.Run(() => CaptureAsync(job, request), CancellationToken.None);
+
         return captureId;
     }
 
     public bool TryGetCapture(string captureId, out DotNetTraceCaptureSnapshot? snapshot)
     {
         CaptureJob? job;
+
         lock (jobsGate)
         {
             jobs.TryGetValue(captureId, out job);
@@ -102,6 +105,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         if (job is not null)
         {
             snapshot = job.CreateSnapshot();
+
             return true;
         }
 
@@ -117,10 +121,12 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 manifest.FailureMessage,
                 manifest,
                 ReadRecentLogLines(captureStore.GetCapturePath(captureId)));
+
             return true;
         }
 
         snapshot = null;
+
         return false;
     }
 
@@ -130,6 +136,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
     public bool CancelCapture(string captureId)
     {
         CaptureJob? job;
+
         lock (jobsGate)
         {
             jobs.TryGetValue(captureId, out job);
@@ -143,6 +150,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         }
 
         job.Cancellation.Cancel();
+
         return true;
     }
 
@@ -153,6 +161,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         if (string.IsNullOrWhiteSpace(tracePath) || !File.Exists(tracePath))
         {
             throw new FileNotFoundException("The .nettrace file could not be found.", tracePath);
@@ -167,12 +176,14 @@ internal sealed class DotNetProfilingEngine : IDisposable
         var capturePath = captureStore.CreateCaptureDirectory(captureId);
         var rawTracePath = Path.Combine(capturePath, "raw", "runtime.nettrace");
         File.Copy(tracePath, rawTracePath, overwrite: false);
+
         var artifacts = new List<DotNetTraceArtifact>
         {
             await captureStore.DescribeArtifactAsync(captureId, NetTraceArtifactKind, rawTracePath, cancellationToken)
         };
         var warnings = new List<string>();
         var toolchain = await toolLocator.ResolveAsync(cancellationToken);
+
         if (toolchain.DotNetTracePath is not null)
         {
             var speedScopePath = await ConvertToSpeedScopeAsync(
@@ -180,6 +191,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 capturePath,
                 rawTracePath,
                 cancellationToken);
+
             if (speedScopePath is not null)
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -227,6 +239,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             Warnings = warnings
         };
         await captureStore.SaveManifestAsync(manifest, cancellationToken);
+
         return manifest;
     }
 
@@ -238,7 +251,9 @@ internal sealed class DotNetProfilingEngine : IDisposable
         }
 
         disposed = true;
+
         CaptureJob[] activeJobs;
+
         lock (jobsGate)
         {
             activeJobs = jobs.Values.ToArray();
@@ -257,6 +272,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         var capturePath = captureStore.GetCapturePath(job.CaptureId);
         var logPath = Path.Combine(capturePath, "diagnostics", "capture.log");
         var warnings = new List<string>();
+
         try
         {
             AppendLog(job, logPath, "Inspecting the supplied application artifact and capture toolchain.");
@@ -267,8 +283,8 @@ internal sealed class DotNetProfilingEngine : IDisposable
             }, cancellationToken);
 
             var devices = deviceService
-                          ?? throw new InvalidOperationException(
-                              "The host device service is not configured for artifact capture.");
+                ?? throw new InvalidOperationException(
+                    "The host device service is not configured for artifact capture.");
             using var package = WorkspaceTestApplicationPackage.Open(request.ApplicationPath);
             var target = await ResolveLaunchTargetAsync(
                 request,
@@ -276,11 +292,12 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 devices,
                 cancellationToken);
             var applicationManifest = DotNetProfilingArtifactInspector.TryRead(package);
+
             if (applicationManifest is null)
             {
                 const string missingManifestWarning =
-                    "The artifact does not contain ansight/dotnet-profiling.json. "
-                    + "Ansight will attempt capture using the manually configured diagnostic endpoint.";
+                                "The artifact does not contain ansight/dotnet-profiling.json. "
+                                    + "Ansight will attempt capture using the manually configured diagnostic endpoint.";
                 warnings.Add(missingManifestWarning);
                 AppendLog(job, logPath, missingManifestWarning);
             }
@@ -316,6 +333,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 job,
                 logPath,
                 cancellationToken);
+
             var metadataPath = await WriteApplicationMetadataAsync(
                 capturePath,
                 request,
@@ -341,13 +359,14 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 rawTracePath,
                 logPath,
                 cancellationToken);
+
             if (!traceResult.IsSuccess)
             {
                 throw new InvalidOperationException(
                     "dotnet-trace could not connect to the supplied artifact's diagnostic endpoint: "
-                    + BuildFailureMessage(traceResult)
-                    + $". Build the artifact with EnableDiagnostics=true and DiagnosticConfiguration="
-                    + $"'{BuildExpectedDiagnosticConfiguration(target.Adapter)}'.");
+                        + BuildFailureMessage(traceResult)
+                        + $". Build the artifact with EnableDiagnostics=true and DiagnosticConfiguration="
+                        + $"'{BuildExpectedDiagnosticConfiguration(target.Adapter)}'.");
             }
 
             if (!File.Exists(rawTracePath))
@@ -377,6 +396,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                     metadataPath,
                     cancellationToken)
             };
+
             foreach (var symbolArtifact in symbolArtifacts)
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -387,6 +407,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             }
 
             var speedScopePath = FindSpeedScopePath(capturePath, rawTracePath);
+
             if (speedScopePath is not null)
             {
                 speedScopePath = MoveSpeedScopeToDerivedFolder(capturePath, speedScopePath);
@@ -397,6 +418,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 capturePath,
                 rawTracePath,
                 cancellationToken);
+
             if (speedScopePath is not null)
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -407,6 +429,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             }
 
             AppendLog(job, logPath, "Capture completed successfully.");
+
             if (File.Exists(logPath))
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -425,7 +448,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             {
                 warnings.Add(
                     "The artifact did not emit the optional Ansight application-ready marker; "
-                    + "startup analysis uses runtime and trace-boundary milestones.");
+                        + "startup analysis uses runtime and trace-boundary milestones.");
             }
 
             await UpdateManifestAsync(job, manifest => manifest with
@@ -440,6 +463,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             TryAppendLog(job, logPath, "Capture cancellation requested. Retaining diagnostic artifacts.");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -452,6 +476,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         catch (Exception ex)
         {
             TryAppendLog(job, logPath, $"Capture failed: {ex.Message}");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -473,7 +498,8 @@ internal sealed class DotNetProfilingEngine : IDisposable
         var inventory = await devices.ListAsync(cancellationToken).ConfigureAwait(false);
         var device = inventory.Devices.FirstOrDefault(candidate =>
             candidate.IsAvailable
-            && string.Equals(candidate.Identifier, request.DeviceId.Trim(), StringComparison.OrdinalIgnoreCase));
+                && string.Equals(candidate.Identifier, request.DeviceId.Trim(), StringComparison.OrdinalIgnoreCase));
+
         if (device is null)
         {
             throw new InvalidOperationException(
@@ -484,14 +510,14 @@ internal sealed class DotNetProfilingEngine : IDisposable
         {
             throw new InvalidOperationException(
                 $"Artifact '{package.SourcePath}' targets '{package.Platform}', "
-                + $"but device '{device.Identifier}' is '{device.Platform}'.");
+                    + $"but device '{device.Identifier}' is '{device.Platform}'.");
         }
 
         if (!DeviceKinds.Matches(package.RequiredDeviceKind, device.Kind))
         {
             throw new InvalidOperationException(
                 $"Artifact '{package.SourcePath}' requires a '{package.RequiredDeviceKind}' target, "
-                + $"but device '{device.Identifier}' is '{device.Kind}'.");
+                    + $"but device '{device.Identifier}' is '{device.Kind}'.");
         }
 
         var adapter = device.Platform switch
@@ -503,6 +529,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             _ => throw new InvalidOperationException(
                 $".NET artifact capture does not support platform '{device.Platform}'.")
         };
+
         return new ResolvedLaunchTarget(adapter, device);
     }
 
@@ -518,6 +545,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             DotNetCaptureLaunchAdapter.IosDevice => toolchain.IsIosDeviceAvailable,
             _ => false
         };
+
         if (available)
         {
             return;
@@ -526,7 +554,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         throw new InvalidOperationException(adapter switch
         {
             DotNetCaptureLaunchAdapter.AndroidEmulator or DotNetCaptureLaunchAdapter.AndroidDevice =>
-                "Android artifact capture requires dotnet-trace, dotnet-dsrouter, and ADB.",
+                        "Android artifact capture requires dotnet-trace, dotnet-dsrouter, and ADB.",
             DotNetCaptureLaunchAdapter.IosSimulator =>
                 "iOS Simulator artifact capture requires macOS, dotnet-trace, dotnet-dsrouter, Xcode, and SimCtl.",
             DotNetCaptureLaunchAdapter.IosDevice =>
@@ -547,6 +575,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         if (!target.Device.IsBooted)
         {
             AppendLog(job, logPath, $"Starting device '{target.Device.Identifier}'.");
+
             var startResult = await devices.StartAsync(
                 target.Device.Platform,
                 target.Device.Identifier,
@@ -563,6 +592,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         }
 
         AppendLog(job, logPath, $"Installing artifact '{package.SourcePath}'.");
+
         var installResult = await devices.InstallApplicationAsync(
             target.Device.Platform,
             target.Device.Identifier,
@@ -571,6 +601,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         EnsureDeviceOperationSucceeded(installResult);
 
         AppendLog(job, logPath, $"Ensuring '{request.AppId.Trim()}' is stopped before startup capture.");
+
         var terminateResult = await devices.TerminateApplicationAsync(
             target.Device.Platform,
             target.Device.Identifier,
@@ -591,6 +622,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
     {
         var dsRouterArguments = BuildDsRouterArguments(target.Adapter);
         AppendLog(job, logPath, $"dotnet-dsrouter {string.Join(' ', dsRouterArguments)}");
+
         await using var dsRouter = DotNetTraceOwnedProcess.Start(
             new DotNetTraceProcessRequest(
                 toolchain.DotNetDsRouterPath!,
@@ -599,17 +631,19 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 EnvironmentVariables: BuildRouterEnvironment(target)),
             line => AppendLog(job, logPath, line));
         await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+
         if (dsRouter.Completion.IsCompleted)
         {
             throw new InvalidOperationException(
                 "dotnet-dsrouter exited before the target runtime and trace collector could connect. "
-                + "Port 9000 may already be in use.");
+                    + "Port 9000 may already be in use.");
         }
 
         var traceArguments = BuildTraceCollectionArguments(request, rawTracePath);
         traceArguments.Add("--process-id");
         traceArguments.Add(dsRouter.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AppendLog(job, logPath, $"dotnet-trace {string.Join(' ', traceArguments.Select(QuoteForLog))}");
+
         var traceTask = processRunner.RunAsync(
             new DotNetTraceProcessRequest(
                 toolchain.DotNetTracePath!,
@@ -620,18 +654,21 @@ internal sealed class DotNetProfilingEngine : IDisposable
             cancellationToken);
 
         await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+
         if (traceTask.IsCompleted)
         {
             return await traceTask.ConfigureAwait(false);
         }
 
         AppendLog(job, logPath, $"Launching '{request.AppId.Trim()}' on '{target.Device.Identifier}'.");
+
         var launchResult = await devices.LaunchApplicationAsync(
             target.Device.Platform,
             target.Device.Identifier,
             request.AppId.Trim(),
             cancellationToken).ConfigureAwait(false);
         EnsureDeviceOperationSucceeded(launchResult);
+
         return await traceTask.ConfigureAwait(false);
     }
 
@@ -641,7 +678,8 @@ internal sealed class DotNetProfilingEngine : IDisposable
     {
         var duration = TimeSpan.FromSeconds(Math.Max(1, Math.Ceiling(request.Duration.TotalSeconds)));
         var providers = "Microsoft-Windows-DotNETRuntime:0x100003801D:5"
-                        + $",{DotNetStartupMarker.ProviderName}:0xFFFFFFFFFFFFFFFF:5";
+            + $",{DotNetStartupMarker.ProviderName}:0xFFFFFFFFFFFFFFFF:5";
+
         return
         [
             "collect",
@@ -666,13 +704,12 @@ internal sealed class DotNetProfilingEngine : IDisposable
         =>
         [
             adapter switch
-            {
-                DotNetCaptureLaunchAdapter.AndroidEmulator => "android-emu",
+{                DotNetCaptureLaunchAdapter.AndroidEmulator => "android-emu",
                 DotNetCaptureLaunchAdapter.AndroidDevice => "android",
                 DotNetCaptureLaunchAdapter.IosSimulator => "ios-sim",
                 DotNetCaptureLaunchAdapter.IosDevice => "ios",
                 _ => throw new ArgumentOutOfRangeException(nameof(adapter), adapter, null)
-            },
+},
             "--runtime-timeout",
             "90",
             "--verbose",
@@ -686,8 +723,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             ? new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["ANDROID_SERIAL"] = target.Device.Identifier
-            }
-            : null;
+            } : null;
 
     private static string BuildExpectedDiagnosticConfiguration(DotNetCaptureLaunchAdapter adapter)
         => adapter switch
@@ -730,6 +766,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             metadataPath,
             JsonSerializer.Serialize(metadata, JsonUtil.Pretty),
             cancellationToken);
+
         return metadataPath;
     }
 
@@ -746,6 +783,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             : Directory.EnumerateFiles(fullSymbolsPath, "*.pdb", SearchOption.AllDirectories).ToArray();
         var destinationRoot = Path.Combine(capturePath, "symbols");
         var artifacts = new List<StagedArtifact>();
+
         foreach (var sourceFile in sourceFiles)
         {
             var relativePath = File.Exists(fullSymbolsPath)
@@ -775,6 +813,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 TimeSpan.FromMinutes(5)),
             outputReceived: null,
             cancellationToken);
+
         if (!result.IsSuccess)
         {
             return null;
@@ -813,6 +852,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             new(ApplicationMetadataArtifactKind, Path.Combine(capturePath, "diagnostics", "application.json"))
         };
         var symbolsPath = Path.Combine(capturePath, "symbols");
+
         if (Directory.Exists(symbolsPath))
         {
             candidates.AddRange(Directory.EnumerateFiles(symbolsPath, "*.pdb", SearchOption.AllDirectories)
@@ -820,6 +860,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         }
 
         var artifacts = new List<DotNetTraceArtifact>();
+
         foreach (var candidate in candidates.Where(candidate => File.Exists(candidate.Path)))
         {
             try
@@ -841,18 +882,21 @@ internal sealed class DotNetProfilingEngine : IDisposable
     private static void ValidateRequest(DotNetStartupCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.ApplicationPath))
         {
             throw new ArgumentException("An application artifact path is required.", nameof(request));
         }
 
         var applicationPath = Path.GetFullPath(request.ApplicationPath);
+
         if (!File.Exists(applicationPath) && !Directory.Exists(applicationPath))
         {
             throw new FileNotFoundException("The application artifact could not be found.", applicationPath);
         }
 
         ResolveArtifactPlatform(applicationPath);
+
         if (string.IsNullOrWhiteSpace(request.AppId))
         {
             throw new ArgumentException("An application id is required.", nameof(request));
@@ -873,6 +917,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         if (!string.IsNullOrWhiteSpace(request.SymbolsPath))
         {
             var symbolsPath = Path.GetFullPath(request.SymbolsPath.Trim());
+
             if (!File.Exists(symbolsPath) && !Directory.Exists(symbolsPath))
             {
                 throw new FileNotFoundException("The symbols path could not be found.", symbolsPath);
@@ -888,9 +933,9 @@ internal sealed class DotNetProfilingEngine : IDisposable
 
     private static string ResolveArtifactPlatform(string applicationPath)
         => TryResolveArtifactPlatform(applicationPath)
-           ?? throw new ArgumentException(
-               $"Unsupported application artifact '{applicationPath}'. Expected an .app, .apk, or .ipa.",
-               nameof(applicationPath));
+            ?? throw new ArgumentException(
+                $"Unsupported application artifact '{applicationPath}'. Expected an .app, .apk, or .ipa.",
+                nameof(applicationPath));
 
     private static string? TryResolveArtifactPlatform(string applicationPath)
         => Path.GetExtension(applicationPath).ToLowerInvariant() switch
@@ -905,6 +950,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         var likelyPath = Path.Combine(
             Path.GetDirectoryName(rawTracePath) ?? capturePath,
             Path.GetFileNameWithoutExtension(rawTracePath) + ".speedscope.json");
+
         if (File.Exists(likelyPath))
         {
             return likelyPath;
@@ -918,15 +964,17 @@ internal sealed class DotNetProfilingEngine : IDisposable
     private static string MoveSpeedScopeToDerivedFolder(string capturePath, string speedScopePath)
     {
         var derivedPath = Path.Combine(capturePath, "derived", "runtime.speedscope.json");
+
         if (string.Equals(
-                Path.GetFullPath(speedScopePath),
-                Path.GetFullPath(derivedPath),
-                StringComparison.Ordinal))
+            Path.GetFullPath(speedScopePath),
+            Path.GetFullPath(derivedPath),
+            StringComparison.Ordinal))
         {
             return speedScopePath;
         }
 
         File.Move(speedScopePath, derivedPath, overwrite: true);
+
         return derivedPath;
     }
 
@@ -940,6 +988,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
         var detail = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput
             : result.StandardError;
+
         return string.IsNullOrWhiteSpace(detail) ? $"exit code {result.ExitCode}" : detail.Trim();
     }
 
@@ -952,9 +1001,9 @@ internal sealed class DotNetProfilingEngine : IDisposable
             source.Dynamic.All += traceEvent =>
             {
                 if (string.Equals(
-                        traceEvent.ProviderName,
-                        DotNetStartupMarker.ProviderName,
-                        StringComparison.Ordinal)
+                    traceEvent.ProviderName,
+                    DotNetStartupMarker.ProviderName,
+                    StringComparison.Ordinal)
                     && string.Equals(
                         traceEvent.EventName,
                         DotNetStartupMarker.EventName,
@@ -964,6 +1013,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 }
             };
             source.Process();
+
             return markerObserved;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException)
@@ -995,6 +1045,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
     {
         const int maximumLineCount = 200;
         var logPath = Path.Combine(capturePath, "diagnostics", "capture.log");
+
         if (!File.Exists(logPath))
         {
             return [];
@@ -1009,6 +1060,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
                 FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
             var lines = new Queue<string>(maximumLineCount);
+
             while (reader.ReadLine() is { } line)
             {
                 if (lines.Count == maximumLineCount)
@@ -1046,7 +1098,11 @@ internal sealed class DotNetProfilingEngine : IDisposable
 
     private void ReportCaptureUsage(CaptureJob job, DotNetTraceCaptureManifest manifest)
     {
-        if (manifest.CompletedUtc is not { } completed || Interlocked.Exchange(ref job.UsageReported, 1) != 0) return;
+        if (manifest.CompletedUtc is not { } completed || Interlocked.Exchange(ref job.UsageReported, 1) != 0)
+        {
+            return;
+        }
+
         analytics.RecordUsage("profile_dotnet",
             outcome: manifest.State == DotNetTraceCaptureState.Completed ? "succeeded" : manifest.State == DotNetTraceCaptureState.Cancelled ? "cancelled" : "failed",
             durationSeconds: Math.Max(0, (completed - (manifest.StartedUtc ?? manifest.CreatedUtc)).TotalSeconds));
@@ -1077,6 +1133,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             lock (logGate)
             {
                 File.AppendAllText(logPath, line + Environment.NewLine);
+
                 if (recentLogLines.Count == MaximumRecentLogLineCount)
                 {
                     recentLogLines.Dequeue();
@@ -1092,6 +1149,7 @@ internal sealed class DotNetProfilingEngine : IDisposable
             lock (gate)
             {
                 manifest = update(manifest);
+
                 return manifest;
             }
         }

@@ -20,31 +20,45 @@ public sealed class LocalTaskRuntimeSupportTests
     public void Save_CreatesRuntimeOnlyForRuntimeImports(string source, bool expected)
     {
         var directory = Directory.CreateTempSubdirectory("ansight-runtime-support-");
+
         try
         {
             LocalTaskExtractionCoordinator.EnsureRequiredTaskRuntime(directory.FullName, source);
+
             var path = Path.Combine(directory.FullName, "ansight-task.js");
             Assert.Equal(expected, File.Exists(path));
-            if (expected) Assert.Equal(RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), File.ReadAllText(path));
+
+            if (expected)
+            {
+                Assert.Equal(RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), File.ReadAllText(path));
+            }
         }
-        finally { directory.Delete(recursive: true); }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]
     public void Save_SupportsNestedHelpersAndPreservesExistingRuntime()
     {
         var directory = Directory.CreateTempSubdirectory("ansight-runtime-support-");
+
         try
         {
             var nested = Directory.CreateDirectory(Path.Combine(directory.FullName, "helpers"));
             File.WriteAllText(Path.Combine(nested.FullName, "permissions.ts"), "export { Permission } from '../ansight-task.js';");
             LocalTaskExtractionCoordinator.EnsureRequiredTaskRuntime(directory.FullName, "import './helpers/permissions.ts';");
+
             var path = Path.Combine(directory.FullName, "ansight-task.js");
             Assert.Equal(RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), File.ReadAllText(path));
             File.WriteAllText(path, "// Existing workspace helper");
             LocalTaskExtractionCoordinator.EnsureRequiredTaskRuntime(directory.FullName, "import './ansight-task.js';");
             Assert.Equal("// Existing workspace helper", File.ReadAllText(path));
         }
-        finally { directory.Delete(recursive: true); }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 }

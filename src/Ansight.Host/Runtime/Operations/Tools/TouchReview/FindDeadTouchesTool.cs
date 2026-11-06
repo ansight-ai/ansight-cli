@@ -74,6 +74,7 @@ internal sealed class FindDeadTouchesTool : Operation
         properties["responseWindowMs"] = ToolSchema.Integer("Milliseconds after each gesture to search for evidence. Defaults to 1200, max 10000.", nullable: true);
         properties["includeScreenshotsAsEvidence"] = ToolSchema.Boolean("Treat screenshots in the response window as evidence. Defaults to false.", nullable: true);
         properties["limit"] = ToolSchema.Integer("Maximum number of dead touch candidates to return. Defaults to 500, max 5000.", nullable: true);
+
         return properties;
     }
 }

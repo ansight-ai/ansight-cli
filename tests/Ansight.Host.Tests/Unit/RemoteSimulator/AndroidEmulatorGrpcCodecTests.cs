@@ -17,20 +17,20 @@ public sealed class AndroidEmulatorGrpcCodecTests
     public void Resolve_RejectsPhysicalAndroidSerial()
     {
         Assert.Throws<NotSupportedException>(() =>
-            Endpoint.Resolve("R5CT123456A"));
+                Endpoint.Resolve("R5CT123456A"));
     }
 
     [Fact]
     public void EncodeTouchEvent_WritesBothContacts()
     {
         var payload = MessageCodec.EncodeTouchEvent(
-        [
-            new AndroidEmulatorTouch(20, 30, 0, 1024),
+            [
+                new AndroidEmulatorTouch(20, 30, 0, 1024),
             new AndroidEmulatorTouch(80, 90, 1, 1024),
         ]);
 
         Assert.Equal(
-        [
+            [
             0x0A, 0x0B, 0x08, 0x14, 0x10, 0x1E, 0x18, 0x00, 0x20, 0x80, 0x08, 0x28, 0x08,
             0x0A, 0x0B, 0x08, 0x50, 0x10, 0x5A, 0x18, 0x01, 0x20, 0x80, 0x08, 0x28, 0x08,
         ],

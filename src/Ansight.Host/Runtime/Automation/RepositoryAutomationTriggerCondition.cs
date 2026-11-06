@@ -39,11 +39,8 @@ internal sealed class RepositoryAutomationTriggerCondition
     }
 
     public string Field { get; }
-
     public string Operator { get; }
-
     public JsonNode? Value { get; }
-
     public bool IgnoreCase { get; }
 
     public static bool IsSupportedOperator(string value) => supportedOperators.Contains(value);
@@ -56,12 +53,13 @@ internal sealed class RepositoryAutomationTriggerCondition
         }
 
         const string payloadPrefix = "payload.";
+
         return value.Length <= 256
-               && value.StartsWith(payloadPrefix, StringComparison.Ordinal)
-               && value.Length > payloadPrefix.Length
-               && value[payloadPrefix.Length..]
-                   .Split('.', StringSplitOptions.None)
-                   .All(segment => segment.Length > 0 && segment.Length <= 120);
+            && value.StartsWith(payloadPrefix, StringComparison.Ordinal)
+            && value.Length > payloadPrefix.Length
+            && value[payloadPrefix.Length..]
+                .Split('.', StringSplitOptions.None)
+                .All(segment => segment.Length > 0 && segment.Length <= 120);
     }
 
     public static bool IsStringValue(JsonNode? value) => TryReadString(value, out _);
@@ -69,6 +67,7 @@ internal sealed class RepositoryAutomationTriggerCondition
     public bool Matches(AutomationEventEnvelope envelope)
     {
         var exists = TryResolveField(envelope, out var actual);
+
         if (string.Equals(Operator, "exists", StringComparison.Ordinal))
         {
             return exists;
@@ -100,6 +99,7 @@ internal sealed class RepositoryAutomationTriggerCondition
         }
 
         var comparison = IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
         return Operator switch
         {
             "contains" => actualText.Contains(expectedText, comparison),
@@ -141,23 +141,27 @@ internal sealed class RepositoryAutomationTriggerCondition
         }
 
         const string payloadPrefix = "payload.";
+
         if (!Field.StartsWith(payloadPrefix, StringComparison.Ordinal))
         {
             return false;
         }
 
         JsonNode? current = envelope.Payload;
+
         foreach (var segment in Field[payloadPrefix.Length..].Split('.', StringSplitOptions.RemoveEmptyEntries))
         {
             if (current is not JsonObject currentObject
                 || !currentObject.TryGetPropertyValue(segment, out current))
             {
                 value = null;
+
                 return false;
             }
         }
 
         value = current;
+
         return true;
     }
 
@@ -169,10 +173,12 @@ internal sealed class RepositoryAutomationTriggerCondition
         if (node is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var text))
         {
             value = text;
+
             return true;
         }
 
         value = string.Empty;
+
         return false;
     }
 }

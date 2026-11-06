@@ -7,11 +7,13 @@ internal sealed class ScreenshotInspectionTool : Operation
 {
     private readonly OperationServices services;
     private readonly bool evaluate;
+
     public ScreenshotInspectionTool(OperationServices services, bool evaluate) : base(services)
     {
         this.services = services;
         this.evaluate = evaluate;
     }
+
     public override string Name => evaluate ? "ansight_evaluate_screenshot" : "ansight_compare_screenshot";
     protected override string Title => evaluate ? "Evaluate Screenshot" : "Compare Screenshots";
     protected override string Description => evaluate
@@ -26,7 +28,9 @@ internal sealed class ScreenshotInspectionTool : Operation
                 ["sessionId"] = ToolSchema.String("Session containing the actual screenshot.", nullable: true),
                 ["appId"] = ToolSchema.String("App owning the session.", nullable: true),
                 ["image"] = ToolSchema.Object(properties: new Dictionary<string, ToolSchema>
-                { ["frameId"] = ToolSchema.String("Exact retained screenshot frame id.") }, required: ["frameId"], additionalProperties: false),
+                {
+                    ["frameId"] = ToolSchema.String("Exact retained screenshot frame id.")
+                }, required: ["frameId"], additionalProperties: false),
                 ["reference"] = ToolSchema.Object(description: "Exactly one frameId from this session or workspacePath relative to its ansight directory.",
                     properties: new Dictionary<string, ToolSchema>
                     {
@@ -34,6 +38,7 @@ internal sealed class ScreenshotInspectionTool : Operation
                         ["workspacePath"] = ToolSchema.String("PNG/JPEG path relative to the ansight workspace, for example references/cubes.png.", nullable: true)
                     }, additionalProperties: false, nullable: evaluate)
             };
+
             if (evaluate)
             {
                 properties["criteria"] = ToolSchema.Array(ToolSchema.Object(properties: new Dictionary<string, ToolSchema>
@@ -60,6 +65,7 @@ internal sealed class ScreenshotInspectionTool : Operation
                 properties["ignoreRegions"] = ScreenshotIgnoreRegions.Schema();
                 properties["ignoreSystemUi"] = ScreenshotSystemUiMasks.Schema();
             }
+
             return ToolSchema.Object(properties: properties, required: evaluate ? ["image", "criteria"] : ["image", "reference"], additionalProperties: false).ToJson();
         }
     }
@@ -67,8 +73,12 @@ internal sealed class ScreenshotInspectionTool : Operation
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         if (!SessionReviewContext.TryResolveReviewSession(sessionResolver, arguments, out var session, out var error))
+        {
             return ToolError(error ?? "Select a session.");
+        }
+
         var token = ToolExecutionCancellation.Current;
+
         try
         {
             using var evidence = new ScreenshotInspectionEvidence(services, session!);
@@ -76,8 +86,14 @@ internal sealed class ScreenshotInspectionTool : Operation
                 ?? throw new ArgumentException("image.frameId is required."), false, token).ConfigureAwait(false);
             var reference = arguments?["reference"] is JsonObject referenceSource
                 ? await evidence.ReadAsync(referenceSource, true, token).ConfigureAwait(false) : null;
-            if (arguments?["reference"] is not null && reference is null) throw new ArgumentException("reference must be an image source.");
+
+            if (arguments?["reference"] is not null && reference is null)
+            {
+                throw new ArgumentException("reference must be an image source.");
+            }
+
             JsonObject result;
+
             if (evaluate)
             {
                 var criteria = ScreenshotAssessment.ValidateCriteria(arguments?["criteria"]);
@@ -88,17 +104,20 @@ internal sealed class ScreenshotInspectionTool : Operation
                 var root = ScreenshotWorkspaceScope.RepositoryRoot ?? hostAppService.Get(session!.AppId)?.CodebasePath ?? AppContext.BaseDirectory;
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
                 timeout.CancelAfter(TimeSpan.FromMinutes(2));
+
                 var response = await evaluator.EvaluateAsync(new ScreenshotEvaluationRequest(session!.AppId, root,
                     image, reference, criteria, reasoning, teamId), timeout.Token).ConfigureAwait(false);
                 result = ScreenshotAssessment.Parse(response, image, criteria);
                 result["capability"] = "screenshot.evaluate";
                 result["image"] = image.Describe();
                 result["image"]!["artifact"] = evidence.WriteImage("actual", image);
+
                 if (reference is not null)
                 {
                     result["reference"] = reference.Describe();
                     result["reference"]!["artifact"] = evidence.WriteImage("reference", reference);
                 }
+
                 result["requestedCriteria"] = criteria;
                 result["model"] = response.Model;
                 result["reasoning"] = response.Reasoning;
@@ -109,11 +128,20 @@ internal sealed class ScreenshotInspectionTool : Operation
             }
             else
             {
-                if (reference is null) throw new ArgumentException("reference is required for comparison.");
+                if (reference is null)
+                {
+                    throw new ArgumentException("reference is required for comparison.");
+                }
+
                 var maxWidth = Integer(arguments, "maxWidth", 1024, 64, 4096);
                 var threshold = Integer(arguments, "pixelThreshold", 16, 0, 255);
                 var ratio = arguments?["maxDifferenceRatio"]?.GetValue<double>() ?? 0.01;
-                if (!double.IsFinite(ratio) || ratio < 0 || ratio > 1) throw new ArgumentException("maxDifferenceRatio must be between 0 and 1.");
+
+                if (!double.IsFinite(ratio) || ratio < 0 || ratio > 1)
+                {
+                    throw new ArgumentException("maxDifferenceRatio must be between 0 and 1.");
+                }
+
                 var kinds = ScreenshotSystemUiMasks.Read(arguments?["ignoreSystemUi"]);
                 var masks = ScreenshotSystemUiMasks.Resolve(image.Geometry, kinds,
                     ScreenshotIgnoreRegions.Read(arguments?["ignoreRegions"]), image.FrameId);
@@ -123,12 +151,14 @@ internal sealed class ScreenshotInspectionTool : Operation
                 result["ignoreSystemUi"] = new JsonArray(kinds.Select(kind => (JsonNode?)JsonValue.Create(kind)).ToArray());
                 result["systemUiMaskResolutions"] = masks.Resolutions;
             }
+
             token.ThrowIfCancellationRequested();
             result["sessionId"] = session!.SessionId;
             result["appId"] = session.AppId;
             result["completedAtUtc"] = DateTimeOffset.UtcNow;
             evidence.AddCrops(result["regions"]!.AsArray(), image, token);
             evidence.Persist(result, image.CapturedAtUtc ?? DateTimeOffset.UtcNow);
+
             // A completed comparison/assessment is data; a named expect decides task failure.
             return RequestResult.ToolResult(result, isError: false);
         }
@@ -161,8 +191,16 @@ internal sealed class ScreenshotInspectionTool : Operation
 
     private static int Integer(JsonObject? arguments, string key, int fallback, int minimum, int maximum)
     {
-        if (arguments?[key] is null) return fallback;
-        if (arguments[key] is JsonValue value && value.TryGetValue<int>(out var number) && number >= minimum && number <= maximum) return number;
+        if (arguments?[key] is null)
+        {
+            return fallback;
+        }
+
+        if (arguments[key] is JsonValue value && value.TryGetValue<int>(out var number) && number >= minimum && number <= maximum)
+        {
+            return number;
+        }
+
         throw new ArgumentException($"{key} must be an integer between {minimum} and {maximum}.");
     }
 }

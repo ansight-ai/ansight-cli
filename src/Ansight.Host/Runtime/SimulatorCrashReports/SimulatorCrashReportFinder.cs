@@ -2,8 +2,8 @@ namespace Ansight.Host.Runtime.SimulatorCrashReports;
 
 internal static class SimulatorCrashReportFinder
 {
-    internal static readonly TimeSpan SessionStartTolerance = TimeSpan.FromSeconds(5);
-    internal static readonly TimeSpan MaximumCaptureLag = TimeSpan.FromSeconds(45);
+    internal static readonly TimeSpan sessionStartTolerance = TimeSpan.FromSeconds(5);
+    internal static readonly TimeSpan maximumCaptureLag = TimeSpan.FromSeconds(45);
 
     public static IReadOnlyList<SimulatorCrashReport> FindMatches(
         string diagnosticReportsDirectoryPath,
@@ -35,7 +35,8 @@ internal static class SimulatorCrashReportFinder
 
     private static bool IsRecentCandidate(string filePath, SimulatorCrashReportMatchContext context)
     {
-        var earliestRelevantWrite = context.SessionStartedAtUtc.ToUniversalTime() - SessionStartTolerance;
+        var earliestRelevantWrite = context.SessionStartedAtUtc.ToUniversalTime() - sessionStartTolerance;
+
         return File.GetLastWriteTimeUtc(filePath) >= earliestRelevantWrite.UtcDateTime;
     }
 
@@ -51,17 +52,19 @@ internal static class SimulatorCrashReportFinder
             return false;
         }
 
-        var earliestCapture = context.SessionStartedAtUtc.ToUniversalTime() - SessionStartTolerance;
-        var latestCapture = context.DisconnectedAtUtc.ToUniversalTime() + MaximumCaptureLag;
+        var earliestCapture = context.SessionStartedAtUtc.ToUniversalTime() - sessionStartTolerance;
+        var latestCapture = context.DisconnectedAtUtc.ToUniversalTime() + maximumCaptureLag;
+
         return report.CapturedAtUtc >= earliestCapture && report.CapturedAtUtc <= latestCapture;
     }
 
     private static bool VersionsMatch(SimulatorCrashReport report, SimulatorCrashReportMatchContext context)
     {
         var appVersionMatches = string.IsNullOrWhiteSpace(context.AppVersion)
-                                || string.Equals(report.AppVersion, context.AppVersion, StringComparison.Ordinal);
+            || string.Equals(report.AppVersion, context.AppVersion, StringComparison.Ordinal);
         var buildVersionMatches = string.IsNullOrWhiteSpace(context.BuildVersion)
-                                  || string.Equals(report.BuildVersion, context.BuildVersion, StringComparison.Ordinal);
+            || string.Equals(report.BuildVersion, context.BuildVersion, StringComparison.Ordinal);
+
         return appVersionMatches && buildVersionMatches;
     }
 }

@@ -10,17 +10,21 @@ public sealed record SessionActivityContext(ActivityCaller Caller, string? RunId
     {
         var previous = current.Value;
         current.Value = context;
+
         return new Scope(() => current.Value = previous);
     }
 
     public static IDisposable ExecuteAs(string kind, string name, string runId, string? batchRunId = null)
     {
         var parent = Current ?? new SessionActivityContext(new ActivityCaller());
+
         return Push(parent with
         {
             Caller = parent.Caller with
             {
-                Kind = kind, Name = name, ExecutorAttribution = "host-generated",
+                Kind = kind,
+                Name = name,
+                ExecutorAttribution = "host-generated",
                 InitiatorKind = parent.Caller.InitiatorKind ?? parent.Caller.Kind,
                 InitiatorName = parent.Caller.InitiatorName ?? parent.Caller.Name,
                 InitiatorAttribution = parent.Caller.InitiatorAttribution ?? parent.Caller.ExecutorAttribution
@@ -30,9 +34,15 @@ public sealed record SessionActivityContext(ActivityCaller Caller, string? RunId
         });
     }
 
-    private sealed class Scope(Action restore) : IDisposable
+    private sealed class Scope : IDisposable
     {
-        private Action? restore = restore;
+        private Action? restore;
+
+        public Scope(Action restore)
+        {
+            this.restore = restore;
+        }
+
         public void Dispose() => Interlocked.Exchange(ref restore, null)?.Invoke();
     }
 }

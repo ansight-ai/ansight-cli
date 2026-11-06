@@ -21,7 +21,6 @@ public sealed record RepositoryAutomationTrigger(
     TimeSpan MaximumRetryDelay)
 {
     public ExecutionRequirements? Requires { get; init; }
-
     public int SchemaVersion { get; init; } = 1;
 
     public bool Enabled { get; init; } = true;

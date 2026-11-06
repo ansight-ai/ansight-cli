@@ -12,6 +12,7 @@ public sealed class ScrcpyToolLocatorTests
     {
         var directory = Path.Combine(Path.GetTempPath(), $"ansight-scrcpy-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
+
         try
         {
             var executable = Path.Combine(directory, "scrcpy.exe");
@@ -72,6 +73,7 @@ public sealed class ScrcpyToolLocatorTests
         using var fixture = new BundleFixture();
         var otherServer = Path.Combine(fixture.DirectoryPath, "other-server");
         File.WriteAllText(otherServer, "server from another version");
+
         var launcher = new VersionProcessLauncher("3.3.1");
 
         var result = await ScrcpyToolLocator.ResolveAsync([fixture.Candidate], launcher, otherServer);
@@ -92,6 +94,7 @@ public sealed class ScrcpyToolLocatorTests
     {
         using var fixture = new BundleFixture();
         File.AppendAllText(Path.Combine(fixture.BundleDirectory, fileName), "modified");
+
         var launcher = new VersionProcessLauncher("3.3.1");
 
         var result = await ScrcpyToolLocator.ResolveAsync([fixture.Candidate], launcher, configuredServer: null);
@@ -110,6 +113,7 @@ public sealed class ScrcpyToolLocatorTests
     {
         using var fixture = new BundleFixture();
         File.Delete(Path.Combine(fixture.BundleDirectory, fileName));
+
         var launcher = new VersionProcessLauncher("3.3.1");
 
         var result = await ScrcpyToolLocator.ResolveAsync([fixture.Candidate], launcher, configuredServer: null);
@@ -136,6 +140,7 @@ public sealed class ScrcpyToolLocatorTests
     {
         using var fixture = new BundleFixture();
         File.WriteAllText(Path.Combine(fixture.BundleDirectory, "bundle.json"), "{}");
+
         var executable = Path.Combine(fixture.DirectoryPath, "scrcpy.exe");
         var server = Path.Combine(fixture.DirectoryPath, "scrcpy-server");
         File.WriteAllText(executable, "system client");
@@ -157,7 +162,9 @@ public sealed class ScrcpyToolLocatorTests
         {
             DirectoryPath = Path.Combine(Path.GetTempPath(), $"ansight scrcpy {Guid.NewGuid():N}");
             Directory.CreateDirectory(BundleDirectory);
+
             var files = new Dictionary<string, string>();
+
             foreach (var fileName in new[] { "scrcpy.exe", "scrcpy-server", "SDL2.dll" })
             {
                 var bytes = Encoding.UTF8.GetBytes($"test {fileName}");
@@ -167,7 +174,11 @@ public sealed class ScrcpyToolLocatorTests
 
             File.WriteAllText(
                 Path.Combine(BundleDirectory, "bundle.json"),
-                JsonSerializer.Serialize(new { version = "3.3.1", files }),
+                JsonSerializer.Serialize(new
+                {
+                    version = "3.3.1",
+                    files
+                }),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
         }
 
@@ -197,6 +208,7 @@ public sealed class ScrcpyToolLocatorTests
         public IAdbProcess Start(AdbProcessStartRequest request)
         {
             Requests.Add(request);
+
             return new VersionProcess(version);
         }
     }
@@ -223,6 +235,7 @@ public sealed class ScrcpyToolLocatorTests
             StandardInput.Dispose();
             StandardOutput.Dispose();
             StandardError.Dispose();
+
             return ValueTask.CompletedTask;
         }
     }

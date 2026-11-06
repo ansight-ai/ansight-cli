@@ -16,17 +16,12 @@ internal sealed class SessionLogPersistenceBatch
     }
 
     public string SessionId { get; }
-
     public string AppId { get; }
-
     public string StreamId { get; }
-
     public List<LogEntry> Entries { get; } = [];
 
     public int StartEntryIndex { get; }
-
     public int StreamEntryCount { get; private set; }
-
     public int TotalEntryCount { get; private set; }
 
     public void Append(SessionLogBatchEventArgs batch)

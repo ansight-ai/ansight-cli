@@ -50,6 +50,7 @@ internal sealed partial class RuntimeState
         }
 
         string appId;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(sessionId, out var session))
@@ -68,15 +69,11 @@ internal sealed partial class RuntimeState
         {
             log.Warning($"Failed to persist the app icon for session {sessionId}.");
             log.Exception(ex);
+
             return null;
         }
     }
 
-}
-
-
-internal sealed partial class RuntimeState
-{
     private static void TrimRetainedTail<T>(List<T> entries, int maximumCount, int trimCount)
     {
         if (entries.Count <= maximumCount)
@@ -88,11 +85,6 @@ internal sealed partial class RuntimeState
         entries.RemoveRange(0, entries.Count - targetCount);
     }
 
-}
-
-
-internal sealed partial class RuntimeState
-{
     private static bool IsSessionLive(SessionState state)
     {
         if (state.IsHistorical)
@@ -111,12 +103,13 @@ internal sealed partial class RuntimeState
     private static bool IsTerminalSessionStatus(string? status)
     {
         var normalizedStatus = status ?? string.Empty;
+
         return normalizedStatus.Contains("complete", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("error", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("closed", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("timeout", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("sign in required", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("rejected", StringComparison.OrdinalIgnoreCase);
+            || normalizedStatus.Contains("error", StringComparison.OrdinalIgnoreCase)
+            || normalizedStatus.Contains("closed", StringComparison.OrdinalIgnoreCase)
+            || normalizedStatus.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+            || normalizedStatus.Contains("sign in required", StringComparison.OrdinalIgnoreCase)
+            || normalizedStatus.Contains("rejected", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static int ParseSessionNumber(string sessionId)
@@ -127,6 +120,7 @@ internal sealed partial class RuntimeState
         }
 
         var separatorIndex = sessionId.LastIndexOf('-');
+
         if (separatorIndex < 0 || separatorIndex == sessionId.Length - 1)
         {
             return 0;
@@ -144,9 +138,11 @@ internal sealed partial class RuntimeState
 
         var builder = new StringBuilder();
         var previousWasSeparator = false;
+
         foreach (var rawCharacter in appId.Trim())
         {
             var character = char.ToLowerInvariant(rawCharacter);
+
             if (IsAsciiAlphaNumeric(character))
             {
                 if (builder.Length >= MaximumSessionAppHintLength)
@@ -169,6 +165,7 @@ internal sealed partial class RuntimeState
         }
 
         var appHint = builder.ToString().Trim('-');
+
         return string.IsNullOrWhiteSpace(appHint) ? DefaultSessionAppHint : appHint;
     }
 
@@ -178,6 +175,7 @@ internal sealed partial class RuntimeState
         {
             var sessionId = $"{NormalizeSessionAppHint(appId)}-{nextSessionNumber:D3}";
             nextSessionNumber++;
+
             return sessionId;
         }
     }
@@ -187,6 +185,7 @@ internal sealed partial class RuntimeState
         while (true)
         {
             var candidateSessionId = AllocateSessionIdCandidate(appId);
+
             if (!SessionIdExists(candidateSessionId))
             {
                 return candidateSessionId;
@@ -197,7 +196,7 @@ internal sealed partial class RuntimeState
     private static bool IsAsciiAlphaNumeric(char character)
     {
         return (character >= 'a' && character <= 'z')
-               || (character >= '0' && character <= '9');
+            || (character >= '0' && character <= '9');
     }
 
     private bool TryResolveExistingSessionId(string appId, string processSessionId, out string sessionId)
@@ -206,12 +205,14 @@ internal sealed partial class RuntimeState
         {
             var loadedMatch = sessionsById.Values
                 .Where(session => string.Equals(session.AppId, appId, StringComparison.Ordinal)
-                                  && string.Equals(session.ProcessSessionId, processSessionId, StringComparison.Ordinal))
+                    && string.Equals(session.ProcessSessionId, processSessionId, StringComparison.Ordinal))
                 .OrderByDescending(session => session.LastUpdatedUtc)
                 .FirstOrDefault();
+
             if (loadedMatch is not null)
             {
                 sessionId = loadedMatch.SessionId;
+
                 return true;
             }
         }
@@ -242,7 +243,7 @@ internal sealed partial class RuntimeState
         }
 
         return sessionCaptureStore.IsSessionIdRetired(sessionId)
-               || sessionCaptureStore.TryLoad(sessionId, out _);
+            || sessionCaptureStore.TryLoad(sessionId, out _);
     }
 
     private static AppSessionSnapshot CreateImportedSnapshot(
@@ -251,6 +252,7 @@ internal sealed partial class RuntimeState
         SessionReplaySource? replaySource)
     {
         var logStreams = SessionLogStreams.Normalize(snapshot.LogStreams, snapshot.Logs);
+
         return new AppSessionSnapshot
         {
             SessionId = resolvedSessionId,
@@ -325,6 +327,7 @@ internal sealed partial class RuntimeState
         }
 
         var highestSegmentId = metrics.Max(metric => metric.SegmentId);
+
         return Math.Max(1, highestSegmentId + 1);
     }
 
@@ -350,7 +353,9 @@ internal sealed partial class RuntimeState
     }
 
     private SessionCaptureAuthorMetadata? ResolveCurrentAuthor()
-    { return null; }
+    {
+        return null;
+    }
 
     private static string? NormalizeAccountValue(string? value)
     {

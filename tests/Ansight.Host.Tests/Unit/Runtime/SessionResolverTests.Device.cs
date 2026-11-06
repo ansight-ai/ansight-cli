@@ -13,7 +13,10 @@ public sealed partial class SessionResolverTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var target = new WorkspaceTestTarget(platform, "native-1", "Phone", "com.example.app", false, false, true)
-        { DeviceKind = kind, ExecutionMode = "device" };
+        {
+            DeviceKind = kind,
+            ExecutionMode = "device"
+        };
         var id = state.CreateDeviceSession(target);
         var resolver = new SessionResolver(state, new DisconnectedAppToolBridge());
         Assert.True(resolver.TryResolveLiveSession(new JsonObject { ["sessionId"] = id }, out var snapshot, out var error), error);
@@ -23,6 +26,7 @@ public sealed partial class SessionResolverTests
 
         // A saved capture retains its provenance but never grants device access after reload.
         new SessionCaptureStore(environment.ApplicationPaths).Save(snapshot);
+
         var reloaded = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         Assert.True(reloaded.TryGetSessionSnapshot(id, out var saved));
         Assert.Equal("device", saved!.CaptureSource);

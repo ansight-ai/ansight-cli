@@ -26,6 +26,7 @@ internal sealed class DeviceLocationRouter
     {
         DeviceLocationPlaybackService service;
         IDeviceService deviceService;
+
         lock (gate)
         {
             service = playback ?? throw new InvalidOperationException("This host has no location playback service.");
@@ -37,6 +38,7 @@ internal sealed class DeviceLocationRouter
         var matches = inventory.Devices.Where(device =>
             string.Equals(device.Identifier, request.DeviceIdentifier, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
         if (matches.Length != 1 || !matches[0].IsBooted || !matches[0].IsVirtual
             || matches[0].Platform is not (DevicePlatforms.Ios or DevicePlatforms.Android))
         {
@@ -62,13 +64,13 @@ internal sealed class DeviceLocationRouter
         SetDeviceLocationRequest request,
         CancellationToken cancellationToken)
         => GetDriver()?.SetLocationAsync(request, cancellationToken)
-           ?? Task.FromResult(DeviceLocationResult.Failure(UnavailableMessage));
+            ?? Task.FromResult(DeviceLocationResult.Failure(UnavailableMessage));
 
     public Task<DeviceLocationResult> ClearLocationAsync(
         ClearDeviceLocationRequest request,
         CancellationToken cancellationToken)
         => GetDriver()?.ClearLocationAsync(request, cancellationToken)
-           ?? Task.FromResult(DeviceLocationResult.Failure(UnavailableMessage));
+            ?? Task.FromResult(DeviceLocationResult.Failure(UnavailableMessage));
 
     private IDeviceLocationDriver? GetDriver()
     {

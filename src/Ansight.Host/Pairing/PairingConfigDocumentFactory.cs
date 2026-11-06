@@ -24,6 +24,7 @@ public static class PairingConfigDocumentFactory
             Invite = PublicPairingConfigJson.CreateJsonModel(document.Config),
             Discovery = document.Discovery
         };
+
         return JsonSerializer.Serialize(model, indented ? JsonUtil.Pretty : JsonUtil.Compact);
     }
 
@@ -31,6 +32,7 @@ public static class PairingConfigDocumentFactory
     {
         var jsonBytes = Encoding.UTF8.GetBytes(Serialize(document));
         using var compressedStream = new MemoryStream();
+
         using (var gzip = new GZipStream(compressedStream, CompressionLevel.SmallestSize, leaveOpen: true))
         {
             gzip.Write(jsonBytes, 0, jsonBytes.Length);
@@ -73,18 +75,14 @@ public static class PairingConfigDocumentFactory
     private sealed class PairingConfigDocumentJsonModel
     {
         public required string Schema { get; init; }
-
         public required object Invite { get; init; }
-
         public SdkPairingDiscoveryHint? Discovery { get; init; }
     }
 
     public sealed class PairingConfigDocument
     {
         public required string Schema { get; init; }
-
         public required global::Ansight.Host.Models.Pairing.PairingConfig Config { get; init; }
-
         public SdkPairingDiscoveryHint? Discovery { get; init; }
     }
 }

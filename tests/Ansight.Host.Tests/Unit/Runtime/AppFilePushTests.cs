@@ -35,6 +35,7 @@ public sealed class AppFilePushTests
         using var tempDirectory = TestDirectory.Create();
         var localFilePath = Path.Combine(tempDirectory.Path, "payload.txt");
         await File.WriteAllTextAsync(localFilePath, "hello app");
+
         var request = AppFilePush.CreateRequest(new JsonObject
         {
             ["localFilePath"] = localFilePath,
@@ -60,6 +61,7 @@ public sealed class AppFilePushTests
         using var tempDirectory = TestDirectory.Create();
         var localFilePath = Path.Combine(tempDirectory.Path, "payload.txt");
         await File.WriteAllTextAsync(localFilePath, "hello app");
+
         var request = AppFilePush.CreateRequest(new JsonObject
         {
             ["localFilePath"] = localFilePath,

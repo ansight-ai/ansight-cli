@@ -20,6 +20,7 @@ internal static class PairingCommands
             options,
             start: false,
             cancellationToken).ConfigureAwait(false);
+
         return action switch
         {
             "issue" or "create" => Issue(lease.Runtime, arguments, output),
@@ -47,6 +48,7 @@ internal static class PairingCommands
         var qrOutputPath = arguments.GetOption("qr-output");
         var qrFileRequested = qrOutputPath is not null;
         var pairingCodeRequested = codeRequested || terminalQrRequested || qrFileRequested;
+
         if ((terminalQrRequested || qrFileRequested) && !runtime.GetStatusSnapshot().IsRunning)
         {
             throw new CliHostUnavailableException(
@@ -60,11 +62,13 @@ internal static class PairingCommands
             arguments.GetOption("duration"));
         PairingCodeResult? codeResult = null;
         PairingQrResult? qrResult = null;
+
         if (result.IsSuccess && pairingCodeRequested && !qrFileRequested && result.Invite is not null)
         {
             codeResult = runtime.Pairing.CreateCode(
                 result.Invite.InviteId,
                 arguments.GetOption("host-address"));
+
             if (!codeResult.IsSuccess)
             {
                 runtime.Pairing.Revoke(result.Invite.InviteId);
@@ -78,6 +82,7 @@ internal static class PairingCommands
                 qrOutputPath!,
                 arguments.GetOption("host-address"),
                 arguments.HasFlag("overwrite"));
+
             if (qrResult.IsSuccess)
             {
                 codeResult = new PairingCodeResult(
@@ -104,9 +109,10 @@ internal static class PairingCommands
                 codeResult,
                 qrResult),
             () => BuildIssueMessage(result, codeResult, qrResult, terminalQrRequested));
+
         return result.IsSuccess
-               && codeResult?.IsSuccess != false
-               && qrResult?.IsSuccess != false
+            && codeResult?.IsSuccess != false
+            && qrResult?.IsSuccess != false
             ? CliExitCodes.Success
             : CliExitCodes.Failure;
     }
@@ -133,6 +139,7 @@ internal static class PairingCommands
         }
 
         var inviteDetails = $"{result.Message}\nInvite file: {result.InviteFilePath}\nExpires: {result.Invite?.ExpiresAtUtc:O}";
+
         if (!string.IsNullOrWhiteSpace(codeResult?.PairingCode))
         {
             inviteDetails += $"\nPairing code (one-time credential; keep private):\n{codeResult.PairingCode}";
@@ -160,6 +167,7 @@ internal static class PairingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(2, "ansight pairing list [--app-id <app-id>] [--active-only]");
+
         var activeOnly = arguments.HasFlag("active-only");
         var invites = runtime.Pairing.List(
             arguments.GetOption("app-id"),
@@ -173,6 +181,7 @@ internal static class PairingCommands
                     Environment.NewLine,
                     invites.Select(invite =>
                         $"{invite.InviteId}\t{invite.Status}\t{invite.AppId}\t{invite.ExpiresAtUtc:O}")));
+
         return CliExitCodes.Success;
     }
 
@@ -182,6 +191,7 @@ internal static class PairingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight pairing get <invite-id>");
+
         var inviteId = arguments.RequirePositional(2, "invite identifier");
         var invite = runtime.Pairing.Get(inviteId);
         output.Write(
@@ -193,6 +203,7 @@ internal static class PairingCommands
             () => invite is null
                 ? $"Enrollment invite '{inviteId}' was not found."
                 : $"{invite.Summary.InviteId}\t{invite.Summary.Status}\t{invite.Summary.AppId}\t{invite.Summary.ExpiresAtUtc:O}");
+
         return invite is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -202,10 +213,12 @@ internal static class PairingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight pairing revoke <invite-id>");
+
         var result = runtime.Pairing.Revoke(arguments.RequirePositional(2, "invite identifier"));
         output.Write(
             new PairingOperationOutput("ansight.pairing-operation/v1", "revoke", result),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -254,5 +267,4 @@ internal static class PairingCommands
            `issue --code` or `issue --qr`; `list` and `get` never expose them.
            Find app IDs with `ansight app list` and existing invite IDs with `ansight pairing list`.
            """;
-
 }

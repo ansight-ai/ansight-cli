@@ -21,6 +21,7 @@ public sealed class IosWebDriverAgentClientTests
         Assert.Equal(400, source.ViewportWidth);
         Assert.Equal(800, source.ViewportHeight);
         Assert.Equal(["/session", "/session/wda-session/source"], handler.Paths);
+
         using var request = JsonDocument.Parse(handler.SessionRequestBody!);
         var capabilities = request.RootElement
             .GetProperty("capabilities")
@@ -43,9 +44,11 @@ public sealed class IosWebDriverAgentClientTests
         {
             var path = request.RequestUri!.AbsolutePath;
             Paths.Add(path);
+
             if (path == "/session")
             {
                 SessionRequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+
                 return JsonResponse("""{"value":{"sessionId":"wda-session"}}""");
             }
 

@@ -9,11 +9,11 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_HttpKeepsDestinationEvidenceAfterTaskAndTaskChecksAfterNextCall()
     {
         var client = new FakeOpenAiClient([
-            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject { ["text"] = "Eagle Rock" }),
-            CreateFunctionTurn("copy", "ansight_run_task", new JsonObject { ["taskId"] = "copy-gps-location" }),
-            CreateFunctionTurn("remaining", "ansight_assert_ui", new JsonObject { ["text"] = "Ready" }),
-            CreateFunctionTurn("complete", "complete_instruction", new JsonObject { ["outcome"] = "succeeded", ["summary"] = "Verified." })
-        ]);
+                CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject {["text"] = "Eagle Rock" }),
+            CreateFunctionTurn("copy", "ansight_run_task", new JsonObject {["taskId"] = "copy-gps-location" }),
+            CreateFunctionTurn("remaining", "ansight_assert_ui", new JsonObject {["text"] = "Ready" }),
+            CreateFunctionTurn("complete", "complete_instruction", new JsonObject {["outcome"] = "succeeded", ["summary"] = "Verified." })
+            ]);
         const string navigation = """
             {"isError":false,"result":{"capability":"ui.tap","performed":true,"message":"Tap delivered.",
               "afterObservation":{"capturedAtUtc":"2026-10-08T08:35:16Z","truncated":true,"root":{
@@ -31,15 +31,21 @@ public sealed partial class SimulatorAgentServiceTests
         gateway.Results.Enqueue(new ToolCallResult(false, navigation, "Tap delivered."));
         gateway.Results.Enqueue(new ToolCallResult(false, task, "Task passed."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"passed\":true}", "Ready is visible."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
-            ["Open Eagle Rock, verify the destination, copy its GPS, then verify Ready."]) { CaptureTrace = true });
+            ["Open Eagle Rock, verify the destination, copy its GPS, then verify Ready."])
+        {
+            CaptureTrace = true
+        });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var previousNavigation = ReadOutput(client.Inputs[2], "open");
         Assert.True(previousNavigation["superseded"]!.GetValue<bool>());
+
         var observed = previousNavigation["historicalEvidence"]!["observation"]!;
         Assert.Equal("2026-10-08T08:35:16Z", observed["capturedAtUtc"]!.GetValue<string>());
         Assert.True(observed["truncated"]!.GetValue<bool>());
@@ -65,6 +71,7 @@ public sealed partial class SimulatorAgentServiceTests
               "output":{"summary":"Could not open the destination."}}}
             """)!.AsObject();
         result["result"]!["output"]!["largeArtifact"] = new string('x', 50_000);
+
         var original = result.ToJsonString();
 
         var summary = ToolEvidenceSummary.Create(result)!;
@@ -82,7 +89,9 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var nodes = new JsonArray(Enumerable.Range(0, 100).Select(index => (JsonNode?)new JsonObject
         {
-            ["text"] = $"Node {index} " + new string('x', 500), ["role"] = "text", ["visible"] = true
+            ["text"] = $"Node {index} " + new string('x', 500),
+            ["role"] = "text",
+            ["visible"] = true
         }).ToArray());
         var result = JsonNode.Parse("""
             {"isError":true,"steps":[
@@ -91,7 +100,9 @@ public sealed partial class SimulatorAgentServiceTests
             ]}
             """)!.AsObject();
         result["steps"]![1]!["result"]!["result"]!["afterObservation"] = new JsonObject
-        { ["root"] = new JsonObject { ["children"] = nodes } };
+        {
+            ["root"] = new JsonObject { ["children"] = nodes }
+        };
 
         var summary = ToolEvidenceSummary.Create(result)!;
 
@@ -110,6 +121,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var item = Assert.Single(input.OfType<JsonObject>(), item => item["type"]?.GetValue<string>() == "function_call_output"
             && item["call_id"]?.GetValue<string>() == callId);
+
         return JsonNode.Parse(item["output"]!.GetValue<string>())!.AsObject();
     }
 }

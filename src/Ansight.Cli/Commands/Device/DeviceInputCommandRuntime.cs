@@ -23,6 +23,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         CancellationToken cancellationToken)
     {
         var normalizedPlatform = NormalizePlatform(platform);
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             return devices.SendTapAsync(
@@ -40,9 +41,10 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             {
                 var viewport = await RequireIosViewportAsync(deviceIdentifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return await driver.TapAsync(
-                        CreateTapRequest(deviceIdentifier, viewport, x, y),
-                        cancellationToken)
+                    CreateTapRequest(deviceIdentifier, viewport, x, y),
+                    cancellationToken)
                     .ConfigureAwait(false);
             });
     }
@@ -58,6 +60,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         CancellationToken cancellationToken)
     {
         var normalizedPlatform = NormalizePlatform(platform);
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             return devices.SendSwipeAsync(
@@ -78,16 +81,17 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             {
                 var viewport = await RequireIosViewportAsync(deviceIdentifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return await driver.SwipeAsync(
-                        CreateSwipeRequest(
-                            deviceIdentifier,
-                            viewport,
-                            startX,
-                            startY,
-                            endX,
-                            endY,
-                            durationMilliseconds),
-                        cancellationToken)
+                    CreateSwipeRequest(
+                        deviceIdentifier,
+                        viewport,
+                        startX,
+                        startY,
+                        endX,
+                        endY,
+                        durationMilliseconds),
+                    cancellationToken)
                     .ConfigureAwait(false);
             });
     }
@@ -103,6 +107,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         CancellationToken cancellationToken)
     {
         var normalizedPlatform = NormalizePlatform(platform);
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             return Task.FromResult(DeviceOperationResult.Failure(
@@ -119,16 +124,17 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             {
                 var viewport = await RequireIosViewportAsync(deviceIdentifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return await driver.PinchAsync(
-                        CreatePinchRequest(
-                            deviceIdentifier,
-                            viewport,
-                            centerX,
-                            centerY,
-                            startSpan,
-                            endSpan,
-                            durationMilliseconds),
-                        cancellationToken)
+                    CreatePinchRequest(
+                        deviceIdentifier,
+                        viewport,
+                        centerX,
+                        centerY,
+                        startSpan,
+                        endSpan,
+                        durationMilliseconds),
+                    cancellationToken)
                     .ConfigureAwait(false);
             });
     }
@@ -140,6 +146,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         CancellationToken cancellationToken)
     {
         var normalizedPlatform = NormalizePlatform(platform);
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             return devices.SendTextAsync(
@@ -156,13 +163,14 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             {
                 await RequireIosDeviceAsync(deviceIdentifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return await driver.TypeTextAsync(
-                        new UiTextRequest(
-                            InputSessionId,
-                            deviceIdentifier,
-                            value,
-                            ReplaceExisting: false),
-                        cancellationToken)
+                    new UiTextRequest(
+                        InputSessionId,
+                        deviceIdentifier,
+                        value,
+                        ReplaceExisting: false),
+                    cancellationToken)
                     .ConfigureAwait(false);
             });
     }
@@ -174,6 +182,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         CancellationToken cancellationToken)
     {
         var normalizedPlatform = NormalizePlatform(platform);
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             return devices.SendButtonAsync(
@@ -190,9 +199,10 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             {
                 await RequireIosDeviceAsync(deviceIdentifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return await driver.PressButtonAsync(
-                        new UiButtonRequest(InputSessionId, deviceIdentifier, button),
-                        cancellationToken)
+                    new UiButtonRequest(InputSessionId, deviceIdentifier, button),
+                    cancellationToken)
                     .ConfigureAwait(false);
             });
     }
@@ -252,6 +262,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
             viewport.Height,
             "center-y",
             viewport.CoordinateUnit);
+
         return new UiPinchRequest(
             InputSessionId,
             deviceIdentifier,
@@ -294,6 +305,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         }
 
         var maximum = Math.Max(0, extent - 1);
+
         if (!double.IsFinite(coordinate) || coordinate < 0 || coordinate > maximum)
         {
             throw new CliUsageException(
@@ -309,6 +321,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
     {
         var viewport = await driver.GetViewportAsync(deviceIdentifier, cancellationToken)
             .ConfigureAwait(false);
+
         if (!string.Equals(viewport.Platform, DevicePlatforms.Ios, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -324,6 +337,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
     {
         var platform = await driver.GetDevicePlatformAsync(deviceIdentifier, cancellationToken)
             .ConfigureAwait(false);
+
         if (!string.Equals(platform, DevicePlatforms.Ios, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -339,6 +353,7 @@ internal sealed class DeviceInputCommandRuntime : IDeviceInputCommandRuntime, ID
         try
         {
             var result = await action().ConfigureAwait(false);
+
             return new DeviceOperationResult(
                 result.IsSuccess,
                 operation,

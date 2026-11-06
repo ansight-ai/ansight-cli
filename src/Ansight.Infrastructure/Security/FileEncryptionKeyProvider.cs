@@ -19,6 +19,7 @@ public static class FileEncryptionKeyProvider
         }
 
         var environmentKey = Environment.GetEnvironmentVariable(MasterKeyEnvironmentVariable);
+
         if (!string.IsNullOrWhiteSpace(environmentKey))
         {
             return DecodeKey(environmentKey, MasterKeyEnvironmentVariable);
@@ -27,6 +28,7 @@ public static class FileEncryptionKeyProvider
         var configuredKeyFilePath = FirstNonEmpty(
             keyFilePathOverride,
             Environment.GetEnvironmentVariable(KeyFileEnvironmentVariable));
+
         if (configuredKeyFilePath is not null)
         {
             return ReadKeyFile(Path.GetFullPath(
@@ -35,11 +37,13 @@ public static class FileEncryptionKeyProvider
 
         var credentialsDirectory = Environment.GetEnvironmentVariable(
             SystemdCredentialsDirectoryEnvironmentVariable);
+
         if (!string.IsNullOrWhiteSpace(credentialsDirectory))
         {
             var credentialPath = Path.Combine(
                 credentialsDirectory.Trim(),
                 SystemdCredentialFileName);
+
             if (!File.Exists(credentialPath))
             {
                 throw new InvalidOperationException(
@@ -51,7 +55,7 @@ public static class FileEncryptionKeyProvider
 
         throw new InvalidOperationException(
             "No protected master key is configured for the file-backed secret store. "
-            + $"Set {KeyFileEnvironmentVariable}, {MasterKeyEnvironmentVariable}, or provide the systemd credential '{SystemdCredentialFileName}'.");
+                + $"Set {KeyFileEnvironmentVariable}, {MasterKeyEnvironmentVariable}, or provide the systemd credential '{SystemdCredentialFileName}'.");
     }
 
     public static bool HasExternalKeySource(string? keyFilePathOverride = null)
@@ -65,6 +69,7 @@ public static class FileEncryptionKeyProvider
 
         var credentialsDirectory = Environment.GetEnvironmentVariable(
             SystemdCredentialsDirectoryEnvironmentVariable);
+
         return !string.IsNullOrWhiteSpace(credentialsDirectory);
     }
 
@@ -78,6 +83,7 @@ public static class FileEncryptionKeyProvider
         var fullPath = Path.GetFullPath(encryptedStorageFilePath);
         var directory = Path.GetDirectoryName(fullPath) ?? string.Empty;
         var fileName = Path.GetFileNameWithoutExtension(fullPath) + ".key";
+
         return Path.Combine(directory, fileName);
     }
 
@@ -91,6 +97,7 @@ public static class FileEncryptionKeyProvider
         try
         {
             var key = Convert.FromBase64String(encodedKey.Trim());
+
             if (key.Length != KeySizeInBytes)
             {
                 CryptographicOperations.ZeroMemory(key);
@@ -116,13 +123,16 @@ public static class FileEncryptionKeyProvider
         }
 
         path = Path.GetFullPath(path);
+
         var parent = Path.GetDirectoryName(path);
+
         if (!string.IsNullOrWhiteSpace(parent))
         {
             Directory.CreateDirectory(parent);
         }
 
         var key = RandomNumberGenerator.GetBytes(KeySizeInBytes);
+
         try
         {
             var options = new FileStreamOptions
@@ -132,6 +142,7 @@ public static class FileEncryptionKeyProvider
                 Share = FileShare.None,
                 Options = FileOptions.WriteThrough
             };
+
             if (!OperatingSystem.IsWindows())
             {
                 options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
@@ -156,6 +167,7 @@ public static class FileEncryptionKeyProvider
         try
         {
             EnsureSafePermissions(path);
+
             return DecodeKey(File.ReadAllText(path), $"Secret key file '{path}'");
         }
         catch (IOException exception)
@@ -177,11 +189,12 @@ public static class FileEncryptionKeyProvider
 
         var mode = File.GetUnixFileMode(path);
         var unsafeBits = mode & (UnixFileMode.GroupRead
-                                 | UnixFileMode.GroupWrite
-                                 | UnixFileMode.GroupExecute
-                                 | UnixFileMode.OtherRead
-                                 | UnixFileMode.OtherWrite
-                                 | UnixFileMode.OtherExecute);
+            | UnixFileMode.GroupWrite
+            | UnixFileMode.GroupExecute
+            | UnixFileMode.OtherRead
+            | UnixFileMode.OtherWrite
+            | UnixFileMode.OtherExecute);
+
         if (unsafeBits != 0)
         {
             throw new InvalidOperationException(

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SkiaSharp;
+using static Ansight.Host.Runtime.Sanitization.SanitizationJson;
 
 namespace Ansight.Host.Runtime.Sanitization;
 
@@ -67,8 +68,8 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         this.ocrScanner = ocrScanner ?? new TesseractSessionScreenshotOcrScanner();
         reportProgress = report;
         this.operationContext = JsonSerializer.SerializeToNode(
-                operationContext ?? SessionSanitizerOperationContext.Export,
-                snapshotJsonOptions)?.AsObject()
+            operationContext ?? SessionSanitizerOperationContext.Export,
+            snapshotJsonOptions)?.AsObject()
             ?? throw new InvalidDataException("The sanitizer operation context could not be prepared.");
         this.report = new SessionSanitizationReportBuilder(Path.GetFileNameWithoutExtension(modulePath));
     }
@@ -76,8 +77,9 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     public SessionSanitizedCapture Sanitize(AppSessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         var root = JsonSerializer.SerializeToNode(snapshot, snapshotJsonOptions)?.AsObject()
-                   ?? throw new InvalidDataException("The session snapshot could not be prepared for sanitization.");
+            ?? throw new InvalidDataException("The session snapshot could not be prepared for sanitization.");
         completedItemCount = 0;
         totalItemCount = CountSanitizerInvocations(root, snapshot.Images.Count);
 
@@ -98,12 +100,13 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         UpdateRetainedCounts(root);
 
         var sanitized = root.Deserialize<AppSessionSnapshot>(snapshotJsonOptions)
-                        ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
         var regions = screenshotInstructions.ToDictionary(
             static pair => pair.Key,
             static pair => (IReadOnlyList<SessionSanitizationRegion>)pair.Value.Regions,
             StringComparer.Ordinal);
         var policy = new SessionSanitizationPolicy { Id = report.PolicyId };
+
         return new SessionSanitizedCapture(sanitized, policy, report, regions);
     }
 
@@ -115,50 +118,57 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         IReadOnlyList<SessionSanitizationRegion> sensitiveRegions)
     {
         var instruction = screenshotInstructions.GetValueOrDefault(frame.FrameId)
-                          ?? SessionScreenshotWriteInstruction.RedactAll;
+            ?? SessionScreenshotWriteInstruction.RedactAll;
+
         if (instruction.Action == SessionScreenshotWriteAction.Remove)
         {
             report.ScreenshotsRemoved++;
+
             return false;
         }
 
         if (instruction.Action == SessionScreenshotWriteAction.Keep)
         {
             archive.CreateEntryFromFile(sourceFilePath, entryName, CompressionLevel.NoCompression);
+
             return true;
         }
 
         using var bitmap = SKBitmap.Decode(sourceFilePath)
-                           ?? throw new InvalidDataException($"Screenshot '{sourceFilePath}' could not be decoded.");
-        using (var canvas = new SKCanvas(bitmap))
-        using (var paint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill, IsAntialias = false })
-        {
-            if (instruction.Action == SessionScreenshotWriteAction.RedactAll || instruction.Regions.Count == 0)
-            {
-                canvas.Clear(SKColors.Black);
-                report.ScreenshotRegionsRedacted++;
-            }
-            else
-            {
-                foreach (var region in instruction.Regions)
-                {
-                    const int padding = 4;
-                    var rectangle = new SKRect(
-                        Math.Max(0, (float)region.X - padding),
-                        Math.Max(0, (float)region.Y - padding),
-                        Math.Min(bitmap.Width, (float)(region.X + region.Width) + padding),
-                        Math.Min(bitmap.Height, (float)(region.Y + region.Height) + padding));
-                    if (rectangle.Width <= 0 || rectangle.Height <= 0)
-                    {
-                        continue;
-                    }
+            ?? throw new InvalidDataException($"Screenshot '{sourceFilePath}' could not be decoded.");
 
-                    canvas.DrawRect(rectangle, paint);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            using (var paint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill, IsAntialias = false })
+            {
+                if (instruction.Action == SessionScreenshotWriteAction.RedactAll || instruction.Regions.Count == 0)
+                {
+                    canvas.Clear(SKColors.Black);
                     report.ScreenshotRegionsRedacted++;
                 }
-            }
+                else
+                {
+                    foreach (var region in instruction.Regions)
+                    {
+                        const int padding = 4;
+                        var rectangle = new SKRect(
+                            Math.Max(0, (float)region.X - padding),
+                            Math.Max(0, (float)region.Y - padding),
+                            Math.Min(bitmap.Width, (float)(region.X + region.Width) + padding),
+                            Math.Min(bitmap.Height, (float)(region.Y + region.Height) + padding));
 
-            canvas.Flush();
+                        if (rectangle.Width <= 0 || rectangle.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        canvas.DrawRect(rectangle, paint);
+                        report.ScreenshotRegionsRedacted++;
+                    }
+                }
+
+                canvas.Flush();
+            }
         }
 
         var entry = archive.CreateEntry(entryName, CompressionLevel.NoCompression);
@@ -169,6 +179,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         using var output = entry.Open();
         encoded.SaveTo(output);
         report.ScreenshotsRedacted++;
+
         return true;
     }
 
@@ -179,6 +190,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         IReadOnlyDictionary<string, string>? sanitizedRelativePaths = null)
     {
         var writtenPaths = new HashSet<string>(StringComparer.Ordinal);
+
         if (!Directory.Exists(artifactsDirectoryPath))
         {
             return writtenPaths;
@@ -187,6 +199,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         var files = Directory.EnumerateFiles(artifactsDirectoryPath, "*", SearchOption.AllDirectories)
             .OrderBy(static path => path, StringComparer.Ordinal)
             .ToArray();
+
         for (var fileIndex = 0; fileIndex < files.Length; fileIndex++)
         {
             var filePath = files[fileIndex];
@@ -194,6 +207,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 $"Sanitizing artifact '{Path.GetFileName(filePath)}'…",
                 fileIndex,
                 files.Length));
+
             var fileInfo = new FileInfo(filePath);
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
             var isText = textArtifactExtensions.Contains(extension) && fileInfo.Length <= 8 * 1024 * 1024;
@@ -206,6 +220,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 ["content"] = isText ? File.ReadAllText(filePath) : null
             };
             var result = Invoke("sanitizeArtifact", item, itemDescription: $"artifact '{Path.GetFileName(filePath)}'");
+
             if (result.WasRemoved || result.Value is null)
             {
                 report.ArtifactsExcluded++;
@@ -215,6 +230,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
             var relativePath = Path.GetRelativePath(artifactsDirectoryPath, filePath);
             var outputRelativePath = ResolveArtifactRelativePath(relativePath, sanitizedRelativePaths);
             var safeEntryName = buildEntryName(outputRelativePath);
+
             if (!isText)
             {
                 if (result.Value["keepBinary"]?.GetValue<bool>() == true)
@@ -255,6 +271,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         IReadOnlyDictionary<string, string>? sanitizedRelativePaths)
     {
         var normalized = NormalizeArtifactRelativePath(path);
+
         return sanitizedRelativePaths?.GetValueOrDefault(normalized) ?? normalized;
     }
 
@@ -263,6 +280,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     private void SanitizeSessionMetadata(JsonObject root)
     {
         var metadata = new JsonObject();
+
         foreach (var property in root)
         {
             if (!evidencePropertyNames.Contains(property.Key))
@@ -272,12 +290,14 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         var result = Invoke("sanitizeSession", metadata, itemDescription: "session metadata");
+
         if (result.WasRemoved || result.Value is null)
         {
             throw new InvalidDataException("sanitizeSession cannot remove the session.");
         }
 
         RestoreProtectedProperties(metadata, result.Value);
+
         foreach (var propertyName in root.Select(static property => property.Key).ToArray())
         {
             if (!evidencePropertyNames.Contains(propertyName))
@@ -304,6 +324,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
 
         var transformed = new JsonArray();
         var items = source.OfType<JsonObject>().ToArray();
+
         for (var index = 0; index < items.Length; index++)
         {
             var item = items[index];
@@ -311,6 +332,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 handler,
                 item,
                 itemDescription: $"{propertyName} item {index + 1:N0} of {items.Length:N0}");
+
             if (result.WasRemoved || result.Value is null)
             {
                 continue;
@@ -331,25 +353,31 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         var transformedStreams = new JsonArray();
+
         foreach (var stream in streams.OfType<JsonObject>())
         {
             var streamId = stream["streamId"]?.GetValue<string>() ?? "unknown";
             var streamMetadata = stream.DeepClone().AsObject();
             streamMetadata.Remove("entries");
+
             var result = Invoke(
                 "sanitizeDefault",
                 streamMetadata,
                 itemDescription: $"log stream '{streamId}' metadata");
+
             if (result.WasRemoved || result.Value is null)
             {
                 continue;
             }
 
             RestoreProtectedProperties(stream, result.Value);
+
             var transformedEntries = new JsonArray();
+
             if (stream["entries"] is JsonArray entries)
             {
                 var sourceEntries = entries.OfType<JsonObject>().ToArray();
+
                 for (var index = 0; index < sourceEntries.Length; index++)
                 {
                     var entry = sourceEntries[index];
@@ -357,6 +385,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                         "sanitizeLog",
                         entry,
                         itemDescription: $"log stream '{streamId}' entry {index + 1:N0} of {sourceEntries.Length:N0}");
+
                     if (!entryResult.WasRemoved && entryResult.Value is not null)
                     {
                         RestoreProtectedProperties(entry, entryResult.Value);
@@ -384,6 +413,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
 
         var transformed = new JsonArray();
         var items = source.OfType<JsonObject>().ToArray();
+
         for (var index = 0; index < items.Length; index++)
         {
             var item = items[index];
@@ -392,14 +422,17 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 "sanitizeNetworkRequest",
                 item,
                 itemDescription: $"network request '{requestId}' ({index + 1:N0} of {items.Length:N0})");
+
             if (result.WasRemoved || result.Value is null)
             {
                 continue;
             }
 
             RestoreProtectedProperties(item, result.Value);
+
             var request = result.Value.Deserialize<SessionNetworkRequest>(snapshotJsonOptions);
             var normalized = SessionNetworkRequestSanitizer.Normalize(request);
+
             if (normalized is not null)
             {
                 transformed.Add(JsonSerializer.SerializeToNode(normalized, snapshotJsonOptions));
@@ -412,10 +445,11 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     private void SanitizeScreenshots(AppSessionSnapshot snapshot, JsonObject root)
     {
         var retained = new JsonArray();
+
         foreach (var frame in snapshot.Images)
         {
             var frameNode = JsonSerializer.SerializeToNode(frame, snapshotJsonOptions)?.AsObject()
-                            ?? throw new InvalidDataException("A screenshot descriptor could not be prepared for sanitization.");
+                ?? throw new InvalidDataException("A screenshot descriptor could not be prepared for sanitization.");
             var sourceImagePath = SessionImageArtifactPath.ResolveCapturedImagePath(
                 sessionCapturesRootPath,
                 appId,
@@ -429,6 +463,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
             context["visualText"] = JsonSerializer.SerializeToNode(
                 ExtractVisualText(snapshot, frame),
                 snapshotJsonOptions);
+
             var result = Invoke(
                 "sanitizeScreenshot",
                 frameNode,
@@ -436,6 +471,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 $"screenshot '{frame.FrameId}'");
             var instruction = ParseScreenshotInstruction(result);
             screenshotInstructions[frame.FrameId] = instruction;
+
             if (instruction.Action != SessionScreenshotWriteAction.Remove)
             {
                 retained.Add(frameNode);
@@ -460,6 +496,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         SessionSanitizerInvocationResult result;
+
         try
         {
             result = executor.Invoke(handler, item, context ?? CreateInvocationContext());
@@ -478,12 +515,14 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         report.StringsScanned++;
+
         if (result.RedactionCount > 0)
         {
             report.RecordRedaction("script", result.RedactionCount);
         }
 
         completedItemCount++;
+
         if (itemDescription is not null)
         {
             reportProgress?.Invoke(new SessionOptimizationProgress(
@@ -498,11 +537,21 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     private static int CountSanitizerInvocations(JsonObject root, int screenshotCount)
     {
         var total = 1 + screenshotCount;
+
         foreach (var propertyName in new[]
-                 {
-                     "logs", "applicationEvents", "networkRequests", "visualTreeSnapshots", "annotations",
-                     "analyses", "artifactSnapshots", "agentTaskLinks", "metricChannels", "metrics", "touches"
-                 })
+        {
+            "logs",
+            "applicationEvents",
+            "networkRequests",
+            "visualTreeSnapshots",
+            "annotations",
+            "analyses",
+            "artifactSnapshots",
+            "agentTaskLinks",
+            "metricChannels",
+            "metrics",
+            "touches"
+        })
         {
             total += root[propertyName] is JsonArray items ? items.OfType<JsonObject>().Count() : 0;
         }
@@ -560,6 +609,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         var regions = new List<SessionSanitizationRegion>();
+
         foreach (var item in array.OfType<JsonObject>())
         {
             if (TryReadDouble(item, "x", out var x)
@@ -584,6 +634,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
             .Where(candidate => string.Equals(candidate.ScreenshotFrameId, frame.FrameId, StringComparison.Ordinal))
             .OrderByDescending(static candidate => candidate.CapturedAtUtc)
             .FirstOrDefault();
+
         if (tree is null)
         {
             return [];
@@ -591,11 +642,12 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
 
         var result = new List<SessionScreenshotTextBlock>();
         var coordinateSpace = ReadBounds(tree.Payload["coordinateSpace"] as JsonObject)
-                              ?? ReadBounds(tree.Payload["root"] as JsonObject)
-                              ?? new SessionSanitizationRegion(0, 0, frame.Width, frame.Height);
+            ?? ReadBounds(tree.Payload["root"] as JsonObject)
+            ?? new SessionSanitizationRegion(0, 0, frame.Width, frame.Height);
         VisitObjects(tree.Payload, candidate =>
         {
             var text = ReadFirstString(candidate, "text", "label", "value", "accessibilityLabel", "contentDescription");
+
             if (string.IsNullOrWhiteSpace(text) || ReadBounds(candidate) is not { } bounds)
             {
                 return;
@@ -612,26 +664,8 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                     bounds.Width * scaleX,
                     bounds.Height * scaleY)));
         });
-        return result;
-    }
 
-    private static void VisitObjects(JsonNode node, Action<JsonObject> visitor)
-    {
-        if (node is JsonObject jsonObject)
-        {
-            visitor(jsonObject);
-            foreach (var child in jsonObject.Select(static property => property.Value).OfType<JsonNode>())
-            {
-                VisitObjects(child, visitor);
-            }
-        }
-        else if (node is JsonArray jsonArray)
-        {
-            foreach (var child in jsonArray.OfType<JsonNode>())
-            {
-                VisitObjects(child, visitor);
-            }
-        }
+        return result;
     }
 
     private static string? ReadFirstString(JsonObject candidate, params string[] names)
@@ -647,62 +681,6 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         }
 
         return null;
-    }
-
-    private static SessionSanitizationRegion? ReadBounds(JsonObject? node)
-    {
-        if (node is null)
-        {
-            return null;
-        }
-
-        if (node["bounds"] is JsonArray array)
-        {
-            var offset = array.Count >= 8 ? 4 : 0;
-            return TryReadDouble(array, offset, out var arrayX)
-                   && TryReadDouble(array, offset + 1, out var arrayY)
-                   && TryReadDouble(array, offset + 2, out var arrayWidth)
-                   && TryReadDouble(array, offset + 3, out var arrayHeight)
-                ? new SessionSanitizationRegion(arrayX, arrayY, arrayWidth, arrayHeight)
-                : null;
-        }
-
-        var bounds = node["bounds"] as JsonObject ?? node;
-        var absolute = bounds["absoluteX"] is not null;
-        return TryReadDouble(bounds, absolute ? "absoluteX" : "x", out var x)
-               && TryReadDouble(bounds, absolute ? "absoluteY" : "y", out var y)
-               && TryReadDouble(bounds, absolute ? "absoluteWidth" : "width", out var width)
-               && TryReadDouble(bounds, absolute ? "absoluteHeight" : "height", out var height)
-            ? new SessionSanitizationRegion(x, y, width, height)
-            : null;
-    }
-
-    private static bool TryReadDouble(JsonObject node, string propertyName, out double result)
-    {
-        result = 0;
-        return node[propertyName] is JsonValue value && TryReadDouble(value, out result);
-    }
-
-    private static bool TryReadDouble(JsonArray array, int index, out double result)
-    {
-        result = 0;
-        return index >= 0 && index < array.Count && array[index] is JsonValue value && TryReadDouble(value, out result);
-    }
-
-    private static bool TryReadDouble(JsonValue value, out double result)
-    {
-        if (value.TryGetValue<double>(out result))
-        {
-            return true;
-        }
-
-        if (value.TryGetValue<int>(out var integer))
-        {
-            result = integer;
-            return true;
-        }
-
-        return false;
     }
 
     private static void RestoreProtectedProperties(JsonObject original, JsonObject sanitized)
@@ -721,7 +699,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
                 RestoreProtectedProperties(originalObject, sanitizedObject);
             }
             else if (property.Value is JsonArray originalArray
-                     && sanitized[property.Key] is JsonArray sanitizedArray)
+                && sanitized[property.Key] is JsonArray sanitizedArray)
             {
                 if (originalArray.Count != sanitizedArray.Count)
                 {
@@ -743,9 +721,10 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     private static bool IsProtectedProperty(string propertyName)
     {
         var normalized = new string(propertyName.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
         return protectedIdentityProperties.Contains(normalized)
-               || normalized.EndsWith("utc", StringComparison.Ordinal)
-               || normalized is "timestamp" or "timestampms";
+            || normalized.EndsWith("utc", StringComparison.Ordinal)
+            || normalized is "timestamp" or "timestampms";
     }
 
     private static void UpdateRetainedCounts(JsonObject root)
@@ -763,6 +742,7 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
     private static SKEncodedImageFormat ResolveImageFormat(string? format, string filePath)
     {
         var normalized = (format ?? Path.GetExtension(filePath)).Trim().TrimStart('.').ToLowerInvariant();
+
         return normalized switch
         {
             "jpg" or "jpeg" => SKEncodedImageFormat.Jpeg,
@@ -775,23 +755,4 @@ internal sealed class ScriptedSessionSanitizationProcessor : ISessionArchiveSani
         => string.Equals(frame.Format?.Trim().TrimStart('.'), "webp", StringComparison.OrdinalIgnoreCase)
             ? Math.Clamp(frame.Quality, 0, 100)
             : 92;
-}
-
-internal enum SessionScreenshotWriteAction
-{
-    Keep,
-    Redact,
-    RedactAll,
-    Remove
-}
-
-internal sealed record SessionScreenshotWriteInstruction(
-    SessionScreenshotWriteAction Action,
-    IReadOnlyList<SessionSanitizationRegion> Regions)
-{
-    public static SessionScreenshotWriteInstruction Keep { get; } = new(SessionScreenshotWriteAction.Keep, []);
-
-    public static SessionScreenshotWriteInstruction RedactAll { get; } = new(SessionScreenshotWriteAction.RedactAll, []);
-
-    public static SessionScreenshotWriteInstruction Remove { get; } = new(SessionScreenshotWriteAction.Remove, []);
 }

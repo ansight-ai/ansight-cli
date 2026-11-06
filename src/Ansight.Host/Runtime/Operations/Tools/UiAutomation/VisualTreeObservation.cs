@@ -18,6 +18,7 @@ internal static class VisualTreeObservation
                 structuredContent["sessionId"]?.GetValue<string>(),
                 structuredContent["appId"]?.GetValue<string>(),
                 structuredContent["toolId"]?.GetValue<string>(), options);
+
             if (inlineObservation is not null)
             {
                 return WithEvidence(inlineObservation, structuredContent);
@@ -25,6 +26,7 @@ internal static class VisualTreeObservation
         }
 
         var artifactPath = structuredContent["payload"]?["result"]?["artifactPath"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(artifactPath) || !File.Exists(artifactPath))
         {
             return null;
@@ -40,6 +42,7 @@ internal static class VisualTreeObservation
                     structuredContent["sessionId"]?.GetValue<string>(),
                     structuredContent["appId"]?.GetValue<string>(),
                     structuredContent["toolId"]?.GetValue<string>(), options);
+
             return observation is null ? null : WithEvidence(observation, structuredContent);
         }
         catch (Exception exception) when (exception is IOException or JsonException)
@@ -52,8 +55,12 @@ internal static class VisualTreeObservation
     {
         foreach (var key in new[] { "persistedVisualTree", "responseType", "evidence", "message", "isError", "error", "errorCode" })
         {
-            if (source[key] is { } value) observation[key] = value.DeepClone();
+            if (source[key] is { } value)
+            {
+                observation[key] = value.DeepClone();
+            }
         }
+
         return observation;
     }
 
@@ -66,10 +73,11 @@ internal static class VisualTreeObservation
     {
         options ??= UiProjectionOptions.Model;
         visualTree = VisualTreePresentationNormalizer.Create(visualTree);
+
         if (!VisualTreeTypeRegistry.TryCreateCompactV2(
-                visualTree,
-                out var typeRegistry,
-                out var root)
+            visualTree,
+            out var typeRegistry,
+            out var root)
             || typeRegistry is null
             || root is null)
         {
@@ -83,19 +91,24 @@ internal static class VisualTreeObservation
             .Where(match => !ReferenceEquals(match.Node, root))
             .ToArray();
         var viewport = LiveUiNodeQuery.ReadCoordinateSpace(visualTree)
-                       ?? LiveUiNodeQuery.ReadBounds(root);
+            ?? LiveUiNodeQuery.ReadBounds(root);
         var selectedMatches = new Dictionary<JsonObject, LiveUiNodeMatch>(ReferenceEqualityComparer.Instance);
         var returnedNodes = BuildBoundedNodeList(candidateNodes, visualTree, viewport, selectedMatches, options);
+
         if (LiveUiTreeCapture.IsTargetSource(toolId))
         {
             foreach (var entry in selectedMatches)
             {
                 var actions = LiveUiNodeQuery.ReadSupportedActions(entry.Value.Node, typeRegistry);
+
                 if (actions.Contains("tap") || actions.Contains("typeText"))
+                {
                     entry.Key["tapHint"] = FindLiveUiTool.BuildTapHint(root, entry.Value, viewport,
                         LiveUiSelector.Parse(null), visualTree, toolId);
+                }
             }
         }
+
         var observation = new JsonObject
         {
             ["capability"] = "ui.observe",
@@ -114,12 +127,13 @@ internal static class VisualTreeObservation
             ["meaningfulNodeCount"] = meaningfulNodes.Length,
             ["returnedNodeCount"] = returnedNodes.Length,
             ["truncated"] = candidateNodes.Length > returnedNodes.Length
-                            || visualTree["truncated"]?.GetValue<bool>() == true
-                            || returnedNodes.Any(node => node["projectionTruncated"]?.GetValue<bool>() == true)
+                || visualTree["truncated"]?.GetValue<bool>() == true
+                || returnedNodes.Any(node => node["projectionTruncated"]?.GetValue<bool>() == true)
         };
         var controllers = NavigationControllerCatalog.ResolveVisualTree(
             visualTree,
             toolId);
+
         if (controllers.Count > 0)
         {
             observation["framework"] = controllers[0].Framework;
@@ -133,8 +147,10 @@ internal static class VisualTreeObservation
             observation["structureNodes"] = new JsonArray(
                 BuildStructureNodeList(root, typeRegistry, options));
         }
+
         NestNodes(observation, root, typeRegistry, selectedMatches, options);
         UiObservationBudget.Apply(observation, options);
+
         return observation;
     }
 
@@ -147,20 +163,23 @@ internal static class VisualTreeObservation
     {
         var rootResult = observation["root"]!.AsObject();
         observation.Remove("nodes");
+
         var projected = new Dictionary<JsonObject, JsonObject>(ReferenceEqualityComparer.Instance)
         {
             [root] = rootResult
         };
+
         foreach (var entry in selectedMatches)
         {
             // Detach from the old ranked list before attaching to its actual ancestor.
             projected[entry.Value.Node] = entry.Key.DeepClone().AsObject();
         }
+
         foreach (var match in selectedMatches.Values)
         {
             foreach (var ancestor in match.Ancestors.Where(ancestor =>
-                         LiveUiNodeQuery.ReadAutomationId(ancestor) is not null
-                         || LiveUiNodeQuery.ReadText(ancestor) is not null).TakeLast(options.MaximumAncestors))
+                                 LiveUiNodeQuery.ReadAutomationId(ancestor) is not null
+                                     || LiveUiNodeQuery.ReadText(ancestor) is not null).TakeLast(options.MaximumAncestors))
             {
                 if (!projected.ContainsKey(ancestor))
                 {
@@ -170,36 +189,46 @@ internal static class VisualTreeObservation
                 }
             }
         }
+
         // Use source identity, not automation IDs or text: these can legitimately repeat.
+
         foreach (var match in LiveUiNodeQuery.Enumerate(root, typeRegistry))
         {
             if (ReferenceEquals(match.Node, root) || !projected.TryGetValue(match.Node, out var node))
             {
                 continue;
             }
+
             node.Remove("ancestorPath");
+
             var parent = match.Ancestors.LastOrDefault(projected.ContainsKey) ?? root;
             var parentResult = projected[parent];
             var children = parentResult["children"] as JsonArray;
+
             if (children is null)
             {
                 children = new JsonArray();
                 parentResult["children"] = children;
             }
+
             children.Add(node);
         }
+
         if (observation["structureNodes"] is JsonArray structureNodes)
         {
             var structureMatches = LiveUiNodeQuery.Enumerate(root, typeRegistry)
                 .Where(IsNavigationStructureNode).Take(MaximumStructureNodes).ToArray();
             var retainedSources = new HashSet<JsonObject>(projected.Keys, ReferenceEqualityComparer.Instance);
             retainedSources.UnionWith(structureMatches.Select(match => match.Node));
+
             for (var index = 0; index < structureMatches.Length; index++)
             {
                 var node = structureNodes[index]!.AsObject();
                 node.Remove("ancestorPath");
                 node.Remove("ancestorTypes");
+
                 var parent = structureMatches[index].Ancestors.LastOrDefault(retainedSources.Contains);
+
                 if (parent is not null)
                 {
                     node["parentId"] = LiveUiNodeQuery.ReadString(parent, "id");
@@ -216,8 +245,8 @@ internal static class VisualTreeObservation
         }
 
         return LiveUiNodeQuery.ReadAutomationId(match.Node) is not null
-               || LiveUiNodeQuery.ReadText(match.Node) is not null
-               || LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry).Count > 0;
+            || LiveUiNodeQuery.ReadText(match.Node) is not null
+            || LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry).Count > 0;
     }
 
     private static JsonObject[] BuildBoundedNodeList(
@@ -233,25 +262,30 @@ internal static class VisualTreeObservation
         var rankedCandidates = candidates
             .Select((match, index) => new LiveUiRankedObservationNode(match, index))
             .OrderByDescending(candidate => viewport is not null
-                                            && LiveUiNodeQuery.HasUsableBoundsInViewport(
-                                                candidate.Match,
-                                                viewport))
+                && LiveUiNodeQuery.HasUsableBoundsInViewport(
+                    candidate.Match,
+                    viewport))
             .ThenByDescending(candidate => UiNavigationContext.IsNavigationNode(candidate.Match))
             .ThenByDescending(candidate => hasActivePageContext
-                                           && LiveUiMauiContext.IsInActivePage(candidate.Match, visualTree))
+                && LiveUiMauiContext.IsInActivePage(candidate.Match, visualTree))
             .ThenByDescending(candidate =>
                 LiveUiNodeQuery.ReadSupportedActions(
                     candidate.Match.Node,
                     candidate.Match.TypeRegistry).Count > 0)
             .ThenByDescending(candidate => LiveUiNodeQuery.ReadAutomationId(candidate.Match.Node) is not null)
             .ThenBy(candidate => candidate.Index);
+
         foreach (var candidate in rankedCandidates.Take(options.MaximumNodes))
         {
             // NestNodes retains shared ancestry once. Do not spend each node's budget on
             // repeated ancestor paths that will be removed, or mark that removal as evidence loss.
             var result = UiNodeProjection.FromMatch(candidate.Match, options, includeAncestors: false);
+
             if (viewport is not null)
+            {
                 result["onScreen"] = LiveUiNodeQuery.HasUsableBoundsInViewport(candidate.Match, viewport);
+            }
+
             if (hasActivePageContext && result["type"]?.GetValue<string>()?.EndsWith("Page", StringComparison.Ordinal) == true
                 && (result["currentPage"]?.GetValue<bool>() == false || result["activePage"]?.GetValue<bool>() == false)
                 && !LiveUiMauiContext.IsInActivePage(candidate.Match, visualTree))
@@ -259,7 +293,9 @@ internal static class VisualTreeObservation
                 result["contextOnly"] = true;
                 result.Remove("supportedActions");
             }
+
             var resultLength = result.ToJsonString().Length;
+
             if (results.Count > 0
                 && resultCharacters + resultLength > options.MaximumCharacters)
             {
@@ -288,6 +324,7 @@ internal static class VisualTreeObservation
     {
         var type = match.TypeRegistry.Resolve(match.Node);
         var role = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry);
+
         return ContainsNavigationTerm(type) || ContainsNavigationTerm(role);
     }
 
@@ -299,37 +336,37 @@ internal static class VisualTreeObservation
         }
 
         return value.Contains("shell", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("flyout", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("drawer", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("uinavigationcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("uitabbarcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("uisplitviewcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("uipageviewcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigationstack", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigationsplitview", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("nstabviewcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("nssplitviewcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("nspagecontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navhost", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("drawerlayout", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("bottomnavigationview", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tablayout", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("viewpager", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("modalnavigationdrawer", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tabrow", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("pagerstate", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tabbar", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tabview", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tabcontroller", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("tabnavigator", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("bottomnavigation", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigationrail", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigationcontainer", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigationpage", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("navigator", StringComparison.OrdinalIgnoreCase)
-               || value.Equals("tab", StringComparison.OrdinalIgnoreCase)
-               || value.Equals("tablist", StringComparison.OrdinalIgnoreCase)
-               || value.Equals("tabpanel", StringComparison.OrdinalIgnoreCase);
+            || value.Contains("flyout", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("drawer", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("uinavigationcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("uitabbarcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("uisplitviewcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("uipageviewcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigationstack", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigationsplitview", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("nstabviewcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("nssplitviewcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("nspagecontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navhost", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("drawerlayout", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("bottomnavigationview", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tablayout", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("viewpager", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("modalnavigationdrawer", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tabrow", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("pagerstate", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tabbar", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tabview", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tabcontroller", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("tabnavigator", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("bottomnavigation", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigationrail", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigationcontainer", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigationpage", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("navigator", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("tab", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("tablist", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("tabpanel", StringComparison.OrdinalIgnoreCase);
     }
 
     private static JsonObject ToCompactStructureNode(LiveUiNodeMatch match, UiProjectionOptions options)
@@ -342,6 +379,7 @@ internal static class VisualTreeObservation
         CopyBoolean(match.Node, result, match.TypeRegistry, "selected");
         CopyBoolean(match.Node, result, match.TypeRegistry, "active");
         CopyBoolean(match.Node, result, match.TypeRegistry, "currentPage");
+
         return result;
     }
 
@@ -362,6 +400,4 @@ internal static class VisualTreeObservation
             fallback: false,
             typeRegistry);
     }
-
-
 }

@@ -24,6 +24,7 @@ internal sealed class FakeAndroidEmulatorProcessRunner : IProcessRunner
     {
         RunExecutablePath = executablePath;
         RunArguments = arguments.ToArray();
+
         return Task.FromResult(RunResult);
     }
 
@@ -31,6 +32,7 @@ internal sealed class FakeAndroidEmulatorProcessRunner : IProcessRunner
     {
         LaunchExecutablePath = executablePath;
         LaunchArguments = arguments.ToArray();
+
         return ProcessId;
     }
 }

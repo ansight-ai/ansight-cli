@@ -30,19 +30,12 @@ public sealed class BinaryFileDownloadOperation
     }
 
     public string RequestId { get; }
-
     public string SessionId { get; }
-
     public string SandboxPath { get; }
-
     public string? SandboxRoot { get; }
-
     public string DownloadId { get; }
-
     public int ChunkBytes { get; }
-
     public ToolProtocolEnvelope RequestEnvelope { get; }
-
     public Task<BinaryFileDownloadResult> Completion => completion.Task;
 
     internal string DestinationDirectoryPath => destinationDirectoryPath;

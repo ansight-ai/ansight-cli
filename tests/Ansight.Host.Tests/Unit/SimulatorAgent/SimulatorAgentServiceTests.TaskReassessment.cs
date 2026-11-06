@@ -17,6 +17,7 @@ public sealed partial class SimulatorAgentServiceTests
             RepositoryTaskShortcuts =
             [CreateRepositoryTaskShortcut(taskToolName, taskId, "Load area weather")]
         };
+
         if (taskFailed)
         {
             turns.Add(CreateFunctionTurn("task", taskToolName, new JsonObject()));
@@ -50,6 +51,7 @@ public sealed partial class SimulatorAgentServiceTests
             "The target remains below the viewport."));
         gateway.Results.Enqueue(PerformedResult());
         gateway.Results.Enqueue(PerformedResult());
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), new FakeOpenAiClient(turns), gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -57,10 +59,12 @@ public sealed partial class SimulatorAgentServiceTests
             "session-123", ["Scroll to the offscreen control and open it, then continue on the next page."]));
 
         Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare").IsError);
+
         foreach (var callId in new[] { "scroll-first", "scroll-second", "open" })
         {
             Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == callId).IsError);
         }
+
         var blocked = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "blocked-next-page-tap");
         Assert.True(blocked.IsError);
         Assert.Contains("reassessment is required", blocked.Message, StringComparison.Ordinal);

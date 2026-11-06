@@ -30,6 +30,7 @@ public sealed class KnownAppStoreTests
         var store = new KnownAppStore(environment.ApplicationPaths);
         var firstSeen = DateTimeOffset.Parse("2026-03-20T00:00:00Z");
         store.EnsureKnown("app-1", "Example App", "glyph-a", "/tmp/codebase", firstSeen);
+
         var app = Assert.Single(store.GetSnapshot());
         app.RepositoryAutomationsEnabled = false;
         store.Upsert(app);

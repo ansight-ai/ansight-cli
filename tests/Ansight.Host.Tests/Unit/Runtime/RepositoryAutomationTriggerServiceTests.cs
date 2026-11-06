@@ -20,6 +20,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             TimeSpan.FromSeconds(30));
 
         Assert.Empty(result.Warnings);
+
         var trigger = Assert.Single(result.Catalog.Triggers);
         Assert.Equal("capture-error", trigger.TriggerId);
         Assert.Equal(1, trigger.SchemaVersion);
@@ -80,6 +81,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         Assert.Equal(
             RepositoryModuleContractArtifacts.TriggerDefinitionSchemaId,
             contract["definitionSchema"]?["$id"]?.GetValue<string>());
+
         var typeDefinitions = contract["typeDefinitions"]?.GetValue<string>();
         Assert.Contains("TriggerFunction", typeDefinitions, StringComparison.Ordinal);
         Assert.Contains("MauiContext", typeDefinitions, StringComparison.Ordinal);
@@ -168,9 +170,9 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         var modulePath = GetTriggerPath(repository, "capture-error.ts");
         var source = File.ReadAllText(modulePath)
             .Replace(
-                "\"conditions\": [",
-                "\"predicate\": \"event => true\", \"conditions\": [",
-                StringComparison.Ordinal);
+            "\"conditions\": [",
+            "\"predicate\": \"event => true\", \"conditions\": [",
+            StringComparison.Ordinal);
         File.WriteAllText(modulePath, source);
 
         var result = RepositoryAutomationTriggerLoader.Load(
@@ -261,6 +263,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             executor,
             runStore: runStore);
         await service.StartAsync();
+
         var finalAttempt = new TaskCompletionSource<AutomationRunCompletedEvent>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         service.RunCompleted += (_, run) =>
@@ -276,6 +279,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         var completed = await finalAttempt.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(3, completed.AttemptNumber);
         Assert.Equal(AutomationRunStatus.Succeeded, completed.Status);
+
         var traces = new RepositoryAutomationRunStore(traceDirectory.Path)
             .GetRecent("com.example.app", 10);
         Assert.Equal([3, 2, 1], traces.Select(trace => trace.AttemptNumber));
@@ -324,6 +328,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         var inspection = service.InspectRepository(repository.Path, "com.example.app");
         Assert.True(inspection.IsSuccess);
         Assert.False(inspection.IsConnected);
+
         var inspectedTrigger = Assert.Single(inspection.Triggers);
         Assert.Equal("com.example.app", inspectedTrigger.AppId);
         Assert.Equal(
@@ -344,6 +349,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
 
         Assert.True(service.ConnectRepository(repository.Path, "com.example.app").IsConnected);
         File.WriteAllText(GetTriggerPath(repository, "capture-error.ts"), "export default () => null;");
+
         var invalidReconnect = service.ConnectRepository(repository.Path, "com.example.app");
         Assert.False(invalidReconnect.IsConnected);
         Assert.Empty(service.RegisteredTriggers);
@@ -518,6 +524,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
                 "export const trigger",
                 "await new Promise(resolve => setTimeout(resolve, 250));\n\nexport const trigger",
                 StringComparison.Ordinal));
+
         var request = CreateMatchedRequest(repository, CreateEnvelope("com.example.app", "Error"));
         var executor = new JavaScriptRepositoryAutomationExecutor(
             "node",
@@ -631,6 +638,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         var repository = TestDirectory.Create();
         var triggerDirectory = Path.Combine(repository.Path, "ansight", "triggers");
         Directory.CreateDirectory(triggerDirectory);
+
         var appIdLine = declareAppId ? "\"appId\": \"com.example.app\"," : string.Empty;
         File.WriteAllText(
             Path.Combine(triggerDirectory, "capture-error.ts"),
@@ -662,6 +670,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
               {{functionBody}}
             }
             """);
+
         return repository;
     }
 
@@ -674,6 +683,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         var repository = TestDirectory.Create();
         var triggerDirectory = Path.Combine(repository.Path, "ansight", "triggers");
         Directory.CreateDirectory(triggerDirectory);
+
         var source = $$"""
             export const trigger = {
               "appId": "com.example.app",
@@ -697,6 +707,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
               });
             }
             """;
+
         if (string.Equals(returnedToolId, "artifacts.request", StringComparison.Ordinal))
         {
             source = source.Replace(
@@ -708,6 +719,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         File.WriteAllText(
             Path.Combine(triggerDirectory, "capture-app-state.ts"),
             source);
+
         return repository;
     }
 
@@ -741,6 +753,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
               return event.eventId.length > 0 ? null : null;
             }
             """);
+
         return repository;
     }
 
@@ -753,6 +766,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             TimeSpan.FromMilliseconds(100),
             TimeSpan.FromSeconds(30));
         var trigger = Assert.Single(loadResult.Catalog.FindMatches(envelope));
+
         return new RepositoryAutomationExecutionRequest(
             "run-1",
             trigger,
@@ -800,7 +814,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
     private sealed class RecordingExecutor : IRepositoryAutomationExecutor
     {
         private readonly TaskCompletionSource<RepositoryAutomationExecutionRequest> firstRequest =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int executionCount;
 
         public Task<RepositoryAutomationExecutionRequest> FirstRequest => firstRequest.Task;
@@ -813,7 +827,9 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         {
             Interlocked.Increment(ref executionCount);
             firstRequest.TrySetResult(request);
+
             var nowUtc = DateTimeOffset.UtcNow;
+
             return Task.FromResult(new RepositoryAutomationExecutionResult(
                 AutomationRunStatus.Succeeded,
                 nowUtc,
@@ -825,9 +841,15 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         }
     }
 
-    private sealed class SequencedExecutor(params AutomationRunStatus[] statuses) : IRepositoryAutomationExecutor
+    private sealed class SequencedExecutor : IRepositoryAutomationExecutor
     {
+        private readonly AutomationRunStatus[] statuses;
         private int executionCount;
+
+        public SequencedExecutor(params AutomationRunStatus[] statuses)
+        {
+            this.statuses = statuses;
+        }
 
         public Task<RepositoryAutomationExecutionResult> ExecuteAsync(
             RepositoryAutomationExecutionRequest request,
@@ -835,6 +857,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
         {
             var index = Math.Min(Interlocked.Increment(ref executionCount) - 1, statuses.Length - 1);
             var nowUtc = DateTimeOffset.UtcNow;
+
             return Task.FromResult(new RepositoryAutomationExecutionResult(
                 statuses[index],
                 nowUtc,
@@ -852,28 +875,23 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
-
         public string? SessionId { get; private set; }
-
         public string? ToolId { get; private set; }
-
         public JsonObject? Arguments { get; private set; }
-
         public AppToolBridgeRequestContext? RequestContext { get; private set; }
-
         public JsonObject? QueryArguments { get; private set; }
-
         public List<string> Operations { get; } = [];
 
         public int ForwardedCallCount { get; private set; }
-
         public TimeSpan CallDelay { get; init; }
-
         public string? QueryFailureMessage { get; init; }
-
         public bool DenyToolCalls { get; init; }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => ["session-1"];
@@ -890,12 +908,14 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             Operations.Add("query");
+
             if (QueryFailureMessage is not null)
             {
                 return Task.FromResult(AppToolBridgeResponse.FromFailure(QueryFailureMessage));
             }
 
             catalogQueried = true;
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess(
                 "Catalog loaded.",
                 new ToolProtocolEnvelope
@@ -929,6 +949,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             QueryArguments = arguments?.DeepClone().AsObject();
+
             return QueryToolsAsync(sessionId, cancellationToken, requestContext);
         }
 
@@ -944,6 +965,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             Arguments = arguments;
             RequestContext = requestContext;
             Operations.Add("call");
+
             if (!catalogQueried)
             {
                 return AppToolBridgeResponse.FromFailure(
@@ -958,6 +980,7 @@ public sealed partial class RepositoryAutomationTriggerServiceTests
             }
 
             ForwardedCallCount++;
+
             if (CallDelay > TimeSpan.Zero)
             {
                 await Task.Delay(CallDelay, cancellationToken);

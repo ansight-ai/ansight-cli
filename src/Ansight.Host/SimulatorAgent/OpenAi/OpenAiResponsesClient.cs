@@ -8,7 +8,7 @@ namespace Ansight.Host.SimulatorAgent.OpenAi;
 
 internal sealed class OpenAiResponsesClient : IOpenAiClient
 {
-    private static readonly Uri ResponsesEndpoint = new("https://api.openai.com/v1/responses");
+    private static readonly Uri responsesEndpoint = new("https://api.openai.com/v1/responses");
     private readonly HttpClient httpClient;
     private readonly bool ownsHttpClient;
 
@@ -30,16 +30,18 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         var startedUtc = DateTimeOffset.UtcNow;
         var timer = Stopwatch.StartNew();
         ValidateRequest(request);
+
         var apiKey = await request.ResolveApiKeyAsync(cancellationToken).ConfigureAwait(false);
         var payload = BuildPayload(request, request.Input);
 
         using var httpRequest = new HttpRequestMessage(
             HttpMethod.Post,
-            ResponsesEndpoint)
+            responsesEndpoint)
         {
             Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
         };
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
         var requestPrepared = timer.ElapsedMilliseconds;
         using var response = request.Transport is null
             ? await httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false)
@@ -47,6 +49,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         var headersReceived = timer.ElapsedMilliseconds;
         var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         var bodyReceived = timer.ElapsedMilliseconds;
+
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException((request.Transport?.DescribeFailure((int)response.StatusCode, responseContent)
@@ -54,6 +57,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         }
 
         JsonObject responseJson;
+
         try
         {
             responseJson = JsonNode.Parse(responseContent) as JsonObject
@@ -65,7 +69,9 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         }
 
         RecordUsage(request, responseJson);
+
         var turn = ParseResponse(responseJson);
+
         return turn with
         {
             Transport = new SimulatorAgentTransportDiagnostics([
@@ -77,8 +83,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
                     FirstResponseMilliseconds = headersReceived,
                     ResponseCompletedMilliseconds = bodyReceived,
                     ParsingDurationMilliseconds = timer.ElapsedMilliseconds - bodyReceived
-                }
-            ], 0)
+                }            ], 0)
         };
     }
 
@@ -91,6 +96,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
 
         // Read usage independently of tool output parsing, including terminal failures.
         var responseId = ReadString(response, "id");
+
         if (responseId is null || response["usage"] is not JsonObject)
         {
             return;
@@ -101,6 +107,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
             ["usage"] = response["usage"]!.DeepClone()
         };
         var tokens = ParseResponse(usageResponse).Tokens;
+
         try
         {
             recorder.RecordUsage(new SimulatorAgentModelPassUsage(
@@ -127,10 +134,12 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         ArgumentNullException.ThrowIfNull(request.Tools);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ReasoningEffort);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.PromptCacheKey);
+
         if (request.MaximumOutputTokens < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(request.MaximumOutputTokens));
         }
+
         if (request.CompactThresholdTokens is < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(request.CompactThresholdTokens));
@@ -142,6 +151,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         JsonArray input)
     {
         ArgumentNullException.ThrowIfNull(input);
+
         var payload = new JsonObject
         {
             ["model"] = request.Model.Trim(),
@@ -158,6 +168,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
             ["prompt_cache_key"] = request.PromptCacheKey.Trim(),
             ["max_output_tokens"] = request.MaximumOutputTokens
         };
+
         if (request.CompactThresholdTokens is { } compactThresholdTokens)
         {
             payload["context_management"] = new JsonArray(new JsonObject
@@ -166,6 +177,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
                 ["compact_threshold"] = compactThresholdTokens
             });
         }
+
         return payload;
     }
 
@@ -175,6 +187,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         bool includeInstructions)
     {
         var payload = BuildPayload(request, input);
+
         if (SupportsPromptCacheBreakpoints(request.Model))
         {
             payload["prompt_cache_options"] = new JsonObject
@@ -182,9 +195,11 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
                 ["mode"] = "implicit",
                 ["ttl"] = "30m"
             };
+
             if (request.UsePromptCacheBreakpoint)
             {
                 payload.Remove("instructions");
+
                 if (includeInstructions)
                 {
                     ((JsonArray)payload["input"]!).Insert(0, new JsonObject
@@ -218,24 +233,28 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
 
     internal static bool SupportsPromptCacheBreakpoints(string model)
         => !string.IsNullOrWhiteSpace(model)
-           && Regex.IsMatch(
-               model.Trim(),
-               @"\Agpt-(?:5\.(?:[6-9]|[1-9][0-9]+)|6(?:\.(?:0|[1-9][0-9]*))?)(?:-[a-z0-9]+)*\z",
-               RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+            && Regex.IsMatch(
+                model.Trim(),
+                @"\Agpt-(?:5\.(?:[6-9]|[1-9][0-9]+)|6(?:\.(?:0|[1-9][0-9]*))?)(?:-[a-z0-9]+)*\z",
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     internal static OpenAiTurn ParseResponse(JsonObject responseJson)
     {
         ArgumentNullException.ThrowIfNull(responseJson);
+
         var output = responseJson["output"] as JsonArray ?? [];
         var calls = new List<OpenAiFunctionCall>();
         var textParts = new List<string>();
+
         foreach (var item in output.OfType<JsonObject>())
         {
             var type = ReadString(item, "type");
+
             if (string.Equals(type, "function_call", StringComparison.Ordinal))
             {
                 var callId = ReadString(item, "call_id");
                 var name = ReadString(item, "name");
+
                 if (callId is null || name is null)
                 {
                     continue;
@@ -257,6 +276,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
             foreach (var contentItem in content.OfType<JsonObject>())
             {
                 var text = ReadString(contentItem, "text");
+
                 if (text is not null)
                 {
                     textParts.Add(text);
@@ -270,6 +290,7 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         var inputTokens = ReadInteger(usage, "input_tokens");
         var outputTokens = ReadInteger(usage, "output_tokens");
         var totalTokens = ReadInteger(usage, "total_tokens");
+
         return new OpenAiTurn(
             ReadString(responseJson, "id"),
             ReadString(responseJson, "model"),
@@ -321,9 +342,11 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
         string responseContent)
     {
         string? message = null;
+
         try
         {
             var error = JsonNode.Parse(responseContent)?["error"];
+
             if (error is JsonValue errorValue
                 && errorValue.TryGetValue<string>(out var errorText))
             {
@@ -354,14 +377,14 @@ internal sealed class OpenAiResponsesClient : IOpenAiClient
 
     internal static string? ReadString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && property.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
     private static int ReadInteger(JsonObject? value, string propertyName)
         => value?[propertyName] is JsonValue property
-           && property.TryGetValue<int>(out var number)
+            && property.TryGetValue<int>(out var number)
             ? number
             : 0;
 }

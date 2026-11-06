@@ -187,7 +187,7 @@ public sealed class ReplayCommandsTests
 
         Assert.Contains(plan.Diagnostics, diagnostic =>
             diagnostic.Contains("text entry", StringComparison.OrdinalIgnoreCase)
-            && diagnostic.Contains("visual-tree", StringComparison.OrdinalIgnoreCase));
+                && diagnostic.Contains("visual-tree", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -205,6 +205,7 @@ public sealed class ReplayCommandsTests
             ["replay", "posthog", replayPath, "--plan-only", "--app-id", "com.example", "--json"]);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         var payload = JsonNode.Parse(result.StandardOutput)!.AsObject();
         Assert.Equal("ansight.replay-run/v1", payload["schema"]!.GetValue<string>());
         Assert.True(payload["planOnly"]!.GetValue<bool>());
@@ -292,7 +293,7 @@ public sealed class ReplayCommandsTests
 
         var exitCode = await CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "replay", "ansight", source.SessionId,
                 "--annotation", "replay-start",
                 "--plan-only",
@@ -341,10 +342,8 @@ public sealed class ReplayCommandsTests
                             Y = 0.2,
                             Width = 0.3,
                             Height = 0.4
-                        }
-                    ]
-                }
-            ]);
+                        }                    ]
+                }            ]);
 
         var range = ReplayCommands.ResolveReplayTimelineRange(
             CliArguments.Parse(["replay", "ansight", snapshot.SessionId, "--annotation", "open-guide"]),
@@ -368,8 +367,7 @@ public sealed class ReplayCommandsTests
                     AnnotationId = "start-here",
                     StartUtc = createdUtc.AddSeconds(30),
                     Label = "Start here"
-                }
-            ]);
+                }            ]);
 
         var range = ReplayCommands.ResolveReplayTimelineRange(
             CliArguments.Parse(["replay", "ansight", snapshot.SessionId, "--annotation", "start-here"]),
@@ -392,12 +390,11 @@ public sealed class ReplayCommandsTests
                     AnnotationId = "start-here",
                     StartUtc = createdUtc.AddSeconds(30),
                     Label = "Start here"
-                }
-            ]);
+                }            ]);
 
         var exception = Assert.Throws<CliUsageException>(() => ReplayCommands.ResolveReplayTimelineRange(
             CliArguments.Parse(
-            [
+                [
                 "replay", "ansight", snapshot.SessionId,
                 "--annotation", "start-here",
                 "--end", "45"
@@ -492,7 +489,7 @@ public sealed class ReplayCommandsTests
 
         var target = ReplayCommands.ResolveReplayTargetRequest(
             CliArguments.Parse(
-            [
+                [
                 "replay", "ansight", snapshot.SessionId,
                 "--platform", "android",
                 "--device-id", "target-device",
@@ -532,6 +529,7 @@ public sealed class ReplayCommandsTests
     {
         var tokenEnvironmentVariable = $"ANSIGHT_TEST_SENTRY_TOKEN_{Guid.NewGuid():N}";
         Environment.SetEnvironmentVariable(tokenEnvironmentVariable, "test-token");
+
         try
         {
             var handler = new StubHttpMessageHandler(
@@ -541,7 +539,7 @@ public sealed class ReplayCommandsTests
             using var httpClient = new HttpClient(handler);
             using var loader = new ExternalReplaySourceLoader(httpClient);
             var arguments = CliArguments.Parse(
-            [
+                [
                 "replay", "sentry", "replay-42",
                 "--organization", "acme",
                 "--project", "mobile",
@@ -580,6 +578,7 @@ public sealed class ReplayCommandsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(exitCode, standardOutput.ToString(), standardError.ToString());
     }
 
@@ -588,6 +587,7 @@ public sealed class ReplayCommandsTests
         var storagePath = Path.Combine(baseFolderPath, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,
@@ -619,8 +619,7 @@ public sealed class ReplayCommandsTests
                     AnnotationId = "replay-start",
                     StartUtc = createdUtc.AddMilliseconds(500),
                     Label = "Replay start"
-                }
-            ],
+                }            ],
             Touches =
             [
                 CreateTouch("down", createdUtc.AddSeconds(1)),
@@ -652,28 +651,31 @@ public sealed class ReplayCommandsTests
                             ["children"] = new JsonArray()
                         }
                     }
-                }
-            ],
+                }            ],
             MetricChannels = [],
             Metrics = []
         };
         var archivePath = Path.Combine(directoryPath, "agentic-replay.zip");
+
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using var sessionStream = sessionEntry.Open();
-            await JsonSerializer.SerializeAsync(
-                sessionStream,
-                new SessionCaptureDocument
-                {
-                    SavedAtUtc = DateTimeOffset.UtcNow,
-                    Session = snapshot
-                },
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+            {
+                var sessionEntry = archive.CreateEntry("session.json");
+                await using var sessionStream = sessionEntry.Open();
+                await JsonSerializer.SerializeAsync(
+                    sessionStream,
+                    new SessionCaptureDocument
+                    {
+                        SavedAtUtc = DateTimeOffset.UtcNow,
+                        Session = snapshot
+                    },
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            }
         }
 
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
+
         return Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
     }
 
@@ -756,9 +758,15 @@ public sealed class ReplayCommandsTests
             Metrics = []
         };
 
-    private sealed class RecordingTestRunGateway(WorkspaceTestRunPreparation preparation)
-        : IWorkspaceTestRunGateway
+    private sealed class RecordingTestRunGateway : IWorkspaceTestRunGateway
     {
+        private readonly WorkspaceTestRunPreparation preparation;
+
+        public RecordingTestRunGateway(WorkspaceTestRunPreparation preparation)
+        {
+            this.preparation = preparation;
+        }
+
         public WorkspaceTestRunPreparationRequest? Request { get; private set; }
 
         public Task<WorkspaceTestRunPreparation> PrepareAsync(
@@ -766,6 +774,7 @@ public sealed class ReplayCommandsTests
             CancellationToken cancellationToken = default)
         {
             Request = request;
+
             return Task.FromResult(preparation);
         }
 

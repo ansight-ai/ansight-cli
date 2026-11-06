@@ -20,9 +20,21 @@ public sealed class SessionEditingService
 
     public void AddAnalysis(string sessionId, SessionAnalysisRecord analysis)
     {
-        if (activity is null) { sessionIngestion.AddSessionAnalysis(sessionId, analysis); return; }
+        if (activity is null)
+        {
+            sessionIngestion.AddSessionAnalysis(sessionId, analysis);
+
+            return;
+        }
+
         activity.Record("session.AddAnalysis", "session", sessionId,
-            () => { sessionIngestion.AddSessionAnalysis(sessionId, analysis); return true; }, _ => "succeeded");
+            () =>
+                    {
+                        sessionIngestion.AddSessionAnalysis(sessionId, analysis);
+
+                        return true;
+                    }
+, _ => "succeeded");
     }
 
     internal void SetUiTestRun(string sessionId, SessionUiTestRun run)
@@ -39,6 +51,7 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(snapshot);
+
         return sessionIngestion.AddSessionVisualTreeSnapshot(sessionId.Trim(), snapshot);
     }
 
@@ -53,6 +66,7 @@ public sealed class SessionEditingService
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectoryPath);
+
         return sessionIngestion.AddSessionArtifactSnapshot(sessionId.Trim(), snapshot, sourceDirectoryPath.Trim());
     }
 
@@ -68,6 +82,7 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(annotation);
+
         return sessionEditor.UpsertSessionAnnotation(sessionId.Trim(), annotation);
     }
 
@@ -75,6 +90,7 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
         if (sessionEditor is not ISessionAnnotationMutator mutator)
         {
             return OperationResult.Failure("Annotation status updates are unavailable.");
@@ -87,6 +103,7 @@ public sealed class SessionEditingService
             HasStatus = true,
             Status = status
         });
+
         return result.IsSuccess
             ? OperationResult.Success($"Annotation '{annotationId}' status updated.")
             : OperationResult.Failure(result.Message);
@@ -96,6 +113,7 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(taskLink);
+
         return sessionEditor.UpsertSessionAgentTaskLink(sessionId.Trim(), taskLink);
     }
 
@@ -103,6 +121,7 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
         return sessionEditor.DeleteSessionAnnotation(sessionId.Trim(), annotationId.Trim());
     }
 
@@ -117,12 +136,14 @@ public sealed class SessionEditingService
         Action<SessionTimelineTrimProgress>? report = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return sessionEditor.TrimSessionTimeline(sessionId.Trim(), startUtc, endUtc, mode, report);
     }
 
     private SessionNormalizationResult NormalizeCore(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return sessionEditor.NormalizeSession(sessionId.Trim());
     }
 
@@ -143,6 +164,7 @@ public sealed class SessionEditingService
         string? name = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return sessionEditor.ExtractSessionTimelineRange(sessionId.Trim(), startUtc, endUtc, name);
     }
 
@@ -153,18 +175,21 @@ public sealed class SessionEditingService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
         return sessionEditor.ExtractSessionAnnotationBounds(sessionId.Trim(), annotationId.Trim(), name);
     }
 
     private OperationResult DeleteCore(string sessionId)
     {
         var result = sessionEditor.DeleteSession(sessionId);
+
         if (!result.IsSuccess)
         {
             return result;
         }
 
         var removedTrendsRows = trendsService.DeleteSessionHistory(sessionId);
+
         return OperationResult.Success(
             removedTrendsRows == 0
                 ? result.Message
@@ -269,5 +294,4 @@ public sealed class SessionEditingService
         => activity is null ? DeleteCore(sessionId)
             : activity.Record("session.Delete", "session", sessionId,
                 () => DeleteCore(sessionId), result => result.IsSuccess ? "succeeded" : "failed");
-
 }

@@ -5,7 +5,9 @@ internal static class SessionSanitizationPolicyValidator
     public static void Validate(SessionSanitizationPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
+
         var source = $"Sanitizer '{policy.Id}'";
+
         if (policy.SchemaVersion != SessionSanitizationPolicy.CurrentSchemaVersion)
         {
             throw new InvalidDataException(
@@ -53,6 +55,7 @@ internal static class SessionSanitizationPolicyValidator
         var supportedDetectors = new HashSet<string>(
             ["email", "phone", "ipAddress", "creditCard", "credential"],
             StringComparer.OrdinalIgnoreCase);
+
         if (policy.Detectors.Any(string.IsNullOrWhiteSpace)
             || policy.SensitiveProperties.Any(string.IsNullOrWhiteSpace))
         {
@@ -61,6 +64,7 @@ internal static class SessionSanitizationPolicyValidator
         }
 
         var unknownDetector = policy.Detectors.FirstOrDefault(detector => !supportedDetectors.Contains(detector));
+
         if (unknownDetector is not null)
         {
             throw new InvalidDataException($"{source} uses unsupported detector '{unknownDetector}'.");
@@ -70,6 +74,7 @@ internal static class SessionSanitizationPolicyValidator
             .Where(static rule => !string.IsNullOrWhiteSpace(rule.Id))
             .GroupBy(static rule => rule.Id.Trim(), StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(static group => group.Count() > 1);
+
         if (duplicateRule is not null)
         {
             throw new InvalidDataException($"{source} contains duplicate rule id '{duplicateRule.Key}'.");
@@ -88,7 +93,7 @@ internal static class SessionSanitizationPolicyValidator
                     rule.Pattern,
                     rule.IgnoreCase
                         ? System.Text.RegularExpressions.RegexOptions.IgnoreCase
-                          | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+                            | System.Text.RegularExpressions.RegexOptions.CultureInvariant
                         : System.Text.RegularExpressions.RegexOptions.CultureInvariant,
                     TimeSpan.FromMilliseconds(250));
             }

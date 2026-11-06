@@ -6,12 +6,13 @@ namespace Ansight.Host.Devices;
 
 internal sealed class CoreDeviceClient
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan defaultTimeout = TimeSpan.FromSeconds(45);
     private readonly SimCtlToolResolution toolResolution;
 
     public CoreDeviceClient(SimCtlToolResolution toolResolution)
     {
         ArgumentNullException.ThrowIfNull(toolResolution);
+
         if (!toolResolution.IsFound)
         {
             throw new ArgumentException("A resolved Xcode command-line toolchain is required.", nameof(toolResolution));
@@ -27,6 +28,7 @@ internal sealed class CoreDeviceClient
             ["list", "devices"],
             "enumerate physical Apple devices",
             cancellationToken).ConfigureAwait(false);
+
         return ParseDevices(document.RootElement);
     }
 
@@ -38,17 +40,19 @@ internal sealed class CoreDeviceClient
         }
 
         var results = new List<CoreDeviceDescriptor>();
+
         foreach (var device in devices.EnumerateArray())
         {
             // Newer CoreDevice versions also enumerate simulators, which simctl already supplies.
             var isSimulator = string.Equals(
-                                  FindString(device, "reality"),
-                                  "simulated",
-                                  StringComparison.OrdinalIgnoreCase)
-                              || string.Equals(
-                                  FindString(device, "provider"),
-                                  "com.apple.CoreSimulator.SimulatorCoreDevicePlugin",
-                                  StringComparison.OrdinalIgnoreCase);
+                FindString(device, "reality"),
+                "simulated",
+                StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    FindString(device, "provider"),
+                    "com.apple.CoreSimulator.SimulatorCoreDevicePlugin",
+                    StringComparison.OrdinalIgnoreCase);
+
             if (isSimulator)
             {
                 continue;
@@ -58,6 +62,7 @@ internal sealed class CoreDeviceClient
                 FindString(device, "udid"),
                 FindString(device, "identifier"),
                 FindString(device, "serialNumber"));
+
             if (identifier is null)
             {
                 continue;
@@ -67,11 +72,11 @@ internal sealed class CoreDeviceClient
             var tunnelState = FindString(device, "tunnelState");
             var developerMode = FindString(device, "developerModeStatus");
             var isPaired = string.IsNullOrWhiteSpace(pairingState)
-                           || string.Equals(pairingState, "paired", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(pairingState, "paired", StringComparison.OrdinalIgnoreCase);
             var isConnected = string.IsNullOrWhiteSpace(tunnelState)
-                              || string.Equals(tunnelState, "connected", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(tunnelState, "connected", StringComparison.OrdinalIgnoreCase);
             var isDeveloperModeEnabled = string.IsNullOrWhiteSpace(developerMode)
-                                         || string.Equals(developerMode, "enabled", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(developerMode, "enabled", StringComparison.OrdinalIgnoreCase);
             var state = !isPaired
                 ? "unpaired"
                 : !isConnected
@@ -103,10 +108,12 @@ internal sealed class CoreDeviceClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceIdentifier(deviceIdentifier);
+
         using var document = await RunJsonAsync(
             ["device", "info", "apps", "--device", deviceIdentifier, "--include-removable-apps", "--include-default-apps"],
             "list physical-device applications",
             cancellationToken).ConfigureAwait(false);
+
         return ParseApplications(document.RootElement);
     }
 
@@ -117,9 +124,11 @@ internal sealed class CoreDeviceClient
         ValidateDeviceIdentifier(deviceIdentifier);
         ValidateBundleIdentifier(bundleIdentifier);
         ArgumentNullException.ThrowIfNull(bundlePath);
+
         using var document = await RunJsonAsync(
             ["device", "info", "processes", "--device", deviceIdentifier],
             "list physical-device processes", cancellationToken).ConfigureAwait(false);
+
         return ParseRunningApplicationProcessIdentity(document.RootElement, bundleIdentifier, bundlePath);
     }
 
@@ -132,7 +141,11 @@ internal sealed class CoreDeviceClient
         JsonElement root, string bundleIdentifier, string bundlePath)
     {
         if (!TryFindArray(root, "runningProcesses", out var processes)
-            && !TryFindArray(root, "processes", out processes)) return null;
+            && !TryFindArray(root, "processes", out processes))
+        {
+            return null;
+        }
+
         var normalizedBundlePath = NormalizeDevicePath(bundlePath).TrimEnd('/');
         var matches = processes.EnumerateArray().Where(process =>
         {
@@ -140,25 +153,44 @@ internal sealed class CoreDeviceClient
                 FindString(process, "bundleIdentifier"),
                 FindString(process, "executableObjectIdentifier"));
             var executable = FindString(process, "executable")
-                             ?? FindString(process, "url")
-                             ?? FindString(process, "path");
+                ?? FindString(process, "url")
+                ?? FindString(process, "path");
+
             if (executable is not null && normalizedBundlePath.Length > 0)
             {
                 var normalizedExecutable = NormalizeDevicePath(executable);
+
                 if (normalizedExecutable.StartsWith(normalizedBundlePath + "/", StringComparison.Ordinal))
                 {
                     var relativeExecutable = normalizedExecutable[(normalizedBundlePath.Length + 1)..];
+
                     return relativeExecutable.Length > 0 && !relativeExecutable.Contains('/');
                 }
             }
+
             return string.Equals(reportedBundle, bundleIdentifier, StringComparison.Ordinal);
         }).ToArray();
-        if (matches.Length == 0) return null;
-        if (matches.Length != 1) throw new IOException("The physical iOS app process could not be identified unambiguously.");
+
+        if (matches.Length == 0)
+        {
+            return null;
+        }
+
+        if (matches.Length != 1)
+        {
+            throw new IOException("The physical iOS app process could not be identified unambiguously.");
+        }
+
         var pid = FindInteger(matches[0], "processIdentifier") ?? FindInteger(matches[0], "pid");
-        if (pid is null or <= 0) throw new IOException("The physical iOS app process has no valid PID.");
+
+        if (pid is null or <= 0)
+        {
+            throw new IOException("The physical iOS app process has no valid PID.");
+        }
+
         var started = FirstNonEmpty(FindString(matches[0], "startDate"),
             FindString(matches[0], "startTime"));
+
         return started is null ? pid.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : pid.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + started;
     }
@@ -167,6 +199,7 @@ internal sealed class CoreDeviceClient
     {
         var normalized = path.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
             ? Uri.UnescapeDataString(path["file:".Length..]) : path;
+
         return normalized.StartsWith("/", StringComparison.Ordinal)
             ? "/" + normalized.TrimStart('/') : normalized;
     }
@@ -225,7 +258,9 @@ internal sealed class CoreDeviceClient
     {
         ValidateDeviceIdentifier(deviceIdentifier);
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationBundlePath);
+
         var fullPath = Path.GetFullPath(applicationBundlePath);
+
         if (!Directory.Exists(fullPath)
             || !string.Equals(Path.GetExtension(fullPath), ".app", StringComparison.OrdinalIgnoreCase))
         {
@@ -256,6 +291,7 @@ internal sealed class CoreDeviceClient
     {
         ValidateDeviceIdentifier(deviceIdentifier);
         ValidateBundleIdentifier(bundleIdentifier);
+
         using var document = await RunJsonAsync(
             [
                 "device", "process", "launch", "--device", deviceIdentifier,
@@ -264,8 +300,9 @@ internal sealed class CoreDeviceClient
             "launch the physical-device app",
             cancellationToken,
             environmentVariables).ConfigureAwait(false);
+
         return FindInteger(document.RootElement, "processIdentifier")
-               ?? FindInteger(document.RootElement, "pid");
+            ?? FindInteger(document.RootElement, "pid");
     }
 
     public async Task TerminateApplicationAsync(
@@ -276,11 +313,13 @@ internal sealed class CoreDeviceClient
     {
         ValidateDeviceIdentifier(deviceIdentifier);
         ValidateBundleIdentifier(bundleIdentifier);
+
         var processId = knownProcessId ?? await FindProcessIdAsync(
-                deviceIdentifier,
-                bundleIdentifier,
-                cancellationToken)
+            deviceIdentifier,
+            bundleIdentifier,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!processId.HasValue)
         {
             return;
@@ -304,6 +343,7 @@ internal sealed class CoreDeviceClient
             ["device", "info", "processes", "--device", deviceIdentifier],
             "list physical-device processes",
             cancellationToken).ConfigureAwait(false);
+
         if (!TryFindArray(document.RootElement, "processes", out var processes))
         {
             return null;
@@ -314,6 +354,7 @@ internal sealed class CoreDeviceClient
             var processBundleIdentifier = FirstNonEmpty(
                 FindString(process, "bundleIdentifier"),
                 FindString(process, "executableObjectIdentifier"));
+
             if (string.Equals(processBundleIdentifier, bundleIdentifier, StringComparison.Ordinal))
             {
                 return FindInteger(process, "processIdentifier") ?? FindInteger(process, "pid");
@@ -332,10 +373,12 @@ internal sealed class CoreDeviceClient
         var jsonOutputPath = Path.Combine(
             Path.GetTempPath(),
             $"ansight-devicectl-{Guid.NewGuid():N}.json");
+
         try
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(DefaultTimeout);
+            timeout.CancelAfter(defaultTimeout);
+
             var startInfo = CreateProcessStartInfo(
                 toolResolution,
                 arguments,
@@ -343,12 +386,14 @@ internal sealed class CoreDeviceClient
                 childEnvironmentVariables);
 
             using var process = Process.Start(startInfo)
-                                ?? throw new InvalidOperationException("Could not start xcrun devicectl.");
+                ?? throw new InvalidOperationException("Could not start xcrun devicectl.");
             var standardOutputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var standardErrorTask = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+
             var standardOutput = await standardOutputTask.ConfigureAwait(false);
             var standardError = await standardErrorTask.ConfigureAwait(false);
+
             if (process.ExitCode != 0 || !File.Exists(jsonOutputPath))
             {
                 var detail = FirstNonEmpty(standardError, standardOutput);
@@ -359,6 +404,7 @@ internal sealed class CoreDeviceClient
             }
 
             await using var stream = File.OpenRead(jsonOutputPath);
+
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -387,6 +433,7 @@ internal sealed class CoreDeviceClient
         ArgumentNullException.ThrowIfNull(resolution);
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(jsonOutputPath);
+
         var startInfo = new ProcessStartInfo
         {
             FileName = resolution.XcrunPath,
@@ -396,6 +443,7 @@ internal sealed class CoreDeviceClient
             CreateNoWindow = true
         };
         startInfo.Environment["DEVELOPER_DIR"] = resolution.DeveloperDirectory;
+
         if (childEnvironmentVariables is not null)
         {
             foreach (var variable in childEnvironmentVariables)
@@ -408,10 +456,11 @@ internal sealed class CoreDeviceClient
         startInfo.ArgumentList.Add("devicectl");
         startInfo.ArgumentList.Add("--quiet");
         startInfo.ArgumentList.Add("--timeout");
-        startInfo.ArgumentList.Add(((int)DefaultTimeout.TotalSeconds).ToString(
+        startInfo.ArgumentList.Add(((int)defaultTimeout.TotalSeconds).ToString(
             System.Globalization.CultureInfo.InvariantCulture));
         startInfo.ArgumentList.Add("--json-output");
         startInfo.ArgumentList.Add(jsonOutputPath);
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -430,6 +479,7 @@ internal sealed class CoreDeviceClient
                     && property.Value.ValueKind == JsonValueKind.Array)
                 {
                     result = property.Value;
+
                     return true;
                 }
 
@@ -451,6 +501,7 @@ internal sealed class CoreDeviceClient
         }
 
         result = default;
+
         return false;
     }
 
@@ -467,6 +518,7 @@ internal sealed class CoreDeviceClient
                 }
 
                 var nested = FindString(property.Value, propertyName);
+
                 if (nested is not null)
                 {
                     return nested;
@@ -478,6 +530,7 @@ internal sealed class CoreDeviceClient
             foreach (var item in element.EnumerateArray())
             {
                 var nested = FindString(item, propertyName);
+
                 if (nested is not null)
                 {
                     return nested;
@@ -490,10 +543,10 @@ internal sealed class CoreDeviceClient
 
     private static string? FindDirectString(JsonElement element, string parentProperty, string propertyName)
         => element.ValueKind == JsonValueKind.Object
-           && element.TryGetProperty(parentProperty, out var parent)
-           && parent.ValueKind == JsonValueKind.Object
-           && parent.TryGetProperty(propertyName, out var value)
-           && value.ValueKind == JsonValueKind.String
+            && element.TryGetProperty(parentProperty, out var parent)
+            && parent.ValueKind == JsonValueKind.Object
+            && parent.TryGetProperty(propertyName, out var value)
+            && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 
@@ -502,11 +555,12 @@ internal sealed class CoreDeviceClient
         foreach (var propertyName in propertyNames)
         {
             var value = FindString(element, propertyName);
+
             if (DateTimeOffset.TryParse(
-                    value,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.RoundtripKind,
-                    out var parsed))
+                value,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out var parsed))
             {
                 return parsed.ToUniversalTime();
             }
@@ -529,6 +583,7 @@ internal sealed class CoreDeviceClient
                 }
 
                 var nested = FindInteger(property.Value, propertyName);
+
                 if (nested.HasValue)
                 {
                     return nested;
@@ -540,6 +595,7 @@ internal sealed class CoreDeviceClient
             foreach (var item in element.EnumerateArray())
             {
                 var nested = FindInteger(item, propertyName);
+
                 if (nested.HasValue)
                 {
                     return nested;

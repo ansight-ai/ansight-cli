@@ -105,10 +105,13 @@ public sealed partial class RuntimeStateTests
             "sessionsById",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(field);
+
         var value = field!.GetValue(runtimeState);
         Assert.NotNull(value);
+
         var countProperty = value!.GetType().GetProperty("Count");
         Assert.NotNull(countProperty);
+
         return Assert.IsType<int>(countProperty!.GetValue(value));
     }
 

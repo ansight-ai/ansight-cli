@@ -43,6 +43,7 @@ internal static class LiveUiOcrTraceEvidence
         }
 
         content.Remove(PayloadPropertyName);
+
         return evidence.DeepClone().AsObject();
     }
 

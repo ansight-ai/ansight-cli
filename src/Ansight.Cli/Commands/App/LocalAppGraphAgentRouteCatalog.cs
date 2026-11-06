@@ -1,22 +1,30 @@
 namespace Ansight.Cli.Commands.App;
 
-internal sealed class LocalAppGraphAgentRouteCatalog(
-    LocalAppGraphService localAppGraphs,
-    string appId,
-    string appName) : IAppGraphAgentRouteCatalog
+internal sealed class LocalAppGraphAgentRouteCatalog : IAppGraphAgentRouteCatalog
 {
-    private readonly LocalAppGraphService localAppGraphs = localAppGraphs
-        ?? throw new ArgumentNullException(nameof(localAppGraphs));
-    private readonly string appId = string.IsNullOrWhiteSpace(appId)
-        ? throw new ArgumentException("An App ID is required.", nameof(appId))
-        : appId.Trim();
-    private readonly string appName = string.IsNullOrWhiteSpace(appName) ? appId.Trim() : appName.Trim();
+    private readonly LocalAppGraphService localAppGraphs;
+    private readonly string appId;
+    private readonly string appName;
+
+    public LocalAppGraphAgentRouteCatalog(
+        LocalAppGraphService localAppGraphs,
+        string appId,
+        string appName)
+    {
+        this.localAppGraphs = localAppGraphs
+            ?? throw new ArgumentNullException(nameof(localAppGraphs));
+        this.appId = string.IsNullOrWhiteSpace(appId)
+            ? throw new ArgumentException("An App ID is required.", nameof(appId))
+            : appId.Trim();
+        this.appName = string.IsNullOrWhiteSpace(appName) ? appId.Trim() : appName.Trim();
+    }
 
     public Task<CloudRegisteredAppQueryResult> ListRegisteredAppsAsync(
         Guid teamId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(CloudRegisteredAppQueryResult.Success(
             [localAppGraphs.ResolveApp(appId, appName)]));
     }
@@ -26,6 +34,7 @@ internal sealed class LocalAppGraphAgentRouteCatalog(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(localAppGraphs.List(appId));
     }
 
@@ -34,6 +43,7 @@ internal sealed class LocalAppGraphAgentRouteCatalog(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(localAppGraphs.Get(graphId, publishedOnly: false));
     }
 }

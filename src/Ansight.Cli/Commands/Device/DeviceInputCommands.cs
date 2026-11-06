@@ -18,14 +18,18 @@ internal static class DeviceInputCommands
         var runtimeOptions = CliRuntime.ResolveOptions(arguments);
         using var runtime = new DeviceInputCommandRuntime(
             CliRuntime.CreateHostOptions(runtimeOptions));
+
         if (IsTextInput(arguments) && TextInputValue.Parse(arguments).SecretAlias is not null)
         {
             _ = ResolveSecretAppId(arguments, TextInputValue.Parse(arguments));
+
             await using var lease = await CliRuntimeLease.CreateAsync(runtimeOptions, start: false, cancellationToken)
                 .ConfigureAwait(false);
+
             return await RunAsync(arguments, output, runtime, cancellationToken,
                 (appId, alias) => SecretTextInput.ReadValue(lease.Runtime, appId, alias)).ConfigureAwait(false);
         }
+
         return await RunAsync(arguments, output, runtime, cancellationToken).ConfigureAwait(false);
     }
 
@@ -39,6 +43,7 @@ internal static class DeviceInputCommands
         var action = arguments.RequirePositional(1, "input action").ToLowerInvariant();
         var platform = arguments.RequirePositional(2, "platform");
         var deviceIdentifier = arguments.RequirePositional(3, "device identifier");
+
         return action switch
         {
             "tap" => DeviceCommands.RunOperationAsync(
@@ -87,7 +92,7 @@ internal static class DeviceInputCommands
 
     internal static bool IsTextInput(CliArguments arguments)
         => arguments.Positionals.Count > 1
-           && arguments.Positionals[1].ToLowerInvariant() is "text" or "type";
+            && arguments.Positionals[1].ToLowerInvariant() is "text" or "type";
 
     private static async Task<int> RunTextAsync(
         CliArguments arguments, CliOutput output, IDeviceInputCommandRuntime runtime,
@@ -95,14 +100,19 @@ internal static class DeviceInputCommands
         CancellationToken cancellationToken)
     {
         var input = TextInputValue.Parse(arguments);
+
         if (input.SecretAlias is not { } alias)
+        {
             return await DeviceCommands.RunOperationAsync(runtime.SendTextAsync(
                 platform, deviceIdentifier, input.Value!, cancellationToken), output).ConfigureAwait(false);
+        }
 
         var appId = ResolveSecretAppId(arguments, input);
         cancellationToken.ThrowIfCancellationRequested();
+
         var value = (readSecret ?? throw new CliUsageException("Secret input requires access to the app secret store."))(appId, alias);
         bool succeeded;
+
         try
         {
             var result = await runtime.SendTextAsync(platform, deviceIdentifier, value, cancellationToken).ConfigureAwait(false);
@@ -116,18 +126,24 @@ internal static class DeviceInputCommands
         {
             succeeded = false;
         }
+
         var message = succeeded ? $"Secret '{alias}' was typed successfully."
             : $"Could not type secret '{alias}'. Inspect the app before retrying.";
         var safeResult = new DeviceOperationResult(succeeded, "type-text", platform, deviceIdentifier, message);
+
         return await DeviceCommands.RunOperationAsync(Task.FromResult(safeResult), output).ConfigureAwait(false);
     }
 
     private static string ResolveSecretAppId(CliArguments arguments, TextInputValue input)
     {
         var requested = arguments.GetOption("app-id");
+
         if (requested is not null && input.AppId is not null
             && !string.Equals(requested, input.AppId, StringComparison.Ordinal))
+        {
             throw new CliUsageException("The secret reference's app ID does not match --app-id.");
+        }
+
         return input.AppId ?? arguments.RequireOption("app-id");
     }
 

@@ -10,9 +10,22 @@ public sealed partial class AppExecutionServiceTests
         await AppExecutionVideoRunner.RunAsync(
             async () => await StartVideoAsync("run", recorder, "always"),
             () => Task.FromResult(CreateRunResult()),
-            _ => { Assert.True(closed); return new("saved.json", null); },
+            _ =>
+            {
+                Assert.True(closed);
+
+                return new("saved.json", null);
+            }
+,
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
-            () => { Assert.Equal(1, recorder.Stops); closed = true; return Task.CompletedTask; });
+            () =>
+            {
+                Assert.Equal(1, recorder.Stops);
+                closed = true;
+
+                return Task.CompletedTask;
+            }
+);
         Assert.True(closed);
     }
 
@@ -24,7 +37,10 @@ public sealed partial class AppExecutionServiceTests
     public async Task AppExecutionRecordsBeforeActionsAndRetainsVideoInAudit(
         SimulatorAgentRunStatus status, string retention, string expectedStatus)
     {
-        var original = CreateRunResult() with { Status = status };
+        var original = CreateRunResult() with
+        {
+            Status = status
+        };
         var recorder = new RecordingVideoRecorder();
         SimulatorAgentRunAudit? persisted = null;
         var result = await AppExecutionVideoRunner.RunAsync(
@@ -33,12 +49,14 @@ public sealed partial class AppExecutionServiceTests
             {
                 Assert.Equal(1, recorder.Starts);
                 Assert.Equal(0, recorder.Stops);
+
                 return Task.FromResult(original);
             },
             audit =>
             {
                 Assert.Equal(1, recorder.Stops);
                 persisted = audit;
+
                 return new("saved.json", null);
             },
             new CliOutput(false, TextWriter.Null, TextWriter.Null));
@@ -119,6 +137,7 @@ public sealed partial class AppExecutionServiceTests
             {
                 Assert.Equal(runId, snapshot.RunId);
                 Assert.True(File.Exists(path));
+
                 return OperationResult.Success("Saved");
             }, CancellationToken.None);
 
@@ -135,8 +154,14 @@ public sealed partial class AppExecutionServiceTests
         public Task<ITestVideoRecording> StartAsync(TestVideoRecordingRequest request, CancellationToken cancellationToken)
         {
             Starts++;
-            if (FailStart) throw new IOException("Recorder unavailable");
+
+            if (FailStart)
+            {
+                throw new IOException("Recorder unavailable");
+            }
+
             OutputPath = request.OutputPath;
+
             return Task.FromResult<ITestVideoRecording>(this);
         }
 
@@ -145,6 +170,7 @@ public sealed partial class AppExecutionServiceTests
             Stops++;
             exited.TrySetResult();
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), OutputPath!);
+
             return Task.FromResult(new TestVideoRecordingCompletion(true));
         }
     }

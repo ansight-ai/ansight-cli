@@ -11,23 +11,66 @@ public sealed class DeviceAppWatchBackendTests
     {
         var ios = new DeviceDescriptor("ios-udid", "iPhone", "ios", "test", "booted", true, true, DeviceKinds.Simulator);
         var android = new DeviceDescriptor("emulator-5554", "My_AVD", "android", "test", "booted", true, true, DeviceKinds.Emulator);
-        var physical = ios with { Identifier = "physical", Kind = DeviceKinds.Physical };
-        var physicalAndroid = android with { Identifier = "R58N123", Name = "Pixel", Kind = DeviceKinds.Device };
-        var inventory = new[] { ios, android, physical, physicalAndroid, ios with { Identifier = "stopped", IsBooted = false },
-            android with { Identifier = "offline", IsAvailable = false } };
+        var physical = ios with
+        {
+            Identifier = "physical",
+            Kind = DeviceKinds.Physical
+        };
+        var physicalAndroid = android with
+        {
+            Identifier = "R58N123",
+            Name = "Pixel",
+            Kind = DeviceKinds.Device
+        };
+        var inventory = new[]
+        {
+            ios,
+            android,
+            physical,
+            physicalAndroid,
+            ios with {Identifier = "stopped", IsBooted = false },
+            android with {Identifier = "offline", IsAvailable = false }
+        };
         var watch = new AppWatchDefinition("watch", "test.app", null, null, true, []);
         Assert.Equal(new[] { ios, android }, DeviceAppWatchBackend.SelectDevices(watch, inventory));
-        Assert.Equal(ios, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with { Platform = "ios" }, inventory)));
-        Assert.Equal(android, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with { DeviceId = "My_AVD" }, inventory)));
-        Assert.Equal(ios, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with { DeviceId = "ios-udid" }, inventory)));
-        Assert.Empty(DeviceAppWatchBackend.SelectDevices(watch with { DeviceId = "physical" }, inventory));
+        Assert.Equal(ios, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with
+        {
+            Platform = "ios"
+        }, inventory)));
+        Assert.Equal(android, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with
+        {
+            DeviceId = "My_AVD"
+        }, inventory)));
+        Assert.Equal(ios, Assert.Single(DeviceAppWatchBackend.SelectDevices(watch with
+        {
+            DeviceId = "ios-udid"
+        }, inventory)));
+        Assert.Empty(DeviceAppWatchBackend.SelectDevices(watch with
+        {
+            DeviceId = "physical"
+        }, inventory));
         Assert.Equal(physical, Assert.Single(DeviceAppWatchBackend.SelectDevices(
-            watch with { Platform = "ios", DeviceId = "physical" }, inventory)));
-        Assert.Empty(DeviceAppWatchBackend.SelectDevices(watch with { DeviceId = "R58N123" }, inventory));
+            watch with
+            {
+                Platform = "ios",
+                DeviceId = "physical"
+            }, inventory)));
+        Assert.Empty(DeviceAppWatchBackend.SelectDevices(watch with
+        {
+            DeviceId = "R58N123"
+        }, inventory));
         Assert.Empty(DeviceAppWatchBackend.SelectDevices(
-            watch with { Platform = "android", DeviceId = "Pixel" }, inventory));
+            watch with
+            {
+                Platform = "android",
+                DeviceId = "Pixel"
+            }, inventory));
         Assert.Equal(physicalAndroid, Assert.Single(DeviceAppWatchBackend.SelectDevices(
-            watch with { Platform = "android", DeviceId = "R58N123" }, inventory)));
+            watch with
+            {
+                Platform = "android",
+                DeviceId = "R58N123"
+            }, inventory)));
     }
 
     [Fact]
@@ -36,6 +79,7 @@ public sealed class DeviceAppWatchBackendTests
         using var environment = new TestEnvironment();
         var adb = Path.Combine(environment.RootPath, "adb");
         File.WriteAllText(adb, "mock executable");
+
         var commands = new Commands();
         var backend = new DeviceAppWatchBackend(null!, () => adb,
             (_, _, _, _) => throw new NotSupportedException(), commands);
@@ -45,15 +89,18 @@ public sealed class DeviceAppWatchBackendTests
         Assert.Null(await backend.ReadIdentityAsync(watch, device, CancellationToken.None));
         commands.Results.Enqueue(new DeviceCommandResult(1, [], "device offline"));
         await Assert.ThrowsAsync<IOException>(() => backend.ReadIdentityAsync(watch, device, CancellationToken.None));
+
         foreach (var birth in new[] { "100", "200" })
         {
             commands.Results.Enqueue(Result("23"));
+
             var fields = Enumerable.Repeat("0", 22).ToArray();
             fields[0] = "S";
             fields[19] = birth;
             commands.Results.Enqueue(Result("23 (test.app) " + string.Join(' ', fields)));
             Assert.Equal("23:" + birth, await backend.ReadIdentityAsync(watch, device, CancellationToken.None));
         }
+
         Assert.All(commands.Arguments, arguments => Assert.Equal(device.Identifier, arguments[1]));
         Assert.Contains(commands.Arguments, arguments => arguments.Last() == "pidof 'test.app'");
     }
@@ -64,6 +111,7 @@ public sealed class DeviceAppWatchBackendTests
         using var environment = new TestEnvironment();
         var adb = Path.Combine(environment.RootPath, "adb");
         File.WriteAllText(adb, "mock executable");
+
         var commands = new Commands();
         var backend = new DeviceAppWatchBackend(null!, () => adb,
             (_, _, _, _) => throw new NotSupportedException(), commands);
@@ -74,6 +122,7 @@ public sealed class DeviceAppWatchBackendTests
         Assert.Null(await backend.ReadIdentityAsync(watch, device, CancellationToken.None));
         commands.Results.Enqueue(Result("topResumedActivity=ActivityRecord{123 test.app/.Main t1}"));
         commands.Results.Enqueue(Result("23"));
+
         var fields = Enumerable.Repeat("0", 22).ToArray();
         fields[0] = "S";
         fields[19] = "100";
@@ -98,6 +147,7 @@ public sealed class DeviceAppWatchBackendTests
     {
         var commands = new Commands();
         commands.Results.Enqueue(Result(launchctl));
+
         var backend = new DeviceAppWatchBackend(null!, () => null,
             (_, _, _, _) => throw new NotSupportedException(), commands);
         var watch = new AppWatchDefinition("watch", "test.app", "ios", "udid", true, []);
@@ -113,6 +163,7 @@ public sealed class DeviceAppWatchBackendTests
     {
         var devices = new FakeHostDeviceService { PhysicalIosProcessIdentity = "17740" };
         devices.SetApplications("phone", new InstalledApplication("test.app", "Test", "/Applications/Test.app"));
+
         var foreground = false;
         var backend = new DeviceAppWatchBackend(devices, () => null,
             (_, _, _, _) => throw new NotSupportedException(),
@@ -125,19 +176,23 @@ public sealed class DeviceAppWatchBackendTests
         Assert.Equal(global::Ansight.AppLifecycleState.Background, backgroundObservation.AppState);
         Assert.NotNull(backgroundObservation.ObservedAtUtc);
         foreground = true;
+
         var foregroundObservation = await backend.ReadObservationAsync(watch, device, CancellationToken.None);
         Assert.Equal("17740", foregroundObservation.ProcessIdentity);
         Assert.Equal(global::Ansight.AppLifecycleState.Foreground, foregroundObservation.AppState);
         Assert.NotNull(foregroundObservation.ObservedAtUtc);
         devices.PhysicalIosProcessIdentity = null;
+
         var exitObservation = await backend.ReadObservationAsync(watch, device, CancellationToken.None);
         Assert.Null(exitObservation.ProcessIdentity);
         Assert.Equal(global::Ansight.AppLifecycleState.Unknown, exitObservation.AppState);
         foreground = false;
+
         var terminatedObservation = await backend.ReadObservationAsync(watch, device, CancellationToken.None);
         Assert.Null(terminatedObservation.ProcessIdentity);
         Assert.Equal(global::Ansight.AppLifecycleState.Background, terminatedObservation.AppState);
         Assert.NotNull(terminatedObservation.ObservedAtUtc);
+
         var inactiveObservation = await backend.ReadObservationAsync(watch, device, CancellationToken.None);
         Assert.Equal(global::Ansight.AppLifecycleState.Unknown, inactiveObservation.AppState);
     }
@@ -148,10 +203,12 @@ public sealed class DeviceAppWatchBackendTests
     {
         public Queue<DeviceCommandResult> Results { get; } = new();
         public List<IReadOnlyList<string>> Arguments { get; } = [];
+
         public Task<DeviceCommandResult> RunAsync(string executable, IReadOnlyList<string> arguments,
             CancellationToken cancellationToken, int maximumBytes = 1_048_576)
         {
             Arguments.Add(arguments);
+
             return Task.FromResult(Results.Dequeue());
         }
     }

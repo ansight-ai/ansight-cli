@@ -12,6 +12,7 @@ internal sealed partial class LiveUiTreeCapture
         var deviceResult = await CaptureDeviceAccessibilityAsync(session, uiInputRouter,
             cancellationToken: cancellationToken, allowCached: false).ConfigureAwait(false);
         LiveUiCaptureResult nativeResult;
+
         if (deviceResult.IsSuccess && HasModalDominance(deviceResult))
         {
             nativeResult = await CaptureModalTargetAsync(deviceResult, session, appToolBridge,
@@ -35,6 +36,7 @@ internal sealed partial class LiveUiTreeCapture
             || sdkResult.Capture is null
             || selector is null
             || !selector.HasCriteria;
+
         if (missingContext)
         {
             return sdkResult;
@@ -51,9 +53,11 @@ internal sealed partial class LiveUiTreeCapture
                     && LiveUiNodeQuery.IsEffectivelyEnabled(match)
                     && LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry)
                         .Any(action => action is "tap" or "typeText");
+
                 return acceptsInput;
             })
             .ToArray();
+
         foreach (var target in LiveUiNodeQuery.Find(sdk.Root, selector!, sdk.TypeRegistry))
         {
             if (NormalizeModalTargetBounds(target, sdk.Viewport) is not { } bounds)
@@ -75,14 +79,17 @@ internal sealed partial class LiveUiTreeCapture
                         && centerX <= hit.X + hit.Width
                         && centerY >= hit.Y
                         && centerY <= hit.Y + hit.Height;
+
                     return containsPoint;
                 })
                 .OrderBy(control =>
                 {
                     var hit = NormalizeModalTargetBounds(control, device.Viewport)!;
+
                     return hit.Width * hit.Height;
                 })
                 .FirstOrDefault();
+
             if (foreground is null)
             {
                 continue;
@@ -90,6 +97,7 @@ internal sealed partial class LiveUiTreeCapture
 
             var foregroundId = LiveUiNodeQuery.ReadAutomationId(foreground.Node);
             var foregroundText = LiveUiNodeQuery.ReadText(foreground.Node);
+
             if (string.IsNullOrWhiteSpace(foregroundId) && string.IsNullOrWhiteSpace(foregroundText))
             {
                 continue;
@@ -102,6 +110,7 @@ internal sealed partial class LiveUiTreeCapture
                 var sameText = !string.IsNullOrWhiteSpace(foregroundText)
                     && string.Equals(foregroundText, LiveUiNodeQuery.ReadText(candidate.Node), StringComparison.Ordinal);
                 var sameIdentity = sameId || sameText;
+
                 return LiveUiNodeQuery.IsEffectivelyVisible(candidate) && sameIdentity;
             });
             // A rendered label can sit inside an accessible button whose label also
@@ -110,11 +119,12 @@ internal sealed partial class LiveUiTreeCapture
             var corroboratedAncestor = !string.IsNullOrWhiteSpace(foregroundId)
                 && target.Ancestors.Any(ancestor => string.Equals(
                     foregroundId, LiveUiNodeQuery.ReadAutomationId(ancestor), StringComparison.Ordinal));
+
             if (!corroboratedSubtree && !corroboratedAncestor)
             {
                 return LiveUiCaptureResult.Failure(
                     "The SDK target is covered by a different foreground accessibility control. No input was delivered. "
-                    + "Inspect fresh device accessibility and dismiss or act on the foreground surface before retrying.");
+                        + "Inspect fresh device accessibility and dismiss or act on the foreground surface before retrying.");
             }
         }
 
@@ -145,7 +155,7 @@ internal sealed partial class LiveUiTreeCapture
         });
         var accessibleTargets = LiveUiNodeQuery.Find(device.Root, identitySelector, device.TypeRegistry)
             .Where(match => device.Viewport is not null
-                            && LiveUiNodeQuery.HasUsableBoundsInViewport(match, device.Viewport))
+                && LiveUiNodeQuery.HasUsableBoundsInViewport(match, device.Viewport))
             .ToArray();
         var mayResolveScrollContainer = operationName is "ansight_scroll_ui" or "ansight_swipe_ui"
             || selector.Action == "scroll" || selector.Role == "scrollview";
@@ -153,13 +163,16 @@ internal sealed partial class LiveUiTreeCapture
         var lacksModalEvidence = accessibleTargets.Length == 0
             && !mayResolveScrollContainer
             && !isStructuralInspection;
+
         if (lacksModalEvidence)
         {
             return deviceResult;
         }
+
         var nativeResult = await CaptureNativeVisualTreeAsync(
             session, appToolBridge, operationName, correlationId, cancellationToken).ConfigureAwait(false);
         string[] attemptedToolIds = [DeviceAccessibilityToolId, .. nativeResult.AttemptedToolIds];
+
         if (nativeResult.Capture is { } native)
         {
             var matches = LiveUiNodeQuery.Find(native.Root, selector, native.TypeRegistry);
@@ -173,9 +186,11 @@ internal sealed partial class LiveUiTreeCapture
                 var isStructuralTarget = isStructuralInspection
                     && !actions.Any(action => action is "tap" or "typeText");
                 var canUseDescendants = isScrollTarget || isStructuralTarget;
+
                 return IsCorroboratedModalTarget(match, native, device, accessibleTargets, usedAccessibilityNodes)
                     || canUseDescendants && IsCorroboratedContainer(match, native, device);
             });
+
             if (allTargetsCorroborated)
             {
                 return AddAttemptedToolIds(ValidateForegroundTargets(deviceResult, nativeResult, selector), attemptedToolIds);
@@ -204,6 +219,7 @@ internal sealed partial class LiveUiTreeCapture
         var accessible = LiveUiNodeQuery.Enumerate(device.Root, device.TypeRegistry)
             .Where(match => LiveUiNodeQuery.IsEffectivelyVisible(match)).ToArray();
         var usedNodes = new HashSet<JsonObject>();
+
         foreach (var child in LiveUiNodeQuery.Enumerate(target.Node, native.TypeRegistry))
         {
             if (NormalizeModalTargetBounds(child, native.Viewport) is not { } bounds)
@@ -217,6 +233,7 @@ internal sealed partial class LiveUiTreeCapture
                 && bounds.Y >= containerBounds.Y
                 && bounds.X + bounds.Width <= containerBounds.X + containerBounds.Width
                 && bounds.Y + bounds.Height <= containerBounds.Y + containerBounds.Height;
+
             if (!isContainedVisibleChild)
             {
                 continue;
@@ -228,8 +245,10 @@ internal sealed partial class LiveUiTreeCapture
                     && HasSameModalTargetIdentity(child, candidate)
                     && NormalizeModalTargetBounds(candidate, device.Viewport) is { } candidateBounds
                     && HaveMatchingModalBounds(bounds, candidateBounds);
+
                 return corroboratesChild;
             }).Take(2).ToArray();
+
             if (matches.Length == 1)
             {
                 usedNodes.Add(matches[0].Node);
@@ -240,6 +259,7 @@ internal sealed partial class LiveUiTreeCapture
                 return true;
             }
         }
+
         return false;
     }
 
@@ -250,16 +270,25 @@ internal sealed partial class LiveUiTreeCapture
         IReadOnlyList<LiveUiNodeMatch> accessibleTargets,
         HashSet<JsonObject> usedAccessibilityNodes)
     {
-        if (!LiveUiNodeQuery.IsEffectivelyVisible(nativeTarget)) return false;
+        if (!LiveUiNodeQuery.IsEffectivelyVisible(nativeTarget))
+        {
+            return false;
+        }
+
         var nativeBounds = NormalizeModalTargetBounds(nativeTarget, native.Viewport);
-        if (nativeBounds is null) return false;
+
+        if (nativeBounds is null)
+        {
+            return false;
+        }
 
         var counterparts = accessibleTargets.Where(accessible =>
                 HasSameModalTargetIdentity(nativeTarget, accessible)
-                && LiveUiNodeQuery.IsEffectivelyEnabled(nativeTarget) == LiveUiNodeQuery.IsEffectivelyEnabled(accessible)
-                && NormalizeModalTargetBounds(accessible, device.Viewport) is { } accessibleBounds
-                && HaveMatchingModalBounds(nativeBounds, accessibleBounds))
+                    && LiveUiNodeQuery.IsEffectivelyEnabled(nativeTarget) == LiveUiNodeQuery.IsEffectivelyEnabled(accessible)
+                    && NormalizeModalTargetBounds(accessible, device.Viewport) is { } accessibleBounds
+                    && HaveMatchingModalBounds(nativeBounds, accessibleBounds))
             .Take(2).ToArray();
+
         return counterparts.Length == 1 && usedAccessibilityNodes.Add(counterparts[0].Node);
     }
 
@@ -271,14 +300,16 @@ internal sealed partial class LiveUiTreeCapture
             // two nodes when deciding whether they describe the same screen target.
             return LiveUiSelector.Parse(new JsonObject
             {
-                ["automationId"] = automationId, ["matchMode"] = "exact", ["caseSensitive"] = true
+                ["automationId"] = automationId,
+                ["matchMode"] = "exact",
+                ["caseSensitive"] = true
             }).Matches(accessible);
         }
 
         return LiveUiNodeQuery.ReadText(native.Node) is { Length: > 0 } text
-               && string.Equals(text, LiveUiNodeQuery.ReadText(accessible.Node), StringComparison.Ordinal)
-               && string.Equals(LiveUiNodeQuery.ReadRole(native.Node, native.TypeRegistry),
-                   LiveUiNodeQuery.ReadRole(accessible.Node, accessible.TypeRegistry), StringComparison.Ordinal);
+            && string.Equals(text, LiveUiNodeQuery.ReadText(accessible.Node), StringComparison.Ordinal)
+            && string.Equals(LiveUiNodeQuery.ReadRole(native.Node, native.TypeRegistry),
+                LiveUiNodeQuery.ReadRole(accessible.Node, accessible.TypeRegistry), StringComparison.Ordinal);
     }
 
     private static LiveUiBounds? NormalizeModalTargetBounds(LiveUiNodeMatch target, LiveUiBounds? viewport)
@@ -286,7 +317,10 @@ internal sealed partial class LiveUiTreeCapture
         if (viewport is null || !HasFinitePositiveModalBounds(viewport)
             || LiveUiNodeQuery.ReadBounds(target.Node) is not { } bounds
             || !HasFinitePositiveModalBounds(bounds)
-            || LiveUiBounds.Intersection(bounds, viewport) is null) return null;
+            || LiveUiBounds.Intersection(bounds, viewport) is null)
+        {
+            return null;
+        }
 
         return new LiveUiBounds(
             (bounds.X - viewport.X) / viewport.Width,
@@ -297,14 +331,19 @@ internal sealed partial class LiveUiTreeCapture
 
     private static bool HasFinitePositiveModalBounds(LiveUiBounds bounds)
         => double.IsFinite(bounds.X) && double.IsFinite(bounds.Y)
-           && double.IsFinite(bounds.Width) && double.IsFinite(bounds.Height)
-           && bounds.Width > 0 && bounds.Height > 0;
+            && double.IsFinite(bounds.Width) && double.IsFinite(bounds.Height)
+            && bounds.Width > 0 && bounds.Height > 0;
 
     private static bool HaveMatchingModalBounds(LiveUiBounds native, LiveUiBounds accessible)
     {
-        if (LiveUiBounds.Intersection(native, accessible) is not { } intersection) return false;
+        if (LiveUiBounds.Intersection(native, accessible) is not { } intersection)
+        {
+            return false;
+        }
+
         var intersectionArea = intersection.Width * intersection.Height;
         var unionArea = native.Width * native.Height + accessible.Width * accessible.Height - intersectionArea;
+
         // Coordinate spaces differ (SDK points/pixels versus normalized accessibility).
         // Require substantial agreement, allowing only small rounding/layout differences.
         return intersectionArea / unionArea >= 0.8;

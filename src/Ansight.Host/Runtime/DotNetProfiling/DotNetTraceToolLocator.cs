@@ -34,6 +34,7 @@ internal sealed class DotNetTraceToolLocator
                 simCtlResolution.XcrunPath,
                 ["xcodebuild", "-version"],
                 cancellationToken);
+
         return new DotNetTraceToolchain(
             dotNetTracePath,
             dotNetDsRouterPath,
@@ -62,25 +63,28 @@ internal sealed class DotNetTraceToolLocator
         var output = string.IsNullOrWhiteSpace(result.StandardOutput)
             ? result.StandardError
             : result.StandardOutput;
+
         return result.IsSuccess && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
     }
 
     internal static string? FindOnPath(string commandName)
     {
         var path = Environment.GetEnvironmentVariable("PATH");
+
         if (string.IsNullOrWhiteSpace(path))
         {
             return null;
         }
 
         var candidateNames = OperatingSystem.IsWindows()
-            ? new[] { commandName + ".exe", commandName + ".cmd", commandName }
-            : new[] { commandName };
+            ? new[] { commandName + ".exe", commandName + ".cmd", commandName } : new[] { commandName };
+
         foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var candidateName in candidateNames)
             {
                 var candidatePath = Path.Combine(directory, candidateName);
+
                 if (File.Exists(candidatePath))
                 {
                     return candidatePath;

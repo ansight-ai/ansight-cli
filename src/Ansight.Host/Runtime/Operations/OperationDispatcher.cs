@@ -145,9 +145,11 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedRootPath = Path.GetFullPath(repositoryRootPath.Trim());
         var normalizedAppId = appId.Trim();
         var result = repositoryTaskRouter.Load(normalizedRootPath, normalizedAppId);
+
         return new RepositoryTaskCatalog(
             normalizedRootPath,
             normalizedAppId,
@@ -176,6 +178,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         var normalizedAppId = appId.Trim();
         var normalizedSessionId = sessionId.Trim();
         var normalizedTaskId = taskId.Trim();
+
         if (!runtimeState.TryGetSessionSnapshot(normalizedSessionId, out var session)
             || session is null)
         {
@@ -215,11 +218,13 @@ internal sealed class OperationDispatcher : IOperationDispatcher
             candidate.TaskId,
             normalizedTaskId,
             StringComparison.Ordinal));
+
         if (task is null)
         {
             var warnings = loadResult.Warnings.Count == 0
                 ? string.Empty
                 : $" {string.Join(" ", loadResult.Warnings)}";
+
             return CreateRejectedTaskResult(
                 normalizedRootPath,
                 normalizedAppId,
@@ -230,10 +235,10 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         }
 
         if (!RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
-                task.InputSchema,
-                suppliedInput,
-                out var input,
-                out var validationError))
+            task.InputSchema,
+            suppliedInput,
+            out var input,
+            out var validationError))
         {
             return CreateRejectedTaskResult(
                 normalizedRootPath,
@@ -247,16 +252,17 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         // Direct tasks need the same continuous capture profile as tasks run by the test suite.
         // Keep it for the entire task, including JavaScript waits, and release on every exit path.
         using var captureScope = externalSessionScreenshotCaptureManager?.BeginTestRun(normalizedSessionId);
+
         return await repositoryTaskRouter.ExecuteAsync(
-                task,
-                normalizedSessionId,
-                input,
-                $"ansight-task-test-{Guid.NewGuid():N}",
-                cancellationToken,
-                context: context,
-                secretValues: secretValues,
-                requestedRunId: runId,
-                batchRunId: batchRunId)
+            task,
+            normalizedSessionId,
+            input,
+            $"ansight-task-test-{Guid.NewGuid():N}",
+            cancellationToken,
+            context: context,
+            secretValues: secretValues,
+            requestedRunId: runId,
+            batchRunId: batchRunId)
             .ConfigureAwait(false);
     }
 
@@ -269,6 +275,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         string message)
     {
         var now = DateTimeOffset.UtcNow;
+
         return new RepositoryTaskRunResult(
             Guid.NewGuid().ToString("N"),
             repositoryRootPath,
@@ -293,6 +300,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         AddToolDefinitions(tools, toolCatalog.BuildToolsListResult());
         AddToolDefinitions(tools, dotNetToolCatalog.BuildToolsListResult());
         AddToolDefinitions(tools, nativeProfilingToolCatalog.BuildToolsListResult());
+
         return new JsonObject { ["tools"] = tools };
     }
 
@@ -311,15 +319,21 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
-        if (runtimeState.IsDeviceSessionActive(sessionId)) return null;
+
+        if (runtimeState.IsDeviceSessionActive(sessionId))
+        {
+            return null;
+        }
+
         var response = await appToolBridge.QueryToolIndexAsync(
-                sessionId.Trim(),
-                cancellationToken,
-                new AppToolBridgeRequestContext(
-                    "simulator-agent",
-                    "context-capabilities",
-                    null))
+            sessionId.Trim(),
+            cancellationToken,
+            new AppToolBridgeRequestContext(
+                "simulator-agent",
+                "context-capabilities",
+                null))
             .ConfigureAwait(false);
+
         if (!response.Success
             || response.Envelope is null
             || string.Equals(response.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal)
@@ -340,8 +354,10 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         if (SessionActivityOperation.Current is { } current && current.Owns(toolName, correlationId))
         {
             current.MarkDispatched();
+
             return CallToolObservedAsync(toolName, arguments, correlationId, context);
         }
+
         return activity.RecordAsync(toolName, "tool", ReadActivityString(arguments, "sessionId"),
             () => CallToolObservedAsync(toolName, arguments, correlationId, context),
             result => result.IsError || result.Payload?["isError"] is JsonValue flag && flag.TryGetValue<bool>(out var isError) && isError ? "failed" : "succeeded",
@@ -355,6 +371,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         string toolName, JsonObject? arguments, string? correlationId, OperationExecutionContext? context)
     {
         var feature = UsageFeature(toolName);
+
         return feature is null ? CallToolMeasuredCoreAsync(toolName, arguments, correlationId, context)
             : analytics.ObserveUsageAsync(feature,
                 () => CallToolMeasuredCoreAsync(toolName, arguments, correlationId, context),
@@ -382,17 +399,19 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         string toolName, JsonObject? arguments, string? correlationId, OperationExecutionContext? context)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+
         var normalizedToolName = toolName.Trim();
         var parameters = new JsonObject
         {
             ["name"] = normalizedToolName,
             ["arguments"] = arguments?.DeepClone()
         };
+
         return nativeProfilingToolCatalog.Contains(normalizedToolName)
             ? nativeProfilingToolCatalog.HandleToolsCallAsync(parameters, correlationId)
             : dotNetToolCatalog.Contains(normalizedToolName)
-            ? dotNetToolCatalog.HandleToolsCallAsync(parameters, correlationId)
-            : toolCatalog.HandleToolsCallAsync(parameters, correlationId, context);
+                ? dotNetToolCatalog.HandleToolsCallAsync(parameters, correlationId)
+                : toolCatalog.HandleToolsCallAsync(parameters, correlationId, context);
     }
 
     private static void AddToolDefinitions(JsonArray destination, JsonObject source)
@@ -411,13 +430,16 @@ internal sealed class OperationDispatcher : IOperationDispatcher
     public IDisposable BeginSimulatorAgentRun(string sessionId, string? targetDeviceIdentifier = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         var targetScope = uiInputRouter.BeginTargetScope(normalizedSessionId, targetDeviceIdentifier);
+
         try
         {
             var captureScope = externalSessionScreenshotCaptureManager?.BeginTestRun(normalizedSessionId)
-                               ?? throw new InvalidOperationException(
-                                   "Tests require screenshot evidence capture, but capture is unavailable.");
+                ?? throw new InvalidOperationException(
+                    "Tests require screenshot evidence capture, but capture is unavailable.");
+
             return new SimulatorAgentRunScope(targetScope, captureScope);
         }
         catch
@@ -427,12 +449,18 @@ internal sealed class OperationDispatcher : IOperationDispatcher
         }
     }
 
-    private sealed class SimulatorAgentRunScope(
-        IDisposable targetScope,
-        IDisposable captureScope) : IDisposable
+    private sealed class SimulatorAgentRunScope : IDisposable
     {
-        private IDisposable? targetScope = targetScope;
-        private IDisposable? captureScope = captureScope;
+        private IDisposable? targetScope;
+        private IDisposable? captureScope;
+
+        public SimulatorAgentRunScope(
+            IDisposable targetScope,
+            IDisposable captureScope)
+        {
+            this.targetScope = targetScope;
+            this.captureScope = captureScope;
+        }
 
         public void Dispose()
         {
@@ -440,5 +468,4 @@ internal sealed class OperationDispatcher : IOperationDispatcher
             Interlocked.Exchange(ref targetScope, null)?.Dispose();
         }
     }
-
 }

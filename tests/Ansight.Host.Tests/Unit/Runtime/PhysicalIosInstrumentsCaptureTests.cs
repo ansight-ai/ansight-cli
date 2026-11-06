@@ -51,6 +51,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
     public void RejectsTraceContainingOnlyAnInstrumentsRunIssue()
     {
         var trace = Path.Combine(Path.GetTempPath(), "ansight-empty-trace-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             Directory.CreateDirectory(Path.Combine(trace, "Trace1.run"));
@@ -61,13 +62,17 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             File.WriteAllText(Path.Combine(trace, "corespace", "sample.data"), "sample");
             Assert.True(PhysicalIosInstrumentsCapture.HasUsableTrace(trace));
         }
-        finally { Directory.Delete(trace, recursive: true); }
+        finally
+        {
+            Directory.Delete(trace, recursive: true);
+        }
     }
 
     [Fact]
     public void ImportsOnlyWatchedPidAndResolvesInstrumentsReferences()
     {
         var path = Path.Combine(Path.GetTempPath(), "ansight-activity-" + Guid.NewGuid().ToString("N") + ".xml");
+
         try
         {
             File.WriteAllText(path, """
@@ -85,6 +90,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
                 <system-cpu-percent>90</system-cpu-percent><size-in-bytes>1</size-in-bytes>
                 <size-in-bytes>1</size-in-bytes></row></node></trace-query-result>
                 """);
+
             var started = DateTimeOffset.Parse("2026-09-25T03:08:26Z");
 
             var samples = PhysicalIosInstrumentsMetrics.Parse(path, started, 17843);
@@ -97,7 +103,10 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             Assert.Equal(513, samples[1].CpuMillicores);
             Assert.Equal(84395168, samples[1].PhysicalFootprintBytes);
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]
@@ -107,8 +116,13 @@ public sealed class PhysicalIosInstrumentsCaptureTests
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         var state = new RuntimeState(store);
         var sessionId = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "iphone-udid", "iPhone",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Physical,
+            ExecutionMode = "device"
+        });
         state.EndDeviceSession(sessionId);
+
         var path = Path.Combine(environment.RootPath, "activity-monitor-process.xml");
         File.WriteAllText(path, """
             <trace-query-result><node><schema name="activity-monitor-process-live">
@@ -124,12 +138,14 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             <size-in-bytes>1</size-in-bytes><size-in-bytes>1</size-in-bytes></row>
             </node></trace-query-result>
             """);
+
         var startedUtc = DateTimeOffset.UtcNow;
 
         var result = PhysicalIosInstrumentsMetrics.Ingest(state, sessionId, path, startedUtc, 12583);
         PhysicalIosInstrumentsMetrics.MarkIngested(state, sessionId, result);
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
         store.Save(session!);
+
         var reloadedStore = new SessionCaptureStore(environment.ApplicationPaths);
 
         Assert.True(reloadedStore.TryLoad(sessionId, out var saved));
@@ -144,7 +160,11 @@ public sealed class PhysicalIosInstrumentsCaptureTests
     [Fact]
     public async Task RecoversMetricsFromRetainedTraceWhenXmlWasNotSaved()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         using var environment = new TestEnvironment();
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -152,13 +172,16 @@ public sealed class PhysicalIosInstrumentsCaptureTests
         var sessionId = state.CreateSession("com.example.app", "Example", IPAddress.Loopback,
             configId: null, processSessionId: null);
         var directory = Path.Combine(Path.GetTempPath(), "ansight-trace-recovery-test-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             var trace = Path.Combine(directory, "source", "capture.trace", "corespace");
             Directory.CreateDirectory(trace);
             File.WriteAllText(Path.Combine(trace, "sample.data"), "sample");
+
             var archive = Path.Combine(directory, "capture.trace.zip");
             ZipFile.CreateFromDirectory(Path.Combine(directory, "source"), archive);
+
             var started = DateTimeOffset.Parse("2026-09-25T03:08:26Z");
 
             var result = await PhysicalIosInstrumentsTraceRecovery.IngestAsync(state, sessionId,
@@ -169,22 +192,35 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             Assert.Equal(2, session!.MetricChannels.Count);
             Assert.Equal(2, session.Metrics.Count);
         }
-        finally { Directory.Delete(directory, recursive: true); }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
     public async Task RecoversRawProcessCountersWhenDerivedTableCrashes()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var sessionId = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "iphone-udid", "iPhone",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Physical,
+            ExecutionMode = "device"
+        });
         var trace = Path.Combine(environment.RootPath, "source", "capture.trace", "corespace");
         Directory.CreateDirectory(trace);
         File.WriteAllText(Path.Combine(trace, "sample.data"), "sample");
+
         var archive = Path.Combine(environment.RootPath, "capture.trace.zip");
         ZipFile.CreateFromDirectory(Path.Combine(environment.RootPath, "source"), archive);
+
         var samplesPath = Path.Combine(environment.RootPath, "recovered.xml");
         var startedUtc = DateTimeOffset.UtcNow;
 
@@ -204,7 +240,11 @@ public sealed class PhysicalIosInstrumentsCaptureTests
     [Fact]
     public async Task ReportsXctraceCrashWhenRetainedTraceCannotBeExported()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         using var environment = new TestEnvironment();
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -212,11 +252,13 @@ public sealed class PhysicalIosInstrumentsCaptureTests
         var sessionId = state.CreateSession("com.example.app", "Example", IPAddress.Loopback,
             configId: null, processSessionId: null);
         var directory = Path.Combine(Path.GetTempPath(), "ansight-trace-crash-test-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             var trace = Path.Combine(directory, "source", "capture.trace", "corespace");
             Directory.CreateDirectory(trace);
             File.WriteAllText(Path.Combine(trace, "sample.data"), "sample");
+
             var archive = Path.Combine(directory, "capture.trace.zip");
             ZipFile.CreateFromDirectory(Path.Combine(directory, "source"), archive);
 
@@ -228,15 +270,26 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
             Assert.Empty(session!.Metrics);
         }
-        finally { Directory.Delete(directory, recursive: true); }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
-    private sealed class SampleExportRunner(int exitCode = 0) : INativeProfilingProcessRunner
+    private sealed class SampleExportRunner : INativeProfilingProcessRunner
     {
+        private readonly int exitCode;
+
+        public SampleExportRunner(int exitCode = 0)
+        {
+            this.exitCode = exitCode;
+        }
+
         public Task<NativeProfilingProcessResult> RunAsync(NativeProfilingProcessRequest request,
             Action<string>? outputReceived, CancellationToken cancellationToken)
         {
             Assert.Contains("--xpath", request.Arguments);
+
             if (exitCode == 0)
             {
                 var output = request.Arguments[Array.IndexOf(request.Arguments.ToArray(), "--output") + 1];
@@ -250,6 +303,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
                 <size-in-bytes>84395168</size-in-bytes></row></node></trace-query-result>
                 """);
             }
+
             return Task.FromResult(new NativeProfilingProcessResult(exitCode, string.Empty, string.Empty, false));
         }
     }
@@ -260,9 +314,14 @@ public sealed class PhysicalIosInstrumentsCaptureTests
             Action<string>? outputReceived, CancellationToken cancellationToken)
         {
             Assert.Contains("--xpath", request.Arguments);
+
             if (request.Arguments.Any(argument => argument.Contains("activity-monitor-process-live", StringComparison.Ordinal)))
+            {
                 return Task.FromResult(new NativeProfilingProcessResult(139, string.Empty, string.Empty, false));
+            }
+
             Assert.Contains(request.Arguments, argument => argument.Contains("sysmon-process", StringComparison.Ordinal));
+
             var output = request.Arguments[Array.IndexOf(request.Arguments.ToArray(), "--output") + 1];
             File.WriteAllText(output, """
                 <trace-query-result><node><schema name="sysmon-process">
@@ -276,6 +335,7 @@ public sealed class PhysicalIosInstrumentsCaptureTests
                 <row><start-time ref="1"/><pid>12588</pid><system-cpu-percent ref="2"/>
                 <size-in-bytes ref="3"/><size-in-bytes ref="4"/></row></node></trace-query-result>
                 """);
+
             return Task.FromResult(new NativeProfilingProcessResult(0, string.Empty, string.Empty, false));
         }
     }

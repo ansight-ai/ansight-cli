@@ -2,12 +2,13 @@ using Ansight.Cli.Input;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Host;
+using static Ansight.Cli.Input.CliSelectorArguments;
 
 namespace Ansight.Cli.Commands.Ui;
 
 internal static class UiCommands
 {
-    private static readonly string[] CommonFlagOptions =
+    private static readonly string[] commonFlagOptions =
     [
         "help",
         "beta",
@@ -20,7 +21,7 @@ internal static class UiCommands
         "disable-repository-automations"
     ];
 
-    private static readonly string[] CommonValueOptions =
+    private static readonly string[] commonValueOptions =
     [
         "session",
         "session-id",
@@ -36,17 +37,6 @@ internal static class UiCommands
         "websocket-port",
         "automation-repository",
         "node-path"
-    ];
-
-    private static readonly string[] SelectorFlagOptions = ["contains", "case-sensitive"];
-
-    private static readonly string[] SelectorValueOptions =
-    [
-        "automation-id",
-        "text",
-        "role",
-        "ancestor",
-        "index"
     ];
 
     internal delegate Task<UiAutomationResult> ExecuteUiOperation(
@@ -69,6 +59,7 @@ internal static class UiCommands
             options,
             start: true,
             cancellationToken).ConfigureAwait(false);
+
         return await RunAsync(
             arguments,
             output,
@@ -85,10 +76,13 @@ internal static class UiCommands
         Func<JsonObject, CancellationToken, Task<UiAutomationResult>>? typeSecret = null)
     {
         ArgumentNullException.ThrowIfNull(execute);
+
         var action = arguments.RequirePositional(1, "ui action").ToLowerInvariant();
         arguments.EnsurePositionalCount(2, $"ansight ui {action} [options]");
+
         var operation = ResolveOperation(action);
         ValidateOptions(operation, action, arguments);
+
         var operationArguments = BuildOperationArguments(operation, arguments);
         var result = operationArguments.ContainsKey("secretAlias")
             ? await (typeSecret ?? throw new CliUsageException("Secret input requires access to the app secret store."))(
@@ -105,6 +99,7 @@ internal static class UiCommands
             () => result.Payload.Count == 0
                 ? result.Message
                 : result.Payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -146,7 +141,10 @@ internal static class UiCommands
         {
             case UiAutomationOperation.PlayPen:
                 var file = arguments.GetOption("file");
-                if (string.IsNullOrWhiteSpace(file)) throw new CliUsageException("play-pen requires --file <path.pen.json>.");
+                if (string.IsNullOrWhiteSpace(file))
+                {
+                    throw new CliUsageException("play-pen requires --file <path.pen.json>.");
+                }
                 result["file"] = Path.GetFullPath(file);
                 AddOptionalString(result, "mode", arguments.GetOption("mode"));
                 AddOptionalString(result, "target", arguments.GetOption("target"));
@@ -178,16 +176,27 @@ internal static class UiCommands
                 if (textInput.SecretAlias is { } alias)
                 {
                     result["secretAlias"] = alias;
+
                     if (textInput.AppId is { } secretAppId)
                     {
                         if (result["appId"]?.GetValue<string>() is { } targetAppId
                             && !string.Equals(targetAppId, secretAppId, StringComparison.Ordinal))
+                        {
                             throw new CliUsageException("The secret reference's app ID does not match the selected app.");
+                        }
+
                         result["secretAppId"] = secretAppId;
-                        if (!result.ContainsKey("sessionId")) result["appId"] = secretAppId;
+
+                        if (!result.ContainsKey("sessionId"))
+                        {
+                            result["appId"] = secretAppId;
+                        }
                     }
                 }
-                else result["value"] = textInput.Value;
+                else
+                {
+                    result["value"] = textInput.Value;
+                }
                 result["replaceExisting"] = !arguments.HasFlag("append");
                 result["includeScreenshot"] = false;
                 break;
@@ -237,6 +246,7 @@ internal static class UiCommands
                 else
                 {
                     AddOptionalBoolean(result, "exists", arguments, "exists");
+
                     if (arguments.GetOption("exists") is null && expectedCount == 0)
                     {
                         result["exists"] = false;
@@ -258,26 +268,6 @@ internal static class UiCommands
         return result;
     }
 
-    private static void AddSelector(JsonObject target, CliArguments arguments)
-    {
-        AddOptionalString(target, "automationId", arguments.GetOption("automation-id"));
-        AddOptionalString(target, "text", arguments.GetOption("text"));
-        AddOptionalString(target, "role", arguments.GetOption("role"));
-        AddOptionalString(target, "ancestorAutomationId", arguments.GetOption("ancestor"));
-        if (arguments.GetOption("index") is not null)
-        {
-            target["index"] = arguments.GetIntOption("index", 0, 0, int.MaxValue);
-        }
-        if (arguments.HasFlag("contains"))
-        {
-            target["exact"] = false;
-        }
-        if (arguments.HasFlag("case-sensitive"))
-        {
-            target["caseSensitive"] = true;
-        }
-    }
-
     private static void RequireSelector(JsonObject arguments, string action)
     {
         if (arguments["automationId"] is null
@@ -287,14 +277,6 @@ internal static class UiCommands
         {
             throw new CliUsageException(
                 $"ansight ui {action} requires at least one selector: --automation-id, --text, --role, or --ancestor.");
-        }
-    }
-
-    private static void AddOptionalString(JsonObject target, string propertyName, string? value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            target[propertyName] = value.Trim();
         }
     }
 
@@ -335,6 +317,7 @@ internal static class UiCommands
         double maximum)
     {
         var value = arguments.GetDoubleOption(optionName);
+
         if (value < minimum || value > maximum)
         {
             throw new CliUsageException(
@@ -349,8 +332,9 @@ internal static class UiCommands
         string action,
         CliArguments arguments)
     {
-        var flags = CommonFlagOptions.ToList();
-        var values = CommonValueOptions.ToList();
+        var flags = commonFlagOptions.ToList();
+        var values = commonValueOptions.ToList();
+
         if (operation is not UiAutomationOperation.Snapshot and not UiAutomationOperation.Back and not UiAutomationOperation.PlayPen)
         {
             flags.AddRange(SelectorFlagOptions);
@@ -406,12 +390,14 @@ internal static class UiCommands
         }
 
         arguments.EnsureOptionContract($"ansight ui {action}", flags, values);
+
         if (arguments.GetOption("detail") is { } detail
             && !string.Equals(detail, "compact", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(detail, "full", StringComparison.OrdinalIgnoreCase))
         {
             throw new CliUsageException("--detail must be compact or full.");
         }
+
         ValidateTargetOptions(arguments);
         ValidateSelectorModifiers(operation, arguments);
         ValidateOperationRelationships(operation, arguments);
@@ -423,6 +409,7 @@ internal static class UiCommands
         var hasSessionId = arguments.GetOption("session-id") is not null;
         var hasApp = arguments.GetOption("app") is not null;
         var hasAppId = arguments.GetOption("app-id") is not null;
+
         if (hasSession && hasSessionId)
         {
             throw new CliUsageException("Use only one of --session or --session-id.");
@@ -449,12 +436,13 @@ internal static class UiCommands
         }
 
         var hasCriteria = arguments.GetOption("automation-id") is not null
-                          || arguments.GetOption("text") is not null
-                          || arguments.GetOption("role") is not null
-                          || arguments.GetOption("ancestor") is not null;
+            || arguments.GetOption("text") is not null
+            || arguments.GetOption("role") is not null
+            || arguments.GetOption("ancestor") is not null;
         var hasModifiers = arguments.GetOption("index") is not null
-                           || arguments.HasFlag("contains")
-                           || arguments.HasFlag("case-sensitive");
+            || arguments.HasFlag("contains")
+            || arguments.HasFlag("case-sensitive");
+
         if (!hasCriteria && hasModifiers)
         {
             throw new CliUsageException(
@@ -476,6 +464,7 @@ internal static class UiCommands
 
             var coordinates = new[] { "start-x", "start-y", "end-x", "end-y" };
             var coordinateCount = coordinates.Count(name => arguments.GetOption(name) is not null);
+
             if (coordinateCount is > 0 and < 4)
             {
                 throw new CliUsageException(
@@ -501,6 +490,7 @@ internal static class UiCommands
         if (operation == UiAutomationOperation.Wait)
         {
             var condition = arguments.GetOption("condition")?.ToLowerInvariant() ?? "visible";
+
             if (condition is not ("visible" or "hidden" or "stable"))
             {
                 throw new CliUsageException("--condition must be visible, hidden, or stable.");
@@ -536,6 +526,7 @@ internal static class UiCommands
             var expectedCount = arguments.GetOption("count") is null
                 ? (int?)null
                 : arguments.GetIntOption("count", 0, 0, 1_000_000);
+
             if (expectedExists.HasValue
                 && expectedCount.HasValue
                 && expectedExists.Value != (expectedCount.Value > 0))
@@ -544,9 +535,10 @@ internal static class UiCommands
             }
 
             var hasSelectedAssertion = arguments.GetOption("expected-text") is not null
-                                       || arguments.GetOption("expected-value") is not null
-                                       || arguments.GetOption("expected-visible") is not null
-                                       || arguments.GetOption("expected-enabled") is not null;
+                || arguments.GetOption("expected-value") is not null
+                || arguments.GetOption("expected-visible") is not null
+                || arguments.GetOption("expected-enabled") is not null;
+
             if (hasSelectedAssertion
                 && (expectedExists == false || expectedCount == 0))
             {
@@ -563,6 +555,7 @@ internal static class UiCommands
         string optionName)
     {
         var value = arguments.GetOption(optionName);
+
         if (value is null)
         {
             return;
@@ -579,6 +572,7 @@ internal static class UiCommands
     private static bool? ReadOptionalBoolean(CliArguments arguments, string optionName)
     {
         var value = arguments.GetOption(optionName);
+
         if (value is null)
         {
             return null;

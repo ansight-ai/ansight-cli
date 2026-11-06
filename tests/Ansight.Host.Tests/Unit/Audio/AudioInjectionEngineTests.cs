@@ -14,6 +14,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
     private readonly string route = Guid.NewGuid().ToString("N");
 
     public AudioInjectionEngineTests() => Directory.CreateDirectory(root);
+
     public void Dispose() => Directory.Delete(root, recursive: true);
 
     [Fact]
@@ -31,6 +32,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
         Directory.Delete(temporary, recursive: true);
 
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
+
         var snapshot = Assert.Single(session!.ArtifactSnapshots);
         var entry = Assert.Single(snapshot.Entries);
         Assert.True(SessionFileLocator.TryResolveArtifactEntryPath(environment.ApplicationPaths, session, snapshot, entry, out var retainedPath));
@@ -52,6 +54,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
             await File.WriteAllTextAsync(file, "changed after validation", token);
             Assert.Equal(160, fixture.Info.FrameCount);
             Assert.Equal(364, new FileInfo(fixture.Path).Length);
+
             return new("host-output-played", fixture.Info.FrameCount, new JsonObject());
         });
         await using var engine = CreateEngine(provider, persist: (_, report, directory) =>
@@ -75,6 +78,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
     {
         var file = Path.Combine(root, "bad.wav");
         File.WriteAllText(file, "invalid");
+
         await using var engine = CreateEngine(new FakeProvider(route, (_, _, _) => throw new Xunit.Sdk.XunitException("Provider called")),
             resolve: (_, _) => throw new Xunit.Sdk.XunitException("Device queried"));
         var result = await engine.InjectAsync("exact-session", file, 1000, 0, CancellationToken.None);
@@ -97,22 +101,51 @@ public sealed class AudioInjectionEngineTests : IDisposable
         var provider = new FakeProvider(route, async (_, _, token) =>
         {
             entered.SetResult();
-            try { await Task.Delay(Timeout.Infinite, token); }
-            finally { await Task.Delay(50); stopped = true; }
+
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            finally
+            {
+                await Task.Delay(50);
+                stopped = true;
+            }
+
             throw new InvalidOperationException("Unreachable");
         });
         await using var engine = CreateEngine(provider, connected: _ => Volatile.Read(ref connected));
         var run = engine.InjectAsync("exact-session", file, reason == "timeout" ? 200 : 2000, 0, cancellation.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
         Task? stop = null;
-        if (reason == "caller") cancellation.Cancel();
-        if (reason == "disconnect") Volatile.Write(ref connected, false);
-        if (reason == "shutdown") stop = engine.StopAsync();
+
+        if (reason == "caller")
+        {
+            cancellation.Cancel();
+        }
+
+        if (reason == "disconnect")
+        {
+            Volatile.Write(ref connected, false);
+        }
+
+        if (reason == "shutdown")
+        {
+            stop = engine.StopAsync();
+        }
+
         var result = await run.WaitAsync(TimeSpan.FromSeconds(3));
-        if (stop is not null) await stop;
+
+        if (stop is not null)
+        {
+            await stop;
+        }
+
         Assert.True(stopped);
         Assert.Equal("cancelled", result["status"]!.GetValue<string>());
         Assert.Equal(reason == "disconnect" ? "session-disconnected" : reason == "timeout" ? "timeout" : "cancelled", result["code"]!.GetValue<string>());
+
         using var lease = AudioRouteLease.Acquire(route);
         Assert.Empty(Directory.EnumerateFileSystemEntries(Path.Combine(root, "runs")));
     }
@@ -134,6 +167,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
         var provider = new FakeProvider(route, (_, fixture, _) =>
         {
             calls++;
+
             return Task.FromResult(new AudioProviderDelivery("host-output-played", fixture.Info.FrameCount, new JsonObject()));
         });
         await using var engine = CreateEngine(provider, persist: (_, _, _) => throw new IOException("disk full"));
@@ -164,6 +198,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
         Assert.Equal("evidence-persistence-failed", result["code"]!.GetValue<string>());
         await engine.StopAsync().WaitAsync(TimeSpan.FromSeconds(1));
         await Assert.ThrowsAsync<AudioInjectionException>(() => engine.GetCapabilitiesAsync("exact-session", CancellationToken.None));
+
         using var lease = AudioRouteLease.Acquire(route);
     }
 
@@ -173,9 +208,11 @@ public sealed class AudioInjectionEngineTests : IDisposable
         var good = Wave(160);
         Assert.Equal(10, AudioFixtureLoader.Parse(good, "snapshot").Info.DurationMs);
         Assert.Throws<AudioInjectionException>(() => AudioFixtureLoader.Parse(good[..^1], "snapshot"));
+
         var stereo = (byte[])good.Clone();
         BinaryPrimitives.WriteUInt16LittleEndian(stereo.AsSpan(22), 2);
         Assert.Throws<AudioInjectionException>(() => AudioFixtureLoader.Parse(stereo, "snapshot"));
+
         var wrongRate = (byte[])good.Clone();
         BinaryPrimitives.WriteUInt32LittleEndian(wrongRate.AsSpan(24), 44100);
         Assert.Throws<AudioInjectionException>(() => AudioFixtureLoader.Parse(wrongRate, "snapshot"));
@@ -188,6 +225,7 @@ public sealed class AudioInjectionEngineTests : IDisposable
     {
         var repository = Path.Combine(root, "repo");
         Directory.CreateDirectory(repository);
+
         var fixture = WriteFixture();
         Assert.Throws<AudioInjectionException>(() => AudioFixtureLoader.ResolvePath("../quote.wav", repository));
         Assert.Throws<AudioInjectionException>(() => AudioFixtureLoader.ResolvePath(fixture, repository));
@@ -217,7 +255,9 @@ public sealed class AudioInjectionEngineTests : IDisposable
             });
         });
         await using var engine = new AudioInjectionEngine((_, _) => Task.FromResult(target), _ => true,
-            (_, _, _) => { }, [provider], Path.Combine(root, "runs"), iosAudioRecovery: recovery);
+            (_, _, _) =>
+            {
+            }, [provider], Path.Combine(root, "runs"), iosAudioRecovery: recovery);
 
         var result = await engine.InjectAsync(target.SessionId, WriteFixture(), 1000, 0, CancellationToken.None);
 
@@ -238,12 +278,15 @@ public sealed class AudioInjectionEngineTests : IDisposable
         Action<AudioTarget, JsonObject, string>? persist = null,
         Func<string, CancellationToken, Task<AudioTarget>>? resolve = null)
         => new(resolve ?? ((id, _) => Task.FromResult(new AudioTarget(id, "app", "exact-device", "ios"))),
-            connected ?? (_ => true), persist ?? ((_, _, _) => { }), [provider], Path.Combine(root, "runs"));
+            connected ?? (_ => true), persist ?? ((_, _, _) =>
+            {
+            }), [provider], Path.Combine(root, "runs"));
 
     private string WriteFixture()
     {
         var file = Path.Combine(root, "quote.wav");
         File.WriteAllBytes(file, Wave(160));
+
         return file;
     }
 
@@ -251,20 +294,42 @@ public sealed class AudioInjectionEngineTests : IDisposable
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
-        writer.Write("RIFF"u8); writer.Write(36 + frames * 2); writer.Write("WAVEfmt "u8);
-        writer.Write(16); writer.Write((short)1); writer.Write((short)1); writer.Write(16000); writer.Write(32000);
-        writer.Write((short)2); writer.Write((short)16); writer.Write("data"u8); writer.Write(frames * 2);
+        writer.Write("RIFF"u8);
+        writer.Write(36 + frames * 2);
+        writer.Write("WAVEfmt "u8);
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write((short)1);
+        writer.Write(16000);
+        writer.Write(32000);
+        writer.Write((short)2);
+        writer.Write((short)16);
+        writer.Write("data"u8);
+        writer.Write(frames * 2);
         writer.Write(new byte[frames * 2]);
+
         return stream.ToArray();
     }
 
-    private sealed class FakeProvider(string route, Func<AudioTarget, AudioFixture, CancellationToken, Task<AudioProviderDelivery>> inject) : IAudioInjectionProvider
+    private sealed class FakeProvider : IAudioInjectionProvider
     {
+        private readonly string route;
+        private readonly Func<AudioTarget, AudioFixture, CancellationToken, Task<AudioProviderDelivery>> inject;
+
+        public FakeProvider(string route, Func<AudioTarget, AudioFixture, CancellationToken, Task<AudioProviderDelivery>> inject)
+        {
+            this.route = route;
+            this.inject = inject;
+        }
+
         public string Platform => "ios";
         public string Backend => "coreaudio-loopback";
+
         public string GetLeaseKey(AudioTarget target) => route;
+
         public Task<AudioProviderCapabilities> GetCapabilitiesAsync(AudioTarget target, CancellationToken cancellationToken)
             => Task.FromResult(new AudioProviderCapabilities(true, "ready", "Ready", new JsonObject()));
+
         public Task<AudioProviderDelivery> InjectAsync(AudioTarget target, AudioFixture fixture, int waitForMicrophoneMs, CancellationToken cancellationToken)
             => inject(target, fixture, cancellationToken);
     }

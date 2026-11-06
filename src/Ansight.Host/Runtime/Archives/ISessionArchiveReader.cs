@@ -8,5 +8,6 @@ internal interface ISessionArchiveReader : IDisposable
 {
     IReadOnlyList<ISessionArchiveEntry> Entries { get; }
     bool HasEncryptedEntries { get; }
+
     ISessionArchiveEntry? GetEntry(string path);
 }

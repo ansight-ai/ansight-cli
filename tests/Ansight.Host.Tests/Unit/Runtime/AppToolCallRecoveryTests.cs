@@ -234,19 +234,32 @@ public sealed class AppToolCallRecoveryTests
                 }
             });
 
-    private sealed class RecordingBridge(
-        AppToolBridgeResponse initialCatalog,
-        AppToolBridgeResponse refreshedCatalog,
-        params AppToolBridgeResponse[] callResponses) : IAppToolBridge
+    private sealed class RecordingBridge : IAppToolBridge
     {
+        private readonly AppToolBridgeResponse initialCatalog;
+        private readonly AppToolBridgeResponse refreshedCatalog;
+        private readonly AppToolBridgeResponse[] callResponses;
         private int callIndex;
+
+        public RecordingBridge(
+            AppToolBridgeResponse initialCatalog,
+            AppToolBridgeResponse refreshedCatalog,
+            params AppToolBridgeResponse[] callResponses)
+        {
+            this.initialCatalog = initialCatalog;
+            this.refreshedCatalog = refreshedCatalog;
+            this.callResponses = callResponses;
+        }
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
-
         public List<string> Operations { get; } = [];
 
         public List<AppToolBridgeRequestContext?> RequestContexts { get; } = [];
@@ -274,6 +287,7 @@ public sealed class AppToolCallRecoveryTests
         {
             Operations.Add("query");
             RequestContexts.Add(requestContext);
+
             return Task.FromResult(initialCatalog);
         }
 
@@ -285,6 +299,7 @@ public sealed class AppToolCallRecoveryTests
         {
             Operations.Add("refresh");
             RequestContexts.Add(requestContext);
+
             return Task.FromResult(refreshedCatalog);
         }
 
@@ -297,8 +312,10 @@ public sealed class AppToolCallRecoveryTests
         {
             Operations.Add("call");
             RequestContexts.Add(requestContext);
+
             var responseIndex = Math.Min(callIndex, callResponses.Length - 1);
             callIndex++;
+
             return Task.FromResult(callResponses[responseIndex]);
         }
     }

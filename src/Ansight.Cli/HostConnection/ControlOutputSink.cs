@@ -34,6 +34,7 @@ internal sealed class ControlOutputSink
         var message = JsonSerializer.Serialize(
             new ControlOutput(ControlProtocol.OutputSchema, stream, value),
             jsonOptions);
+
         lock (gate)
         {
             try

@@ -3,15 +3,10 @@ namespace Ansight.Infrastructure.Localisation;
 public interface ILocalisationService
 {
     string DeviceLanguageCode { get; }
-
     string CurrentLanguageCode { get; }
-
     string CurrentLanguageName { get; }
-
     string CurrentLanguageIcon { get; }
-
     bool CurrentLanguageMachineTranslated { get; }
-
     event EventHandler<LanguagePackEventArgs>? LanguageChanged;
 
     event EventHandler<LanguagePackEventArgs>? LanguagePackApplying;

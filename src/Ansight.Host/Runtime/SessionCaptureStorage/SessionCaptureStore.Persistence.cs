@@ -45,7 +45,8 @@ internal sealed partial class SessionCaptureStore
         SessionPersistenceCounts persistenceCounts;
         SessionIncrementalPersistenceState? incrementalPersistenceState = null;
         var shouldPreserveIncrementalContent = !IsRecordingStatus(snapshot.Status)
-                                               && IsRecordingStatus(ResolvePersistedStatus(snapshot));
+            && IsRecordingStatus(ResolvePersistedStatus(snapshot));
+
         if (IsRecordingStatus(snapshot.Status))
         {
             incrementalPersistenceState = WriteIncrementalRecordingSnapshotContent(layout, savedAtUtc, snapshot);
@@ -66,6 +67,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         report?.Invoke("Updating session summary…");
+
         var appIcon = SessionSnapshotReader.LoadAppIcon(layout.SessionDirectoryPath, snapshot.AppIcon);
         var cacheSizeBytes = ResolveCacheSizeBytesForSnapshot(snapshot, layout);
 
@@ -120,6 +122,7 @@ internal sealed partial class SessionCaptureStore
         WriteJsonAtomic(layout.SummaryFilePath, summaryDocument);
         RecordCaptureEvidence(summary);
         DeleteIfExists(SessionCaptureArchiveCodec.GetSessionArchivePath(layout.SessionDirectoryPath));
+
         var capturesWriteUtc = TouchCapturesIndex();
         persistedStatusBySessionId[snapshot.SessionId] = new PersistedSessionStatus(snapshot.Status);
 
@@ -131,6 +134,7 @@ internal sealed partial class SessionCaptureStore
             summaryBySessionId![snapshot.SessionId] = summary;
             summarySnapshotBySessionId![snapshot.SessionId] = summarySnapshot;
             lastObservedCapturesWriteUtc = capturesWriteUtc;
+
             if (!IsRecordingStatus(snapshot.Status))
             {
                 cacheSizeBytesBySessionId![snapshot.SessionId] = cacheSizeBytes;
@@ -241,9 +245,10 @@ internal sealed partial class SessionCaptureStore
             snapshot.MetricChannels,
             compactedMetrics);
         incrementalPersistenceStateBySessionId.TryRemove(snapshot.SessionId, out _);
+
         foreach (var key in persistedLogCountByStream.Keys
-                     .Where(key => string.Equals(key.SessionId, snapshot.SessionId, StringComparison.Ordinal))
-                     .ToArray())
+            .Where(key => string.Equals(key.SessionId, snapshot.SessionId, StringComparison.Ordinal))
+            .ToArray())
         {
             persistedLogCountByStream.TryRemove(key, out _);
         }
@@ -266,6 +271,7 @@ internal sealed partial class SessionCaptureStore
         WriteIncrementalLogSegments(layout, savedAtUtc, snapshot, persistenceState);
         WriteIncrementalSnapshotContent(layout, savedAtUtc, snapshot, persistenceState);
         WriteIncrementalTelemetrySegments(layout, savedAtUtc, snapshot, persistenceState);
+
         return persistenceState;
     }
 
@@ -425,6 +431,7 @@ internal sealed partial class SessionCaptureStore
             PersistedArtifactSnapshots = LoadPersistedArtifactSnapshotDocumentState(layout.ArtifactsDirectoryPath)
         };
         incrementalPersistenceStateBySessionId[snapshot.SessionId] = state;
+
         return state;
     }
 
@@ -435,16 +442,11 @@ internal sealed partial class SessionCaptureStore
     {
         var totalLogCount = ResolveTotalLogCount(snapshot);
         var inferredStartIndex = Math.Max(0, totalLogCount - snapshot.Logs.Count);
+
         return snapshot.RetainedLogStartIndex <= 0
             ? inferredStartIndex
             : Math.Clamp(snapshot.RetainedLogStartIndex, 0, inferredStartIndex);
     }
-
-}
-
-
-internal sealed partial class SessionCaptureStore
-{
 
     private static void WriteIncrementalLogSegments(
         SessionPathLayout layout,
@@ -454,6 +456,7 @@ internal sealed partial class SessionCaptureStore
     {
         var totalLogCount = ResolveTotalLogCount(snapshot);
         var retainedLogStartIndex = ResolveRetainedLogStartIndex(snapshot);
+
         if (totalLogCount < persistenceState.PersistedLogCount)
         {
             // Log totals are monotonic for a session. A lower total means this snapshot was
@@ -468,6 +471,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var firstUnpersistedRetainedIndex = persistenceState.PersistedLogCount - retainedLogStartIndex;
+
         if (firstUnpersistedRetainedIndex < 0 || firstUnpersistedRetainedIndex >= snapshot.Logs.Count)
         {
             return;
@@ -538,6 +542,7 @@ internal sealed partial class SessionCaptureStore
                     || previousGeometry != frame.Geometry?.ToJsonString())
                 .DistinctBy(frame => frame.FrameId, StringComparer.Ordinal)
                 .ToArray();
+
             if (addedImages.Length > 0)
             {
                 AppendJsonLine(
@@ -547,8 +552,12 @@ internal sealed partial class SessionCaptureStore
                         SavedAtUtc = savedAtUtc,
                         Images = addedImages
                     });
+
                 foreach (var frame in addedImages)
+                {
                     persistenceState.PersistedImageGeometry[frame.FrameId] = frame.Geometry?.ToJsonString();
+                }
+
                 persistenceState.PersistedImageFrameIds.UnionWith(
                     addedImages.Select(frame => frame.FrameId));
             }
@@ -606,7 +615,7 @@ internal sealed partial class SessionCaptureStore
         if (!ReferenceEquals(snapshot.NetworkRequests, persistenceState.PersistedNetworkRequestsSource))
         {
             foreach (var request in snapshot.NetworkRequests
-                         .Where(request => !persistenceState.PersistedNetworkRequestIds.Contains(request.Id)))
+                .Where(request => !persistenceState.PersistedNetworkRequestIds.Contains(request.Id)))
             {
                 WriteNetworkRequestDocument(layout.NetworkRequestsDirectoryPath, request);
                 persistenceState.PersistedNetworkRequestIds.Add(request.Id);
@@ -660,11 +669,11 @@ internal sealed partial class SessionCaptureStore
         }
 
         if (!string.Equals(
-                snapshot.AppToolCatalog?.Schema,
-                persistenceState.PersistedAppToolCatalogSchema,
-                StringComparison.Ordinal)
+            snapshot.AppToolCatalog?.Schema,
+            persistenceState.PersistedAppToolCatalogSchema,
+            StringComparison.Ordinal)
             || snapshot.AppToolCatalog?.CapturedAtUtc
-            != persistenceState.PersistedAppToolCatalogCapturedAtUtc)
+                != persistenceState.PersistedAppToolCatalogCapturedAtUtc)
         {
             WriteAppToolCatalogBlob(
                 layout.AppToolCatalogFilePath,
@@ -682,6 +691,7 @@ internal sealed partial class SessionCaptureStore
         SessionIncrementalPersistenceState persistenceState)
     {
         var totalMetricSampleCount = Math.Max(snapshot.TotalMetricSampleCount, snapshot.Metrics.Count);
+
         if (totalMetricSampleCount <= persistenceState.PersistedMetricSampleCount)
         {
             if (totalMetricSampleCount == persistenceState.PersistedMetricSampleCount
@@ -689,6 +699,7 @@ internal sealed partial class SessionCaptureStore
                 && !ReferenceEquals(snapshot.Metrics, persistenceState.PersistedMetricsSource))
             {
                 var persistedMetrics = SessionSnapshotReader.LoadTelemetry(layout.TelemetryDirectoryPath);
+
                 if (!AreMetricSamplesEquivalent(persistedMetrics, snapshot.Metrics))
                 {
                     AppendJsonLine(
@@ -703,26 +714,32 @@ internal sealed partial class SessionCaptureStore
             }
 
             persistenceState.PersistedMetricsSource = snapshot.Metrics;
+
             return;
         }
 
         var retainedMetricStartIndex = Math.Max(0, totalMetricSampleCount - snapshot.Metrics.Count);
         var firstUnpersistedRetainedIndex = persistenceState.PersistedMetricSampleCount - retainedMetricStartIndex;
+
         if (firstUnpersistedRetainedIndex >= snapshot.Metrics.Count)
         {
             persistenceState.PersistedMetricsSource = snapshot.Metrics;
+
             return;
         }
 
         Directory.CreateDirectory(layout.TelemetryDirectoryPath);
+
         var firstMetricIndex = Math.Max(0, firstUnpersistedRetainedIndex);
         var addedMetrics = CopyRange(
             snapshot.Metrics,
             firstMetricIndex,
             snapshot.Metrics.Count - firstMetricIndex);
+
         if (addedMetrics.Length == 0)
         {
             persistenceState.PersistedMetricsSource = snapshot.Metrics;
+
             return;
         }
 
@@ -749,10 +766,12 @@ internal sealed partial class SessionCaptureStore
 
         var orderedLeft = OrderMetricSamples(left);
         var orderedRight = OrderMetricSamples(right);
+
         for (var index = 0; index < orderedLeft.Length; index++)
         {
             var leftSample = orderedLeft[index];
             var rightSample = orderedRight[index];
+
             if (leftSample.ChannelId != rightSample.ChannelId
                 || leftSample.Value != rightSample.Value
                 || leftSample.CapturedAtUtc != rightSample.CapturedAtUtc
@@ -781,6 +800,7 @@ internal sealed partial class SessionCaptureStore
         }
 
         var items = new T[count];
+
         for (var i = 0; i < count; i++)
         {
             items[i] = source[startIndex + i];
@@ -813,8 +833,9 @@ internal sealed partial class SessionCaptureStore
         }
 
         var normalizedStatus = status.Trim();
+
         return string.Equals(normalizedStatus, "Connected", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("open", StringComparison.OrdinalIgnoreCase);
+            || normalizedStatus.Contains("open", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void PruneDetachedSessionContent(SessionPathLayout layout, AppSessionSnapshot snapshot)
@@ -830,13 +851,15 @@ internal sealed partial class SessionCaptureStore
         IReadOnlyList<SessionNetworkRequest> requests)
     {
         Directory.CreateDirectory(directoryPath);
+
         var expectedPaths = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var request in requests
-                     .Select(SessionNetworkRequestSanitizer.Normalize)
-                     .Where(static request => request is not null)
-                     .Cast<SessionNetworkRequest>()
-                     .GroupBy(static request => request.Id, StringComparer.Ordinal)
-                     .Select(static group => group.Last()))
+            .Select(SessionNetworkRequestSanitizer.Normalize)
+            .Where(static request => request is not null)
+            .Cast<SessionNetworkRequest>()
+            .GroupBy(static request => request.Id, StringComparer.Ordinal)
+            .Select(static group => group.Last()))
         {
             expectedPaths.Add(Path.GetFullPath(WriteNetworkRequestDocument(directoryPath, request)));
         }
@@ -855,11 +878,13 @@ internal sealed partial class SessionCaptureStore
         SessionNetworkRequest request)
     {
         var normalized = SessionNetworkRequestSanitizer.Normalize(request)
-                         ?? throw new InvalidDataException("Network request record is invalid.");
+            ?? throw new InvalidDataException("Network request record is invalid.");
         Directory.CreateDirectory(directoryPath);
+
         var fileName = $"{normalized.StartedAtUtc:yyyyMMddHHmmssfff}-{FileNameUtil.Sanitize(normalized.Id)}.json";
         var filePath = Path.Combine(directoryPath, fileName);
         WriteJsonAtomic(filePath, normalized);
+
         return filePath;
     }
 
@@ -924,6 +949,7 @@ internal sealed partial class SessionCaptureStore
     private static void WriteDeviceProfileBlob(string filePath, DateTimeOffset savedAtUtc, AppSessionSnapshot snapshot)
     {
         var profileJson = NormalizeJson(snapshot.DeviceProfileJson);
+
         if (string.IsNullOrWhiteSpace(profileJson) && snapshot.DeviceProfile is not null)
         {
             profileJson = JsonSerializer.Serialize(snapshot.DeviceProfile, JsonUtil.Compact);
@@ -932,6 +958,7 @@ internal sealed partial class SessionCaptureStore
         if (string.IsNullOrWhiteSpace(profileJson))
         {
             DeleteIfExists(filePath);
+
             return;
         }
 
@@ -952,6 +979,7 @@ internal sealed partial class SessionCaptureStore
         if (catalog is null)
         {
             DeleteIfExists(filePath);
+
             return;
         }
 
@@ -974,9 +1002,10 @@ internal sealed partial class SessionCaptureStore
 
         var channelMap = metricChannels.ToDictionary(channel => channel.ChannelId);
         var expectedFilePaths = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var grouping in metrics
-                     .GroupBy(metric => metric.ChannelId)
-                     .OrderBy(group => group.Key))
+            .GroupBy(metric => metric.ChannelId)
+            .OrderBy(group => group.Key))
         {
             var telemetryFilePath = GetTelemetryBlobFilePath(layout, grouping.Key);
             expectedFilePaths.Add(telemetryFilePath);
@@ -1022,9 +1051,11 @@ internal sealed partial class SessionCaptureStore
             FileShare.Read,
             bufferSize: 16 * 1024,
             FileOptions.None);
+
         if (stream.Length > 0)
         {
             stream.Position = stream.Length - 1;
+
             if (stream.ReadByte() != '\n')
             {
                 stream.WriteByte((byte)'\n');
@@ -1051,10 +1082,12 @@ internal sealed partial class SessionCaptureStore
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
+
         var layout = GetSessionLayout(appId, sessionId);
         Directory.CreateDirectory(layout.CapturedImagesDirectoryPath);
 
         var normalizedFormat = format.Trim().ToLowerInvariant();
+
         if (bytes.Length == 0)
         {
             return null;

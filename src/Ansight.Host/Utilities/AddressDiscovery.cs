@@ -60,6 +60,7 @@ public static class AddressDiscovery
             ResolveAdditionalHostAddressesOverride());
 
         var wifiInterface = interfaces.FirstOrDefault(IsWifiInterface);
+
         return new AddressDiscoveryResult(addresses, wifiInterface?.Name);
     }
 
@@ -73,6 +74,7 @@ public static class AddressDiscovery
         if (OperatingSystem.IsMacCatalyst())
         {
             var resolver = Volatile.Read(ref macCatalystWifiNetworkNameResolver);
+
             return resolver is null
                 ? Task.FromResult<string?>(interfaceName.Trim())
                 : resolver(interfaceName.Trim(), cancellationToken);
@@ -130,6 +132,7 @@ public static class AddressDiscovery
     {
         var name = networkInterface.Name ?? string.Empty;
         var description = networkInterface.Description ?? string.Empty;
+
         return name.Contains("wi-fi", StringComparison.OrdinalIgnoreCase) ||
                name.Contains("wifi", StringComparison.OrdinalIgnoreCase) ||
                name.Contains("airport", StringComparison.OrdinalIgnoreCase) ||
@@ -180,6 +183,7 @@ public static class AddressDiscovery
         {
             using var socket = new Socket(family, SocketType.Dgram, ProtocolType.Udp);
             socket.Connect(IPAddress.Parse(remoteAddress), 53);
+
             return (socket.LocalEndPoint as IPEndPoint)?.Address.ToString();
         }
         catch
@@ -194,6 +198,7 @@ public static class AddressDiscovery
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(1.5));
 
         Process? process = null;
+
         try
         {
             process = Process.Start(new ProcessStartInfo
@@ -205,12 +210,14 @@ public static class AddressDiscovery
                 UseShellExecute = false,
                 CreateNoWindow = true
             });
+
             if (process is null)
             {
                 return null;
             }
 
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+
             var output = (await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false)).Trim();
 
             return ParseMacWifiNetworkName(output);
@@ -218,6 +225,7 @@ public static class AddressDiscovery
         catch (OperationCanceledException)
         {
             TryKillProcess(process);
+
             return null;
         }
         catch
@@ -233,6 +241,7 @@ public static class AddressDiscovery
     public static string? ParseMacWifiNetworkName(string output)
     {
         const string prefix = "Current Wi-Fi Network: ";
+
         if (string.IsNullOrWhiteSpace(output)
             || !output.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -240,6 +249,7 @@ public static class AddressDiscovery
         }
 
         var ssid = output[prefix.Length..].Trim();
+
         return string.IsNullOrWhiteSpace(ssid) ? null : ssid;
     }
 
@@ -249,6 +259,7 @@ public static class AddressDiscovery
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(1.5));
 
         Process? process = null;
+
         try
         {
             process = Process.Start(new ProcessStartInfo
@@ -260,18 +271,22 @@ public static class AddressDiscovery
                 UseShellExecute = false,
                 CreateNoWindow = true
             });
+
             if (process is null)
             {
                 return null;
             }
 
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+
             var output = (await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false)).Trim();
+
             return ParseWindowsWifiNetworkName(output, interfaceName);
         }
         catch (OperationCanceledException)
         {
             TryKillProcess(process);
+
             return null;
         }
         catch
@@ -299,6 +314,7 @@ public static class AddressDiscovery
         foreach (var rawLine in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var separatorIndex = rawLine.IndexOf(':', StringComparison.Ordinal);
+
             if (separatorIndex < 0)
             {
                 continue;
@@ -344,6 +360,7 @@ public static class AddressDiscovery
         var addresses = new List<string>();
         AddAddresses(SplitAdditionalHostAddresses(additionalAddresses));
         AddAddresses(discoveredAddresses);
+
         return addresses.ToArray();
 
         void AddAddresses(IEnumerable<string> values)
@@ -357,6 +374,7 @@ public static class AddressDiscovery
         void AddAddress(string value)
         {
             var trimmed = value.Trim();
+
             if (string.IsNullOrWhiteSpace(trimmed) ||
                 !IPAddress.TryParse(trimmed, out var address) ||
                 !IsEligibleHostAddress(address))
@@ -365,6 +383,7 @@ public static class AddressDiscovery
             }
 
             var normalized = address.ToString();
+
             if (addresses.Contains(normalized, StringComparer.OrdinalIgnoreCase))
             {
                 return;
@@ -421,9 +440,9 @@ public static class AddressDiscovery
         string? targetInterfaceName)
     {
         return !string.IsNullOrWhiteSpace(currentSsid) &&
-               !string.IsNullOrWhiteSpace(currentInterfaceName) &&
-               !string.IsNullOrWhiteSpace(targetInterfaceName) &&
-               string.Equals(currentInterfaceName.Trim(), targetInterfaceName.Trim(), StringComparison.OrdinalIgnoreCase);
+                   !string.IsNullOrWhiteSpace(currentInterfaceName) &&
+                   !string.IsNullOrWhiteSpace(targetInterfaceName) &&
+                   string.Equals(currentInterfaceName.Trim(), targetInterfaceName.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     private static void TryKillProcess(Process? process)

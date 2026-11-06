@@ -13,8 +13,11 @@ internal sealed class MacSessionVideoFrameExtractor : ISessionVideoFrameExtracto
         await Task.Run(() =>
         {
             var error = new StringBuilder(4096);
+
             if (Extract(videoPath, imagePath, position.Ticks / 10, 1024, error, error.Capacity) == 0)
+            {
                 throw new IOException($"Native video frame extraction failed: {error}");
+            }
         }, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
     }

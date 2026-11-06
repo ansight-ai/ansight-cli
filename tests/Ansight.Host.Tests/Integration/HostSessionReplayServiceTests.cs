@@ -58,9 +58,11 @@ public sealed class HostSessionReplayServiceTests
         var started = await runtime.SessionReplays.StartAsync(new SessionReplayStartRequest(imported.SessionId));
 
         Assert.True(started.IsSuccess, started.Message);
+
         var replayUrl = Assert.IsType<Uri>(started.ReplayUrl);
         Assert.Equal("127.0.0.1", replayUrl.Host);
         Assert.NotEqual("/", replayUrl.AbsolutePath);
+
         using var client = new HttpClient();
         using var page = await client.GetAsync(replayUrl);
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
@@ -85,41 +87,52 @@ public sealed class HostSessionReplayServiceTests
 
         var explorer = await runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest());
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         var explorerUrl = Assert.IsType<Uri>(explorer.ExplorerUrl);
         var bootstrap = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/bootstrap")))!.AsObject();
         Assert.Equal("explorer", bootstrap["mode"]?.GetValue<string>());
         Assert.True(bootstrap["supportsSessionAdministration"]?.GetValue<bool>());
         Assert.False(bootstrap["supportsCloudSessions"]?.GetValue<bool>());
         Assert.False(bootstrap["supportsAccountManagement"]?.GetValue<bool>());
+
         var settings = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/settings")))!.AsObject();
         Assert.NotNull(settings["logCaptureLevel"]);
+
         using var settingsResponse = await client.PostAsync(
             new Uri(explorerUrl, "api/settings"),
             JsonContent.Create(new CoreSettingsUpdateRequest(
                 "Debug", false, false, false, null, null, false, 14, 7,
                 1024L * 1024L * 1024L, 20, 256, null, null, "disabled")));
         Assert.Equal(HttpStatusCode.OK, settingsResponse.StatusCode);
+
         var savedSettings = JsonNode.Parse(await settingsResponse.Content.ReadAsStringAsync())!.AsObject();
         Assert.Equal("Debug", savedSettings["settings"]?["logCaptureLevel"]?.GetValue<string>());
+
         var storageSettingsUrl = new Uri(explorerUrl, "api/settings/session-storage");
         var storageSettings = JsonNode.Parse(await client.GetStringAsync(storageSettingsUrl))!.AsObject();
         Assert.False(storageSettings["sessionAutoCleanupEnabled"]?.GetValue<bool>());
+
         using var storageSettingsResponse = await client.PostAsync(
             storageSettingsUrl,
             JsonContent.Create(new SessionStorageSettings(true, 30, 15, 2L * 1024 * 1024 * 1024)));
         Assert.Equal(HttpStatusCode.OK, storageSettingsResponse.StatusCode);
+
         var updatedStorageSettings = JsonNode.Parse(await client.GetStringAsync(storageSettingsUrl))!.AsObject();
         Assert.True(updatedStorageSettings["sessionAutoCleanupEnabled"]?.GetValue<bool>());
         Assert.Equal(30, updatedStorageSettings["sessionAutoCleanupRetentionDays"]?.GetValue<int>());
         Assert.Equal(15, updatedStorageSettings["sessionAutoCompactionAgeDays"]?.GetValue<int>());
         Assert.Equal(2L * 1024 * 1024 * 1024, updatedStorageSettings["sessionAutoCleanupMaximumCacheBytes"]?.GetValue<long>());
+
         var unchangedCoreSettings = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/settings")))!.AsObject();
         Assert.Equal("Debug", unchangedCoreSettings["logCaptureLevel"]?.GetValue<string>());
+
         var cachePlan = JsonNode.Parse(await client.GetStringAsync(new Uri(explorerUrl, "api/session-cache")))!.AsObject();
         Assert.Equal(2L * 1024 * 1024 * 1024, cachePlan["maximumCacheSizeBytes"]?.GetValue<long>());
+
         var storage = JsonNode.Parse(await client.GetStringAsync(
             new Uri(replayUrl, $"api/sessions/{Uri.EscapeDataString(imported.SessionId)}/storage")))!.AsObject();
         Assert.True(storage["totalSizeBytes"]!.GetValue<long>() > 0);
+
         var updates = JsonNode.Parse(await client.GetStringAsync(
             new Uri(replayUrl, $"api/sessions/{Uri.EscapeDataString(imported.SessionId)}/updates?imageIndex=0")))!.AsObject();
         Assert.False(updates["requiresReset"]!.GetValue<bool>());
@@ -135,6 +148,7 @@ public sealed class HostSessionReplayServiceTests
         using var stream = File.Create(archivePath);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
         var sessionEntry = archive.CreateEntry("session.json");
+
         await using (var sessionStream = sessionEntry.Open())
         {
             await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
@@ -145,6 +159,7 @@ public sealed class HostSessionReplayServiceTests
         }
 
         var frameEntry = archive.CreateEntry(SessionImageArtifactPath.ResolveArchiveEntryPath(frame));
+
         await using (var frameStream = frameEntry.Open())
         {
             await frameStream.WriteAsync(frameBytes);

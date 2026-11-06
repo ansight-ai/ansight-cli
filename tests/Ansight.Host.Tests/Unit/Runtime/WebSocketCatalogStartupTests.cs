@@ -21,6 +21,7 @@ public sealed class WebSocketCatalogStartupTests
         using var socket = new ScriptedWebSocket();
         var session = manager.RunConnectedSessionAsync(sessionId, socket,
             new PairingSessionAuthorization(2, "grant-1", "read"));
+
         try
         {
             socket.SendControl("profile", PairingControlActions.DeviceProfile, new JsonObject
@@ -28,15 +29,21 @@ public sealed class WebSocketCatalogStartupTests
                 ["periodicScreenshotCaptureControlVersion"] = 1,
                 ["sessionJpegCapture"] = new JsonObject { ["includeSystemUiMetadata"] = true }
             });
+
             var profile = await socket.ReadSentAsync();
             Assert.Equal("app", profile["payload"]?["sessionJpegCapture"]?["mode"]?.GetValue<string>());
             await AcknowledgePolicy(false);
+
             using var video = screenshots.SuspendPeriodicCapture(sessionId);
             await AcknowledgePolicy(true);
             video.Dispose();
             await AcknowledgePolicy(false);
         }
-        finally { socket.End(); await session.WaitAsync(TimeSpan.FromSeconds(5)); }
+        finally
+        {
+            socket.End();
+            await session.WaitAsync(TimeSpan.FromSeconds(5));
+        }
 
         async Task AcknowledgePolicy(bool paused)
         {
@@ -45,7 +52,8 @@ public sealed class WebSocketCatalogStartupTests
             Assert.Equal(paused, request["payload"]?["paused"]?.GetValue<bool>());
             socket.Receive(new JsonObject
             {
-                ["type"] = "session.screenshots.result", ["id"] = Guid.NewGuid().ToString("N"),
+                ["type"] = "session.screenshots.result",
+                ["id"] = Guid.NewGuid().ToString("N"),
                 ["replyTo"] = request["id"]!.GetValue<string>(),
                 ["payload"] = new JsonObject { ["paused"] = paused }
             });
@@ -63,6 +71,7 @@ public sealed class WebSocketCatalogStartupTests
         using var socket = new ScriptedWebSocket();
         var session = manager.RunConnectedSessionAsync(sessionId, socket,
             new PairingSessionAuthorization(2, "grant-1", "read"));
+
         try
         {
             // A handshake alone, ordinary traffic, and a rejected open must not start discovery.
@@ -76,6 +85,7 @@ public sealed class WebSocketCatalogStartupTests
 
             socket.SendControl("open", PairingControlActions.SessionOpen);
             await AssertControlResponseAsync(socket, "open", success: true);
+
             var query = await socket.ReadSentAsync();
             Assert.Equal(ToolProtocolMessageTypes.QueryType, query["type"]?.GetValue<string>());
             Assert.Equal("index", query["payload"]?["detail"]?.GetValue<string>());
@@ -137,7 +147,9 @@ public sealed class WebSocketCatalogStartupTests
             });
 
         public void Receive(JsonObject message) => incoming.Writer.TryWrite(message.ToJsonString());
+
         public void End() => incoming.Writer.TryWrite(null);
+
         public Task<JsonObject> ReadSentAsync()
             => outgoing.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -145,6 +157,7 @@ public sealed class WebSocketCatalogStartupTests
             bool endOfMessage, CancellationToken cancellationToken)
         {
             outgoing.Writer.TryWrite(JsonNode.Parse(buffer.AsSpan())!.AsObject());
+
             return Task.CompletedTask;
         }
 
@@ -152,13 +165,17 @@ public sealed class WebSocketCatalogStartupTests
             CancellationToken cancellationToken)
         {
             var message = await incoming.Reader.ReadAsync(cancellationToken);
+
             if (message is null)
             {
                 state = WebSocketState.CloseReceived;
+
                 return new WebSocketReceiveResult(0, WebSocketMessageType.Close, true);
             }
+
             var bytes = Encoding.UTF8.GetBytes(message);
             bytes.AsSpan().CopyTo(buffer.AsSpan());
+
             return new WebSocketReceiveResult(bytes.Length, WebSocketMessageType.Text, true);
         }
 
@@ -166,6 +183,7 @@ public sealed class WebSocketCatalogStartupTests
             CancellationToken cancellationToken)
         {
             state = WebSocketState.Closed;
+
             return Task.CompletedTask;
         }
 
@@ -173,6 +191,7 @@ public sealed class WebSocketCatalogStartupTests
             CancellationToken cancellationToken) => CloseAsync(closeStatus, statusDescription, cancellationToken);
 
         public override void Abort() => End();
+
         public override void Dispose()
         {
             state = WebSocketState.Closed;

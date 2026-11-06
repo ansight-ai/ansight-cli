@@ -36,11 +36,13 @@ internal static class AppGraphCommands
             ? arguments.RequirePositional(1, "App Graph action").ToLowerInvariant()
             : "list";
         ValidateArguments(arguments, action, positionalOffset: 1);
+
         var options = CliRuntime.ResolveOptions(arguments);
         await using var lease = await CliRuntimeLease.CreateAsync(
             options,
             start: action is "run" or "explore" or "sync",
             cancellationToken).ConfigureAwait(false);
+
         return await RunActionAsync(
             lease.Runtime,
             arguments,
@@ -65,26 +67,31 @@ internal static class AppGraphCommands
         if (action == "list")
         {
             arguments.EnsurePositionalCount(positionalOffset + 1, "ansight app-graph list --team-id <uuid>");
+
             if (AppGraphStoreOptions.Resolve(arguments) == AppGraphStoreMode.Hosted)
             {
                 ParseRequiredGuidOption(arguments, "team-id", "organisation ID");
             }
+
             return;
         }
 
         if (action == "sync")
         {
             var direction = arguments.RequirePositional(positionalOffset + 1, "sync direction").ToLowerInvariant();
+
             if (direction is not ("push" or "pull"))
             {
                 throw new CliUsageException("App Graph sync direction must be push or pull.");
             }
+
             arguments.EnsurePositionalCount(
                 positionalOffset + 3,
                 direction == "push"
                     ? "ansight app-graph sync push <local-graph-id> --team-id <uuid>"
                     : "ansight app-graph sync pull <hosted-graph-id> --app-id <id> [--published]");
             ParseGraphId(arguments.RequirePositional(positionalOffset + 2, "App Graph ID"));
+
             if (direction == "push")
             {
                 ParseRequiredGuidOption(arguments, "team-id", "organisation ID");
@@ -93,12 +100,14 @@ internal static class AppGraphCommands
             {
                 _ = arguments.RequireOption("app-id");
             }
+
             return;
         }
 
         if (action == "explore")
         {
             var usage = "ansight app-graph explore [<app-id>] [--graph <name-or-id>|--new-graph <name>] [options]";
+
             if (arguments.Positionals.Count < positionalOffset + 1
                 || arguments.Positionals.Count > positionalOffset + 2)
             {
@@ -109,45 +118,63 @@ internal static class AppGraphCommands
                 ? arguments.RequirePositional(positionalOffset + 1, "App ID")
                 : null;
             var optionAppId = arguments.GetOption("app-id");
+
             if (positionalAppId is not null && optionAppId is not null)
             {
                 throw new CliUsageException("Use either the positional App ID or --app-id, not both.");
             }
+
             if (string.IsNullOrWhiteSpace(positionalAppId) && string.IsNullOrWhiteSpace(optionAppId))
             {
                 throw new CliUsageException(
                     $"No workspace app could be selected. Usage: {usage}");
             }
-            if (arguments.HasFlag("graph")) _ = arguments.RequireOption("graph");
-            if (arguments.HasFlag("new-graph")) _ = arguments.RequireOption("new-graph");
+
+            if (arguments.HasFlag("graph"))
+            {
+                _ = arguments.RequireOption("graph");
+            }
+
+            if (arguments.HasFlag("new-graph"))
+            {
+                _ = arguments.RequireOption("new-graph");
+            }
+
             if (arguments.HasFlag("graph") && string.IsNullOrWhiteSpace(arguments.RequireOption("graph")))
             {
                 throw new CliUsageException("--graph requires a non-empty graph name or UUID.");
             }
+
             if (arguments.HasFlag("new-graph") && string.IsNullOrWhiteSpace(arguments.RequireOption("new-graph")))
             {
                 throw new CliUsageException("--new-graph requires a non-empty graph name.");
             }
+
             if (arguments.HasFlag("graph") && arguments.HasFlag("new-graph"))
             {
                 throw new CliUsageException("Use only one of --graph or --new-graph.");
             }
+
             if (arguments.HasFlag("new-graph") && arguments.HasFlag("published"))
             {
                 throw new CliUsageException("A new exploration graph starts as a draft; do not combine --new-graph with --published.");
             }
+
             if (arguments.HasFlag("team-id"))
             {
                 ParseRequiredGuidOption(arguments, "team-id", "organisation ID");
             }
+
             if (arguments.HasFlag("launch") && arguments.HasFlag("no-launch"))
             {
                 throw new CliUsageException("Use only one of --launch or --no-launch.");
             }
+
             if (arguments.HasFlag("wait-seconds"))
             {
                 _ = arguments.GetSecondsOption("wait-seconds", TimeSpan.FromSeconds(45));
             }
+
             return;
         }
 
@@ -163,6 +190,7 @@ internal static class AppGraphCommands
                 positionalOffset + 2,
                 usage);
             ParseGraphId(arguments.RequirePositional(positionalOffset + 1, "App Graph ID"));
+
             return;
         }
 
@@ -173,6 +201,7 @@ internal static class AppGraphCommands
                 "ansight app-graph run <graph-id> <session-id> [--parameters <JSON>] [--published]");
             ParseGraphId(arguments.RequirePositional(positionalOffset + 1, "App Graph ID"));
             arguments.RequirePositional(positionalOffset + 2, "live session ID");
+
             return;
         }
 
@@ -191,6 +220,7 @@ internal static class AppGraphCommands
         if (action == "list")
         {
             arguments.EnsurePositionalCount(positionalOffset + 1, "ansight app-graph list --team-id <uuid>");
+
             return await ListAsync(runtime, arguments, output, cancellationToken).ConfigureAwait(false);
         }
 
@@ -218,27 +248,32 @@ internal static class AppGraphCommands
         }
 
         var graphId = ParseGraphId(arguments.RequirePositional(positionalOffset + 1, "App Graph ID"));
+
         if (action == "show")
         {
             arguments.EnsurePositionalCount(positionalOffset + 2, "ansight app-graph show <graph-id> [--published]");
+
             return await ShowAsync(runtime, graphId, arguments, output, cancellationToken).ConfigureAwait(false);
         }
 
         if (action == "plan")
         {
             arguments.EnsurePositionalCount(positionalOffset + 2, "ansight app-graph plan <graph-id> [--target <node>] [--published]");
+
             return await PlanAsync(runtime, graphId, arguments, output, cancellationToken).ConfigureAwait(false);
         }
 
         if (action == "validate")
         {
             arguments.EnsurePositionalCount(positionalOffset + 2, "ansight app-graph validate <graph-id> [--published]");
+
             return await ValidateAsync(runtime, graphId, arguments, output, cancellationToken).ConfigureAwait(false);
         }
 
         if (action == "run")
         {
             arguments.EnsurePositionalCount(positionalOffset + 3, "ansight app-graph run <graph-id> <session-id> [--parameters <JSON>] [--published]");
+
             return await RunGraphAsync(
                 runtime,
                 graphId,
@@ -276,6 +311,7 @@ internal static class AppGraphCommands
                         Environment.NewLine,
                         result.Graphs.Select(graph =>
                             $"{graph.Id:D}\tv{graph.Version}\t{graph.Status}\t{graph.Name}\t{graph.Intent}")));
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -296,9 +332,10 @@ internal static class AppGraphCommands
             () => result.Detail is null
                 ? result.Message
                 : $"{result.Detail.Graph.Name}\n"
-                  + (string.IsNullOrWhiteSpace(result.Detail.Graph.Intent) ? string.Empty : $"Description: {result.Detail.Graph.Intent}\n")
-                  + $"Version: {result.Detail.Version.VersionNumber} ({result.Detail.Version.Status})\n"
-                  + $"Bindings: {result.Detail.Bindings.Count}");
+                    + (string.IsNullOrWhiteSpace(result.Detail.Graph.Intent) ? string.Empty : $"Description: {result.Detail.Graph.Intent}\n")
+                    + $"Version: {result.Detail.Version.VersionNumber} ({result.Detail.Version.Status})\n"
+                    + $"Bindings: {result.Detail.Bindings.Count}");
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -314,6 +351,7 @@ internal static class AppGraphCommands
             graphId,
             arguments,
             cancellationToken).ConfigureAwait(false);
+
         if (!detailResult.IsSuccess || detailResult.Detail is null)
         {
             return WriteDetailFailure(detailResult.Message, output);
@@ -323,6 +361,7 @@ internal static class AppGraphCommands
         output.Write(
             new AppGraphPlanOutput("ansight.app-graph-plan/v1", detailResult.Detail.Graph.Id, detailResult.Detail.Version.Id, plan),
             () => FormatPlan(detailResult.Detail, plan));
+
         return plan.Errors.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -338,6 +377,7 @@ internal static class AppGraphCommands
             graphId,
             arguments,
             cancellationToken).ConfigureAwait(false);
+
         if (!detailResult.IsSuccess || detailResult.Detail is null)
         {
             return WriteDetailFailure(detailResult.Message, output);
@@ -353,7 +393,8 @@ internal static class AppGraphCommands
             () => validation.Errors.Count == 0
                 ? $"App Graph v{detailResult.Detail.Version.VersionNumber} is executable ({validation.EdgeCount} edges, {validation.BindingCount} bindings)."
                 : "App Graph validation failed:" + Environment.NewLine
-                  + string.Join(Environment.NewLine, validation.Errors.Select(error => $"- {error}")));
+                    + string.Join(Environment.NewLine, validation.Errors.Select(error => $"- {error}")));
+
         return validation.Errors.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -366,14 +407,18 @@ internal static class AppGraphCommands
         CancellationToken cancellationToken)
     {
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken).ConfigureAwait(false);
+
         if (snapshot is null)
         {
             output.WriteError("session_not_found", $"Session '{sessionId}' was not found.", CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
+
         if (!runtime.AppTools.IsConnected(snapshot.SessionId))
         {
             output.WriteError("session_not_connected", $"Session '{snapshot.SessionId}' is not connected. App Graph runs require a live app.", CliExitCodes.HostUnavailable);
+
             return CliExitCodes.HostUnavailable;
         }
 
@@ -382,6 +427,7 @@ internal static class AppGraphCommands
             graphId,
             arguments,
             cancellationToken).ConfigureAwait(false);
+
         if (!detailResult.IsSuccess || detailResult.Detail is null)
         {
             return WriteDetailFailure(detailResult.Message, output);
@@ -390,30 +436,34 @@ internal static class AppGraphCommands
         var detail = detailResult.Detail;
         var isLocal = AppGraphStoreOptions.Resolve(arguments) == AppGraphStoreMode.Local;
         var plan = AppGraphPlanner.Build(detail, arguments.GetOption("target"));
+
         if (plan.Errors.Count > 0)
         {
             output.WriteError("app_graph_not_executable", string.Join(" ", plan.Errors), CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
         var parameters = ReadParameters(arguments);
         var createRequest = new CloudAppGraphRunCreateRequest(
-                detail.Graph.TeamId,
-                detail.Graph.Id,
-                detail.Version.Id,
-                string.IsNullOrWhiteSpace(detail.Graph.Intent)
-                    ? $"Execute an App Graph path in {detail.Graph.Name}."
-                    : detail.Graph.Intent,
-                parameters,
-                snapshot.SessionId);
+            detail.Graph.TeamId,
+            detail.Graph.Id,
+            detail.Version.Id,
+            string.IsNullOrWhiteSpace(detail.Graph.Intent)
+                ? $"Execute an App Graph path in {detail.Graph.Name}."
+                : detail.Graph.Intent,
+            parameters,
+            snapshot.SessionId);
         var createResult = isLocal
             ? runtime.LocalAppGraphs.CreateRun(createRequest)
             : await Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IAppGraphOperations>("Graph.CreateStore", [runtime]).CreateAppGraphRunAsync(
                 createRequest,
                 cancellationToken).ConfigureAwait(false);
+
         if (!createResult.IsSuccess)
         {
             output.WriteError("app_graph_run_create_failed", createResult.Message, CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
@@ -421,11 +471,13 @@ internal static class AppGraphCommands
         var executedSteps = new List<AppGraphExecutedStep>();
         var traceIndex = 0;
         var failureMessage = string.Empty;
+
         try
         {
             foreach (var step in plan.Steps)
             {
                 var edgeSucceeded = false;
+
                 foreach (var binding in step.Bindings)
                 {
                     var startedAt = DateTimeOffset.UtcNow;
@@ -443,18 +495,18 @@ internal static class AppGraphCommands
                     var completedAt = DateTimeOffset.UtcNow;
                     var status = execution.IsSuccess ? "succeeded" : "failed";
                     var writeRequest = new CloudAppGraphRunStepWriteRequest(
-                            detail.Graph.TeamId,
-                            runId,
-                            traceIndex,
-                            step.Edge.Id,
-                            binding.Id,
-                            status,
-                            execution.Request,
-                            execution.Response,
-                            execution.Evidence,
-                            execution.IsSuccess ? null : execution.Message,
-                            startedAt,
-                            completedAt);
+                        detail.Graph.TeamId,
+                        runId,
+                        traceIndex,
+                        step.Edge.Id,
+                        binding.Id,
+                        status,
+                        execution.Request,
+                        execution.Response,
+                        execution.Evidence,
+                        execution.IsSuccess ? null : execution.Message,
+                        startedAt,
+                        completedAt);
                     var writeResult = isLocal
                         ? runtime.LocalAppGraphs.WriteRunStep(writeRequest)
                         : await Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IAppGraphOperations>("Graph.CreateStore", [runtime]).WriteAppGraphRunStepAsync(
@@ -462,11 +514,13 @@ internal static class AppGraphCommands
                             cancellationToken).ConfigureAwait(false);
                     executedSteps.Add(new AppGraphExecutedStep(traceIndex, step.Edge.Id, binding.Id, binding.Mechanism, status, execution.Message));
                     traceIndex++;
+
                     if (!writeResult.IsSuccess)
                     {
                         failureMessage = $"The action completed, but its evidence could not be recorded: {writeResult.Message}";
                         break;
                     }
+
                     if (execution.IsSuccess)
                     {
                         edgeSucceeded = true;
@@ -474,7 +528,11 @@ internal static class AppGraphCommands
                     }
                 }
 
-                if (!string.IsNullOrWhiteSpace(failureMessage)) break;
+                if (!string.IsNullOrWhiteSpace(failureMessage))
+                {
+                    break;
+                }
+
                 if (!edgeSucceeded)
                 {
                     failureMessage = $"Every binding failed for edge '{step.Edge.Id}'.";
@@ -492,6 +550,7 @@ internal static class AppGraphCommands
             {
                 await Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IAppGraphOperations>("Graph.CreateStore", [runtime]).CompleteAppGraphRunAsync(runId, "cancelled", "Run cancelled.", CancellationToken.None).ConfigureAwait(false);
             }
+
             throw;
         }
         catch (Exception exception)
@@ -513,6 +572,7 @@ internal static class AppGraphCommands
                 succeeded ? "succeeded" : "failed",
                 message,
                 cancellationToken).ConfigureAwait(false);
+
         if (!completeResult.IsSuccess)
         {
             succeeded = false;
@@ -522,7 +582,8 @@ internal static class AppGraphCommands
         output.Write(
             new AppGraphRunOutput("ansight.app-graph-run/v1", runId, detail.Graph.Id, detail.Version.Id, succeeded, message, executedSteps),
             () => $"Run {runId:D}: {(succeeded ? "succeeded" : "failed")}\n{message}\n"
-                  + string.Join(Environment.NewLine, executedSteps.Select(step => $"{step.StepIndex + 1}. {step.EdgeId} [{step.Mechanism}] {step.Status}")));
+                + string.Join(Environment.NewLine, executedSteps.Select(step => $"{step.StepIndex + 1}. {step.EdgeId} [{step.Mechanism}] {step.Status}")));
+
         return succeeded ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -547,6 +608,7 @@ internal static class AppGraphCommands
         var sessions = runtime.Sessions.GetSummaries();
         AppGraphExploreLiveTarget liveTarget;
         WorkspaceTestTarget? launchedTarget = null;
+
         try
         {
             liveTarget = AppGraphExploreTargetResolver.Resolve(
@@ -562,6 +624,7 @@ internal static class AppGraphCommands
                 sessions);
             output.WriteProgress(
                 $"[App Graph] No live session is connected for '{launchAppId}'; launching the app.");
+
             var launchProgress = new CliProgress<WorkspaceTestRunProgress>(value =>
                 output.WriteProgress($"[App Graph] [{value.Stage}] {value.Message}"));
             var launchResult = await runtime.WorkspaceTests.LaunchAppAndWaitForSessionAsync(
@@ -571,12 +634,14 @@ internal static class AppGraphCommands
                 arguments.GetSecondsOption("wait-seconds", TimeSpan.FromSeconds(45)),
                 launchProgress,
                 cancellationToken).ConfigureAwait(false);
+
             if (!launchResult.IsSuccess || launchResult.Session is null)
             {
                 output.WriteError(
                     "app_launch_failed",
                     launchResult.Message,
                     CliExitCodes.Failure);
+
                 return CliExitCodes.Failure;
             }
 
@@ -588,13 +653,16 @@ internal static class AppGraphCommands
                     requestedAppId,
                     StringComparison.OrdinalIgnoreCase));
         }
+
         var snapshot = liveTarget.Session;
         using var sessionClaim = reserveSession ? runtime.WorkspaceTests.ReserveSession(snapshot) : null;
+
         if (reserveSession && arguments.GetOption("device-id") is { } requestedDeviceId)
         {
             var inventory = await runtime.Devices.ListAsync(cancellationToken).ConfigureAwait(false);
             _ = AppExecutionScope.ResolveSessionTarget(snapshot, requestedDeviceId, inventory, "--device-id");
         }
+
         var storeMode = AppGraphStoreOptions.Resolve(arguments);
         var cloudTarget = storeMode == AppGraphStoreMode.Local
             ? ResolveLocalExploreTarget(
@@ -619,37 +687,47 @@ internal static class AppGraphCommands
             cloudTarget.GraphName,
             maximumActions,
             arguments.GetOption("focus"));
-        if (!string.IsNullOrWhiteSpace(additionalInstructions)) instruction += "\n\n" + additionalInstructions;
+
+        if (!string.IsNullOrWhiteSpace(additionalInstructions))
+        {
+            instruction += "\n\n" + additionalInstructions;
+        }
+
         var reasoning = ReasoningOptions.Resolve(arguments);
         var model = ReasoningOptions.ResolveModelOverride(arguments);
         var workspacePath = Path.Combine(runtime.BaseFolderPath, "app-graph-executions");
         var preparation = await PrepareAppGraphAgentRunAsync(
-                runtime.WorkspaceTests.RunGateway,
-                snapshot.AppId,
-                model,
-                workspacePath,
-                storeMode == AppGraphStoreMode.Local
-                    ? null
-                    : cloudTarget.RegisteredApp.TeamId == Guid.Empty
+            runtime.WorkspaceTests.RunGateway,
+            snapshot.AppId,
+            model,
+            workspacePath,
+            storeMode == AppGraphStoreMode.Local
+                ? null
+                : cloudTarget.RegisteredApp.TeamId == Guid.Empty
                     ? null
                     : cloudTarget.RegisteredApp.TeamId,
-                "app-graph-explore",
-                "App Graph exploration",
-                cancellationToken,
-                reasoning)
+            "app-graph-explore",
+            "App Graph exploration",
+            cancellationToken,
+            reasoning)
             .ConfigureAwait(false);
+
         if (preparation.HasResolvedTeam)
         {
             output.WriteProgress(
                 $"[App Graph] [organisation.selected] Hosted agent execution resolved to '{preparation.TeamName}' ({preparation.TeamId:D}).");
         }
+
         if (!preparation.IsSuccess)
         {
             output.WriteError("configuration", preparation.Message, CliExitCodes.Configuration);
+
             return CliExitCodes.Configuration;
         }
+
         output.WriteProgress(
             $"[App Graph] Exploring app '{liveTarget.AppId}' through host-linked session '{snapshot.SessionId}'.");
+
         var progress = new CliProgress<SimulatorAgentProgress>(value =>
         {
             if (arguments.IsVerbose
@@ -662,6 +740,7 @@ internal static class AppGraphCommands
         SimulatorAgentRunResult? agentResult = null;
         var completionStatus = "failed";
         var runStopwatch = Stopwatch.StartNew();
+
         try
         {
             var request = ConfigureAppGraphAgentRequest(
@@ -689,8 +768,8 @@ internal static class AppGraphCommands
                     MaximumModelOutputTokens = ExploreMaximumModelOutputTokens,
                     OpenAiProtocol = ModelTransportOptions.ResolveModelTransport(arguments),
                     TargetDeviceIdentifier = arguments.GetOption("device-id")
-                                             ?? arguments.GetOption("device")
-                                             ?? launchedTarget?.DeviceIdentifier
+                        ?? arguments.GetOption("device")
+                        ?? launchedTarget?.DeviceIdentifier
                 },
                 preparation,
                 arguments.GetIntOption(
@@ -710,6 +789,7 @@ internal static class AppGraphCommands
         catch (InvalidOperationException exception)
         {
             output.WriteError("configuration", exception.Message, CliExitCodes.Configuration);
+
             return CliExitCodes.Configuration;
         }
         catch (OperationCanceledException)
@@ -720,15 +800,17 @@ internal static class AppGraphCommands
         finally
         {
             runStopwatch.Stop();
+
             var meteringOutcome = await AppExecutionService.CompleteAppExecutionRunAsync(
-                    runtime.WorkspaceTests.RunGateway,
-                    preparation,
-                    agentResult,
-                    completionStatus,
-                    runStopwatch.ElapsedMilliseconds,
-                    runtime.SimulatorAgent.PersistRunAudit)
+                runtime.WorkspaceTests.RunGateway,
+                preparation,
+                agentResult,
+                completionStatus,
+                runStopwatch.ElapsedMilliseconds,
+                runtime.SimulatorAgent.PersistRunAudit)
                 .ConfigureAwait(false);
             agentResult = meteringOutcome.RunResult;
+
             if (meteringOutcome.Warning is not null)
             {
                 output.WriteProgress($"[App Graph] [metering.warning] {meteringOutcome.Warning}");
@@ -736,16 +818,19 @@ internal static class AppGraphCommands
         }
 
         ArgumentNullException.ThrowIfNull(agentResult);
+
         if (agentResult.Status != SimulatorAgentRunStatus.Succeeded)
         {
             output.WriteError(
                 "app_graph_exploration_failed",
                 $"{agentResult.Message} Audit: {agentResult.AuditFilePath ?? agentResult.Audit.RunId}",
                 agentResult.Status == SimulatorAgentRunStatus.Cancelled ? CliExitCodes.Cancelled : CliExitCodes.Failure);
+
             return agentResult.Status == SimulatorAgentRunStatus.Cancelled ? CliExitCodes.Cancelled : CliExitCodes.Failure;
         }
 
         var completionSummary = agentResult.Instructions.FirstOrDefault()?.Summary;
+
         if (!AppGraphExplorationCompiler.TryCompile(completionSummary, out var candidate, out var compileError)
             || candidate is null)
         {
@@ -756,6 +841,7 @@ internal static class AppGraphCommands
                 "app_graph_exploration_invalid",
                 $"{compileError} The agent audit is available at {agentResult.AuditFilePath ?? agentResult.Audit.RunId}.",
                 CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
@@ -766,6 +852,7 @@ internal static class AppGraphCommands
         Guid? observationId = null;
         var saveMessage = "Exploration was not uploaded because --no-save was used.";
         var saveSucceeded = true;
+
         if (!arguments.HasFlag("no-save"))
         {
             if (cloudTarget.ShouldCreate)
@@ -786,12 +873,14 @@ internal static class AppGraphCommands
                             BuildDefaultGraphIntent(cloudTarget.RegisteredApp.Name, arguments.GetOption("focus")),
                             candidate.Definition),
                         cancellationToken).ConfigureAwait(false);
+
                 if (!createResult.IsSuccess || createResult.Detail is null)
                 {
                     output.WriteError(
                         "app_graph_create_failed",
                         $"{createResult.Message} The completed exploration remains available in audit {agentResult.AuditFilePath ?? agentResult.Audit.RunId}.",
                         CliExitCodes.Failure);
+
                     return CliExitCodes.Failure;
                 }
 
@@ -806,20 +895,21 @@ internal static class AppGraphCommands
                     "app_graph_not_resolved",
                     "The exploration completed, but no App Graph was available to receive its evidence.",
                     CliExitCodes.Failure);
+
                 return CliExitCodes.Failure;
             }
 
             var observationRequest = new CloudAppGraphObservationCreateRequest(
-                    graph.TeamId,
-                    graph.Id,
-                    snapshot.SessionId,
-                    snapshot.AppId,
-                    agentResult.Audit.RunId,
-                    candidate.Definition,
-                    evidence,
-                    candidate.Confidence,
-                    arguments.GetOption("notes"),
-                    createdGraph ? detail?.Version.Id : null);
+                graph.TeamId,
+                graph.Id,
+                snapshot.SessionId,
+                snapshot.AppId,
+                agentResult.Audit.RunId,
+                candidate.Definition,
+                evidence,
+                candidate.Confidence,
+                arguments.GetOption("notes"),
+                createdGraph ? detail?.Version.Id : null);
             var saveResult = storeMode == AppGraphStoreMode.Local
                 ? runtime.LocalAppGraphs.SaveObservation(observationRequest)
                 : await Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IAppGraphOperations>("Graph.CreateStore", [runtime]).CreateAppGraphObservationAsync(
@@ -829,7 +919,11 @@ internal static class AppGraphCommands
             saveMessage = createdGraph
                 ? $"Created draft App Graph '{graph.Name}' ({graph.Id:D}). {saveResult.Message}"
                 : saveResult.Message;
-            if (saveResult.IsSuccess) observationId = saveResult.ObservationId;
+
+            if (saveResult.IsSuccess)
+            {
+                observationId = saveResult.ObservationId;
+            }
         }
 
         var result = new AppGraphExploreOutput(
@@ -849,11 +943,17 @@ internal static class AppGraphCommands
             evidence,
             saveSucceeded,
             saveMessage);
+
         if (arguments.GetOption("result-file") is { } resultFile)
         {
             var resultPath = Path.GetFullPath(resultFile);
             var resultDirectory = Path.GetDirectoryName(resultPath);
-            if (!string.IsNullOrWhiteSpace(resultDirectory)) Directory.CreateDirectory(resultDirectory);
+
+            if (!string.IsNullOrWhiteSpace(resultDirectory))
+            {
+                Directory.CreateDirectory(resultDirectory);
+            }
+
             await File.WriteAllTextAsync(
                 resultPath,
                 JsonSerializer.Serialize(result, jsonOptions),
@@ -869,8 +969,9 @@ internal static class AppGraphCommands
             output.Write(
                 result,
                 () => $"Exploration {agentResult.Audit.RunId}: observed {candidate.DestinationCount} destinations and {candidate.ElementActionCount} element actions.\n"
-                      + candidate.Summary + Environment.NewLine + saveMessage);
+                    + candidate.Summary + Environment.NewLine + saveMessage);
         }
+
         return saveSucceeded ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -883,6 +984,7 @@ internal static class AppGraphCommands
         var registeredApp = runtime.LocalAppGraphs.ResolveApp(appId, appName);
         var graphReference = arguments.GetOption("graph")?.Trim();
         var requestedNewGraphName = arguments.GetOption("new-graph")?.Trim();
+
         if (!string.IsNullOrWhiteSpace(requestedNewGraphName))
         {
             return new AppGraphExploreCloudTarget(
@@ -894,33 +996,39 @@ internal static class AppGraphCommands
         }
 
         CloudAppGraphDetailResult detailResult;
+
         if (Guid.TryParse(graphReference, out var graphId) && graphId != Guid.Empty)
         {
             var belongsToApp = runtime.LocalAppGraphs.List(appId).Graphs.Any(graph => graph.Id == graphId);
+
             if (!belongsToApp)
             {
                 throw new CliUsageException(
                     $"Local App Graph '{graphId:D}' does not belong to app '{appId}'.");
             }
+
             detailResult = runtime.LocalAppGraphs.Get(graphId, arguments.HasFlag("published"));
         }
         else
         {
             var graphName = string.IsNullOrWhiteSpace(graphReference) ? "Default" : graphReference;
             detailResult = runtime.LocalAppGraphs.Find(appId, graphName, arguments.HasFlag("published"));
+
             if (!detailResult.IsSuccess)
             {
                 if (!string.IsNullOrWhiteSpace(graphReference))
                 {
                     throw new CliUsageException(
                         $"Local App Graph '{graphReference}' was not found for app '{appId}'. "
-                        + $"Use --new-graph '{graphReference}' to create it.");
+                            + $"Use --new-graph '{graphReference}' to create it.");
                 }
+
                 if (arguments.HasFlag("published"))
                 {
                     throw new CliUsageException(
                         $"App '{appId}' does not have a published local Default graph.");
                 }
+
                 return new AppGraphExploreCloudTarget(
                     registeredApp,
                     Graph: null,
@@ -934,6 +1042,7 @@ internal static class AppGraphCommands
         {
             throw new InvalidOperationException(detailResult.Message);
         }
+
         return new AppGraphExploreCloudTarget(
             registeredApp,
             detailResult.Detail.Graph,
@@ -941,24 +1050,28 @@ internal static class AppGraphCommands
             detailResult.Detail.Graph.Name,
             ShouldCreate: false);
     }
-internal static Task<AppGraphExploreCloudTarget> ResolveExploreCloudTargetAsync(
+
+    internal static Task<AppGraphExploreCloudTarget> ResolveExploreCloudTargetAsync(
         RuntimeCoordinator runtime,
         string appId,
         string appName,
         CliArguments arguments,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<AppGraphExploreCloudTarget>>("HostedGraphCommands.ResolveExploreCloudTargetAsync", [runtime, appId, appName, arguments, cancellationToken]);
-internal static Task<CloudRegisteredApp> ResolveRegisteredAppAsync(
+
+    internal static Task<CloudRegisteredApp> ResolveRegisteredAppAsync(
         RuntimeCoordinator runtime,
         Guid? requestedTeamId,
         string appId,
         string appName,
         bool allowRegistration,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<CloudRegisteredApp>>("HostedGraphCommands.ResolveRegisteredAppAsync", [runtime, requestedTeamId, appId, appName, allowRegistration, cancellationToken]);
-internal static Task<Guid> ResolveSingleCurrentTeamIdAsync(
+
+    internal static Task<Guid> ResolveSingleCurrentTeamIdAsync(
         RuntimeCoordinator runtime,
         string appId,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<Guid>>("HostedGraphCommands.ResolveSingleCurrentTeamIdAsync", [runtime, appId, cancellationToken]);
-internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
+
+    internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
         RuntimeCoordinator runtime,
         CloudAppGraphSummary graph,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<CloudRegisteredApp>>("HostedGraphCommands.LoadRegisteredGraphAppAsync", [runtime, graph, cancellationToken]);
@@ -1021,6 +1134,7 @@ internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(preparation);
+
         var maximumRoundTrips = Math.Min(
             requestedMaximumRoundTrips,
             preparation.MaximumRoundTrips ?? requestedMaximumRoundTrips);
@@ -1028,7 +1142,8 @@ internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
             ? maximumRoundTrips - 1
             : maximumRoundTrips;
         var reasoningConfiguration = preparation.ReasoningConfiguration
-                                     ?? AgentReasoningConfiguration.CreateDefault(request.Reasoning, request.Model);
+            ?? AgentReasoningConfiguration.CreateDefault(request.Reasoning, request.Model);
+
         return request with
         {
             Model = reasoningConfiguration.Model,
@@ -1059,7 +1174,8 @@ internal static Task<CloudRegisteredApp> LoadRegisteredGraphAppAsync(
                 graphId,
                 arguments.HasFlag("published"),
                 cancellationToken);
-internal static Task<int> SyncAsync(
+
+    internal static Task<int> SyncAsync(
         RuntimeCoordinator runtime,
         string direction,
         Guid graphId,
@@ -1074,35 +1190,41 @@ internal static Task<int> SyncAsync(
         var candidatesByEdge = detail.Bindings
             .GroupBy(static binding => binding.EdgeId, StringComparer.Ordinal)
             .ToDictionary(
-                static group => group.Key,
-                group => group.Select(binding => new JsonObject
-                {
-                    ["edgeId"] = binding.EdgeId,
-                    ["mechanism"] = binding.Mechanism,
-                    ["configuration"] = binding.Configuration.DeepClone(),
-                    ["preconditions"] = JsonSerializer.SerializeToNode(binding.Preconditions),
-                    ["postconditions"] = JsonSerializer.SerializeToNode(binding.Postconditions),
-                    ["confidence"] = binding.Confidence
-                }).ToArray(),
-                StringComparer.Ordinal);
+            static group => group.Key,
+            group => group.Select(binding => new JsonObject
+            {
+                ["edgeId"] = binding.EdgeId,
+                ["mechanism"] = binding.Mechanism,
+                ["configuration"] = binding.Configuration.DeepClone(),
+                ["preconditions"] = JsonSerializer.SerializeToNode(binding.Preconditions),
+                ["postconditions"] = JsonSerializer.SerializeToNode(binding.Postconditions),
+                ["confidence"] = binding.Confidence
+            }).ToArray(),
+            StringComparer.Ordinal);
+
         if (definition["edges"] is JsonArray edges)
         {
             foreach (var edge in edges.OfType<JsonObject>())
             {
                 var edgeId = edge["id"]?.GetValue<string>();
+
                 if (edgeId is null || !candidatesByEdge.TryGetValue(edgeId, out var candidates))
                 {
                     continue;
                 }
+
                 var edgeCandidates = new JsonArray();
+
                 foreach (var candidate in candidates)
                 {
                     edgeCandidates.Add(candidate.DeepClone());
                     allCandidates.Add(candidate.DeepClone());
                 }
+
                 edge["bindingCandidates"] = edgeCandidates;
             }
         }
+
         return new AppGraphSyncPayload(definition, allCandidates);
     }
 
@@ -1130,6 +1252,7 @@ internal static Task<int> SyncAsync(
         if (string.Equals(binding.Mechanism, "app_tool", StringComparison.Ordinal))
         {
             var toolId = configuration["toolId"]?.GetValue<string>();
+
             if (string.IsNullOrWhiteSpace(toolId))
             {
                 return AppGraphBindingExecution.Failure(request, "The app_tool binding does not declare configuration.toolId.");
@@ -1149,14 +1272,15 @@ internal static Task<int> SyncAsync(
                 cancellationToken).ConfigureAwait(false);
             var responseJson = JsonSerializer.SerializeToNode(response, jsonOptions) as JsonObject ?? new JsonObject();
             var isSuccess = response.Success
-                            && response.Envelope is not null
-                            && !string.Equals(response.Envelope.Type, "tool.error", StringComparison.Ordinal)
-                            && response.Envelope.Payload?["success"]?.GetValue<bool>() != false;
+                && response.Envelope is not null
+                && !string.Equals(response.Envelope.Type, "tool.error", StringComparison.Ordinal)
+                && response.Envelope.Payload?["success"]?.GetValue<bool>() != false;
             var evidence = new JsonObject
             {
                 ["after"] = response.Envelope?.Payload?["after"]?.DeepClone(),
                 ["protocolType"] = response.Envelope?.Type
             };
+
             return isSuccess
                 ? AppGraphBindingExecution.Success(request, responseJson, evidence, response.Message)
                 : AppGraphBindingExecution.Failure(request, response.Message, responseJson, evidence);
@@ -1195,6 +1319,7 @@ internal static Task<int> SyncAsync(
                         }).TrimEnd()
             }).TrimEnd();
         output.WriteProgress($"[App Graph] {step.Edge.Id}: {binding.Mechanism}");
+
         var progress = new CliProgress<SimulatorAgentProgress>(value =>
         {
             if (arguments.IsVerbose || value.Stage is SimulatorAgentProgressStage.CallingTool or SimulatorAgentProgressStage.ToolCompleted)
@@ -1206,28 +1331,32 @@ internal static Task<int> SyncAsync(
         var model = ReasoningOptions.ResolveModelOverride(arguments);
         var workspacePath = Path.Combine(runtime.BaseFolderPath, "app-graph-executions");
         var preparation = await PrepareAppGraphAgentRunAsync(
-                runtime.WorkspaceTests.RunGateway,
-                appId,
-                model,
-                workspacePath,
-                teamId,
-                "app-graph-run",
-                "App Graph run",
-                cancellationToken,
-                reasoning)
+            runtime.WorkspaceTests.RunGateway,
+            appId,
+            model,
+            workspacePath,
+            teamId,
+            "app-graph-run",
+            "App Graph run",
+            cancellationToken,
+            reasoning)
             .ConfigureAwait(false);
+
         if (preparation.HasResolvedTeam)
         {
             output.WriteProgress(
                 $"[App Graph] [organisation.selected] Hosted agent execution resolved to '{preparation.TeamName}' ({preparation.TeamId:D}).");
         }
+
         if (!preparation.IsSuccess)
         {
             return AppGraphBindingExecution.Failure(request, preparation.Message);
         }
+
         SimulatorAgentRunResult? agentResult = null;
         var completionStatus = "failed";
         var runStopwatch = Stopwatch.StartNew();
+
         try
         {
             var agentRequest = ConfigureAppGraphAgentRequest(
@@ -1268,15 +1397,17 @@ internal static Task<int> SyncAsync(
         finally
         {
             runStopwatch.Stop();
+
             var meteringOutcome = await AppExecutionService.CompleteAppExecutionRunAsync(
-                    runtime.WorkspaceTests.RunGateway,
-                    preparation,
-                    agentResult,
-                    completionStatus,
-                    runStopwatch.ElapsedMilliseconds,
-                    runtime.SimulatorAgent.PersistRunAudit)
+                runtime.WorkspaceTests.RunGateway,
+                preparation,
+                agentResult,
+                completionStatus,
+                runStopwatch.ElapsedMilliseconds,
+                runtime.SimulatorAgent.PersistRunAudit)
                 .ConfigureAwait(false);
             agentResult = meteringOutcome.RunResult;
+
             if (meteringOutcome.Warning is not null)
             {
                 output.WriteProgress($"[App Graph] [metering.warning] {meteringOutcome.Warning}");
@@ -1284,6 +1415,7 @@ internal static Task<int> SyncAsync(
         }
 
         ArgumentNullException.ThrowIfNull(agentResult);
+
         var agentResponse = new JsonObject
         {
             ["status"] = agentResult.Status.ToString().ToLowerInvariant(),
@@ -1299,6 +1431,7 @@ internal static Task<int> SyncAsync(
             ["failedAnsightToolCalls"] = agentResult.Audit.FailedAnsightToolCallCount,
             ["summary"] = agentResult.Instructions.FirstOrDefault()?.Summary
         };
+
         return agentResult.Status == SimulatorAgentRunStatus.Succeeded
             ? AppGraphBindingExecution.Success(request, agentResponse, agentEvidence, agentResult.Message)
             : AppGraphBindingExecution.Failure(request, agentResult.Message, agentResponse, agentEvidence);
@@ -1312,30 +1445,41 @@ internal static Task<int> SyncAsync(
         if (node is JsonObject sourceObject)
         {
             var result = new JsonObject();
+
             foreach (var property in sourceObject)
             {
                 result[property.Key] = ExpandTemplates(property.Value, parameters);
             }
+
             return result;
         }
+
         if (node is JsonArray sourceArray)
         {
             var result = new JsonArray();
-            foreach (var item in sourceArray) result.Add(ExpandTemplates(item, parameters));
+
+            foreach (var item in sourceArray)
+            {
+                result.Add(ExpandTemplates(item, parameters));
+            }
+
             return result;
         }
+
         if (node is JsonValue value && value.TryGetValue<string>(out var text))
         {
             foreach (var parameter in parameters)
             {
                 var replacement = parameter.Value is JsonValue parameterValue
-                                  && parameterValue.TryGetValue<string>(out var stringValue)
+                    && parameterValue.TryGetValue<string>(out var stringValue)
                     ? stringValue
                     : parameter.Value?.ToJsonString(jsonOptions) ?? string.Empty;
                 text = text.Replace($"{{{{{parameter.Key}}}}}", replacement, StringComparison.Ordinal);
             }
+
             return JsonValue.Create(text);
         }
+
         return node?.DeepClone();
     }
 
@@ -1343,23 +1487,35 @@ internal static Task<int> SyncAsync(
     {
         var inline = arguments.GetOption("parameters");
         var file = arguments.GetOption("parameters-file");
+
         if (inline is not null && file is not null)
         {
             throw new CliUsageException("Use only one of --parameters or --parameters-file.");
         }
 
         var source = inline;
+
         if (file is not null)
         {
             var path = Path.GetFullPath(file);
-            if (!File.Exists(path)) throw new CliUsageException($"Parameters file '{path}' was not found.");
+
+            if (!File.Exists(path))
+            {
+                throw new CliUsageException($"Parameters file '{path}' was not found.");
+            }
+
             source = File.ReadAllText(path);
         }
-        if (string.IsNullOrWhiteSpace(source)) return new JsonObject();
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return new JsonObject();
+        }
+
         try
         {
             return JsonNode.Parse(source) as JsonObject
-                   ?? throw new CliUsageException("App Graph parameters must be a JSON object.");
+                ?? throw new CliUsageException("App Graph parameters must be a JSON object.");
         }
         catch (JsonException exception)
         {
@@ -1370,6 +1526,7 @@ internal static Task<int> SyncAsync(
     internal static int WriteDetailFailure(string message, CliOutput output)
     {
         output.WriteError("app_graph_not_found", message, CliExitCodes.Failure);
+
         return CliExitCodes.Failure;
     }
 
@@ -1381,6 +1538,7 @@ internal static Task<int> SyncAsync(
     internal static Guid ParseRequiredGuidOption(CliArguments arguments, string optionName, string label)
     {
         var source = arguments.RequireOption(optionName);
+
         return Guid.TryParse(source, out var value) && value != Guid.Empty
             ? value
             : throw new CliUsageException($"--{optionName} must be a non-empty {label} UUID.");
@@ -1391,14 +1549,15 @@ internal static Task<int> SyncAsync(
         if (plan.Errors.Count > 0)
         {
             return "Unable to compile the App Graph:" + Environment.NewLine
-                   + string.Join(Environment.NewLine, plan.Errors.Select(error => $"- {error}"));
+                + string.Join(Environment.NewLine, plan.Errors.Select(error => $"- {error}"));
         }
+
         return $"{detail.Graph.Name} · version {detail.Version.VersionNumber}\n"
-               + string.Join(
-                   Environment.NewLine,
-                   plan.Steps.Select((step, index) =>
-                       $"{index + 1}. {step.From.Name} --{ReadSemanticMeaning(step.Edge)}--> {step.To.Name} "
-                       + $"[{string.Join(" -> ", step.Bindings.Select(binding => binding.Mechanism))}]"));
+            + string.Join(
+                Environment.NewLine,
+                plan.Steps.Select((step, index) =>
+                               $"{index + 1}. {step.From.Name} --{ReadSemanticMeaning(step.Edge)}--> {step.To.Name} "
+                                   + $"[{string.Join(" -> ", step.Bindings.Select(binding => binding.Mechanism))}]"));
     }
 
     internal static string ReadSemanticMeaning(AppGraphDocumentEdge edge)
@@ -1472,180 +1631,4 @@ internal static Task<int> SyncAsync(
              ansight cloud app-graph list --team-id <uuid>
              ansight cloud app-graph show <graph-id> [--published]
            """;
-}
-
-internal sealed record AppGraphBindingExecution(
-    bool IsSuccess,
-    string Message,
-    JsonObject Request,
-    JsonObject Response,
-    JsonObject Evidence)
-{
-    public static AppGraphBindingExecution Success(
-        JsonObject request,
-        JsonObject response,
-        JsonObject evidence,
-        string message)
-        => new(true, message, request, response, evidence);
-
-    public static AppGraphBindingExecution Failure(
-        JsonObject request,
-        string message,
-        JsonObject? response = null,
-        JsonObject? evidence = null)
-        => new(false, message, request, response ?? new JsonObject(), evidence ?? new JsonObject());
-}
-
-internal sealed record AppGraphExecutedStep(
-    int StepIndex,
-    string EdgeId,
-    Guid BindingId,
-    string Mechanism,
-    string Status,
-    string Message);
-
-internal sealed record AppGraphListOutput(string Schema, CloudAppGraphQueryResult Result);
-
-internal sealed record AppGraphDetailOutput(string Schema, CloudAppGraphDetailResult Result);
-
-internal sealed record AppGraphPlanOutput(
-    string Schema,
-    Guid AppGraphId,
-    Guid AppGraphVersionId,
-    AppGraphPlan Plan);
-
-internal sealed record AppGraphValidationOutput(
-    string Schema,
-    Guid AppGraphId,
-    Guid AppGraphVersionId,
-    AppGraphValidation Validation);
-
-internal sealed record AppGraphRunOutput(
-    string Schema,
-    Guid RunId,
-    Guid AppGraphId,
-    Guid AppGraphVersionId,
-    bool IsSuccess,
-    string Message,
-    IReadOnlyList<AppGraphExecutedStep> Steps);
-
-internal sealed record AppGraphSyncOutput(
-    string Schema,
-    string Direction,
-    Guid LocalGraphId,
-    Guid RemoteGraphId,
-    Guid RemoteTeamId,
-    Guid? RemoteVersionId,
-    string Message);
-
-internal sealed record AppGraphSyncPayload(
-    JsonObject Definition,
-    JsonArray BindingCandidates);
-
-internal sealed record AppGraphExploreOutput(
-    string Schema,
-    Guid? AppGraphId,
-    Guid? AppGraphVersionId,
-    bool CreatedGraph,
-    string SessionId,
-    string AppId,
-    string AuditRunId,
-    Guid? ObservationId,
-    int DestinationCount,
-    int ElementActionCount,
-    decimal Confidence,
-    string Summary,
-    JsonObject CandidateDefinition,
-    JsonObject Evidence,
-    bool WasSaved,
-    string SaveMessage);
-
-internal sealed record AppGraphExploreCloudTarget(
-    CloudRegisteredApp RegisteredApp,
-    CloudAppGraphSummary? Graph,
-    CloudAppGraphDetail? Detail,
-    string GraphName,
-    bool ShouldCreate);
-
-internal sealed record AppGraphExploreLiveTarget(
-    string AppId,
-    AppSessionSnapshot Session,
-    bool UsedLegacySessionTarget);
-
-internal static class AppGraphExploreTargetResolver
-{
-    public static string ResolveAppIdForLaunch(
-        string requestedTarget,
-        IReadOnlyList<AppSessionSnapshot> sessions)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(requestedTarget);
-        ArgumentNullException.ThrowIfNull(sessions);
-        var normalizedTarget = requestedTarget.Trim();
-        return sessions
-                   .Where(session => session.SessionId.Equals(normalizedTarget, StringComparison.Ordinal))
-                   .OrderByDescending(static session => session.LastUpdatedUtc)
-                   .Select(static session => session.AppId)
-                   .FirstOrDefault()
-               ?? normalizedTarget;
-    }
-
-    public static AppGraphExploreLiveTarget Resolve(
-        string requestedAppId,
-        string? requestedSessionId,
-        IReadOnlyList<AppSessionSnapshot> sessions,
-        IReadOnlyList<string> connectedSessionIds)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(requestedAppId);
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(connectedSessionIds);
-        var normalizedTarget = requestedAppId.Trim();
-        var connected = connectedSessionIds.ToHashSet(StringComparer.Ordinal);
-        var liveSessions = sessions
-            .Where(session => connected.Contains(session.SessionId))
-            .ToArray();
-
-        if (!string.IsNullOrWhiteSpace(requestedSessionId))
-        {
-            var normalizedSessionId = requestedSessionId.Trim();
-            var selected = liveSessions.FirstOrDefault(session =>
-                session.SessionId.Equals(normalizedSessionId, StringComparison.Ordinal));
-            if (selected is null)
-            {
-                throw new CliHostUnavailableException(
-                    $"Session '{normalizedSessionId}' is not currently linked to the Ansight host.");
-            }
-            if (!selected.AppId.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new CliUsageException(
-                    $"Session '{normalizedSessionId}' belongs to app '{selected.AppId}', not targeted app '{normalizedTarget}'.");
-            }
-
-            return new AppGraphExploreLiveTarget(selected.AppId, selected, UsedLegacySessionTarget: false);
-        }
-
-        var legacySession = liveSessions.FirstOrDefault(session =>
-            session.SessionId.Equals(normalizedTarget, StringComparison.Ordinal));
-        if (legacySession is not null)
-        {
-            return new AppGraphExploreLiveTarget(
-                legacySession.AppId,
-                legacySession,
-                UsedLegacySessionTarget: true);
-        }
-
-        var selectedForApp = liveSessions
-            .Where(session => session.AppId.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(static session => session.LastUpdatedUtc)
-            .FirstOrDefault();
-        if (selectedForApp is null)
-        {
-            throw new CliHostUnavailableException(
-                $"No live session is linked to app '{normalizedTarget}'. Run interactively to launch it, pass --launch, or open the app yourself and retry after the Ansight connection notification.");
-        }
-
-        return new AppGraphExploreLiveTarget(
-            selectedForApp.AppId,
-            selectedForApp,
-            UsedLegacySessionTarget: false);
-    }
 }

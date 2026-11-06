@@ -13,17 +13,23 @@ public sealed class HostUiInputRouterTests
         var sessionId = state.CreateSession("test.app", "Input", IPAddress.Loopback, null, null);
         var router = new UiInputRouter();
         router.ConfigureRecording(state);
+
         using (router.BeginEvidenceScope("outer"))
         {
             using (router.BeginEvidenceScope("inner"))
+            {
                 await router.RecordInputAsync(sessionId, "tap", () => Task.FromResult(
                     UiInputResult.Failure("Private backend text")), .5, .5);
+            }
+
             await Assert.ThrowsAsync<OperationCanceledException>(() => router.RecordInputAsync(sessionId,
                 "keyboard.press", () => Task.FromException<UiInputResult>(new OperationCanceledException())));
         }
+
         await router.RecordInputAsync(sessionId, "tap", () => Task.FromResult(
             new UiInputResult(true, "test", "Delivered")), .2, .3);
         Assert.True(state.TryGetSessionSnapshot(sessionId, out var snapshot));
+
         var actions = snapshot!.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
         Assert.Equal(new[] { "failed", "interrupted", "succeeded" }, actions.Select(action => action.Status));
         Assert.Equal(new string?[] { "inner", "outer", null }, actions.Select(action => action.EvidenceActionId));
@@ -80,6 +86,7 @@ public sealed class HostUiInputRouterTests
         var router = new UiInputRouter();
         var driver = new RecordingAccessibilityDriver();
         router.ConfigureAccessibility(driver);
+
         var request = new UiAccessibilityRequest(
             "session-1",
             "device-1",
@@ -97,6 +104,7 @@ public sealed class HostUiInputRouterTests
         var router = new UiInputRouter();
         var driver = new RecordingPreflightAccessibilityDriver();
         router.ConfigureAccessibility(driver);
+
         var accessibilityRequest = new UiAccessibilityRequest(
             "session-1",
             "device-1",
@@ -108,6 +116,7 @@ public sealed class HostUiInputRouterTests
 
         await router.CaptureAccessibilityAsync(accessibilityRequest, CancellationToken.None);
         await router.CaptureAccessibilityAsync(accessibilityRequest, CancellationToken.None);
+
         var result = await router.PrepareForInputAsync(preflightRequest, CancellationToken.None);
         await router.CaptureAccessibilityAsync(accessibilityRequest, CancellationToken.None);
 
@@ -125,6 +134,7 @@ public sealed class HostUiInputRouterTests
             CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+
             return Task.FromResult(new UiAccessibilityResult(
                 true,
                 "test-accessibility",
@@ -138,7 +148,6 @@ public sealed class HostUiInputRouterTests
         IUiInputPreflightDriver
     {
         public int CaptureCount { get; private set; }
-
         public UiInputPreflightRequest? LastPreflightRequest { get; private set; }
 
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(
@@ -146,6 +155,7 @@ public sealed class HostUiInputRouterTests
             CancellationToken cancellationToken = default)
         {
             CaptureCount++;
+
             return Task.FromResult(new UiAccessibilityResult(
                 true,
                 "test-accessibility",
@@ -158,6 +168,7 @@ public sealed class HostUiInputRouterTests
             CancellationToken cancellationToken = default)
         {
             LastPreflightRequest = request;
+
             return Task.FromResult(new UiInputResult(
                 true,
                 "test-preflight",

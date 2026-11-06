@@ -34,6 +34,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         return RunAsync(
             ["-s", deviceSerial, "shell", "cmd", "statusbar", "collapse"],
             cancellationToken);
@@ -44,6 +45,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         var result = await RunAsync(
             [
                 "-s",
@@ -52,8 +54,9 @@ public sealed partial class AdbClient
                 "dumpsys input_method | grep 'mInputShown='"
             ],
             cancellationToken).ConfigureAwait(false);
+
         return result.IsSuccess
-               && TryParseSoftwareKeyboardVisibility(result.StandardOutput, out var isVisible)
+            && TryParseSoftwareKeyboardVisibility(result.StandardOutput, out var isVisible)
             ? isVisible
             : null;
     }
@@ -63,6 +66,7 @@ public sealed partial class AdbClient
         out bool isVisible)
     {
         const string statePrefix = "mInputShown=";
+
         // Android versions can put this field beside other fields on the same line.
         foreach (var field in WhitespacePattern().Split(output))
         {
@@ -74,18 +78,21 @@ public sealed partial class AdbClient
         }
 
         isVisible = false;
+
         return false;
     }
 
     public async Task<IReadOnlyList<AdbDevice>> GetDevicesAsync(CancellationToken cancellationToken = default)
     {
         var result = await RunAsync(["devices", "-l"], cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("enumerate devices", result));
         }
 
         var devices = new List<AdbDevice>();
+
         foreach (var line in result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (line.StartsWith("List of devices", StringComparison.OrdinalIgnoreCase)
@@ -95,6 +102,7 @@ public sealed partial class AdbClient
             }
 
             var parts = WhitespacePattern().Split(line.Trim());
+
             if (parts.Length < 2)
             {
                 continue;
@@ -122,9 +130,11 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         var result = await RunAsync(
             ["-s", deviceSerial, "emu", "avd", "name"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             return null;
@@ -134,8 +144,8 @@ public sealed partial class AdbClient
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(static line =>
                 !string.Equals(line, "OK", StringComparison.OrdinalIgnoreCase)
-                && !line.StartsWith("KO", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(line, "unknown", StringComparison.OrdinalIgnoreCase));
+                    && !line.StartsWith("KO", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(line, "unknown", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<AndroidDeviceFormFactor> GetDeviceFormFactorAsync(
@@ -143,6 +153,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         var characteristicsResult = await RunAsync(
             ["-s", deviceSerial, "shell", "getprop", "ro.build.characteristics"],
             cancellationToken).ConfigureAwait(false);
@@ -152,6 +163,7 @@ public sealed partial class AdbClient
         var densityResult = await RunAsync(
             ["-s", deviceSerial, "shell", "wm", "density"],
             cancellationToken).ConfigureAwait(false);
+
         return FormFactorDetector.FromConnectedDevice(
             characteristicsResult.IsSuccess ? characteristicsResult.StandardOutput : string.Empty,
             sizeResult.IsSuccess ? sizeResult.StandardOutput : string.Empty,
@@ -165,9 +177,11 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var result = await RunAsync(
             ["-s", deviceSerial, "shell", "pidof", packageIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.StandardOutput))
         {
             return Array.Empty<int>();
@@ -189,9 +203,11 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var pathResult = await RunAsync(
             ["-s", deviceSerial, "shell", "pm", "path", packageIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!pathResult.IsSuccess)
         {
             return null;
@@ -201,7 +217,8 @@ public sealed partial class AdbClient
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(static line => line.StartsWith("package:", StringComparison.Ordinal))?
             ["package:".Length..]
-            .Trim();
+                .Trim();
+
         if (string.IsNullOrWhiteSpace(packagePath))
         {
             return null;
@@ -213,6 +230,7 @@ public sealed partial class AdbClient
         var timeZoneResult = await RunAsync(
             ["-s", deviceSerial, "shell", "getprop", "persist.sys.timezone"],
             cancellationToken).ConfigureAwait(false);
+
         return ParseInstalledApplication(
             packageIdentifier,
             packagePath,
@@ -229,13 +247,14 @@ public sealed partial class AdbClient
         var version = ReadPackageValue(packageDump, "versionName");
         var buildVersion = ReadPackageValue(packageDump, "versionCode")?
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
+                .FirstOrDefault();
         var installedAtUtc = ParseDeviceTimestamp(
             ReadPackageValue(packageDump, "firstInstallTime"),
             timeZoneId);
         var lastUpdatedAtUtc = ParseDeviceTimestamp(
             ReadPackageValue(packageDump, "lastUpdateTime"),
             timeZoneId);
+
         return new AdbInstalledApplication(
             packageIdentifier,
             packagePath,
@@ -248,21 +267,22 @@ public sealed partial class AdbClient
     private static string? ReadPackageValue(string output, string key)
     {
         var prefix = key + "=";
+
         return output
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(line => line.StartsWith(prefix, StringComparison.Ordinal))?
             [prefix.Length..]
-            .Trim();
+                .Trim();
     }
 
     private static DateTimeOffset? ParseDeviceTimestamp(string? value, string timeZoneId)
     {
         if (!DateTime.TryParseExact(
-                value,
-                "yyyy-MM-dd HH:mm:ss",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var localTime)
+            value,
+            "yyyy-MM-dd HH:mm:ss",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var localTime)
             || string.IsNullOrWhiteSpace(timeZoneId))
         {
             return null;
@@ -272,6 +292,7 @@ public sealed partial class AdbClient
         {
             var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId.Trim());
             var unspecifiedTime = DateTime.SpecifyKind(localTime, DateTimeKind.Unspecified);
+
             return new DateTimeOffset(unspecifiedTime, timeZone.GetUtcOffset(unspecifiedTime))
                 .ToUniversalTime();
         }
@@ -292,9 +313,11 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var pathResult = await RunAsync(
             ["-s", deviceSerial, "shell", "pm", "path", packageIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!pathResult.IsSuccess)
         {
             return null;
@@ -308,7 +331,8 @@ public sealed partial class AdbClient
             .ToArray();
         var basePackagePath = packagePaths.FirstOrDefault(static path =>
                                   string.Equals(Path.GetFileName(path), "base.apk", StringComparison.OrdinalIgnoreCase))
-                              ?? (packagePaths.Length == 1 ? packagePaths[0] : null);
+            ?? (packagePaths.Length == 1 ? packagePaths[0] : null);
+
         if (basePackagePath is null)
         {
             return null;
@@ -317,6 +341,7 @@ public sealed partial class AdbClient
         var checksumResult = await RunAsync(
             ["-s", deviceSerial, "shell", "sha256sum", basePackagePath],
             cancellationToken).ConfigureAwait(false);
+
         if (!checksumResult.IsSuccess)
         {
             return null;
@@ -325,6 +350,7 @@ public sealed partial class AdbClient
         var checksum = checksumResult.StandardOutput
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault();
+
         return checksum is { Length: 64 } && checksum.All(Uri.IsHexDigit)
             ? checksum.ToLowerInvariant()
             : null;
@@ -338,6 +364,7 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidateCoordinate(latitude, longitude);
+
         var result = await RunAsync(
             [
                 "-s",
@@ -349,6 +376,7 @@ public sealed partial class AdbClient
                 latitude.ToString("R", CultureInfo.InvariantCulture)
             ],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("set the emulator location", result));
@@ -360,9 +388,11 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         var result = await RunAsync(
             ["-s", deviceSerial, "emu", "sensor", "get", "acceleration"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || result.StandardOutput.Contains("KO:", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(BuildFailureMessage("read emulator acceleration", result));
@@ -371,8 +401,8 @@ public sealed partial class AdbClient
         var line = result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(static value => value.StartsWith("acceleration =", StringComparison.OrdinalIgnoreCase));
         var components = line?.Split('=', 2)[1].Trim().Split(':');
-        if (components is not { Length: 3 }
-            || !double.TryParse(components[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+
+        if (components is not { Length: 3 } || !double.TryParse(components[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
             || !double.TryParse(components[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
             || !double.TryParse(components[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var z)
             || !double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(z))
@@ -389,6 +419,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         if (!double.IsFinite(acceleration.X) || !double.IsFinite(acceleration.Y) || !double.IsFinite(acceleration.Z))
         {
             throw new ArgumentOutOfRangeException(nameof(acceleration), "Acceleration components must be finite numbers.");
@@ -401,6 +432,7 @@ public sealed partial class AdbClient
         var result = await RunAsync(
             ["-s", deviceSerial, "emu", "sensor", "set", "acceleration", value],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || result.StandardOutput.Contains("KO:", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(BuildFailureMessage("set emulator acceleration", result));
@@ -414,6 +446,7 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var component = await ResolveLaunchComponentAsync(
             deviceSerial, packageIdentifier, cancellationToken).ConfigureAwait(false);
         var result = await RunAsync(
@@ -421,6 +454,7 @@ public sealed partial class AdbClient
                 "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER",
                 "-n", component],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || ReportsActivityStartFailure(result))
         {
             throw new InvalidOperationException(BuildFailureMessage("launch the Android app", result));
@@ -434,6 +468,7 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var launchComponent = await ResolveLaunchComponentAsync(
             deviceSerial,
             packageIdentifier,
@@ -455,6 +490,7 @@ public sealed partial class AdbClient
                 launchComponent
             ],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || ReportsActivityStartFailure(result))
         {
             throw new InvalidOperationException(BuildFailureMessage("launch the Android app for profiling", result));
@@ -470,6 +506,7 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         if (string.IsNullOrWhiteSpace(intentStringExtraName)
             || !SafeIdentifierPattern().IsMatch(intentStringExtraName))
         {
@@ -477,6 +514,7 @@ public sealed partial class AdbClient
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(intentStringExtraValue);
+
         var launchComponent = await ResolveLaunchComponentAsync(
             deviceSerial,
             packageIdentifier,
@@ -492,6 +530,7 @@ public sealed partial class AdbClient
             ["-s", deviceSerial, "shell"],
             command + "\n",
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || ReportsActivityStartFailure(result))
         {
             throw new InvalidOperationException(BuildFailureMessage("launch the Android app", result));
@@ -505,7 +544,7 @@ public sealed partial class AdbClient
     {
         var result = await RunAsync(
             [
-                "-s",
+                    "-s",
                 deviceSerial,
                 "shell",
                 "cmd",
@@ -519,8 +558,9 @@ public sealed partial class AdbClient
                 "android.intent.category.LAUNCHER",
                 "-p",
                 packageIdentifier
-            ],
+                ],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("resolve the Android app launcher", result));
@@ -529,6 +569,7 @@ public sealed partial class AdbClient
         var launchComponents = result.StandardOutput.Split(
             '\n',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         if (launchComponents.Length != 1
             || !IsValidLaunchComponent(launchComponents[0], packageIdentifier))
         {
@@ -546,7 +587,9 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+
         var fullPackagePath = Path.GetFullPath(packagePath);
+
         if (!File.Exists(fullPackagePath)
             || !Path.GetExtension(fullPackagePath).Equals(".apk", StringComparison.OrdinalIgnoreCase))
         {
@@ -556,6 +599,7 @@ public sealed partial class AdbClient
         var result = await RunAsync(
             ["-s", deviceSerial, "install", "-r", fullPackagePath],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess
             || !result.StandardOutput.Contains("Success", StringComparison.OrdinalIgnoreCase))
         {
@@ -570,9 +614,11 @@ public sealed partial class AdbClient
     {
         ValidateDeviceSerial(deviceSerial);
         ValidatePackageIdentifier(packageIdentifier);
+
         var result = await RunAsync(
             ["-s", deviceSerial, "shell", "am", "force-stop", packageIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("terminate the Android app", result));
@@ -585,12 +631,14 @@ public sealed partial class AdbClient
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateDeviceSerial(request.DeviceSerial);
+
         if (request.ProcessId <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(request), "A positive process ID is required.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var arguments = new List<string>
         {
             "-s",
@@ -606,8 +654,7 @@ public sealed partial class AdbClient
             "usec",
             $"--pid={request.ProcessId}"
         };
-        var buffers = request.Buffers is { Count: > 0 }
-            ? request.Buffers
+        var buffers = request.Buffers is { Count: > 0 } ? request.Buffers
             : ["main", "system", "crash"];
         arguments.Add("-b");
         arguments.Add(string.Join(',', buffers.Where(IsValidBufferName)));
@@ -620,6 +667,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ValidateDeviceSerial(deviceSerial);
+
         await using var process = StartProcess(
             ["-s", deviceSerial, "exec-out", "screencap", "-p"]);
         process.StandardInput.Dispose();
@@ -632,6 +680,7 @@ public sealed partial class AdbClient
             var errorTask = errorReader.ReadToEndAsync(cancellationToken);
             var exitCode = await process.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
             await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+
             if (exitCode != 0 || output.Length == 0)
             {
                 var detail = errorTask.Result.Trim();
@@ -661,6 +710,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(standardInput);
+
         return await RunProcessAsync(arguments, standardInput, cancellationToken).ConfigureAwait(false);
     }
 
@@ -670,6 +720,7 @@ public sealed partial class AdbClient
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         await using var process = StartProcess(arguments);
 
         try
@@ -678,6 +729,7 @@ public sealed partial class AdbClient
             using var errorReader = new StreamReader(process.StandardError);
             var outputTask = outputReader.ReadToEndAsync(cancellationToken);
             var errorTask = errorReader.ReadToEndAsync(cancellationToken);
+
             if (standardInput is null)
             {
                 process.StandardInput.Dispose();
@@ -689,8 +741,10 @@ public sealed partial class AdbClient
                     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 await inputWriter.WriteAsync(standardInput.AsMemory(), cancellationToken).ConfigureAwait(false);
             }
+
             var exitCode = await process.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
             await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+
             return new AdbCommandResult(exitCode, outputTask.Result, errorTask.Result);
         }
         catch (OperationCanceledException)
@@ -703,6 +757,7 @@ public sealed partial class AdbClient
     public IAdbProcess StartProcess(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         return processLauncher.Start(new AdbProcessStartRequest(AdbPath, arguments));
     }
 
@@ -745,17 +800,18 @@ public sealed partial class AdbClient
 
     private static bool ReportsActivityStartFailure(AdbCommandResult result)
         => result.StandardOutput.Contains("Error:", StringComparison.OrdinalIgnoreCase)
-           || result.StandardOutput.Contains("unable to resolve Intent", StringComparison.OrdinalIgnoreCase)
-           || result.StandardError.Contains("Error:", StringComparison.OrdinalIgnoreCase)
-           || result.StandardError.Contains("unable to resolve Intent", StringComparison.OrdinalIgnoreCase);
+            || result.StandardOutput.Contains("unable to resolve Intent", StringComparison.OrdinalIgnoreCase)
+            || result.StandardError.Contains("Error:", StringComparison.OrdinalIgnoreCase)
+            || result.StandardError.Contains("unable to resolve Intent", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsValidLaunchComponent(string value, string packageIdentifier)
     {
         var separatorIndex = value.IndexOf('/');
+
         return separatorIndex == packageIdentifier.Length
-               && value.StartsWith(packageIdentifier, StringComparison.Ordinal)
-               && separatorIndex < value.Length - 1
-               && SafeActivityNamePattern().IsMatch(value[(separatorIndex + 1)..]);
+            && value.StartsWith(packageIdentifier, StringComparison.Ordinal)
+            && separatorIndex < value.Length - 1
+            && SafeActivityNamePattern().IsMatch(value[(separatorIndex + 1)..]);
     }
 
     private static string QuoteShellArgument(string value)
@@ -766,6 +822,7 @@ public sealed partial class AdbClient
         var detail = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput.Trim()
             : result.StandardError.Trim();
+
         return string.IsNullOrWhiteSpace(detail)
             ? $"ADB failed to {operation} with exit code {result.ExitCode}."
             : $"ADB failed to {operation}: {detail}";

@@ -33,6 +33,7 @@ internal sealed class VisualTreeTypeRegistry
                     : string.Empty)
                 .ToArray()
             : [];
+
         return new VisualTreeTypeRegistry(
             types,
             ReadFlag(payload, "visible", fallback: 1),
@@ -48,6 +49,7 @@ internal sealed class VisualTreeTypeRegistry
     {
         typeRegistry = null;
         root = payload["root"] as JsonObject;
+
         if (root is null
             || payload["types"] is not JsonArray typeArray
             || typeArray.Count == 0
@@ -59,6 +61,7 @@ internal sealed class VisualTreeTypeRegistry
         }
 
         var types = new List<string>(typeArray.Count);
+
         foreach (var type in typeArray)
         {
             if (type is not JsonValue value
@@ -73,6 +76,7 @@ internal sealed class VisualTreeTypeRegistry
 
         var pending = new Stack<JsonObject>();
         pending.Push(root);
+
         while (pending.TryPop(out var node))
         {
             if (node["typeId"] is not JsonValue typeIdValue
@@ -114,6 +118,7 @@ internal sealed class VisualTreeTypeRegistry
             ReadFlag(payload, "enabled", fallback: 2),
             ReadFlag(payload, "currentPage", fallback: 4),
             ReadFlag(payload, "activePage", fallback: 8));
+
         return true;
     }
 
@@ -133,6 +138,7 @@ internal sealed class VisualTreeTypeRegistry
             "activePage" => activePageFlag,
             _ => 0
         };
+
         return flag == 0 ? null : (flags & flag) == flag;
     }
 
@@ -152,8 +158,8 @@ internal sealed class VisualTreeTypeRegistry
     private static int ReadFlag(JsonObject payload, string propertyName, int fallback)
     {
         return payload["flagBits"] is JsonObject flagBits
-               && flagBits[propertyName] is JsonValue value
-               && value.TryGetValue<int>(out var flag)
+            && flagBits[propertyName] is JsonValue value
+            && value.TryGetValue<int>(out var flag)
             ? flag
             : fallback;
     }

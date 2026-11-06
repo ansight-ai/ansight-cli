@@ -8,7 +8,7 @@ namespace Ansight.Host.SimulatorAgent.OpenAi.Transport;
 
 internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
 {
-    private static readonly Uri ResponsesEndpoint = new("wss://api.openai.com/v1/responses");
+    private static readonly Uri responsesEndpoint = new("wss://api.openai.com/v1/responses");
     private const string StreamId = "main";
     private readonly IOpenAiWebSocketConnectionFactory connectionFactory;
     private IOpenAiWebSocketConnection? connection;
@@ -31,7 +31,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
     internal OpenAiResponsesWebSocketSession(IOpenAiWebSocketConnectionFactory connectionFactory)
     {
         this.connectionFactory = connectionFactory
-                                 ?? throw new ArgumentNullException(nameof(connectionFactory));
+            ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
     public async Task WarmupAsync(
@@ -45,6 +45,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         warmupResponses.Clear();
         warmupTokens = SimulatorAgentTokenUsage.Empty;
         warmupCompactionCount = 0;
+
         try
         {
             var response = await SendResponseAsync(
@@ -59,6 +60,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
             previousResponseId = response.ResponseId;
             warmupTokens = response.Tokens;
             warmupCompactionCount = CountCompactions(response);
+
             if (previousResponseId is not null)
             {
                 warmupConfiguration = GetWarmupConfiguration(request);
@@ -75,8 +77,8 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
             throw;
         }
         catch (Exception exception) when (exception is OpenAiWebSocketTransportException
-                                          or OpenAiPreviousResponseNotFoundException
-                                          or InvalidOperationException)
+            or OpenAiPreviousResponseNotFoundException
+            or InvalidOperationException)
         {
             // Warming the prefix is optional. A generation can recover with the complete input.
             await ResetConnectionAsync().ConfigureAwait(false);
@@ -99,23 +101,27 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         CancellationToken cancellationToken)
     {
         ValidateRequest(request);
+
         var attempts = new List<SimulatorAgentTransportAttempt>(warmupAttempts);
         warmupAttempts.Clear();
+
         var hadPreviousResponse = previousResponseId is not null;
         var hasWarmup = warmupConfiguration is not null;
         var useWarmup = hasWarmup
-                        && previousResponseId is not null
-                        && warmupConfiguration == GetWarmupConfiguration(request);
+            && previousResponseId is not null
+            && warmupConfiguration == GetWarmupConfiguration(request);
         warmupConfiguration = null;
+
         var reconnect = previousResponseId is not null && connection?.State != WebSocketState.Open;
+
         if (reconnect || (request.StartNewConversation || hasWarmup) && !useWarmup)
         {
             previousResponseId = null;
         }
 
         var mustReplayFullInput = previousResponseId is null
-                                  || !useWarmup && (request.IncrementalInput is null
-                                                   || request.StartNewConversation);
+            || !useWarmup && (request.IncrementalInput is null
+                || request.StartNewConversation);
         var replayReason = mustReplayFullInput
             ? reconnect
                 ? "reconnect"
@@ -123,9 +129,11 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                     ? "instruction-boundary"
                     : "initial")
             : null;
+
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var completed = false;
+
             try
             {
                 var response = await SendResponseAsync(
@@ -143,6 +151,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                 warmupCompactionCount = 0;
                 warmupResponses.Clear();
                 completed = true;
+
                 return response with
                 {
                     Transport = LastTransportDiagnostics
@@ -220,18 +229,25 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         string? requestSha256 = null;
         string[]? inputItemTypes = null;
         List<SimulatorAgentToolRegistration>? toolRegistrations = null;
+
         try
         {
             bool credentialChanged;
+
             try
             {
                 credentialChanged = await EnsureConnectedAsync(request, cancellationToken).ConfigureAwait(false);
                 connectionSucceeded = true;
             }
-            finally { connectionDurationMilliseconds = stopwatch.ElapsedMilliseconds; }
+            finally
+            {
+                connectionDurationMilliseconds = stopwatch.ElapsedMilliseconds;
+            }
+
             if (credentialChanged)
             {
                 previousResponseId = null;
+
                 if (generate)
                 {
                     input = request.Input;
@@ -240,47 +256,65 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                     replayReason = "credential-renewal";
                 }
             }
+
             var payload = OpenAiResponsesClient.BuildWebSocketPayload(request, input, includeInstructions);
             payload["type"] = "response.create";
             payload["stream_id"] = StreamId;
+
             if (!generate)
             {
                 payload["generate"] = false;
             }
+
             if (!includeInstructions && previousResponseId is not null)
             {
                 payload["previous_response_id"] = previousResponseId;
             }
 
             var messageJson = payload.ToJsonString();
+
             if (request.CaptureWireDiagnostics)
             {
                 requestSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(messageJson)));
                 inputItemTypes = payload["input"]!.AsArray().OfType<JsonObject>()
                     .Select(item => item["type"]?.GetValue<string>() ?? item["role"]?.GetValue<string>() ?? "unknown").ToArray();
                 toolRegistrations = [];
+
                 void RecordTools(JsonArray? definitions, string location)
                 {
                     foreach (var tool in definitions?.OfType<JsonObject>() ?? [])
+                    {
                         if (tool["name"] is JsonValue name && name.TryGetValue<string>(out var toolName))
+                        {
                             toolRegistrations.Add(new(toolName,
                                 Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(tool.ToJsonString()))), location));
+                        }
+                    }
                 }
+
                 RecordTools(payload["tools"] as JsonArray, "request");
+
                 foreach (var item in payload["input"]!.AsArray().OfType<JsonObject>())
+                {
                     if (item["type"]?.GetValue<string>() == "additional_tools")
+                    {
                         RecordTools(item["tools"] as JsonArray, "input");
+                    }
+                }
             }
+
             inputItemCount = payload["input"]?.AsArray().Count ?? 0;
             requestBytes = Encoding.UTF8.GetByteCount(messageJson);
             requestPrepared = stopwatch.ElapsedMilliseconds;
             await connection!.SendTextAsync(messageJson, cancellationToken)
                 .ConfigureAwait(false);
             requestSent = stopwatch.ElapsedMilliseconds;
+
             while (true)
             {
                 var message = await connection.ReceiveTextAsync(cancellationToken)
                     .ConfigureAwait(false);
+
                 if (message is null)
                 {
                     throw new OpenAiWebSocketTransportException(
@@ -288,12 +322,14 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                 }
 
                 firstResponse ??= stopwatch.ElapsedMilliseconds;
+
                 var parseStarted = stopwatch.ElapsedMilliseconds;
                 JsonObject responseEvent;
+
                 try
                 {
                     responseEvent = JsonNode.Parse(message) as JsonObject
-                                    ?? throw new JsonException("The event was not a JSON object.");
+                        ?? throw new JsonException("The event was not a JSON object.");
                 }
                 catch (JsonException exception)
                 {
@@ -303,15 +339,18 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
                 }
 
                 var eventType = OpenAiResponsesClient.ReadString(responseEvent, "type");
+
                 if (string.Equals(eventType, "response.completed", StringComparison.Ordinal))
                 {
                     var response = responseEvent["response"] as JsonObject
-                                   ?? throw new OpenAiWebSocketTransportException(
-                                       "OpenAI returned a completed WebSocket event without a response object.");
+                        ?? throw new OpenAiWebSocketTransportException(
+                            "OpenAI returned a completed WebSocket event without a response object.");
                     responseCompleted = parseStarted;
                     OpenAiResponsesClient.RecordUsage(request, response);
+
                     var turn = OpenAiResponsesClient.ParseResponse(response);
                     parsingDuration = stopwatch.ElapsedMilliseconds - parseStarted;
+
                     return turn;
                 }
 
@@ -347,8 +386,8 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
             throw;
         }
         catch (Exception exception) when (exception is WebSocketException
-                                          or HttpRequestException
-                                          or IOException)
+            or HttpRequestException
+            or IOException)
         {
             error = exception.Message;
             throw new OpenAiWebSocketTransportException(
@@ -358,10 +397,12 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         catch (Exception exception)
         {
             error = connectionApiKey is null ? exception.Message : exception.Message.Replace(connectionApiKey, "[redacted]", StringComparison.Ordinal);
+
             if (error != exception.Message)
             {
                 throw new InvalidOperationException(error);
             }
+
             throw;
         }
         finally
@@ -407,6 +448,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
     {
         ThrowIfDisposed();
         OpenAiResponsesClient.ValidateRequest(request);
+
         if (request.Transport?.SupportsWebSockets == false)
         {
             throw new ArgumentException(
@@ -426,6 +468,7 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
     {
         var apiKey = await request.ResolveApiKeyAsync(cancellationToken).ConfigureAwait(false);
         var credentialChanged = connectionApiKey is not null && !string.Equals(connectionApiKey, apiKey, StringComparison.Ordinal);
+
         if (connection?.State == WebSocketState.Open && !credentialChanged)
         {
             return false;
@@ -434,18 +477,29 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         await ResetConnectionAsync().ConfigureAwait(false);
         connection = connectionFactory.Create();
         connectionApiKey = apiKey;
+
         try
         {
-            await connection.ConnectAsync(ResponsesEndpoint, apiKey, cancellationToken).ConfigureAwait(false);
+            await connection.ConnectAsync(responsesEndpoint, apiKey, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception.ToString().Contains(apiKey, StringComparison.Ordinal))
         {
             var message = exception.Message.Replace(apiKey, "[redacted]", StringComparison.Ordinal);
+
             // Some handshake failures echo Authorization. Do not retain a secret in an inner exception.
-            if (exception is OperationCanceledException) throw new OperationCanceledException(message, cancellationToken);
-            if (exception is InvalidOperationException) throw new InvalidOperationException(message);
+            if (exception is OperationCanceledException)
+            {
+                throw new OperationCanceledException(message, cancellationToken);
+            }
+
+            if (exception is InvalidOperationException)
+            {
+                throw new InvalidOperationException(message);
+            }
+
             throw new OpenAiWebSocketTransportException(message);
         }
+
         return credentialChanged;
     }
 
@@ -466,16 +520,19 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
     {
         var error = responseEvent["error"] as JsonObject;
         var code = error is null ? null : OpenAiResponsesClient.ReadString(error, "code");
+
         if (string.Equals(code, "previous_response_not_found", StringComparison.Ordinal))
         {
             throw new OpenAiPreviousResponseNotFoundException();
         }
+
         if (string.Equals(code, "websocket_connection_limit_reached", StringComparison.Ordinal))
         {
             throw new OpenAiWebSocketTransportException("The OpenAI WebSocket connection reached its lifetime limit.");
         }
 
         var status = responseEvent["status"]?.GetValue<int>() ?? 0;
+
         if (status > 0 && error is not null)
         {
             var errorPayload = new JsonObject
@@ -502,18 +559,22 @@ internal sealed class OpenAiResponsesWebSocketSession : IOpenAiSession
         var errorCode = error is null ? null : OpenAiResponsesClient.ReadString(error, "code");
         var message = error is null ? null : OpenAiResponsesClient.ReadString(error, "message");
         var details = new List<string>();
+
         if (!string.IsNullOrWhiteSpace(responseId))
         {
             details.Add($"response_id={responseId}");
         }
+
         if (!string.IsNullOrWhiteSpace(reason))
         {
             details.Add($"reason={reason}");
         }
+
         if (!string.IsNullOrWhiteSpace(errorCode))
         {
             details.Add($"error_code={errorCode}");
         }
+
         var diagnosticDetails = details.Count == 0 ? string.Empty : $" ({string.Join(", ", details)})";
         throw new InvalidOperationException(string.IsNullOrWhiteSpace(message)
             ? $"OpenAI returned terminal WebSocket event '{eventType}'{diagnosticDetails}."

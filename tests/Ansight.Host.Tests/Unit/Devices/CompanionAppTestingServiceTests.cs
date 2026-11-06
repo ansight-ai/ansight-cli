@@ -20,9 +20,11 @@ public sealed class CompanionAppTestingServiceTests
             "selected-sim", action, "com.example.app", Value: value), default);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var call = runner.Calls.Single(arguments => arguments[0] == command);
         Assert.Contains("selected-sim", call);
         Assert.DoesNotContain("booted", call);
+
         if (action.StartsWith("app-", StringComparison.Ordinal))
         {
             Assert.Equal("com.example.app", call[^1]);
@@ -68,6 +70,7 @@ public sealed class CompanionAppTestingServiceTests
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal(payload, runner.PushPayload);
+
         var call = runner.Calls.Single(arguments => arguments[0] == "push");
         Assert.Equal("com.example.app", call[2]);
         Assert.False(File.Exists(call[3]));
@@ -132,6 +135,7 @@ public sealed class CompanionAppTestingServiceTests
             CancellationToken cancellationToken, int maximumBytes = 1_048_576)
         {
             Calls.Add(arguments.ToArray());
+
             if (arguments[0] == "get_app_container" && !Installed)
             {
                 return Task.FromResult(new DeviceCommandResult(1, [], "App is not installed."));
@@ -143,6 +147,7 @@ public sealed class CompanionAppTestingServiceTests
             }
 
             var output = arguments[0] == "help" ? "  microphone - Audio\n  location - Location\n  all - All" : "";
+
             return Task.FromResult(new DeviceCommandResult(0, Encoding.UTF8.GetBytes(output), ""));
         }
     }

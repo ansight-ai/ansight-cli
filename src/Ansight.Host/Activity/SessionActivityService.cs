@@ -8,6 +8,7 @@ public sealed class SessionActivityService
     public string? PersistenceError => store.PersistenceError;
 
     internal SessionActivityService(SessionActivityStore store) => this.store = store;
+
     internal static SessionActivityService For(IApplicationPaths paths)
         => services.GetValue(paths, static paths => new(new SessionActivityStore(paths.ApplicationDataPath)));
 
@@ -20,9 +21,14 @@ public sealed class SessionActivityService
 
     internal bool Append(SessionActivityRecord record) => store.Append(record with
     {
-        Operation = ActivityCaller.Limit(record.Operation) ?? "unknown", Category = ActivityCaller.Limit(record.Category) ?? "unknown",
-        RequestId = ActivityCaller.Limit(record.RequestId), RunId = ActivityCaller.Limit(record.RunId), BatchRunId = ActivityCaller.Limit(record.BatchRunId),
-        Outcome = ActivityCaller.Limit(record.Outcome), ErrorType = ActivityCaller.Limit(record.ErrorType), EvidenceStatus = ActivityCaller.Limit(record.EvidenceStatus),
+        Operation = ActivityCaller.Limit(record.Operation) ?? "unknown",
+        Category = ActivityCaller.Limit(record.Category) ?? "unknown",
+        RequestId = ActivityCaller.Limit(record.RequestId),
+        RunId = ActivityCaller.Limit(record.RunId),
+        BatchRunId = ActivityCaller.Limit(record.BatchRunId),
+        Outcome = ActivityCaller.Limit(record.Outcome),
+        ErrorType = ActivityCaller.Limit(record.ErrorType),
+        EvidenceStatus = ActivityCaller.Limit(record.EvidenceStatus),
         EvidenceIds = (record.EvidenceIds ?? []).Take(16).Select(id => ActivityCaller.Limit(id)).OfType<string>().ToArray()
     });
 
@@ -30,26 +36,46 @@ public sealed class SessionActivityService
         Func<Task<T>> execute, Func<T, string> outcome, string? requestId = null, string? appId = null)
     {
         using var activity = Begin(operation, category, sessionId, appId, requestId);
+
         try
         {
             var result = await execute().ConfigureAwait(false);
             activity.Complete(outcome(result));
+
             return result;
         }
-        catch (OperationCanceledException) { activity.Complete("cancelled"); throw; }
-        catch (Exception exception) { activity.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+        catch (OperationCanceledException)
+        {
+            activity.Complete("cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            activity.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name);
+            throw;
+        }
     }
 
     internal T Record<T>(string operation, string category, string? sessionId, Func<T> execute, Func<T, string> outcome)
     {
         using var activity = Begin(operation, category, sessionId);
+
         try
         {
             var result = execute();
             activity.Complete(outcome(result));
+
             return result;
         }
-        catch (OperationCanceledException) { activity.Complete("cancelled"); throw; }
-        catch (Exception exception) { activity.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+        catch (OperationCanceledException)
+        {
+            activity.Complete("cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            activity.Complete(exception is ArgumentException ? "rejected" : "failed", errorType: exception.GetType().Name);
+            throw;
+        }
     }
 }

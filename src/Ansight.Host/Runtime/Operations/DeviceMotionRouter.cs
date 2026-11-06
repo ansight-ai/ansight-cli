@@ -9,7 +9,10 @@ internal sealed class DeviceMotionRouter
 
     public void Configure(IDeviceMotionDriver value)
     {
-        lock (gate) driver = value;
+        lock (gate)
+        {
+            driver = value;
+        }
     }
 
     public Task PlayAsync(
@@ -18,16 +21,24 @@ internal sealed class DeviceMotionRouter
         CancellationToken cancellationToken)
     {
         IDeviceMotionDriver selected;
+
         lock (gate)
+        {
             selected = driver ?? throw new InvalidOperationException("This host has no device motion driver.");
+        }
+
         return selected.PlayMotionAsync(deviceSerial, samples, cancellationToken);
     }
 
     public Task ShakeIosSimulatorAsync(string deviceUdid, CancellationToken cancellationToken)
     {
         IDeviceMotionDriver selected;
+
         lock (gate)
+        {
             selected = driver ?? throw new InvalidOperationException("This host has no device motion driver.");
+        }
+
         return selected.ShakeIosSimulatorAsync(deviceUdid, cancellationToken);
     }
 }

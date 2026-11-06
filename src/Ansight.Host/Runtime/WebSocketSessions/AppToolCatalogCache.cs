@@ -51,6 +51,7 @@ internal sealed class AppToolCatalogCache
             if (ReadBoolean(payload["unchanged"], fallback: false))
             {
                 ApplyAvailabilityChanges(payload);
+
                 return;
             }
 
@@ -60,14 +61,17 @@ internal sealed class AppToolCatalogCache
             }
 
             var detail = ReadString(payload["detail"]);
+
             if (string.Equals(detail, "definitions", StringComparison.Ordinal))
             {
                 StoreDefinitions(tools);
+
                 return;
             }
 
             var isCompactIndex = string.Equals(detail, "index", StringComparison.Ordinal);
             var indexTools = new JsonArray();
+
             foreach (var tool in tools.OfType<JsonObject>())
             {
                 // Catalogs from pre-v3 SDKs do not declare a detail level and may
@@ -105,9 +109,10 @@ internal sealed class AppToolCatalogCache
         lock (gate)
         {
             var canReuse = initialCaptureReuseExpiresUtc is { } expiresUtc
-                           && expiresUtc >= DateTimeOffset.UtcNow
-                           && indexCatalog is not null;
+                && expiresUtc >= DateTimeOffset.UtcNow
+                && indexCatalog is not null;
             initialCaptureReuseExpiresUtc = null;
+
             return canReuse;
         }
     }
@@ -122,6 +127,7 @@ internal sealed class AppToolCatalogCache
             }
 
             var filtered = ApplyFilter(indexCatalog, arguments);
+
             return filtered?["tools"] is JsonArray tools
                 ? tools
                     .OfType<JsonObject>()
@@ -141,10 +147,11 @@ internal sealed class AppToolCatalogCache
         lock (gate)
         {
             var indexRevisions = ReadIndexDefinitionRevisions();
+
             return toolIds
                 .Where(toolId => !definitionsById.TryGetValue(toolId, out var definition)
-                                 || indexRevisions.TryGetValue(toolId, out var expectedRevision)
-                                 && !string.Equals(definition.Revision, expectedRevision, StringComparison.Ordinal))
+                    || indexRevisions.TryGetValue(toolId, out var expectedRevision)
+                        && !string.Equals(definition.Revision, expectedRevision, StringComparison.Ordinal))
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
@@ -160,22 +167,26 @@ internal sealed class AppToolCatalogCache
             }
 
             var filtered = ApplyFilter(indexCatalog, arguments);
+
             if (filtered?["tools"] is not JsonArray tools)
             {
                 return filtered;
             }
+
             if (!includeDefinitions || string.Equals(
-                    ReadString(arguments?["detail"]),
-                    "summary",
-                    StringComparison.OrdinalIgnoreCase))
+                ReadString(arguments?["detail"]),
+                "summary",
+                StringComparison.OrdinalIgnoreCase))
             {
                 return filtered;
             }
 
             var mergedTools = new JsonArray();
+
             foreach (var indexTool in tools.OfType<JsonObject>())
             {
                 var toolId = ReadString(indexTool["id"]);
+
                 if (toolId is null || !definitionsById.TryGetValue(toolId, out var cachedDefinition))
                 {
                     mergedTools.Add(indexTool.DeepClone());
@@ -192,6 +203,7 @@ internal sealed class AppToolCatalogCache
             }
 
             filtered["tools"] = mergedTools;
+
             return filtered;
         }
     }
@@ -212,18 +224,21 @@ internal sealed class AppToolCatalogCache
                 StringComparison.Ordinal);
             tool.Remove("runtime");
             tool.Remove("denial");
+
             if (!preserveAppNotExecutable)
             {
                 tool.Remove("executable");
             }
 
             var toolId = ReadString(tool["id"]);
+
             if (toolId is null || changes[toolId] is not JsonObject runtime)
             {
                 continue;
             }
 
             tool["runtime"] = runtime.DeepClone();
+
             if (!ReadBoolean(runtime["available"], fallback: true)
                 || !ReadBoolean(runtime["executable"], fallback: true))
             {
@@ -246,6 +261,7 @@ internal sealed class AppToolCatalogCache
     private void StoreDefinition(JsonObject tool)
     {
         var toolId = ReadString(tool["id"]);
+
         if (toolId is null)
         {
             return;
@@ -263,6 +279,7 @@ internal sealed class AppToolCatalogCache
     private Dictionary<string, string> ReadIndexDefinitionRevisions()
     {
         var revisions = new Dictionary<string, string>(StringComparer.Ordinal);
+
         if (indexCatalog?["tools"] is not JsonArray tools)
         {
             return revisions;
@@ -272,6 +289,7 @@ internal sealed class AppToolCatalogCache
         {
             var toolId = ReadString(tool["id"]);
             var definitionRevision = ReadString(tool["definitionRevision"]);
+
             if (toolId is not null && definitionRevision is not null)
             {
                 revisions[toolId] = definitionRevision;
@@ -286,6 +304,7 @@ internal sealed class AppToolCatalogCache
         var indexEntry = tool.DeepClone().AsObject();
         indexEntry.Remove("argumentsSchema");
         indexEntry.Remove("resultSchema");
+
         return indexEntry;
     }
 
@@ -293,7 +312,7 @@ internal sealed class AppToolCatalogCache
         => arguments is null
             ? catalog.DeepClone().AsObject()
             : RemoteAppToolCatalogFilter.Apply(catalog, arguments)?.AsObject()
-              ?? catalog.DeepClone().AsObject();
+                ?? catalog.DeepClone().AsObject();
 
     private static void CopyIfPresent(JsonObject source, JsonObject destination, string propertyName)
     {
@@ -309,8 +328,8 @@ internal sealed class AppToolCatalogCache
 
     private static string? ReadString(JsonNode? value)
         => value is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && jsonValue.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
@@ -321,9 +340,3 @@ internal sealed class AppToolCatalogCache
 
     private sealed record CachedToolDefinition(JsonObject Definition, string? Revision);
 }
-
-internal sealed record AppToolCatalogCacheSnapshot(
-    string? Revision,
-    string? AvailabilityRevision,
-    JsonObject? IndexCatalog,
-    long UpdateVersion);

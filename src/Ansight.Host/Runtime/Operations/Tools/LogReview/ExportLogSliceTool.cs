@@ -37,6 +37,7 @@ internal sealed class ExportLogSliceTool : Operation
         properties["includeAnnotations"] = ToolSchema.Boolean("Include annotations overlapping the exported time range. Defaults to true.", nullable: true);
         properties["includeScreenshots"] = ToolSchema.Boolean("Include screenshot frame summaries in the exported time range. Defaults to true.", nullable: true);
         properties["includeTelemetrySummary"] = ToolSchema.Boolean("Include telemetry sample summaries in the exported time range. Defaults to true.", nullable: true);
+
         return properties;
     }
 }

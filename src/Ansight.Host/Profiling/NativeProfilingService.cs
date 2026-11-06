@@ -22,6 +22,7 @@ public sealed class NativeProfilingService : IDisposable
     {
         var toolchain = await profiling.GetToolchainAsync(platform, cancellationToken)
             .ConfigureAwait(false);
+
         return new NativeProfilingToolchain(
             toolchain.Platform,
             toolchain.Engine,
@@ -37,6 +38,7 @@ public sealed class NativeProfilingService : IDisposable
     {
         var toolchain = await profiling.GetProcessSampleToolchainAsync(cancellationToken)
             .ConfigureAwait(false);
+
         return new NativeProfilingToolchain(
             toolchain.Platform,
             toolchain.Engine,
@@ -52,6 +54,7 @@ public sealed class NativeProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return await profiling.StartCaptureAsync(
             new NativeProfileCaptureRequest(
                 request.Platform,
@@ -69,6 +72,7 @@ public sealed class NativeProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return await profiling.StartProcessSampleAsync(
             new ProcessSampleCaptureRequest(
                 request.ProcessId,
@@ -80,6 +84,7 @@ public sealed class NativeProfilingService : IDisposable
     public NativeCaptureSnapshot? GetCapture(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.TryGetCapture(captureId.Trim(), out var snapshot) && snapshot is not null
             ? ToPublic(snapshot)
             : null;
@@ -91,8 +96,9 @@ public sealed class NativeProfilingService : IDisposable
     public NativeCaptureManifest? GetManifest(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CaptureStore.TryLoadManifest(captureId.Trim(), out var manifest)
-               && manifest is not null
+            && manifest is not null
             ? ToPublic(manifest)
             : null;
     }
@@ -100,23 +106,26 @@ public sealed class NativeProfilingService : IDisposable
     public string GetCaptureDirectoryPath(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CaptureStore.GetCapturePath(captureId.Trim());
     }
 
     public string? GetProcessSampleArtifactPath(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var normalizedCaptureId = captureId.Trim();
+
         return profiling.TryGetCapture(normalizedCaptureId, out var snapshot)
-               && snapshot is not null
-               && string.Equals(
-                   snapshot.Manifest.Platform,
-                   NativeProfilePlatforms.Process,
-                   StringComparison.Ordinal)
-               && profiling.TryResolveArtifactPath(
-                   normalizedCaptureId,
-                   ProcessSampleCaptureAdapter.ArtifactKind,
-                   out var artifactPath)
+            && snapshot is not null
+            && string.Equals(
+                snapshot.Manifest.Platform,
+                NativeProfilePlatforms.Process,
+                StringComparison.Ordinal)
+            && profiling.TryResolveArtifactPath(
+                normalizedCaptureId,
+                ProcessSampleCaptureAdapter.ArtifactKind,
+                out var artifactPath)
             ? artifactPath
             : null;
     }
@@ -126,7 +135,9 @@ public sealed class NativeProfilingService : IDisposable
         string? artifactKind = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var artifact = profiling.Inspection.GetArtifact(captureId.Trim(), artifactKind);
+
         return artifact is null ? null : ToPublic(artifact);
     }
 
@@ -135,15 +146,18 @@ public sealed class NativeProfilingService : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         var inspection = await profiling.Inspection.InspectAsync(
             captureId.Trim(),
             cancellationToken).ConfigureAwait(false);
+
         return ToPublic(inspection);
     }
 
     public InstrumentsTocInspection InspectInstrumentsToc(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return ToPublic(profiling.Inspection.InspectInstrumentsToc(captureId.Trim()));
     }
 
@@ -160,17 +174,20 @@ public sealed class NativeProfilingService : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
         var inspection = await profiling.Inspection.QueryPerfettoAsync(
             captureId.Trim(),
             sql,
             maximumRows,
             cancellationToken).ConfigureAwait(false);
+
         return ToPublic(inspection);
     }
 
     public bool CancelCapture(string captureId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(captureId);
+
         return profiling.CancelCapture(captureId.Trim());
     }
 
@@ -314,6 +331,7 @@ public sealed class NativeProfilingService : IDisposable
     private static string NormalizeEnum<T>(T value) where T : struct, Enum
     {
         var text = value.ToString();
+
         return text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
     }
 }

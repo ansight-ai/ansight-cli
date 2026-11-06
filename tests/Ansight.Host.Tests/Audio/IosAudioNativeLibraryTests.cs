@@ -10,12 +10,17 @@ public sealed class IosAudioNativeLibraryTests
     [Fact]
     public async Task NativeErrorsPreserveUtf8AndDoNotPoisonTheNextCall()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         var error = await Assert.ThrowsAsync<AudioInjectionException>(() =>
-            IosAudioHelper.RunAsync(["inspect", "--unknown-音", "value"], CancellationToken.None));
+                    IosAudioHelper.RunAsync(["inspect", "--unknown-音", "value"], CancellationToken.None));
         Assert.Equal("invalid-arguments", error.Code);
         Assert.Contains("--unknown-音", error.Message);
         Assert.False(error.Diagnostics!["deliveryStarted"]!.GetValue<bool>());
+
         var response = await IosAudioHelper.RunAsync(["accessibility"], CancellationToken.None);
         Assert.True(response["success"]!.GetValue<bool>());
         Assert.True(response["accessibilityGranted"] is JsonValue value && value.TryGetValue<bool>(out _));
@@ -24,12 +29,19 @@ public sealed class IosAudioNativeLibraryTests
     [Fact]
     public async Task CancellationIsIsolatedToItsNativeOperation()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         var operation = IosAudioHelper.Create();
+
         try
         {
             IosAudioHelper.Cancel(operation);
+
             var response = IosAudioHelper.Execute(operation, "[\"accessibility\"]");
+
             try
             {
                 var result = JsonNode.Parse(Marshal.PtrToStringUTF8(response)!)!;
@@ -37,11 +49,18 @@ public sealed class IosAudioNativeLibraryTests
                 Assert.Equal("cancelled", result["code"]!.GetValue<string>());
                 Assert.False(result["diagnostics"]!["deliveryStarted"]!.GetValue<bool>());
             }
-            finally { IosAudioHelper.FreeString(response); }
+            finally
+            {
+                IosAudioHelper.FreeString(response);
+            }
+
             var independent = await IosAudioHelper.RunAsync(["accessibility"], CancellationToken.None);
             Assert.True(independent["success"]!.GetValue<bool>());
         }
-        finally { IosAudioHelper.Destroy(operation); }
+        finally
+        {
+            IosAudioHelper.Destroy(operation);
+        }
     }
 
     [Fact]
@@ -56,12 +75,16 @@ public sealed class IosAudioNativeLibraryTests
     [Fact]
     public async Task ConcurrentNativeCallsOwnTheirResponses()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         await Task.WhenAll(Enumerable.Range(0, 20).Select(async index =>
         {
             var option = $"--invalid-{index}";
             var error = await Assert.ThrowsAsync<AudioInjectionException>(() =>
-                IosAudioHelper.RunAsync(["inspect", option, "value"], CancellationToken.None));
+        IosAudioHelper.RunAsync(["inspect", option, "value"], CancellationToken.None));
             Assert.Contains(option + ".", error.Message);
             Assert.False(error.Diagnostics!["deliveryStarted"]!.GetValue<bool>());
         }));

@@ -29,6 +29,7 @@ internal sealed class CompareSessionsTool : Operation
     {
         var leftSessionId = NormalizeOptionalString(arguments?["leftSessionId"]?.GetValue<string>());
         var rightSessionId = NormalizeOptionalString(arguments?["rightSessionId"]?.GetValue<string>());
+
         if (leftSessionId is null || rightSessionId is null)
         {
             return Task.FromResult(ToolError("leftSessionId and rightSessionId are required."));
@@ -80,6 +81,7 @@ internal sealed class CompareSessionsTool : Operation
             .Distinct()
             .OrderBy(priority => priority.ToString())
             .ToArray();
+
         return PayloadJson.CreateJsonArray(priorities.Select(priority => (JsonNode?)new JsonObject
         {
             ["priority"] = priority.ToString(),
@@ -112,6 +114,7 @@ internal sealed class CompareSessionsTool : Operation
     {
         var leftGestures = TouchGestureSegmenter.BuildGestureSegments(left.Touches, TimeSpan.FromMilliseconds(TouchReviewDefaults.DefaultGestureGapMilliseconds));
         var rightGestures = TouchGestureSegmenter.BuildGestureSegments(right.Touches, TimeSpan.FromMilliseconds(TouchReviewDefaults.DefaultGestureGapMilliseconds));
+
         return new JsonObject
         {
             ["gestureCount"] = BuildDelta(leftGestures.Count, rightGestures.Count),
@@ -127,8 +130,9 @@ internal sealed class CompareSessionsTool : Operation
     {
         var samples = snapshot.Metrics
             .Where(sample => channelMap.TryGetValue(sample.ChannelId, out var channel)
-                             && string.Equals(channel.Name, channelName, StringComparison.OrdinalIgnoreCase))
+                && string.Equals(channel.Name, channelName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
         if (samples.Length == 0)
         {
             return new JsonObject
@@ -138,6 +142,7 @@ internal sealed class CompareSessionsTool : Operation
         }
 
         var values = samples.Select(sample => sample.Value).ToArray();
+
         return new JsonObject
         {
             ["sampleCount"] = samples.Length,
@@ -152,6 +157,7 @@ internal sealed class CompareSessionsTool : Operation
         var leftCounts = leftValues.GroupBy(value => value, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var rightCounts = rightValues.GroupBy(value => value, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var keys = leftCounts.Keys.Concat(rightCounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(key => key, StringComparer.OrdinalIgnoreCase);
+
         return PayloadJson.CreateJsonArray(keys.Select(key => (JsonNode?)new JsonObject
         {
             ["value"] = key,

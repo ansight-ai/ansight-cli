@@ -5,20 +5,6 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Devices;
 
-internal sealed record IosPhysicalDeviceAppiumSessionKey(
-    string DeviceIdentifier,
-    string ApplicationIdentifier);
-
-internal sealed record IosPhysicalDeviceAppiumSession(
-    string SessionId,
-    int ViewportWidth,
-    int ViewportHeight);
-
-internal sealed record IosAccessibilityPageSource(
-    string Source,
-    int ViewportWidth,
-    int ViewportHeight);
-
 internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
 {
     private const string WebDriverElementKey = "element-6066-11e4-a52e-4f735466cecf";
@@ -39,9 +25,11 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         HttpMessageHandler? handler)
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
+
         var normalizedServerUrl = string.IsNullOrWhiteSpace(options.ServerUrl)
             ? "http://127.0.0.1:4723/"
             : options.ServerUrl.Trim();
+
         if (!Uri.TryCreate(normalizedServerUrl, UriKind.Absolute, out var endpoint)
             || (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps))
         {
@@ -68,6 +56,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         var key = new IosPhysicalDeviceAppiumSessionKey(
             deviceIdentifier.Trim(),
             applicationIdentifier.Trim());
+
         return sessions.TryGetValue(key, out var session)
             || monitoringSessions.TryGetValue(key.DeviceIdentifier, out session) ? session.SessionId : null;
     }
@@ -87,10 +76,9 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
             session,
             [
                 PointerMove(x, y, 0),
-                new JsonObject { ["type"] = "pointerDown", ["button"] = 0 },
-                new JsonObject { ["type"] = "pause", ["duration"] = 50 },
-                new JsonObject { ["type"] = "pointerUp", ["button"] = 0 }
-            ],
+                new JsonObject {["type"] = "pointerDown", ["button"] = 0 },
+                new JsonObject {["type"] = "pause", ["duration"] = 50 },
+                new JsonObject {["type"] = "pointerUp", ["button"] = 0 }            ],
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -104,16 +92,16 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
     {
         new UiLongPressRequest(string.Empty, deviceIdentifier, normalizedX, normalizedY,
             durationMilliseconds, applicationIdentifier).Validate();
+
         var session = await GetSessionAsync(deviceIdentifier, applicationIdentifier, cancellationToken)
             .ConfigureAwait(false);
         await SendActionsAsync(session,
             [
                 PointerMove(ToCoordinate(normalizedX, session.ViewportWidth),
                     ToCoordinate(normalizedY, session.ViewportHeight), 0),
-                new JsonObject { ["type"] = "pointerDown", ["button"] = 0 },
-                new JsonObject { ["type"] = "pause", ["duration"] = durationMilliseconds },
-                new JsonObject { ["type"] = "pointerUp", ["button"] = 0 }
-            ], cancellationToken).ConfigureAwait(false);
+                new JsonObject {["type"] = "pointerDown", ["button"] = 0 },
+                new JsonObject {["type"] = "pause", ["duration"] = durationMilliseconds },
+                new JsonObject {["type"] = "pointerUp", ["button"] = 0 }            ], cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IosAccessibilityPageSource> GetPageSourceAsync(
@@ -129,9 +117,10 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
                 payload: null,
                 cancellationToken).ConfigureAwait(false);
             var source = response["value"] is JsonValue value
-                         && value.TryGetValue<string>(out var text)
+                && value.TryGetValue<string>(out var text)
                 ? text
                 : null;
+
             if (string.IsNullOrWhiteSpace(source))
             {
                 throw new InvalidOperationException("WebDriverAgent returned no accessibility page source.");
@@ -154,14 +143,18 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
     {
         var response = await ReadWithRecoveryAsync(deviceIdentifier, applicationIdentifier,
             session => SendAsync(HttpMethod.Post, $"session/{Escape(session.SessionId)}/execute/sync",
-            new JsonObject
-            {
-                ["script"] = "mobile: activeAppInfo",
-                ["args"] = new JsonArray()
-            }, cancellationToken), cancellationToken).ConfigureAwait(false);
+                new JsonObject
+                {
+                    ["script"] = "mobile: activeAppInfo",
+                    ["args"] = new JsonArray()
+                }, cancellationToken), cancellationToken).ConfigureAwait(false);
         var activeBundleId = ReadString(response["value"], "bundleId");
+
         if (string.IsNullOrWhiteSpace(activeBundleId))
+        {
             throw new InvalidOperationException("WebDriverAgent returned no active application bundle ID.");
+        }
+
         return string.Equals(activeBundleId, applicationIdentifier, StringComparison.Ordinal);
     }
 
@@ -172,8 +165,12 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
             session => SendAsync(HttpMethod.Get, $"session/{Escape(session.SessionId)}/screenshot", null,
                 cancellationToken), cancellationToken).ConfigureAwait(false);
         var encoded = response["value"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(encoded))
+        {
             throw new InvalidOperationException("WebDriverAgent returned no physical iOS screenshot.");
+        }
+
         return Convert.FromBase64String(encoded);
     }
 
@@ -196,13 +193,12 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
                     ToCoordinate(startNormalizedX, session.ViewportWidth),
                     ToCoordinate(startNormalizedY, session.ViewportHeight),
                     0),
-                new JsonObject { ["type"] = "pointerDown", ["button"] = 0 },
+                new JsonObject {["type"] = "pointerDown", ["button"] = 0 },
                 PointerMove(
                     ToCoordinate(endNormalizedX, session.ViewportWidth),
                     ToCoordinate(endNormalizedY, session.ViewportHeight),
                     Math.Clamp(durationMilliseconds, 50, 2_000)),
-                new JsonObject { ["type"] = "pointerUp", ["button"] = 0 }
-            ],
+                new JsonObject {["type"] = "pointerUp", ["button"] = 0 }            ],
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -216,6 +212,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         var session = await GetSessionAsync(deviceIdentifier, applicationIdentifier, cancellationToken)
             .ConfigureAwait(false);
         var elementId = await GetActiveElementIdAsync(session, cancellationToken).ConfigureAwait(false);
+
         if (replaceExisting && elementId is not null)
         {
             await SendAsync(
@@ -256,6 +253,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
     {
         var session = await GetSessionAsync(deviceIdentifier, applicationIdentifier, cancellationToken)
             .ConfigureAwait(false);
+
         if (string.Equals(button, "back", StringComparison.OrdinalIgnoreCase))
         {
             await SendAsync(
@@ -263,6 +261,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
                 $"session/{Escape(session.SessionId)}/back",
                 new JsonObject(),
                 cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
@@ -270,6 +269,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         {
             await SendAsync(HttpMethod.Post, $"session/{Escape(session.SessionId)}/wda/keys",
                 new JsonObject { ["value"] = new JsonArray("\n") }, cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
@@ -300,20 +300,21 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         }
 
         disposed = true;
+
         foreach (var session in sessions.Values.Concat(monitoringSessions.Values).DistinctBy(session => session.SessionId))
         {
             try
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 using var response = httpClient.DeleteAsync(
-                        $"session/{Escape(session.SessionId)}",
-                        timeout.Token)
+                    $"session/{Escape(session.SessionId)}",
+                    timeout.Token)
                     .GetAwaiter()
                     .GetResult();
             }
             catch (Exception exception) when (exception is HttpRequestException
-                                               or InvalidOperationException
-                                               or TaskCanceledException)
+                or InvalidOperationException
+                or TaskCanceledException)
             {
             }
         }
@@ -329,10 +330,15 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         var key = new IosPhysicalDeviceAppiumSessionKey(deviceIdentifier.Trim(), applicationIdentifier.Trim());
         var gate = sessionGates.GetOrAdd(key.DeviceIdentifier, _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (!sessions.TryRemove(key, out var session)
-                && !monitoringSessions.TryRemove(key.DeviceIdentifier, out session)) return;
+                && !monitoringSessions.TryRemove(key.DeviceIdentifier, out session))
+            {
+                return;
+            }
+
             try
             {
                 await SendAsync(HttpMethod.Delete, $"session/{Escape(session.SessionId)}", null,
@@ -343,7 +349,10 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
                 // The device session may already have ended with the app or Appium server.
             }
         }
-        finally { gate.Release(); }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     private async Task<IosPhysicalDeviceAppiumSession> GetSessionAsync(
@@ -355,14 +364,19 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceIdentifier);
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationIdentifier);
+
         var gate = sessionGates.GetOrAdd(deviceIdentifier.Trim(), _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             return await CreateOrReuseSessionAsync(deviceIdentifier, applicationIdentifier,
                 cancellationToken, autoLaunch).ConfigureAwait(false);
         }
-        finally { gate.Release(); }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     private async Task<IosPhysicalDeviceAppiumSession> CreateOrReuseSessionAsync(
@@ -371,18 +385,29 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         var key = new IosPhysicalDeviceAppiumSessionKey(
             deviceIdentifier.Trim(),
             applicationIdentifier.Trim());
+
         if (sessions.TryGetValue(key, out var existing))
         {
             return existing;
         }
-        if (monitoringSessions.TryGetValue(key.DeviceIdentifier, out existing)) return existing;
+
+        if (monitoringSessions.TryGetValue(key.DeviceIdentifier, out existing))
+        {
+            return existing;
+        }
+
         if (!autoLaunch)
         {
             existing = sessions.FirstOrDefault(item => item.Key.DeviceIdentifier == key.DeviceIdentifier).Value;
-            if (existing is not null) return existing;
+
+            if (existing is not null)
+            {
+                return existing;
+            }
         }
 
         JsonObject response;
+
         try
         {
             var capabilities = new JsonObject
@@ -432,12 +457,20 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         }
 
         var sessionId = ReadString(response["value"], "sessionId")
-                        ?? ReadString(response, "sessionId")
-                        ?? throw new InvalidOperationException("Appium created no usable WebDriver session.");
+            ?? ReadString(response, "sessionId")
+            ?? throw new InvalidOperationException("Appium created no usable WebDriver session.");
         var viewport = await ReadViewportAsync(sessionId, cancellationToken).ConfigureAwait(false);
         var session = new IosPhysicalDeviceAppiumSession(sessionId, viewport.Width, viewport.Height);
-        if (autoLaunch) sessions[key] = session;
-        else monitoringSessions[key.DeviceIdentifier] = session;
+
+        if (autoLaunch)
+        {
+            sessions[key] = session;
+        }
+        else
+        {
+            monitoringSessions[key.DeviceIdentifier] = session;
+        }
+
         return session;
     }
 
@@ -448,7 +481,11 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         {
             var session = await GetSessionAsync(deviceIdentifier, applicationIdentifier, cancellationToken,
                 autoLaunch: false).ConfigureAwait(false);
-            try { return await read(session).ConfigureAwait(false); }
+
+            try
+            {
+                return await read(session).ConfigureAwait(false);
+            }
             catch (AppiumSessionUnavailableException) when (attempt == 0)
             {
                 // Retry one read with a fresh connection. Never replay app input or launch the app.
@@ -459,9 +496,14 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
     private void ForgetSession(string sessionId)
     {
         foreach (var item in sessions.Where(item => item.Value.SessionId == sessionId))
+        {
             sessions.TryRemove(item);
+        }
+
         foreach (var item in monitoringSessions.Where(item => item.Value.SessionId == sessionId))
+        {
             monitoringSessions.TryRemove(item);
+        }
     }
 
     private async Task<IosPhysicalDeviceViewport> ReadViewportAsync(
@@ -476,6 +518,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         var value = response["value"] as JsonObject;
         var width = ReadInteger(value, "width");
         var height = ReadInteger(value, "height");
+
         if (width <= 0 || height <= 0)
         {
             throw new InvalidOperationException("Appium returned no usable physical-device viewport.");
@@ -494,6 +537,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
             payload: null,
             cancellationToken).ConfigureAwait(false);
         var value = response["value"] as JsonObject;
+
         return ReadString(value, WebDriverElementKey) ?? ReadString(value, "ELEMENT");
     }
 
@@ -526,6 +570,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
+
         if (payload is not null)
         {
             request.Content = JsonContent.Create(payload);
@@ -534,6 +579,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         JsonObject body;
+
         try
         {
             body = string.IsNullOrWhiteSpace(content)
@@ -546,12 +592,14 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
         }
 
         var isWebDriverError = IsWebDriverError(body, out var errorMessage);
+
         if (!response.IsSuccessStatusCode || isWebDriverError)
         {
             var message = string.IsNullOrWhiteSpace(errorMessage)
-                    ? $"Appium request '{method} {path}' failed with HTTP {(int)response.StatusCode}."
-                    : $"Appium request '{method} {path}' failed: {errorMessage}";
+                ? $"Appium request '{method} {path}' failed with HTTP {(int)response.StatusCode}."
+                : $"Appium request '{method} {path}' failed: {errorMessage}";
             var error = ReadString(body["value"], "error");
+
             if (path.StartsWith("session/", StringComparison.Ordinal)
                 && (error == "invalid session id"
                     || response.StatusCode == System.Net.HttpStatusCode.NotFound && !isWebDriverError))
@@ -559,6 +607,7 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
                 ForgetSession(Uri.UnescapeDataString(path.Split('/')[1]));
                 throw new AppiumSessionUnavailableException(message);
             }
+
             throw new InvalidOperationException(message);
         }
 
@@ -568,18 +617,21 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
     private static bool IsWebDriverError(JsonObject body, out string? message)
     {
         message = null;
+
         if (body["value"] is not JsonObject value)
         {
             return false;
         }
 
         var error = ReadString(value, "error");
+
         if (string.IsNullOrWhiteSpace(error))
         {
             return false;
         }
 
         message = ReadString(value, "message") ?? error;
+
         return true;
     }
 
@@ -603,14 +655,14 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
 
     private static string? ReadString(JsonNode? node, string propertyName)
         => node is JsonObject value
-           && value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
+            && value[propertyName] is JsonValue property
+            && property.TryGetValue<string>(out var text)
             ? text
             : null;
 
     private static int ReadInteger(JsonObject? value, string propertyName)
         => value?[propertyName] is JsonValue property
-           && property.TryGetValue<int>(out var number)
+            && property.TryGetValue<int>(out var number)
             ? number
             : 0;
 
@@ -626,5 +678,10 @@ internal sealed class IosPhysicalDeviceAppiumClient : IDisposable
 
     private sealed record IosPhysicalDeviceViewport(int Width, int Height);
 
-    private sealed class AppiumSessionUnavailableException(string message) : InvalidOperationException(message);
+    private sealed class AppiumSessionUnavailableException : InvalidOperationException
+    {
+        public AppiumSessionUnavailableException(string message) : base(message)
+        {
+        }
+    }
 }

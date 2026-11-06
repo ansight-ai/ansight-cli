@@ -69,6 +69,7 @@ internal sealed class SummarizeTouchFlowTool : Operation
     {
         var properties = SessionReviewToolSchemas.TouchFilterProperties();
         properties["gestureGapMs"] = ToolSchema.Integer("Maximum gap between touches for the same pointer before starting a new gesture. Defaults to 700, max 10000.", nullable: true);
+
         return properties;
     }
 }

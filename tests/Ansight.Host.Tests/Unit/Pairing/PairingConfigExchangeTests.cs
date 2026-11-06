@@ -14,6 +14,7 @@ public sealed class PairingConfigExchangeTests
         var result = PairingConfigExchange.TryDeserialize(json);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var imported = Assert.IsType<CachedPairingConfig>(result.Config);
         Assert.Equal(cachedInvite.Config.ConfigId, imported.Config.ConfigId);
         Assert.Equal(cachedInvite.Config.AppId, imported.Config.AppId);
@@ -44,6 +45,7 @@ public sealed class PairingConfigExchangeTests
             PairingConfigExchange.Serialize(cachedInvite));
 
         Assert.True(result.IsSuccess, result.Message);
+
         var payload = Assert.IsType<PairingConfigImportPayload>(result.Payload);
         Assert.Equal(PairingConfigImportKind.FullConfigExport, payload.Kind);
         Assert.Equal("app-1", payload.AppId);
@@ -61,6 +63,7 @@ public sealed class PairingConfigExchangeTests
             PublicPairingConfigJson.Serialize(invite, indented: true));
 
         Assert.True(result.IsSuccess, result.Message);
+
         var payload = Assert.IsType<PairingConfigImportPayload>(result.Payload);
         Assert.Equal(PairingConfigImportKind.PublicAppConfig, payload.Kind);
         Assert.Equal("app-1", payload.AppId);
@@ -84,6 +87,7 @@ public sealed class PairingConfigExchangeTests
             PairingConfigDocumentFactory.Serialize(document));
 
         Assert.True(result.IsSuccess, result.Message);
+
         var payload = Assert.IsType<PairingConfigImportPayload>(result.Payload);
         Assert.Equal(PairingConfigImportKind.PublicAppConfig, payload.Kind);
         Assert.Equal("invite-1", payload.SourceConfigId);
@@ -140,6 +144,7 @@ public sealed class PairingConfigExchangeTests
                 compactCode,
                 "invite-1",
                 out var directInviteJson));
+
         using var directInvite = JsonDocument.Parse(directInviteJson);
         Assert.Equal("invite-1", directInvite.RootElement.GetProperty("inviteId").GetString());
     }
@@ -147,6 +152,7 @@ public sealed class PairingConfigExchangeTests
     private static CachedPairingConfig CreateCachedInvite(string inviteId, string appId)
     {
         var now = DateTimeOffset.UtcNow;
+
         return new CachedPairingConfig
         {
             Config = new PairingConfig
@@ -182,11 +188,13 @@ public sealed class PairingConfigExchangeTests
     {
         var separatorIndex = compactCode.IndexOf(':');
         Assert.True(separatorIndex > 0);
+
         var compressedBytes = CryptoUtil.FromBase64Url(compactCode[(separatorIndex + 1)..]);
         using var compressedStream = new MemoryStream(compressedBytes);
         using var gzip = new GZipStream(compressedStream, CompressionMode.Decompress);
         using var jsonStream = new MemoryStream();
         gzip.CopyTo(jsonStream);
+
         return Encoding.UTF8.GetString(jsonStream.ToArray());
     }
 }

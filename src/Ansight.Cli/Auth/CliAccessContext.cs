@@ -9,6 +9,7 @@ internal sealed record CliAccessContext(ICliAccessAuthorizer Authorizer, CliAcce
     {
         var previous = current.Value;
         current.Value = new CliAccessContext(authorizer, lease);
+
         return new CliCommandContextScope(() => current.Value = previous);
     }
 }

@@ -6,7 +6,7 @@ internal sealed class NetworkRequestSnapshotStore
 {
     internal const long MaximumCachedCharacters = 16 * 1024 * 1024;
     internal const int MaximumSnapshots = 32;
-    internal static readonly TimeSpan SnapshotLifetime = TimeSpan.FromMinutes(5);
+    internal static readonly TimeSpan snapshotLifetime = TimeSpan.FromMinutes(5);
     private readonly object sync = new();
     private readonly Dictionary<string, NetworkRequestSnapshot> snapshots = new(StringComparer.Ordinal);
     private readonly TimeProvider timeProvider;
@@ -19,21 +19,25 @@ internal sealed class NetworkRequestSnapshotStore
     {
         var summaries = new List<string>();
         long characterCount = filters.ToJson().ToJsonString().Length + session.SessionId.Length + session.AppId.Length;
+
         if (characterCount > MaximumCachedCharacters)
         {
             throw new ArgumentException("The network query filters exceed the cursor memory budget. Narrow the query filters.");
         }
+
         foreach (var request in session.NetworkRequests.Where(filters.Matches)
-                     .OrderByDescending(request => request.StartedAtUtc)
-                     .ThenBy(request => request.Id, StringComparer.Ordinal))
+            .OrderByDescending(request => request.StartedAtUtc)
+            .ThenBy(request => request.Id, StringComparer.Ordinal))
         {
             var summary = NetworkInspectionPayload.Summary(request).ToJsonString();
+
             if (summary.Length > NetworkInspectionPayload.MaximumSerializedCharacters - 2048)
             {
                 throw new ArgumentException("A network request summary exceeds the serialized output budget.");
             }
 
             characterCount += summary.Length;
+
             if (characterCount > MaximumCachedCharacters)
             {
                 throw new ArgumentException("The matching network snapshot exceeds the cursor memory budget. Narrow the query filters.");
@@ -51,6 +55,7 @@ internal sealed class NetworkRequestSnapshotStore
         lock (sync)
         {
             RemoveExpired();
+
             while (snapshots.Count >= MaximumSnapshots || cachedCharacters + snapshot.CharacterCount > MaximumCachedCharacters)
             {
                 Remove(snapshots.Values.MinBy(item => item.CreatedUtc)!);
@@ -64,6 +69,7 @@ internal sealed class NetworkRequestSnapshotStore
     public NetworkRequestSnapshot Resolve(string cursor, string sessionId, out int offset)
     {
         var separator = cursor.IndexOf(':');
+
         if (separator != 32 || !Guid.TryParseExact(cursor[..separator], "N", out _)
             || !int.TryParse(cursor.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out offset)
             || offset < 1)
@@ -74,6 +80,7 @@ internal sealed class NetworkRequestSnapshotStore
         lock (sync)
         {
             RemoveExpired();
+
             if (!snapshots.TryGetValue(cursor[..separator], out var snapshot))
             {
                 throw new ArgumentException("The network cursor is invalid or expired. Start a new query without a cursor.");
@@ -99,7 +106,8 @@ internal sealed class NetworkRequestSnapshotStore
     private void RemoveExpired()
     {
         var now = timeProvider.GetUtcNow();
-        foreach (var expired in snapshots.Values.Where(snapshot => now - snapshot.CreatedUtc >= SnapshotLifetime).ToArray())
+
+        foreach (var expired in snapshots.Values.Where(snapshot => now - snapshot.CreatedUtc >= snapshotLifetime).ToArray())
         {
             Remove(expired);
         }

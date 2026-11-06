@@ -20,6 +20,7 @@ internal static class SessionCaptureArchiveCodec
         try
         {
             using var archive = ZipFile.OpenRead(archiveFilePath);
+
             return TryLoadArchiveDocument<SessionCaptureSummaryDocument>(archive, SessionSummaryFileName)?.Session;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
@@ -38,6 +39,7 @@ internal static class SessionCaptureArchiveCodec
         SessionAnnotationsBlobDocument? annotationsDocument = null;
         SessionAgentTaskLinksBlobDocument? taskLinksDocument = null;
         SessionImagesBlobDocument? imagesDocument = null;
+
         try
         {
             using var archive = ZipFile.OpenRead(archiveFilePath);
@@ -53,6 +55,7 @@ internal static class SessionCaptureArchiveCodec
 
         var profileJson = NormalizeJson(deviceProfileDocument?.ProfileJson);
         DeviceAppProfile? deviceProfile = null;
+
         if (!string.IsNullOrWhiteSpace(profileJson))
         {
             try
@@ -67,6 +70,7 @@ internal static class SessionCaptureArchiveCodec
         var analyses = analysesDocument?.Analyses ?? Array.Empty<SessionAnalysisRecord>();
         var annotations = annotationsDocument?.Annotations ?? Array.Empty<SessionAnnotation>();
         var images = imagesDocument?.Images ?? Array.Empty<SessionImageFrame>();
+
         return new AppSessionSnapshot
         {
             SessionId = summary.SessionId,
@@ -117,6 +121,7 @@ internal static class SessionCaptureArchiveCodec
         where T : class
     {
         var entry = archive.GetEntry(entryName);
+
         if (entry is null)
         {
             return null;
@@ -125,6 +130,7 @@ internal static class SessionCaptureArchiveCodec
         try
         {
             using var stream = entry.Open();
+
             return JsonSerializer.Deserialize<T>(stream, JsonUtil.Compact);
         }
         catch
@@ -143,17 +149,20 @@ internal static class SessionCaptureArchiveCodec
     {
         var referenceUtc = summary.LastUpdatedUtc;
         var sessionDirectoryPath = Path.GetDirectoryName(summaryFilePath);
+
         if (!string.IsNullOrWhiteSpace(sessionDirectoryPath))
         {
             var resetFilePath = Path.Combine(sessionDirectoryPath, SessionCacheCompactionResetFileName);
+
             try
             {
                 var resetText = File.ReadAllText(resetFilePath).Trim();
+
                 if (DateTimeOffset.TryParse(
-                        resetText,
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.RoundtripKind,
-                        out var resetUtc)
+                    resetText,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out var resetUtc)
                     && resetUtc > referenceUtc)
                 {
                     referenceUtc = resetUtc;
@@ -172,6 +181,7 @@ internal static class SessionCaptureArchiveCodec
         DateTimeOffset resetUtc)
     {
         var resetFilePath = Path.Combine(sessionDirectoryPath, SessionCacheCompactionResetFileName);
+
         try
         {
             File.WriteAllText(
@@ -203,6 +213,7 @@ internal static class SessionCaptureArchiveCodec
         try
         {
             using var document = JsonDocument.Parse(json);
+
             return JsonSerializer.Serialize(document.RootElement, JsonUtil.Compact);
         }
         catch

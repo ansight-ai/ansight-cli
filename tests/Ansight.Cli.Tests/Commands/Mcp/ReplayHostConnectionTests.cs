@@ -44,11 +44,13 @@ public sealed class ReplayHostConnectionTests
     public async Task MissingOrStaleHostNeverCreatesAStandaloneRuntime(bool stale)
     {
         using var directory = TestDirectory.Create();
+
         if (stale)
         {
             var metadata = new CliHostMetadata(int.MaxValue, null, true, "stale-pipe", directory.Path, DateTimeOffset.UtcNow);
             await File.WriteAllTextAsync(CliRuntime.ResolveMetadataPath(directory.Path), JsonSerializer.Serialize(metadata));
         }
+
         var before = Directory.GetFileSystemEntries(directory.Path);
 
         await Assert.ThrowsAsync<CliHostUnavailableException>(() =>
@@ -64,6 +66,7 @@ public sealed class ReplayHostConnectionTests
         using var dataLock = CliDataDirectoryLock.Acquire(directory.Path);
         var key = Path.Combine(directory.Path, "test-key");
         FileEncryptionKeyProvider.CreateKeyFile(key);
+
         await using var runtime = new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = directory.Path,
@@ -77,19 +80,23 @@ public sealed class ReplayHostConnectionTests
             // An MCP server can outlive the host and retry through a discovery gap.
             await Assert.ThrowsAsync<CliHostUnavailableException>(() =>
                 ReplayMcpCommand.RunCommandAsync(["session", "list"], directory.Path, timeout.Token));
+
             await using (var server = new ControlServer(runtime, directory.Path, timeout.Token, CliLocalAccessAuthorizer.Instance))
             {
                 server.Start();
+
                 var url = new Uri($"http://127.0.0.1:{48000 + generation}/ansight/");
                 await CliRuntime.WriteRecoveryMetadataAsync(directory.Path, url, null, timeout.Token, server.PipeName);
 
                 var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
                     ReplayMcpCommand.RunCommandAsync(["session", "list"], directory.Path, timeout.Token)));
                 Assert.All(results, result => Assert.Empty(result["sessions"]!.AsArray()));
+
                 var status = await ReplayMcpCommand.RunCommandAsync(["host", "status"], directory.Path, timeout.Token);
                 Assert.Equal(url.AbsoluteUri, status["explorerUrl"]!.GetValue<string>());
                 Assert.Throws<CliHostUnavailableException>(() => CliDataDirectoryLock.Acquire(directory.Path));
             }
+
             CliRuntime.TryDeleteMetadata(directory.Path);
         }
     }

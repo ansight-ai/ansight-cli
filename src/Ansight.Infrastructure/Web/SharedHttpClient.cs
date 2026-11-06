@@ -2,17 +2,16 @@ namespace Ansight.Infrastructure.Web;
 
 public sealed class SharedHttpClient : ISharedHttpClient
 {
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan FileTransferTimeout = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan requestTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan fileTransferTimeout = TimeSpan.FromMinutes(15);
 
     public SharedHttpClient()
     {
-        HttpClient = CreateHttpClient(RequestTimeout);
-        FileTransferHttpClient = CreateHttpClient(FileTransferTimeout);
+        HttpClient = CreateHttpClient(requestTimeout);
+        FileTransferHttpClient = CreateHttpClient(fileTransferTimeout);
     }
 
     public HttpClient HttpClient { get; }
-
     public HttpClient FileTransferHttpClient { get; }
 
     private static HttpClient CreateHttpClient(TimeSpan timeout)
@@ -22,6 +21,7 @@ public sealed class SharedHttpClient : ISharedHttpClient
             Timeout = timeout
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Ansight/1.0");
+
         return client;
     }
 }

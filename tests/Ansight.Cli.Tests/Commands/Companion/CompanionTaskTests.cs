@@ -31,6 +31,7 @@ public sealed class CompanionTaskTests
             DateTimeOffset.UtcNow, null, "session", []);
         File.WriteAllText(Path.Combine(directory.Path, "companion-task-runs.json"),
             JsonSerializer.Serialize(new[] { run }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
         await using var source = new CliCompanionTestingSource(runtime, new CliRemoteAnnotationSource(runtime));
         var request = new RemoteDeviceTestingRequest("device-one", "task-start", "com.example.app",
             Prompt: run.Prompt, ExecutionType: "test", RequestId: id);
@@ -38,8 +39,15 @@ public sealed class CompanionTaskTests
         var retried = await source.ExecuteAsync(request);
         Assert.True(retried.IsSuccess);
         Assert.Equal("run-one", retried.Details!["task"]!["id"]!.GetValue<string>());
-        Assert.False((await source.ExecuteAsync(request with { DeviceUdid = "other-device" })).IsSuccess);
-        Assert.False((await source.ExecuteAsync(request with { Prompt = "Different task" })).IsSuccess);
+        Assert.False((await source.ExecuteAsync(request with
+        {
+            DeviceUdid = "other-device"
+        })).IsSuccess);
+        Assert.False((await source.ExecuteAsync(request with
+        {
+            Prompt = "Different task"
+        })).IsSuccess);
+
         var wrongTarget = await source.ExecuteAsync(new RemoteDeviceTestingRequest(
             "other-device", "task-cancel", RunId: "run-one"));
         Assert.False(wrongTarget.IsSuccess);
@@ -51,11 +59,24 @@ public sealed class CompanionTaskTests
         var screenshot = new SimulatorAgentProgress(SimulatorAgentProgressStage.CallingTool,
             "Internal tool detail", 1, 2, 1, "ansight_screenshot");
         Assert.Equal("Taking screenshot", CliCompanionTestingSource.ProgressMessage(screenshot, false));
-        var validation = screenshot with { Stage = SimulatorAgentProgressStage.Thinking, InstructionIndex = 2 };
+
+        var validation = screenshot with
+        {
+            Stage = SimulatorAgentProgressStage.Thinking,
+            InstructionIndex = 2
+        };
         Assert.Equal("Checking results", CliCompanionTestingSource.ProgressMessage(validation, true));
-        var completed = screenshot with { Stage = SimulatorAgentProgressStage.InstructionCompleted, Message = "The requested control is visible." };
+
+        var completed = screenshot with
+        {
+            Stage = SimulatorAgentProgressStage.InstructionCompleted,
+            Message = "The requested control is visible."
+        };
         Assert.Equal(completed.Message, CliCompanionTestingSource.ProgressMessage(completed, false));
-        Assert.Null(CliCompanionTestingSource.ProgressMessage(screenshot with { Stage = SimulatorAgentProgressStage.ModelCompleted }, false));
+        Assert.Null(CliCompanionTestingSource.ProgressMessage(screenshot with
+        {
+            Stage = SimulatorAgentProgressStage.ModelCompleted
+        }, false));
     }
 
     [Fact]
@@ -69,12 +90,12 @@ public sealed class CompanionTaskTests
         var runId = started.Details!["task"]!["id"]!.GetValue<string>();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         RemoteDeviceTestingResult finished;
+
         do
         {
             await Task.Delay(10, deadline.Token);
             finished = await source.ExecuteAsync(new RemoteDeviceTestingRequest("device", "task-status", RunId: runId));
-        }
-        while (finished.Details!["task"]!["isRunning"]!.GetValue<bool>());
+        } while (finished.Details!["task"]!["isRunning"]!.GetValue<bool>());
 
         var stopped = await source.ExecuteAsync(new RemoteDeviceTestingRequest("device", "task-cancel", RunId: runId));
         Assert.False(stopped.Details!["task"]!["isRunning"]!.GetValue<bool>());
@@ -91,6 +112,7 @@ public sealed class CompanionTaskTests
             "Read the current screen", "running", "Running", DateTimeOffset.UtcNow, null, null, null, []);
         File.WriteAllText(Path.Combine(directory.Path, "companion-task-runs.json"),
             JsonSerializer.Serialize(new[] { run }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
         await using var source = new CliCompanionTestingSource(runtime, new CliRemoteAnnotationSource(runtime));
 
         var result = await source.ExecuteAsync(new RemoteDeviceTestingRequest("device", "task-status"));
@@ -103,6 +125,7 @@ public sealed class CompanionTaskTests
         var storage = Path.Combine(path, "secure-storage.json");
         var key = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storage);
         FileEncryptionKeyProvider.CreateKeyFile(key);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = path,

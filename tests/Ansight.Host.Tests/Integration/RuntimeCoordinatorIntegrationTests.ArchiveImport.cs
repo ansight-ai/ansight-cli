@@ -68,8 +68,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 new LogEntry(DateTimeOffset.Parse("2026-04-01T06:00:10Z"), "Archive import log")
                 {
                     Source = "Client"
-                }
-            ],
+                }            ],
             MetricChannels =
             [
                 new SessionMetricChannel
@@ -77,8 +76,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     ChannelId = 1,
                     Name = "FPS",
                     ColorHex = "#00FF00"
-                }
-            ],
+                }            ],
             Metrics =
             [
                 new SessionMetricSample
@@ -87,64 +85,69 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     Value = 60,
                     CapturedAtUtc = DateTimeOffset.Parse("2026-04-01T06:00:20Z"),
                     SegmentId = 2
-                }
-            ]
+                }            ]
         };
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using (var entryStream = sessionEntry.Open())
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                await JsonSerializer.SerializeAsync(
-                    entryStream,
-                    new SessionCaptureDocument
-                    {
-                        Schema = SessionCaptureDocument.LegacySchemaName,
-                        SavedAtUtc = DateTimeOffset.UtcNow,
-                        Session = snapshot
-                    },
-                    protocolJson);
-            }
+                var sessionEntry = archive.CreateEntry("session.json");
 
-            var imageEntry = archive.CreateEntry(SessionImageArtifactPath.ResolveArchiveEntryPath(frame));
-            await using (var imageStream = imageEntry.Open())
-            {
-                await imageStream.WriteAsync(new byte[] { 1, 2, 3, 4, 5 });
-            }
-
-            var touchesEntry = archive.CreateEntry("session-data/touches.json");
-            await using (var touchesStream = touchesEntry.Open())
-            {
-                await JsonSerializer.SerializeAsync(
-                    touchesStream,
-                    new JsonObject
-                    {
-                        ["schema"] = "ansight.touches.v1",
-                        ["savedAtUtc"] = DateTimeOffset.UtcNow,
-                        ["batches"] = new JsonArray
+                await using (var entryStream = sessionEntry.Open())
+                {
+                    await JsonSerializer.SerializeAsync(
+                        entryStream,
+                        new SessionCaptureDocument
                         {
-                            new JsonObject
+                            Schema = SessionCaptureDocument.LegacySchemaName,
+                            SavedAtUtc = DateTimeOffset.UtcNow,
+                            Session = snapshot
+                        },
+                        protocolJson);
+                }
+
+                var imageEntry = archive.CreateEntry(SessionImageArtifactPath.ResolveArchiveEntryPath(frame));
+
+                await using (var imageStream = imageEntry.Open())
+                {
+                    await imageStream.WriteAsync(new byte[] { 1, 2, 3, 4, 5 });
+                }
+
+                var touchesEntry = archive.CreateEntry("session-data/touches.json");
+
+                await using (var touchesStream = touchesEntry.Open())
+                {
+                    await JsonSerializer.SerializeAsync(
+                        touchesStream,
+                        new JsonObject
+                        {
+                            ["schema"] = "ansight.touches.v1",
+                            ["savedAtUtc"] = DateTimeOffset.UtcNow,
+                            ["batches"] = new JsonArray
                             {
-                                ["t0"] = DateTimeOffset.Parse("2026-04-01T06:00:25Z"),
-                                ["space"] = "w",
-                                ["unit"] = "pt",
-                                ["surface"] = new JsonArray(440, 275, 2),
-                                ["rows"] = new JsonArray
+                                new JsonObject
                                 {
-                                    new JsonArray(0, 0, 7, 44, 55)
+                                    ["t0"] = DateTimeOffset.Parse("2026-04-01T06:00:25Z"),
+                                    ["space"] = "w",
+                                    ["unit"] = "pt",
+                                    ["surface"] = new JsonArray(440, 275, 2),
+                                    ["rows"] = new JsonArray
+                                    {
+                                        new JsonArray(0, 0, 7, 44, 55)
+                                    }
                                 }
                             }
-                        }
-                    },
-                    protocolJson);
-            }
+                        },
+                        protocolJson);
+                }
 
-            var appIconEntry = archive.CreateEntry(SessionAppIconArtifactPath.ResolveArchiveEntryPath(snapshot.AppIcon));
-            await using (var appIconStream = appIconEntry.Open())
-            {
-                await appIconStream.WriteAsync(appIconBytes);
+                var appIconEntry = archive.CreateEntry(SessionAppIconArtifactPath.ResolveArchiveEntryPath(snapshot.AppIcon));
+
+                await using (var appIconStream = appIconEntry.Open())
+                {
+                    await appIconStream.WriteAsync(appIconBytes);
+                }
             }
         }
 
@@ -163,6 +166,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Single(importResult.ImportedSession.Images);
         Assert.Single(importResult.ImportedSession.Logs);
         Assert.Single(importResult.ImportedSession.Metrics);
+
         var importedTouch = Assert.Single(importResult.ImportedSession.Touches);
         Assert.Equal("down", importedTouch.Action);
         Assert.Equal(DateTimeOffset.Parse("2026-04-01T06:00:25Z"), importedTouch.CapturedAtUtc);
@@ -173,6 +177,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Equal("proc-001", restoredSession.ProcessSessionId);
         Assert.Equal("0.1.0-import", restoredSession.SdkVersion);
         Assert.NotNull(restoredSession.AppIcon);
+
         var importedIconPath = SessionAppIconArtifactPath.ResolveSessionIconPath(
             SessionAppIconArtifactPath.ResolveSessionCapturesRootPath(runtime.ApplicationPaths),
             restoredSession.AppId,
@@ -230,45 +235,48 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using (var entryStream = sessionEntry.Open())
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
+                var sessionEntry = archive.CreateEntry("session.json");
+
+                await using (var entryStream = sessionEntry.Open())
+                {
+                    await JsonSerializer.SerializeAsync(
+                        entryStream,
+                        new SessionCaptureDocument
+                        {
+                            SavedAtUtc = capturedAtUtc,
+                            Session = snapshot,
+                            VisualTreeSnapshotIndex =
+                                            [
+                                                new SessionVisualTreeSnapshotIndexEntry
+                                                {
+                                                    EntryPath = visualTreeEntryPath,
+                                                    Header = header
+                                                }                            ]
+                        },
+                        protocolJson);
+                }
+
+                var visualTreeEntry = archive.CreateEntry(visualTreeEntryPath);
+                await using var visualTreeStream = visualTreeEntry.Open();
                 await JsonSerializer.SerializeAsync(
-                    entryStream,
-                    new SessionCaptureDocument
+                    visualTreeStream,
+                    new SessionVisualTreeSnapshotDocument
                     {
                         SavedAtUtc = capturedAtUtc,
-                        Session = snapshot,
-                        VisualTreeSnapshotIndex =
-                        [
-                            new SessionVisualTreeSnapshotIndexEntry
-                            {
-                                EntryPath = visualTreeEntryPath,
-                                Header = header
-                            }
-                        ]
+                        Header = header,
+                        Snapshot = visualTree
                     },
                     protocolJson);
             }
-
-            var visualTreeEntry = archive.CreateEntry(visualTreeEntryPath);
-            await using var visualTreeStream = visualTreeEntry.Open();
-            await JsonSerializer.SerializeAsync(
-                visualTreeStream,
-                new SessionVisualTreeSnapshotDocument
-                {
-                    SavedAtUtc = capturedAtUtc,
-                    Header = header,
-                    Snapshot = visualTree
-                },
-                protocolJson);
         }
 
         var importResult = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
 
         Assert.True(importResult.IsSuccess, importResult.Message);
+
         var importedTree = Assert.Single(importResult.ImportedSession!.VisualTreeSnapshots);
         Assert.Equal("tree-001", importedTree.SnapshotId);
         Assert.Equal(1, importedTree.NodeCount);
@@ -276,17 +284,21 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var exportedArchivePath = Path.Combine(environment.ApplicationPaths.ApplicationDataPath, "export-session-v2.ansight.zip");
         var exportResult = await runtime.SessionArchives.ExportSessionArchiveAsync(importResult.ImportedSession.SessionId, exportedArchivePath);
         Assert.True(exportResult.IsSuccess, exportResult.Message);
+
         using var exportedArchive = ZipFile.OpenRead(exportedArchivePath);
         var exportedSessionEntry = exportedArchive.GetEntry("session.json");
         Assert.NotNull(exportedSessionEntry);
+
         using var exportedSessionStream = exportedSessionEntry!.Open();
         using var exportedSessionReader = new StreamReader(exportedSessionStream);
         var exportedSessionJson = await exportedSessionReader.ReadToEndAsync();
         Assert.DoesNotContain('\n', exportedSessionJson);
+
         var exportedDocument = JsonSerializer.Deserialize<SessionCaptureDocument>(exportedSessionJson, protocolJson);
         Assert.NotNull(exportedDocument);
         Assert.Equal(SessionCaptureDocument.SchemaName, exportedDocument.Schema);
         Assert.Empty(exportedDocument.Session.VisualTreeSnapshots);
+
         var exportedTreeDescriptor = Assert.Single(exportedDocument.VisualTreeSnapshotIndex);
         Assert.NotNull(exportedArchive.GetEntry(exportedTreeDescriptor.EntryPath));
     }
@@ -314,64 +326,65 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using (var entryStream = sessionEntry.Open())
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                await JsonSerializer.SerializeAsync(
-                    entryStream,
-                    new SessionCaptureDocument
-                    {
-                        SavedAtUtc = DateTimeOffset.UtcNow,
-                        Session = snapshot
-                    },
-                    protocolJson);
-            }
+                var sessionEntry = archive.CreateEntry("session.json");
 
-            await WriteArchiveTextEntryAsync(
-                archive,
-                "session-data/logs.jsonl",
-                JsonSerializer.Serialize(new
+                await using (var entryStream = sessionEntry.Open())
                 {
-                    timestampUtc = DateTimeOffset.Parse("2026-04-01T06:00:10Z"),
-                    message = "JSONL archive log",
-                    source = "Client",
-                    tag = "Import"
-                }, protocolJson));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                "session-data/metric-channels.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    id = 1,
-                    name = "FPS",
-                    color = "#00ff00"
-                }, protocolJson));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                "session-data/metrics.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    channel = 1,
-                    value = 61,
-                    capturedAtUtc = DateTimeOffset.Parse("2026-04-01T06:00:20Z")
-                }, protocolJson));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                "session-data/touches.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    schema = "ansight.touches.v1",
-                    t0 = DateTimeOffset.Parse("2026-04-01T06:00:25Z"),
-                    space = "w",
-                    unit = "pt",
-                    surface = new object?[] { 440, 275, 2 },
-                    rows = new object?[]
+                    await JsonSerializer.SerializeAsync(
+                        entryStream,
+                        new SessionCaptureDocument
+                        {
+                            SavedAtUtc = DateTimeOffset.UtcNow,
+                            Session = snapshot
+                        },
+                        protocolJson);
+                }
+
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    "session-data/logs.jsonl",
+                    JsonSerializer.Serialize(new
                     {
-                        new object?[] { 0, 0, 7, 44, 55 }
-                    }
-                }, protocolJson));
+                        timestampUtc = DateTimeOffset.Parse("2026-04-01T06:00:10Z"),
+                        message = "JSONL archive log",
+                        source = "Client",
+                        tag = "Import"
+                    }, protocolJson));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    "session-data/metric-channels.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        id = 1,
+                        name = "FPS",
+                        color = "#00ff00"
+                    }, protocolJson));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    "session-data/metrics.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        channel = 1,
+                        value = 61,
+                        capturedAtUtc = DateTimeOffset.Parse("2026-04-01T06:00:20Z")
+                    }, protocolJson));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    "session-data/touches.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        schema = "ansight.touches.v1",
+                        t0 = DateTimeOffset.Parse("2026-04-01T06:00:25Z"),
+                        space = "w",
+                        unit = "pt",
+                        surface = new object?[] { 440, 275, 2 },
+                        rows = new object?[]
+{                        new object?[] {0, 0, 7, 44, 55 }}
+                    }, protocolJson));
+            }
         }
 
         var importResult = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
@@ -379,13 +392,17 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.True(importResult.IsSuccess, importResult.Message);
         Assert.NotNull(importResult.ImportedSession);
         Assert.Equal("com.example.jsonl.archive", importResult.ImportedSession!.AppId);
+
         var importedLog = Assert.Single(importResult.ImportedSession.Logs);
         Assert.Equal("JSONL archive log", importedLog.Message);
+
         var importedChannel = Assert.Single(importResult.ImportedSession.MetricChannels);
         Assert.Equal((byte)1, importedChannel.ChannelId);
         Assert.Equal("#00FF00", importedChannel.ColorHex);
+
         var importedMetric = Assert.Single(importResult.ImportedSession.Metrics);
         Assert.Equal(61, importedMetric.Value);
+
         var importedTouch = Assert.Single(importResult.ImportedSession.Touches);
         Assert.Equal("down", importedTouch.Action);
         Assert.Equal("points", importedTouch.CoordinateUnit);
@@ -415,55 +432,43 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         };
         var jsonLines = new[]
         {
-            JsonSerializer.Serialize(new { type = "session", session = snapshot }, protocolJson),
+            JsonSerializer.Serialize(new {type = "session", session = snapshot }, protocolJson),
             JsonSerializer.Serialize(new
-            {
-                type = "CLIENT_METRIC_CHANNELS",
+{                type = "CLIENT_METRIC_CHANNELS",
                 channels = new[]
                 {
                     new
-                    {
-                        id = 1,
+{                        id = 1,
                         name = "FPS",
                         color = "#00ff00"
-                    }
-                }
-            }, protocolJson),
+}
+                }}, protocolJson),
             JsonSerializer.Serialize(new
-            {
-                type = "CLIENT_METRICS",
+{                type = "CLIENT_METRICS",
                 metrics = new[]
                 {
                     new
-                    {
-                        channel = 1,
+{                        channel = 1,
                         value = 59,
                         capturedAtUtc = DateTimeOffset.Parse("2026-04-02T06:00:20Z")
-                    }
-                }
-            }, protocolJson),
+}
+                }}, protocolJson),
             JsonSerializer.Serialize(new
-            {
-                type = "CLIENT_TOUCH_INPUT",
+{                type = "CLIENT_TOUCH_INPUT",
                 schema = "ansight.touches.v1",
                 t0 = DateTimeOffset.Parse("2026-04-02T06:00:25Z"),
                 space = "w",
                 unit = "pt",
-                surface = new object?[] { 440, 275, 2 },
+                surface = new object?[] {440, 275, 2 },
                 rows = new object?[]
-                {
-                    new object?[] { 0, 0, 7, 44, 55 }
-                }
-            }, protocolJson),
+{                    new object?[] {0, 0, 7, 44, 55 }}}, protocolJson),
             JsonSerializer.Serialize(new
-            {
-                type = "CLIENT_LOG",
+{                type = "CLIENT_LOG",
                 data = "Offline JSONL log",
                 capturedAtUtc = DateTimeOffset.Parse("2026-04-02T06:00:30Z")
-            }, protocolJson),
+}, protocolJson),
             JsonSerializer.Serialize(new
-            {
-                type = "CLIENT_JPEG",
+{                type = "CLIENT_JPEG",
                 frameId = "frame-offline",
                 capturedAtUtc = DateTimeOffset.Parse("2026-04-02T06:00:40Z"),
                 format = "jpeg",
@@ -471,7 +476,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 height = 1,
                 quality = 80,
                 base64 = Convert.ToBase64String(imageBytes)
-            }, protocolJson)
+}, protocolJson)
         };
         await File.WriteAllLinesAsync(jsonLinesPath, jsonLines);
 
@@ -485,6 +490,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Single(importResult.ImportedSession.MetricChannels);
         Assert.Single(importResult.ImportedSession.Metrics);
         Assert.Single(importResult.ImportedSession.Touches);
+
         var importedFrame = Assert.Single(importResult.ImportedSession.Images);
         var importedImagePath = SessionImageArtifactPath.ResolveCapturedImagePath(
             SessionImageArtifactPath.ResolveSessionCapturesRootPath(runtime.ApplicationPaths),
@@ -508,104 +514,105 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var screenshotRelativePath = "screenshots/20260403060040000.jpg";
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "manifest.json",
-                JsonSerializer.Serialize(new
-                {
-                    Version = 1,
-                    SessionId = sessionId,
-                    StartedAtUtc = DateTimeOffset.Parse("2026-04-03T06:00:00Z"),
-                    StoppedAtUtc = DateTimeOffset.Parse("2026-04-03T06:01:00Z"),
-                    AppId = "com.example.offline.sdk",
-                    ClientName = "Offline SDK App",
-                    RemoteAddress = "offline",
-                    ProcessSessionId = "12345",
-                    SdkVersion = "1.0.2-preview.1",
-                    AppState = 1,
-                    AppStateChangedUtc = DateTimeOffset.Parse("2026-04-03T06:00:10Z")
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "metadata/channels.json",
-                JsonSerializer.Serialize(new
-                {
-                    v = 1,
-                    ch = new[]
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+            {
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "manifest.json",
+                    JsonSerializer.Serialize(new
                     {
-                        new
+                        Version = 1,
+                        SessionId = sessionId,
+                        StartedAtUtc = DateTimeOffset.Parse("2026-04-03T06:00:00Z"),
+                        StoppedAtUtc = DateTimeOffset.Parse("2026-04-03T06:01:00Z"),
+                        AppId = "com.example.offline.sdk",
+                        ClientName = "Offline SDK App",
+                        RemoteAddress = "offline",
+                        ProcessSessionId = "12345",
+                        SdkVersion = "1.0.2-preview.1",
+                        AppState = 1,
+                        AppStateChangedUtc = DateTimeOffset.Parse("2026-04-03T06:00:10Z")
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "metadata/channels.json",
+                    JsonSerializer.Serialize(new
+                    {
+                        v = 1,
+                        ch = new[]
                         {
-                            id = 1,
+                            new
+{                            id = 1,
                             n = "FPS",
                             c = "#00ff00"
+}
                         }
-                    }
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "metadata/custom-properties.json",
-                JsonSerializer.Serialize(new
-                {
-                    scenario = new
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "metadata/custom-properties.json",
+                    JsonSerializer.Serialize(new
                     {
-                        mode = "offline"
-                    }
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "telemetry/metrics/m-20260403060020000.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    t = DateTimeOffset.Parse("2026-04-03T06:00:20Z").ToUnixTimeMilliseconds(),
-                    c = 1,
-                    v = 72.125
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "telemetry/events/e-20260403060025000.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    id = "11111111111111111111111111111111",
-                    t = DateTimeOffset.Parse("2026-04-03T06:00:25Z").ToUnixTimeMilliseconds(),
-                    c = 0,
-                    k = 3,
-                    l = "export_warning",
-                    d = "needs-review"
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "input/touches/t-20260403060030000.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    id = "22222222222222222222222222222222",
-                    t = DateTimeOffset.Parse("2026-04-03T06:00:30Z").ToUnixTimeMilliseconds(),
-                    a = 0,
-                    p = 7,
-                    x = 44,
-                    y = 55,
-                    w = 440,
-                    h = 275,
-                    u = "points",
-                    s = 2
-                }));
-            await WriteArchiveTextEntryAsync(
-                archive,
-                archiveRoot + "screenshots/index/s-20260403060040000.jsonl",
-                JsonSerializer.Serialize(new
-                {
-                    t = screenshotUtc.ToUnixTimeMilliseconds(),
-                    p = screenshotRelativePath,
-                    w = 1,
-                    h = 1,
-                    q = 80,
-                    b = imageBytes.Length
-                }));
+                        scenario = new
+                        {
+                            mode = "offline"
+                        }
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "telemetry/metrics/m-20260403060020000.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        t = DateTimeOffset.Parse("2026-04-03T06:00:20Z").ToUnixTimeMilliseconds(),
+                        c = 1,
+                        v = 72.125
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "telemetry/events/e-20260403060025000.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        id = "11111111111111111111111111111111",
+                        t = DateTimeOffset.Parse("2026-04-03T06:00:25Z").ToUnixTimeMilliseconds(),
+                        c = 0,
+                        k = 3,
+                        l = "export_warning",
+                        d = "needs-review"
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "input/touches/t-20260403060030000.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        id = "22222222222222222222222222222222",
+                        t = DateTimeOffset.Parse("2026-04-03T06:00:30Z").ToUnixTimeMilliseconds(),
+                        a = 0,
+                        p = 7,
+                        x = 44,
+                        y = 55,
+                        w = 440,
+                        h = 275,
+                        u = "points",
+                        s = 2
+                    }));
+                await WriteArchiveTextEntryAsync(
+                    archive,
+                    archiveRoot + "screenshots/index/s-20260403060040000.jsonl",
+                    JsonSerializer.Serialize(new
+                    {
+                        t = screenshotUtc.ToUnixTimeMilliseconds(),
+                        p = screenshotRelativePath,
+                        w = 1,
+                        h = 1,
+                        q = 80,
+                        b = imageBytes.Length
+                    }));
 
-            var imageEntry = archive.CreateEntry(archiveRoot + screenshotRelativePath);
-            await using var imageStream = imageEntry.Open();
-            await imageStream.WriteAsync(imageBytes);
+                var imageEntry = archive.CreateEntry(archiveRoot + screenshotRelativePath);
+                await using var imageStream = imageEntry.Open();
+                await imageStream.WriteAsync(imageBytes);
+            }
         }
 
         var importResult = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
@@ -617,21 +624,27 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Equal("Offline SDK App", importResult.ImportedSession.ClientName);
         Assert.Equal("1.0.2-preview.1", importResult.ImportedSession.SdkVersion);
         Assert.Equal("12345", importResult.ImportedSession.ProcessSessionId);
+
         var channel = Assert.Single(importResult.ImportedSession.MetricChannels);
         Assert.Equal("FPS", channel.Name);
         Assert.Equal("#00FF00", channel.ColorHex);
+
         var metric = Assert.Single(importResult.ImportedSession.Metrics);
         Assert.Equal(72.125, metric.Value);
+
         var log = Assert.Single(importResult.ImportedSession.Logs);
         Assert.Equal("export_warning: needs-review", log.Message);
         Assert.Equal("WARNING", log.Tag);
         Assert.Equal("export_warning", Assert.Single(importResult.ImportedSession.ApplicationEvents).Label);
+
         var touch = Assert.Single(importResult.ImportedSession.Touches);
         Assert.Equal("down", touch.Action);
         Assert.Equal(7, touch.PointerId);
         Assert.Equal("points", touch.CoordinateUnit);
+
         var frame = Assert.Single(importResult.ImportedSession.Images);
         Assert.Equal(screenshotUtc, frame.CapturedAtUtc);
+
         var imagePath = SessionImageArtifactPath.ResolveCapturedImagePath(
             SessionImageArtifactPath.ResolveSessionCapturesRootPath(runtime.ApplicationPaths),
             importResult.ImportedSession.AppId,
@@ -698,6 +711,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.NotNull(importResult.ImportedSession);
         Assert.Equal(sessionId, importResult.ImportedSession!.SessionId);
         Assert.Equal("com.example.offline.encrypted", importResult.ImportedSession.AppId);
+
         var log = Assert.Single(importResult.ImportedSession.Logs);
         Assert.Equal("encrypted_export: imported", log.Message);
     }

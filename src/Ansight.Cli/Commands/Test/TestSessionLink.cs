@@ -13,6 +13,7 @@ internal sealed record TestSessionLink(
         string? testId)
     {
         var links = new List<TestSessionLink>(2);
+
         if (!string.IsNullOrWhiteSpace(result.SessionId))
         {
             links.Add(new TestSessionLink(

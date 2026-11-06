@@ -21,6 +21,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
         using var connectionChanged = new SemaphoreSlim(0);
         server.CompanionConnectionsChanged += (_, _) => connectionChanged.Release();
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         var offerBody = JsonSerializer.Serialize(
@@ -36,6 +37,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
             Endpoint(server, "/api/webrtc/offer"),
             new StringContent(offerBody, Encoding.UTF8, "application/json"));
         Assert.True(offerResponse.IsSuccessStatusCode, await offerResponse.Content.ReadAsStringAsync());
+
         var offerAnswer = await offerResponse.Content.ReadFromJsonAsync<JsonElement>();
         var sessionId = offerAnswer.GetProperty("sessionId").GetString();
         Assert.False(string.IsNullOrWhiteSpace(sessionId));
@@ -55,6 +57,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
             """);
 
         Assert.True(await connectionChanged.WaitAsync(TimeSpan.FromSeconds(2)));
+
         var connection = Assert.Single(server.GetConnectedCompanionConnections());
         Assert.Equal(sessionId, connection.SessionId);
         Assert.Equal("companion-device-1", connection.Device.Identifier);
@@ -77,6 +80,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
         var sessionFactory = new FakeWebRtcSessionFactory();
         await using var server = CreateServer(sessionFactory);
         await server.StartAsync();
+
         using var client = new HttpClient();
         var offerBody = JsonSerializer.Serialize(
             new
@@ -91,6 +95,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
             Endpoint(server, "/api/webrtc/offer"),
             new StringContent(offerBody, Encoding.UTF8, "application/json"));
         Assert.True(offerResponse.IsSuccessStatusCode, await offerResponse.Content.ReadAsStringAsync());
+
         var offerAnswer = await offerResponse.Content.ReadFromJsonAsync<JsonElement>();
         var sessionId = offerAnswer.GetProperty("sessionId").GetString()!;
         var session = Assert.IsType<FakeWebRtcSession>(sessionFactory.LastSession);
@@ -119,6 +124,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
     private static string Endpoint(RemoteControlServer server, string path, string? query = null)
     {
         var suffix = string.IsNullOrWhiteSpace(query) ? string.Empty : $"&{query}";
+
         return $"http://127.0.0.1:{server.Port}{path}?token={SessionToken}{suffix}";
     }
 
@@ -127,14 +133,14 @@ public sealed class RemoteControlServerCompanionConnectionTests
         public RemoteRuntimeSnapshot Current { get; } = new(
             DateTimeOffset.UtcNow,
             [
-                new RemoteRuntimeDevice(
-                    "runtime-device-1",
-                    "iPhone 17 Pro Max",
-                    "Booted",
-                    true,
-                    "iOS 26.5",
-                    "ios")
-            ],
+                    new RemoteRuntimeDevice(
+                        "runtime-device-1",
+                        "iPhone 17 Pro Max",
+                        "Booted",
+                        true,
+                        "iOS 26.5",
+                        "ios")
+                ],
             null);
     }
 
@@ -151,6 +157,7 @@ public sealed class RemoteControlServerCompanionConnectionTests
         public ISimulatorWebRtcSession Create(string deviceUdid, int framesPerSecond)
         {
             LastSession = new FakeWebRtcSession(deviceUdid);
+
             return LastSession;
         }
     }

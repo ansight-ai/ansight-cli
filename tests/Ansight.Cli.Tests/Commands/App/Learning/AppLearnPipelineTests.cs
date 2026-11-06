@@ -113,6 +113,7 @@ public sealed class AppLearnPipelineTests
             {
                 cancellation.Cancel();
                 token.ThrowIfCancellationRequested();
+
                 return Task.FromResult(true);
             }, cancellation.Token, snapshot => checkpoint = snapshot));
         Assert.NotNull(checkpoint!.Draft);
@@ -133,6 +134,7 @@ public sealed class AppLearnPipelineTests
         => AppLearnPipeline.RunCandidateAsync(AppLearnTestData.Candidate(), Request(), draftOnly, author, (_, _, _) =>
         {
             author.Calls.Add("prepare");
+
             return Task.FromResult(prepare);
         }, CancellationToken.None);
 
@@ -152,24 +154,50 @@ public sealed class AppLearnPipelineTests
             Action<LocalTaskExtractionSnapshot> checkpoint)
         {
             Calls.Add("author");
-            snapshot = snapshot with { Status = AuthorStatus, Draft = snapshot.Draft! with { ValidationWarnings = Warnings } };
+            snapshot = snapshot with
+            {
+                Status = AuthorStatus,
+                Draft = snapshot.Draft! with
+                {
+                    ValidationWarnings = Warnings
+                }
+            };
             checkpoint(snapshot);
-            if (AuthorFailsAfterCheckpoint) throw new IOException("Authoring failed after source was retained.");
+
+            if (AuthorFailsAfterCheckpoint)
+            {
+                throw new IOException("Authoring failed after source was retained.");
+            }
+
             return Task.FromResult(snapshot);
         }
 
         public Task<LocalTaskExtractionSnapshot> TestAsync(string extractionId, string sessionId, CancellationToken cancellationToken)
         {
             Calls.Add("test");
-            snapshot = snapshot with { TestStatus = TestResult.Status, TestResult = TestResult };
+            snapshot = snapshot with
+            {
+                TestStatus = TestResult.Status,
+                TestResult = TestResult
+            };
+
             return Task.FromResult(snapshot);
         }
 
         public LocalTaskExtractionSnapshot Save(string extractionId)
         {
             Calls.Add("save");
-            if (SaveFails) throw new IOException("Task already exists.");
-            return snapshot with { Status = "committed", CommittedPath = "/workspace/ansight/tasks/task.ts" };
+
+            if (SaveFails)
+            {
+                throw new IOException("Task already exists.");
+            }
+
+            return snapshot with
+            {
+                Status = "committed",
+                CommittedPath = "/workspace/ansight/tasks/task.ts"
+            };
         }
     }
 }

@@ -11,23 +11,27 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_SearchFeedbackPreservesExplicitResultSelectionAndRemainingJourney(string selection)
     {
         var client = new FakeOpenAiClient(
-        [
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject
-            {
-                ["automationId"] = "for-you-global-search", ["value"] = "Eagle rock"
-            }),
+            [
+                CreateFunctionTurn("type", "ansight_type_text", new JsonObject
+                {
+                    ["automationId"] = "for-you-global-search",
+                    ["value"] = "Eagle rock"
+                }),
             CreateFunctionTurn("find", "ansight_find_ui", new JsonObject
             {
-                ["text"] = "Eagle Rock", ["role"] = "text", ["visible"] = true
+                ["text"] = "Eagle Rock",
+                ["role"] = "text",
+                ["visible"] = true
             }),
-            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject { ["automationId"] = "eagle-rock-result" }),
+            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject {["automationId"] = "eagle-rock-result" }),
             CompleteNavigationTurn()
-        ]);
+            ]);
         var gateway = new FakeToolGateway();
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
         gateway.Results.Enqueue(new ToolCallResult(false,
             "{\"result\":{\"totalMatches\":2,\"matches\":[{\"text\":\"Eagle Rock\"},{\"text\":\"Eagle Rock\"}]}}", "Results found."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Opened."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -38,6 +42,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(3, gateway.Calls.Count);
+
         var postFindInput = client.Inputs[2].ToJsonString();
         Assert.Contains("Use the complete current instruction", postFindInput);
         Assert.Contains("continue the remaining journey", postFindInput);
@@ -52,7 +57,7 @@ public sealed partial class SimulatorAgentServiceTests
         const string focusTaskId = "focus-map-search-area";
         const string detailsTaskId = "open-selected-map-area-details";
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("declare", "ansight_declare_uncovered_step", new JsonObject
             {
                 ["uncoveredStep"] = "Select the Map tab before searching for an area and opening Details.",
@@ -61,7 +66,7 @@ public sealed partial class SimulatorAgentServiceTests
                 ["evidence"] = "For you is selected; both tasks require the Map tab or a selected map card.",
                 ["consideredTaskIds"] = new JsonArray(focusTaskId, detailsTaskId)
             }),
-            CreateFunctionTurn("select-map", "ansight_tap_ui", new JsonObject { ["automationId"] = "home-tab-explore" }),
+            CreateFunctionTurn("select-map", "ansight_tap_ui", new JsonObject {["automationId"] = "home-tab-explore" }),
             CompleteNavigationTurn()
         ]);
         var gateway = new FakeToolGateway
@@ -73,6 +78,7 @@ public sealed partial class SimulatorAgentServiceTests
             ]
         };
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Map tab selected."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -94,7 +100,7 @@ public sealed partial class SimulatorAgentServiceTests
             Description = "From the current area's open AreaPage, select About, scroll its details until the weather card is visible. Does not search for another area."
         };
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("declare", "ansight_declare_uncovered_step", new JsonObject
             {
                 ["uncoveredStep"] = "Search Approach in the area details page and copy the Location card contents.",
@@ -103,11 +109,12 @@ public sealed partial class SimulatorAgentServiceTests
                 ["evidence"] = "Weather is unrelated to Location sharing and clipboard copying.",
                 ["consideredTaskIds"] = new JsonArray(weatherTaskId)
             }),
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Approach" }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject {["value"] = "Approach" }),
             CompleteNavigationTurn()
         ]);
         var gateway = new FakeToolGateway { RepositoryTaskShortcuts = [weatherTask] };
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -115,6 +122,7 @@ public sealed partial class SimulatorAgentServiceTests
             ["Search Approach and copy the Location card contents."]));
 
         Assert.False(Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare").IsError);
+
         var typed = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "type");
         Assert.False(typed.IsError, typed.Message);
         Assert.DoesNotContain(gateway.Calls, call => call.ToolName == "ansight_run_task");
@@ -125,14 +133,14 @@ public sealed partial class SimulatorAgentServiceTests
     {
         const string taskId = "export-account-data";
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("declare", "ansight_declare_uncovered_step", UnrelatedTaskDeclaration(taskId)),
             CreateFunctionTurn("focus-search", "ansight_tap_ui", new JsonObject
             {
                 ["text"] = "Search",
                 ["role"] = "textbox"
             }),
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Kalymnos" }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject {["value"] = "Kalymnos" }),
             CompleteNavigationTurn()
         ]);
         var gateway = new FakeToolGateway
@@ -142,17 +150,23 @@ public sealed partial class SimulatorAgentServiceTests
         gateway.Results.Enqueue(new ToolCallResult(false,
             "{\"result\":{\"performed\":true,\"target\":{\"role\":\"textbox\"}}", "Search focused."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
-            ["Search for Kalymnos."]) { CaptureTrace = true });
+            ["Search for Kalymnos."])
+        {
+            CaptureTrace = true
+        });
 
         var declared = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "declare");
         Assert.Contains("\"manualUiAllowed\":true", declared.Result.Content, StringComparison.Ordinal);
+
         var focused = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "focus-search");
         Assert.False(focused.IsError);
         Assert.Equal("{\"result\":{\"performed\":true,\"target\":{\"role\":\"textbox\"}}", focused.Result.Content);
+
         var typed = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "type");
         Assert.False(typed.IsError, typed.Message);
         Assert.Equal(2, gateway.Calls.Count);
@@ -179,7 +193,7 @@ public sealed partial class SimulatorAgentServiceTests
             }
         };
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("exclude", "ansight_declare_uncovered_step", new JsonObject
             {
                 ["uncoveredStep"] = "Search for Kalymnos, open a result, then return.",
@@ -188,8 +202,8 @@ public sealed partial class SimulatorAgentServiceTests
                 ["evidence"] = "The task additionally opens a child area. Required childArea is not supplied by the instruction or observations.",
                 ["consideredTaskIds"] = new JsonArray(taskId)
             }),
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Kalymnos" }),
-            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject { ["automationId"] = "result-kalymnos" }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject {["value"] = "Kalymnos" }),
+            CreateFunctionTurn("open", "ansight_tap_ui", new JsonObject {["automationId"] = "result-kalymnos" }),
             CreateFunctionTurn("back", "ansight_back_ui", new JsonObject()),
             CompleteNavigationTurn()
         ]);
@@ -211,11 +225,11 @@ public sealed partial class SimulatorAgentServiceTests
     {
         const string taskId = "export-account-data";
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("declare", "ansight_declare_uncovered_step", UnrelatedTaskDeclaration(taskId)),
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Kalymnos" }),
-            CreateFunctionTurn("bad-selector", "ansight_tap_ui", new JsonObject { ["text"] = "Kalymnos", ["index"] = 1 }),
-            CreateFunctionTurn("corrected-selector", "ansight_tap_ui", new JsonObject { ["automationId"] = "result-kalymnos" }),
+            CreateFunctionTurn("type", "ansight_type_text", new JsonObject {["value"] = "Kalymnos" }),
+            CreateFunctionTurn("bad-selector", "ansight_tap_ui", new JsonObject {["text"] = "Kalymnos", ["index"] = 1 }),
+            CreateFunctionTurn("corrected-selector", "ansight_tap_ui", new JsonObject {["automationId"] = "result-kalymnos" }),
             CreateFunctionTurn("blocked-after-navigation", "ansight_back_ui", new JsonObject()),
             CompleteNavigationTurn()
         ]);
@@ -227,6 +241,7 @@ public sealed partial class SimulatorAgentServiceTests
         gateway.Results.Enqueue(new ToolCallResult(true,
             "{\"isError\":true,\"result\":{\"performed\":false,\"message\":\"No matching selector.\"}}", "No matching selector."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Opened."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
@@ -248,7 +263,7 @@ public sealed partial class SimulatorAgentServiceTests
         {
             CreateFunctionTurn($"declare-{index}", "ansight_declare_uncovered_step", UnrelatedTaskDeclaration(taskId)),
             CreateFunctionTurn($"observe-{index}", index % 2 == 0 ? "ansight_find_ui" : "ansight_take_screenshot",
-                new JsonObject { ["text"] = $"Result {index}" })
+                new JsonObject {["text"] = $"Result {index}" })
         }).ToArray();
         var client = new FakeOpenAiClient(turns);
         var gateway = new FakeToolGateway
@@ -280,16 +295,18 @@ public sealed partial class SimulatorAgentServiceTests
         string instruction = "Search for Kalymnos, open a result, then return.")
     {
         var waitArguments = new JsonObject { ["text"] = "Kalymnos", ["condition"] = "visible" };
+
         if (explicitInputSelector)
         {
             waitArguments["role"] = "textbox";
         }
+
         var client = new FakeOpenAiClient(
-        [
-            CreateFunctionTurn("type", "ansight_type_text", new JsonObject { ["value"] = "Kalymnos" }),
+            [
+                    CreateFunctionTurn("type", "ansight_type_text", new JsonObject {["value"] = "Kalymnos" }),
             CreateFunctionTurn("wait", "ansight_wait_for_ui", waitArguments),
             CompleteNavigationTurn()
-        ]);
+                ]);
         var gateway = new FakeToolGateway();
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"result\":{\"performed\":true}}", "Typed."));
         gateway.Results.Enqueue(new ToolCallResult(false, new JsonObject
@@ -301,14 +318,19 @@ public sealed partial class SimulatorAgentServiceTests
                 ["matches"] = new JsonArray(new JsonObject { ["text"] = "Kalymnos", ["role"] = role })
             }
         }.ToJsonString(), "Wait satisfied."));
+
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123",
-            [instruction]) { CaptureTrace = true });
+            [instruction])
+        {
+            CaptureTrace = true
+        });
 
         var wait = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "wait");
         Assert.Equal(rejected, wait.IsError);
+
         if (rejected)
         {
             var content = JsonNode.Parse(wait.Result.Content)!["result"]!;
@@ -320,20 +342,21 @@ public sealed partial class SimulatorAgentServiceTests
     private static OpenAiTurn CompleteNavigationTurn()
         => CreateFunctionTurn("complete", "complete_instruction", new JsonObject
         {
-            ["outcome"] = "succeeded", ["summary"] = "Navigation fixture completed."
+            ["outcome"] = "succeeded",
+            ["summary"] = "Navigation fixture completed."
         });
 
     [Fact]
     public async Task RunAsync_CanExcludeMultipleOverlappingTasksWithoutUnlockingOtherUnassessedTasks()
     {
         var client = new FakeOpenAiClient(
-        [
-            CreateFunctionTurn("exclude-first", "ansight_declare_uncovered_step", Exclude("first", ["first", "second"])),
-            CreateFunctionTurn("blocked", "ansight_tap_ui", new JsonObject { ["text"] = "Kalymnos" }),
+            [
+                CreateFunctionTurn("exclude-first", "ansight_declare_uncovered_step", Exclude("first", ["first", "second"])),
+            CreateFunctionTurn("blocked", "ansight_tap_ui", new JsonObject {["text"] = "Kalymnos" }),
             CreateFunctionTurn("exclude-second", "ansight_declare_uncovered_step", Exclude("second", ["second"])),
-            CreateFunctionTurn("allowed", "ansight_tap_ui", new JsonObject { ["text"] = "Kalymnos" }),
+            CreateFunctionTurn("allowed", "ansight_tap_ui", new JsonObject {["text"] = "Kalymnos" }),
             CompleteNavigationTurn()
-        ]);
+            ]);
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts =

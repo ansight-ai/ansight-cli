@@ -8,6 +8,7 @@ public sealed class SimulatorAgentObservationCompactionTests
     public void UiResultProjection_RemovesVerboseVisualStateAndBoundsMatchCount()
     {
         var matches = new JsonArray();
+
         for (var index = 0; index < 30; index++)
         {
             matches.Add(new JsonObject
@@ -20,9 +21,9 @@ public sealed class SimulatorAgentObservationCompactionTests
                 ["visual"] = new JsonObject { ["debug"] = new string('x', 2_000) },
                 ["ancestorPath"] = new JsonArray
                 {
-                    new JsonObject { ["automationId"] = "page" },
-                    new JsonObject { ["automationId"] = "panel" },
-                    new JsonObject { ["automationId"] = "row" }
+                    new JsonObject {["automationId"] = "page" },
+                    new JsonObject {["automationId"] = "panel" },
+                    new JsonObject {["automationId"] = "row" }
                 }
             });
         }
@@ -55,8 +56,11 @@ public sealed class SimulatorAgentObservationCompactionTests
                     ["id"] = "open-guide-label",
                     ["text"] = "Open 3D Guide",
                     ["type"] = "Label",
-                    ["tapHint"] = new JsonObject { ["tool"] = "ansight_tap_ui",
-                        ["selector"] = new JsonObject { ["automationId"] = "area-open3d-guide-button" } },
+                    ["tapHint"] = new JsonObject
+                    {
+                        ["tool"] = "ansight_tap_ui",
+                        ["selector"] = new JsonObject {["automationId"] = "area-open3d-guide-button" }
+                    },
                     ["role"] = "text",
                     ["bounds"] = new JsonObject
                     {
@@ -106,8 +110,11 @@ public sealed class SimulatorAgentObservationCompactionTests
                     ["type"] = "Button",
                     ["role"] = "button",
                     ["supportedActions"] = new JsonArray("tap"),
-                    ["tapHint"] = new JsonObject { ["tool"] = "ansight_tap_ui",
-                        ["selector"] = new JsonObject { ["automationId"] = "area-result-siurana" } },
+                    ["tapHint"] = new JsonObject
+                    {
+                        ["tool"] = "ansight_tap_ui",
+                        ["selector"] = new JsonObject {["automationId"] = "area-result-siurana" }
+                    },
                     ["matchMode"] = "fuzzy",
                     ["matchScore"] = 0.857,
                     ["matchReason"] = "text:token-edit-distance-1"
@@ -307,6 +314,7 @@ public sealed class SimulatorAgentObservationCompactionTests
     public void AppToolObservation_ReportsWhenItsLocalAnnotationProjectionIsTruncated()
     {
         var annotations = new JsonArray();
+
         for (var index = 0; index < 100; index++)
         {
             annotations.Add(new JsonObject
@@ -350,6 +358,7 @@ public sealed class SimulatorAgentObservationCompactionTests
     public void AppToolObservation_PreservesCompleteThirtyPointProjection()
     {
         var annotations = new JsonArray();
+
         for (var index = 0; index < 30; index++)
         {
             annotations.Add(new JsonObject

@@ -50,6 +50,7 @@ internal sealed class CliAnalytics
         {
             using var actor = AnalyticsAccount.Capture(analytics.DataDirectoryPath, accountId, businessId);
             var now = utcNow().ToUniversalTime();
+
             if (exitCode == CliExitCodes.Success && TryResolveLifecycle(arguments, out var lifecycle))
             {
                 outbox.TryStore(CreateLifecycleEnvelope(now, arguments, lifecycle));
@@ -67,15 +68,21 @@ internal sealed class CliAnalytics
             if (settings.IsDetailedTrackingActive && !IsDetailedTrackingMutation(arguments))
             {
                 outbox.TryStore(CreateDetailedEnvelope(arguments, exitCode, duration, now));
+
                 var feature = ResolveUsageFeature(arguments);
+
                 if (feature is not null && !CliCommandHelp.IsRequested(arguments))
+                {
                     analytics.RecordUsage(feature, "cli", exitCode switch
                     {
-                        CliExitCodes.Success => "succeeded", CliExitCodes.Cancelled => "cancelled",
+                        CliExitCodes.Success => "succeeded",
+                        CliExitCodes.Cancelled => "cancelled",
                         CliExitCodes.TelemetryAnalysisDetected => "finding",
                         CliExitCodes.AccessDenied or CliExitCodes.CapabilityUnavailable or CliExitCodes.Configuration => "blocked",
                         _ => "failed"
                     }, duration.TotalSeconds);
+                }
+
                 analytics.Flush();
             }
             else if (!settings.IsDetailedTrackingActive)
@@ -94,6 +101,7 @@ internal sealed class CliAnalytics
     private EventEnvelope CreateDailyEnvelope(DateTimeOffset now)
     {
         var date = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
         return new EventEnvelope(
             Hash($"{distinctId}:cli_daily_active:{date}"),
             "cli_daily_active",
@@ -111,6 +119,7 @@ internal sealed class CliAnalytics
     private EventEnvelope CreateCommandUseEnvelope(DateTimeOffset now)
     {
         var date = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
         return new EventEnvelope(
             Hash($"{distinctId}:cli_command_used_daily:{date}"),
             "cli_command_used_daily",
@@ -133,6 +142,7 @@ internal sealed class CliAnalytics
     {
         var identity = CliReleaseIdentity.Current;
         var command = ResolveCommand(arguments);
+
         return new EventEnvelope(
             Guid.NewGuid().ToString("N"),
             "cli_command_completed",
@@ -169,6 +179,7 @@ internal sealed class CliAnalytics
         string lifecycle)
     {
         var identity = CliReleaseIdentity.Current;
+
         return new EventEnvelope(
             Hash($"{distinctId}:cli_{lifecycle}:{identity.Version}:{identity.BuildNumber}"),
             lifecycle == "install" ? "cli_installed" : "cli_updated",
@@ -237,9 +248,9 @@ internal sealed class CliAnalytics
             "sign-out" or "signout" => "logout",
             var value => value
         };
+
         return knownActions.Contains(action) ? action : "other";
     }
-
 
     internal static string ResolveOperation(CliArguments arguments)
     {
@@ -248,7 +259,12 @@ internal sealed class CliAnalytics
         // Only these command groups have a third classification token. Never send a positional ID/path.
         var nested = command is "profile" or "cloud" || command == "app-graph" && action == "sync";
         var third = nested && arguments.Positionals.Count > 2 ? arguments.Positionals[2].ToLowerInvariant() : null;
-        if (command == "replay") return command + "." + action + (arguments.HasFlag("plan-only") ? ".plan" : ".run");
+
+        if (command == "replay")
+        {
+            return command + "." + action + (arguments.HasFlag("plan-only") ? ".plan" : ".run");
+        }
+
         return command + "." + action + (third is not null && knownActions.Contains(third) ? "." + third : "");
     }
 
@@ -256,19 +272,28 @@ internal sealed class CliAnalytics
     {
         var command = ResolveCommand(arguments);
         var action = ResolveAction(arguments);
+
         return command switch
         {
             "session" => action switch
             {
-                "logs" => "logs", "network" or "requests" => "network", "trees" => "visual_tree",
-                "artifacts" => "artifacts", "annotations" => "annotations", "export" => "export", "import" => "import",
-                "share" or "share-batch" => "share", _ => "session"
+                "logs" => "logs",
+                "network" or "requests" => "network",
+                "trees" => "visual_tree",
+                "artifacts" => "artifacts",
+                "annotations" => "annotations",
+                "export" => "export",
+                "import" => "import",
+                "share" or "share-batch" => "share",
+                _ => "session"
             },
             "app-graph" => action switch { "run" => "graph_run", "explore" => "graph_explore", _ => "app_graph" },
             "task" => action == "extract" ? "task_extract" : "task",
             "test" => action == "run-all" ? "test_batch" : "test",
             "replay" => arguments.HasFlag("plan-only") ? "replay_plan" : "replay",
-            "repo" => "workspace", "auth" => "account", "config" => "settings",
+            "repo" => "workspace",
+            "auth" => "account",
+            "config" => "settings",
             _ => ProductUsage.Features.Contains(command) ? command : null
         };
     }
@@ -295,15 +320,16 @@ internal sealed class CliAnalytics
     private static string ResolveFeatureScope(CliArguments arguments)
     {
         var command = ResolveCommand(arguments);
+
         if (command is "cloud" or "auth" or "companion")
         {
             return "cloud";
         }
 
         return command == "session"
-               && ResolveAction(arguments) is "share" or "share-batch" or "summary" or "summarize" or "summarise"
-                   or "summary-local" or "summarize-local" or "summarise-local"
-                   or "url" or "share-url" or "replay-url"
+            && ResolveAction(arguments) is "share" or "share-batch" or "summary" or "summarize" or "summarise"
+                or "summary-local" or "summarize-local" or "summarise-local"
+                or "url" or "share-url" or "replay-url"
             ? "cloud"
             : "local";
     }
@@ -342,6 +368,7 @@ internal sealed class CliAnalytics
         }
 
         var command = ResolveCommand(arguments);
+
         if (command is "help" or "version" or "update" or "analytics" or "auth" or "license" or "doctor")
         {
             return false;
@@ -352,10 +379,10 @@ internal sealed class CliAnalytics
 
     private static bool IsDetailedTrackingMutation(CliArguments arguments)
         => TryResolveLifecycle(arguments, out _)
-           || arguments.Positionals.Count >= 3
-           && string.Equals(arguments.Positionals[0], "analytics", StringComparison.OrdinalIgnoreCase)
-           && string.Equals(arguments.Positionals[1], "detailed", StringComparison.OrdinalIgnoreCase)
-           && arguments.Positionals[2].ToLowerInvariant() is "enable" or "disable";
+            || arguments.Positionals.Count >= 3
+                && string.Equals(arguments.Positionals[0], "analytics", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(arguments.Positionals[1], "detailed", StringComparison.OrdinalIgnoreCase)
+                && arguments.Positionals[2].ToLowerInvariant() is "enable" or "disable";
 
     internal static bool IsLifecycleInvocation(CliArguments arguments)
         => TryResolveLifecycle(arguments, out _);
@@ -363,6 +390,7 @@ internal sealed class CliAnalytics
     private static bool TryResolveLifecycle(CliArguments arguments, out string lifecycle)
     {
         lifecycle = string.Empty;
+
         if (arguments.Positionals.Count < 3
             || !string.Equals(arguments.Positionals[0], "analytics", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(arguments.Positionals[1], "lifecycle", StringComparison.OrdinalIgnoreCase))
@@ -371,6 +399,7 @@ internal sealed class CliAnalytics
         }
 
         lifecycle = arguments.Positionals[2].ToLowerInvariant();
+
         return lifecycle is "install" or "update";
     }
 
@@ -385,6 +414,7 @@ internal sealed class CliAnalytics
             .Where(static character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')
             .Take(64)
             .ToArray());
+
         return string.IsNullOrWhiteSpace(normalized) ? "unknown" : normalized;
     }
 
@@ -393,9 +423,9 @@ internal sealed class CliAnalytics
 
     private static bool IsContinuousIntegration()
         => ReadBooleanEnvironmentVariable("CI")
-           || ReadBooleanEnvironmentVariable("GITHUB_ACTIONS")
-           || ReadBooleanEnvironmentVariable("TF_BUILD")
-           || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BUILD_BUILDID"));
+            || ReadBooleanEnvironmentVariable("GITHUB_ACTIONS")
+            || ReadBooleanEnvironmentVariable("TF_BUILD")
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BUILD_BUILDID"));
 
     private static bool ReadBooleanEnvironmentVariable(string name)
         => Environment.GetEnvironmentVariable(name)?.Trim().ToLowerInvariant()
@@ -424,26 +454,147 @@ internal sealed class CliAnalytics
     private static string Hash(string value)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+
         return Convert.ToHexString(bytes[..16]).ToLowerInvariant();
     }
 
     private static readonly HashSet<string> knownCommands = new(StringComparer.Ordinal)
     {
-        "app-graph", "replay", "audio", "trends", "config", "analytics", "app", "auth", "cloud", "companion", "device", "doctor", "help", "host", "input",
-        "keyboard", "license", "pairing", "profile", "repo", "secret", "serve", "session", "ui",
-        "task", "test", "update", "version", "workspace"
+        "app-graph",
+        "replay",
+        "audio",
+        "trends",
+        "config",
+        "analytics",
+        "app",
+        "auth",
+        "cloud",
+        "companion",
+        "device",
+        "doctor",
+        "help",
+        "host",
+        "input",
+        "keyboard",
+        "license",
+        "pairing",
+        "profile",
+        "repo",
+        "secret",
+        "serve",
+        "session",
+        "ui",
+        "task",
+        "test",
+        "update",
+        "version",
+        "workspace"
     };
 
     private static readonly HashSet<string> knownActions = new(StringComparer.Ordinal)
     {
-        "network", "requests", "telemetry", "screenshots", "artifacts", "compare", "extract", "execute", "explore", "sync", "push", "pull", "rebuild", "inspect", "run-inline", "inject", "capabilities", "ios", "android", "sample", "sentry", "posthog", "ansight", "call-tree", "manifest", "speedscope", "access", "add", "analyses", "annotations", "apps", "audit", "cache", "call", "cancel",
-        "check", "connections", "cpu", "delete", "detailed", "disconnect", "dotnet", "enable",
-        "exceptions", "export", "gc", "get", "help", "history", "images", "import", "init", "install",
-        "jit", "launch", "list", "location", "login", "logout", "logs", "machines", "metadata", "metrics",
-        "dismiss", "is-open", "open", "openai", "overview", "pair", "plan", "prune", "push-file", "refresh", "register", "remove", "run",
-        "run-all", "sanitize", "screenshot", "serve", "share", "share-batch", "share-url", "replay-url",
-        "show", "shutdown", "start", "startup", "summary", "summarize", "summarise",
-        "summary-local", "summarize-local", "summarise-local",
-        "status", "stop", "terminate", "threads", "tools", "touches", "trees", "url", "validate"
+        "network",
+        "requests",
+        "telemetry",
+        "screenshots",
+        "artifacts",
+        "compare",
+        "extract",
+        "execute",
+        "explore",
+        "sync",
+        "push",
+        "pull",
+        "rebuild",
+        "inspect",
+        "run-inline",
+        "inject",
+        "capabilities",
+        "ios",
+        "android",
+        "sample",
+        "sentry",
+        "posthog",
+        "ansight",
+        "call-tree",
+        "manifest",
+        "speedscope",
+        "access",
+        "add",
+        "analyses",
+        "annotations",
+        "apps",
+        "audit",
+        "cache",
+        "call",
+        "cancel",
+        "check",
+        "connections",
+        "cpu",
+        "delete",
+        "detailed",
+        "disconnect",
+        "dotnet",
+        "enable",
+        "exceptions",
+        "export",
+        "gc",
+        "get",
+        "help",
+        "history",
+        "images",
+        "import",
+        "init",
+        "install",
+        "jit",
+        "launch",
+        "list",
+        "location",
+        "login",
+        "logout",
+        "logs",
+        "machines",
+        "metadata",
+        "metrics",
+        "dismiss",
+        "is-open",
+        "open",
+        "openai",
+        "overview",
+        "pair",
+        "plan",
+        "prune",
+        "push-file",
+        "refresh",
+        "register",
+        "remove",
+        "run",
+        "run-all",
+        "sanitize",
+        "screenshot",
+        "serve",
+        "share",
+        "share-batch",
+        "share-url",
+        "replay-url",
+        "show",
+        "shutdown",
+        "start",
+        "startup",
+        "summary",
+        "summarize",
+        "summarise",
+        "summary-local",
+        "summarize-local",
+        "summarise-local",
+        "status",
+        "stop",
+        "terminate",
+        "threads",
+        "tools",
+        "touches",
+        "trees",
+        "url",
+        "validate"
     };
 }

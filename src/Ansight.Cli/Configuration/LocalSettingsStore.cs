@@ -30,12 +30,20 @@ internal sealed class LocalSettingsStore
 
     public static CredentialSettings? ReadCredentials(string dataDirectory)
     {
-        if (!File.Exists(Path.Combine(dataDirectory, SettingsFileName))) return null;
+        if (!File.Exists(Path.Combine(dataDirectory, SettingsFileName)))
+        {
+            return null;
+        }
+
         var saved = new LocalSettingsStore(dataDirectory).Credentials;
+
         if (saved is not null && (saved.Provider is not ("protected-file" or "linux-secret-service")
             || (saved.Provider == "protected-file" && string.IsNullOrWhiteSpace(saved.KeyFile))
             || (saved.Provider == "linux-secret-service" && (saved.KeyFile is not null || saved.StoreFile is not null))))
+        {
             throw new CliUsageException("Saved credential settings are invalid. Restore the original provider and external key reference in cli-settings.json.");
+        }
+
         return saved;
     }
 
@@ -70,6 +78,7 @@ internal sealed class LocalSettingsStore
     {
         var normalizedPath = NormalizeRequiredPath(path);
         preferences.Set(ExplorerPathKey, normalizedPath);
+
         return normalizedPath;
     }
 
@@ -77,6 +86,7 @@ internal sealed class LocalSettingsStore
     {
         var wasPinned = ExplorerPath is not null;
         preferences.Set(ExplorerPathKey, string.Empty);
+
         return wasPinned;
     }
 
@@ -90,6 +100,7 @@ internal sealed class LocalSettingsStore
         }
 
         preferences.Set(ExplorerPortKey, parsedPort);
+
         return parsedPort;
     }
 
@@ -97,6 +108,7 @@ internal sealed class LocalSettingsStore
     {
         var wasPinned = ExplorerPort is not null;
         preferences.Set(ExplorerPortKey, 0);
+
         return wasPinned;
     }
 
@@ -106,6 +118,7 @@ internal sealed class LocalSettingsStore
         string dataDirectory)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (arguments.HasFlag(optionName))
         {
             return arguments.RequireOption(optionName);
@@ -120,6 +133,7 @@ internal sealed class LocalSettingsStore
         string dataDirectory)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (arguments.HasFlag(optionName))
         {
             return arguments.GetIntOption(optionName, 0, 0, 65_535);
@@ -153,7 +167,7 @@ internal sealed class LocalSettingsStore
         try
         {
             return ExplorerServer.NormalizeRequestedPath(path)
-                   ?? throw new CliUsageException("Explorer path cannot be empty.");
+                ?? throw new CliUsageException("Explorer path cannot be empty.");
         }
         catch (InvalidOperationException exception)
         {

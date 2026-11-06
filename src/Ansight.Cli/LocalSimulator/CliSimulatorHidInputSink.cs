@@ -93,9 +93,11 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
             () =>
             {
                 var normalized = textEvent.NormalizeAndValidate();
+
                 foreach (var stroke in SimulatorTextInputMapper.Map(normalized.Text))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (stroke.RequiresShift)
                     {
                         session.SendKey(normalized.DeviceUdid, 225, MacSimulatorKeyPhase.Down);
@@ -103,6 +105,7 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
 
                     session.SendKey(normalized.DeviceUdid, stroke.UsageCode, MacSimulatorKeyPhase.Down);
                     session.SendKey(normalized.DeviceUdid, stroke.UsageCode, MacSimulatorKeyPhase.Up);
+
                     if (stroke.RequiresShift)
                     {
                         session.SendKey(normalized.DeviceUdid, 225, MacSimulatorKeyPhase.Up);
@@ -122,6 +125,7 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
         disposed = true;
         session.Dispose();
         sendGate.Dispose();
+
         return ValueTask.CompletedTask;
     }
 
@@ -132,27 +136,34 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
         string inputKind = "control")
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var queuedAt = Stopwatch.GetTimestamp();
         await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         var deliveryStartedAt = Stopwatch.GetTimestamp();
+
         try
         {
             send();
             SetStatus(successStatus);
+
             return InputDeliveryResult.Success(BackendName, Status);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             log.Warning($"simulator_input_failed kind={inputKind} message={exception.Message}");
             SetStatus(exception.Message);
+
             return InputDeliveryResult.Failure(BackendName, exception.Message);
         }
         finally
         {
             sendGate.Release();
+
             var queueMilliseconds = Stopwatch.GetElapsedTime(queuedAt, deliveryStartedAt).TotalMilliseconds;
             var deliveryMilliseconds = Stopwatch.GetElapsedTime(deliveryStartedAt).TotalMilliseconds;
             var timing = $"simulator_input_timing kind={inputKind} queueMs={queueMilliseconds:F1} deliveryMs={deliveryMilliseconds:F1}";
+
             if (queueMilliseconds + deliveryMilliseconds >= 250)
             {
                 log.Warning(timing);

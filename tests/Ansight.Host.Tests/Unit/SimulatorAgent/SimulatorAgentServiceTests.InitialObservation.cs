@@ -41,6 +41,7 @@ public sealed partial class SimulatorAgentServiceTests
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), new FakeOpenAiClient([]),
             gateway, openAiWebSocketSessionFactory: new FakeOpenAiSessionFactory(session));
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123", ["Verify the current page."])
         {
             OpenAiProtocol = SimulatorAgentOpenAiProtocol.WebSocket,
@@ -51,6 +52,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(failed ? "Capture unavailable" : "HomePage", input);
         Assert.DoesNotContain("full-host-evidence", input);
         Assert.Empty(gateway.Calls);
+
         var capture = Assert.Single(result.Audit.ToolCalls, call => call.InstructionTurn == 0);
         Assert.Equal("full-host-evidence", capture.Result.Content);
         Assert.Equal(failed, capture.IsError);

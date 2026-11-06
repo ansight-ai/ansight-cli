@@ -8,7 +8,10 @@ public sealed class DeviceTargetResolverTests
     public async Task DuplicateAvdNamesCannotSelectAnArbitraryInputDevice()
     {
         var first = new DeviceDescriptor("emulator-5554", "Demo", "android", "15", "device", true, true, "emulator");
-        var second = first with { Identifier = "emulator-5556" };
+        var second = first with
+        {
+            Identifier = "emulator-5556"
+        };
         var resolver = new DeviceTargetResolver(
             _ => Task.FromResult(new DeviceInventory([], [first, second], [])),
             _ => Task.FromResult<IReadOnlyList<AdbDevice>>([]));
@@ -27,8 +30,20 @@ public sealed class DeviceTargetResolverTests
         var adbCalls = 0;
         var target = new DeviceDescriptor(serial, name, "android", "14", "device", true, true, kind);
         var resolver = new DeviceTargetResolver(
-            _ => { inventoryCalls++; return Task.FromResult(new DeviceInventory([], [target], [])); },
-            _ => { adbCalls++; return Task.FromResult<IReadOnlyList<AdbDevice>>([new(serial, "device", null, null, null, null)]); },
+            _ =>
+            {
+                inventoryCalls++;
+
+                return Task.FromResult(new DeviceInventory([], [target], []));
+            }
+,
+            _ =>
+            {
+                adbCalls++;
+
+                return Task.FromResult<IReadOnlyList<AdbDevice>>([new(serial, "device", null, null, null, null)]);
+            }
+,
             clock);
 
         Assert.Equal(target, await resolver.ResolveAsync(requestedIdentifier, default));
@@ -50,11 +65,18 @@ public sealed class DeviceTargetResolverTests
         var inventoryCalls = 0;
         var target = new DeviceDescriptor("pixel", "Pixel", "android", "14", "device", true, true, "device");
         var resolver = new DeviceTargetResolver(
-            _ => { inventoryCalls++; return Task.FromResult(new DeviceInventory([], [target], [])); },
+            _ =>
+            {
+                inventoryCalls++;
+
+                return Task.FromResult(new DeviceInventory([], [target], []));
+            }
+,
             _ => Task.FromResult<IReadOnlyList<AdbDevice>>(state is null ? [] : [new("pixel", state, null, null, null, null)]),
             clock);
         await resolver.ResolveAsync("pixel", default);
         clock.Advance();
+
         var disconnected = await resolver.ResolveAsync("pixel", default);
         Assert.False(disconnected!.IsBooted);
         Assert.Equal(state ?? "disconnected", disconnected.State);
@@ -72,7 +94,13 @@ public sealed class DeviceTargetResolverTests
         var calls = 0;
         var target = new DeviceDescriptor("ios-udid", "iPhone", "ios", "26", "Booted", true, true, "simulator");
         var resolver = new DeviceTargetResolver(
-            _ => { calls++; return Task.FromResult(new DeviceInventory([], [target], [])); },
+            _ =>
+            {
+                calls++;
+
+                return Task.FromResult(new DeviceInventory([], [target], []));
+            }
+,
             _ => throw new InvalidOperationException("An iOS target must not use ADB."), clock);
         await resolver.ResolveAsync("ios-udid", default);
         clock.Advance();
@@ -89,7 +117,10 @@ public sealed class DeviceTargetResolverTests
             _ => Task.FromResult(new DeviceInventory([], [target], [])),
             _ => Task.FromResult<IReadOnlyList<AdbDevice>>([]), clock);
         await resolver.ResolveAsync("Pixel", default);
-        target = target with { Identifier = "emulator-5556" };
+        target = target with
+        {
+            Identifier = "emulator-5556"
+        };
         clock.Advance();
         Assert.Equal("emulator-5556", (await resolver.ResolveAsync("Pixel", default))!.Identifier);
     }
@@ -97,7 +128,9 @@ public sealed class DeviceTargetResolverTests
     private sealed class TestClock : TimeProvider
     {
         private DateTimeOffset now = DateTimeOffset.UtcNow;
+
         public override DateTimeOffset GetUtcNow() => now;
+
         public void Advance() => now += TimeSpan.FromSeconds(3);
     }
 }

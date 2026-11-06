@@ -15,6 +15,7 @@ public sealed class AndroidEmulatorInputSinkTests
         await using var sink = CreateSink(client);
 
         await sink.SendAsync(new RemotePointerEvent(DeviceSerial, "down", 0.25, 0.5, 7, 100));
+
         var result = await sink.SendAsync(new RemotePointerEvent(DeviceSerial, "up", 0.25, 0.5, 7, 150));
 
         Assert.True(result.IsSuccess);
@@ -33,6 +34,7 @@ public sealed class AndroidEmulatorInputSinkTests
 
         await sink.SendAsync(new RemotePointerEvent(DeviceSerial, "down", 0.1, 0.2, 4, 100));
         await sink.SendAsync(new RemotePointerEvent(DeviceSerial, "move", 0.5, 0.6, 4, 250));
+
         var result = await sink.SendAsync(new RemotePointerEvent(DeviceSerial, "up", 0.9, 0.8, 4, 500));
 
         Assert.True(result.IsSuccess);
@@ -183,6 +185,7 @@ public sealed class AndroidEmulatorInputSinkTests
         {
             Assert.Equal(DeviceSerial, deviceSerial);
             TouchEvents.Add(touches.ToArray());
+
             return Task.CompletedTask;
         }
     }

@@ -15,6 +15,7 @@ internal static class MauiVisualTreeRootScope
         if (string.IsNullOrWhiteSpace(value))
         {
             rootScope = Default;
+
             return true;
         }
 
@@ -23,6 +24,7 @@ internal static class MauiVisualTreeRootScope
             .Replace("-", string.Empty, StringComparison.Ordinal)
             .Replace(" ", string.Empty, StringComparison.Ordinal)
             .ToLowerInvariant();
+
         switch (key)
         {
             case "root":

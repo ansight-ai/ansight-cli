@@ -15,6 +15,7 @@ internal sealed class TestDirectory : IDisposable
             System.IO.Path.GetTempPath(),
             $"ansight-cli-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
+
         return new TestDirectory(path);
     }
 

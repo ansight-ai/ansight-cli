@@ -106,6 +106,7 @@ public sealed class CompanionAnnotationGeometryTests
         var result = CliAnnotationGeometry.Create(request, "frame-1", DateTimeOffset.UtcNow);
 
         Assert.Null(result.Error);
+
         var point = Assert.Single(result.Geometry);
         Assert.Equal(0.5, point.X);
         Assert.Equal(0.6, point.Y);
@@ -120,11 +121,15 @@ public sealed class CompanionAnnotationGeometryTests
         var result = CliAnnotationGeometry.Create(request, "frame-1", DateTimeOffset.UtcNow);
 
         Assert.Null(result.Error);
+
         var region = Assert.Single(result.Geometry);
         Assert.Equal(SessionAnnotationGeometryKind.Rectangle, region.Kind);
         Assert.Equal(0.3, region.Width);
         Assert.Equal(0.4, region.Height);
-        Assert.NotNull(CliAnnotationGeometry.Create(request with { Kind = "unknown" }, "frame-1", DateTimeOffset.UtcNow).Error);
+        Assert.NotNull(CliAnnotationGeometry.Create(request with
+        {
+            Kind = "unknown"
+        }, "frame-1", DateTimeOffset.UtcNow).Error);
     }
 
     private static RemoteAnnotationRequest Drawing(params RemoteAnnotationStroke[] strokes)

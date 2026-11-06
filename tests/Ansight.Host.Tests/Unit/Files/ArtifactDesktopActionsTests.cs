@@ -12,6 +12,7 @@ public sealed class ArtifactDesktopActionsTests
         var desktop = Path.Combine(environment.RootPath, "Desktop");
         Directory.CreateDirectory(desktop);
         await File.WriteAllTextAsync(source, "{\"artifact\":true}");
+
         var existing = Path.Combine(desktop, "reference graph.json");
         await File.WriteAllTextAsync(existing, "Keep this file");
         Directory.CreateDirectory(Path.Combine(desktop, "reference graph (1).json"));
@@ -31,12 +32,14 @@ public sealed class ArtifactDesktopActionsTests
         var content = new byte[1024 * 1024];
         Random.Shared.NextBytes(content);
         await File.WriteAllBytesAsync(source, content);
+
         var desktop = Path.Combine(environment.RootPath, "Desktop");
 
         var paths = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
             ArtifactDesktopActions.ExportToDirectoryAsync(source, desktop, CancellationToken.None)));
 
         Assert.Equal(paths.Length, paths.Distinct().Count());
+
         foreach (var path in paths)
         {
             Assert.Equal(content, await File.ReadAllBytesAsync(path));
@@ -49,6 +52,7 @@ public sealed class ArtifactDesktopActionsTests
         using var environment = new TestEnvironment();
         var source = Path.Combine(environment.RootPath, "artifact.txt");
         await File.WriteAllTextAsync(source, "Artifact");
+
         var desktop = Path.Combine(environment.RootPath, "Desktop");
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();

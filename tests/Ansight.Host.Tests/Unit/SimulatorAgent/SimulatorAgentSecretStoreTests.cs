@@ -42,6 +42,7 @@ public sealed class SimulatorAgentSecretStoreTests
             name =>
             {
                 requestedVariables.Add(name);
+
                 return environment.GetValueOrDefault(name);
             });
 
@@ -50,6 +51,7 @@ public sealed class SimulatorAgentSecretStoreTests
             ["TEST_USER_PASSWORD"]);
 
         Assert.Equal("environment-value", environmentAccess.Resolve("TEST_USER_PASSWORD"));
+
         var environmentMetadata = Assert.Single(environmentAccess.Secrets.Values);
         Assert.Equal("environment", environmentMetadata.VersionId);
         Assert.Equal(["TEST_USER_PASSWORD"], requestedVariables);
@@ -75,11 +77,11 @@ public sealed class SimulatorAgentSecretStoreTests
         var store = new SecretStore(
             new InMemoryEncryptedStorage(),
             name => name switch
-            {
-                "DECLARED_SECRET" => "available-value",
-                "EMPTY_SECRET" => string.Empty,
-                _ => null
-            });
+    {
+        "DECLARED_SECRET" => "available-value",
+        "EMPTY_SECRET" => string.Empty,
+        _ => null
+    });
 
         Assert.NotNull(store.GetMetadata("com.example.app", "DECLARED_SECRET"));
         Assert.Null(store.GetMetadata("com.example.app", "EMPTY_SECRET"));

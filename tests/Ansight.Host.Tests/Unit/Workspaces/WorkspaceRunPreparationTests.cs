@@ -16,12 +16,14 @@ public sealed class WorkspaceRunPreparationTests
         {
             brokerEntered.SetResult();
             await releaseBroker.Task.WaitAsync(token);
+
             return fixture.Preparation;
         };
         fixture.Launcher.Launch = async token =>
         {
             launchEntered.SetResult();
             await releaseLaunch.Task.WaitAsync(token);
+
             return WorkspaceTestTargetLaunchResult.Failure("Launch failed.");
         };
 
@@ -31,10 +33,12 @@ public sealed class WorkspaceRunPreparationTests
         releaseBroker.SetResult();
         Assert.False(run.IsCompleted);
         releaseLaunch.SetResult();
+
         var result = await run;
 
         Assert.False(result.IsSuccess);
         Assert.Equal("Launch failed.", result.Message);
+
         var completion = Assert.Single(fixture.Gateway.Completions);
         Assert.Equal(fixture.Preparation.TrackingRunId, completion.RunId);
         Assert.Equal("failed", completion.Status);
@@ -64,16 +68,29 @@ public sealed class WorkspaceRunPreparationTests
         var brokerCancelled = false;
         fixture.Gateway.Prepare = async token =>
         {
-            try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
-            finally { brokerCancelled = token.IsCancellationRequested; }
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            finally
+            {
+                brokerCancelled = token.IsCancellationRequested;
+            }
+
             return fixture.Preparation;
         };
         fixture.Launcher.Launch = _ => throws
             ? throw new IOException("Launch failed.")
             : Task.FromResult(WorkspaceTestTargetLaunchResult.Failure("Launch failed."));
 
-        if (throws) await Assert.ThrowsAsync<IOException>(() => fixture.RunAsync());
-        else Assert.False((await fixture.RunAsync()).IsSuccess);
+        if (throws)
+        {
+            await Assert.ThrowsAsync<IOException>(() => fixture.RunAsync());
+        }
+        else
+        {
+            Assert.False((await fixture.RunAsync()).IsSuccess);
+        }
 
         Assert.True(brokerCancelled);
         Assert.Empty(fixture.Gateway.Completions);
@@ -89,8 +106,10 @@ public sealed class WorkspaceRunPreparationTests
         {
             launchEntered.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
+
             return WorkspaceTestTargetLaunchResult.Success(fixture.Target);
         };
+
         var run = fixture.RunAsync(cancellation.Token);
         await launchEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         cancellation.Cancel();
@@ -103,6 +122,7 @@ public sealed class WorkspaceRunPreparationTests
     public async Task NormalCompletionIsNotSubmittedAgainOnDisposal()
     {
         using var fixture = new Fixture();
+
         await using (var scope = new WorkspaceRunPreparationScope(fixture.Gateway, CancellationToken.None,
             message => Assert.Fail(message)))
         {
@@ -112,6 +132,7 @@ public sealed class WorkspaceRunPreparationTests
             await first;
             scope.MarkCompletionHandled();
         }
+
         Assert.Empty(fixture.Gateway.Completions);
     }
 
@@ -144,6 +165,7 @@ public sealed class WorkspaceRunPreparationTests
         public Fixture()
         {
             runtime = environment.CreateRuntime();
+
             var tests = Path.Combine(environment.RootPath, "ansight", "tests");
             Directory.CreateDirectory(tests);
             File.WriteAllText(Path.Combine(tests, "example.json"),
@@ -157,18 +179,25 @@ public sealed class WorkspaceRunPreparationTests
                     Target: new WorkspaceTestTargetRequest(DeviceIdentifier: Target.DeviceIdentifier),
                     SessionWaitTimeout: TimeSpan.Zero, EnableWorkspaceTools: false), cancellationToken: token);
 
-        public void Dispose() { runtime.Dispose(); environment.Dispose(); }
+        public void Dispose()
+        {
+            runtime.Dispose();
+            environment.Dispose();
+        }
     }
 
     private sealed class Launcher : IWorkspaceTestTargetLauncher
     {
         public Func<CancellationToken, Task<WorkspaceTestTargetLaunchResult>> Launch { get; set; } = null!;
         public int StopCount { get; private set; }
+
         public Task<WorkspaceTestTargetLaunchResult> LaunchAsync(string appId, WorkspaceTestTargetRequest? request,
             IProgress<WorkspaceTestRunProgress>? progress, CancellationToken cancellationToken) => Launch(cancellationToken);
+
         public Task<DeviceOperationResult> StopAsync(WorkspaceTestTarget target, CancellationToken cancellationToken)
         {
             StopCount++;
+
             return Task.FromResult(DeviceOperationResult.Success("terminate-app", target.Platform, target.DeviceIdentifier, "Stopped."));
         }
     }
@@ -179,18 +208,26 @@ public sealed class WorkspaceRunPreparationTests
         public List<WorkspaceTestRunMeterCompletion> Completions { get; } = [];
         public Exception? CompletionError { get; set; }
         public int PrepareCount { get; private set; }
+
         public Task<WorkspaceTestRunPreparation> PrepareAsync(WorkspaceTestRunPreparationRequest request,
             CancellationToken cancellationToken = default)
         {
             PrepareCount++;
+
             return Prepare(cancellationToken);
         }
+
         public Task<WorkspaceTestRunMeterResult> CompleteAsync(WorkspaceTestRunMeterCompletion completion,
             CancellationToken cancellationToken = default)
         {
             Assert.False(cancellationToken.IsCancellationRequested);
             Completions.Add(completion);
-            if (CompletionError is not null) throw CompletionError;
+
+            if (CompletionError is not null)
+            {
+                throw CompletionError;
+            }
+
             return Task.FromResult(WorkspaceTestRunMeterResult.Success());
         }
     }
@@ -199,8 +236,11 @@ public sealed class WorkspaceRunPreparationTests
     {
         public string Description => "Unused";
         public bool SupportsWebSockets => false;
+
         public ValueTask<string> ResolveAccessKeyAsync(CancellationToken token) => throw new NotSupportedException();
+
         public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) => throw new NotSupportedException();
+
         public string DescribeFailure(int statusCode, string responseContent) => throw new NotSupportedException();
     }
 }

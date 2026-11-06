@@ -16,6 +16,7 @@ public sealed class NativeProfileCaptureStoreTests
         Directory.CreateDirectory(Path.Combine(tracePath, "Trace1.run"));
         await File.WriteAllBytesAsync(Path.Combine(tracePath, "template.data"), [1, 2, 3]);
         await File.WriteAllBytesAsync(Path.Combine(tracePath, "Trace1.run", "samples.data"), [4, 5]);
+
         var producedArtifact = new NativeProfileProducedArtifact(
             InstrumentsProfileCaptureAdapter.TraceArtifactKind,
             tracePath,

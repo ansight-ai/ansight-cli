@@ -9,7 +9,9 @@ namespace Ansight.Host.Runtime.Operations;
 /// </summary>
 internal interface IOperationDispatcher : IDisposable
 {
-    void ConfigureOptionalExtensions(Ansight.Infrastructure.Extensions.OptionalExtensions extensions) { }
+    void ConfigureOptionalExtensions(Ansight.Infrastructure.Extensions.OptionalExtensions extensions)
+    {
+    }
 
     JsonObject BuildToolsListResult();
 
@@ -33,11 +35,15 @@ internal interface IOperationDispatcher : IDisposable
 
     IAppInteractionContext CreateAppInteractionContext(string sessionId, string? repositoryRootPath = null);
 
-    void ConfigureDevicePermissions(IDeviceService devices, RuntimeOptions options) { }
+    void ConfigureDevicePermissions(IDeviceService devices, RuntimeOptions options)
+    {
+    }
 
     Task StopNetworkConditioningAsync() => Task.CompletedTask;
 
-    void ConfigureScreenshotEvaluator(IScreenshotEvaluator evaluator) { }
+    void ConfigureScreenshotEvaluator(IScreenshotEvaluator evaluator)
+    {
+    }
 
     void ConfigureAudioInjection(Ansight.Host.Audio.AudioInjectionEngine engine);
 

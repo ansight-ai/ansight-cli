@@ -4,7 +4,7 @@ namespace Ansight.Cli;
 
 internal sealed class CliArguments
 {
-    private static readonly HashSet<string> BooleanOptions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> booleanOptions = new(StringComparer.OrdinalIgnoreCase)
     {
         "help",
         "ai",
@@ -119,9 +119,7 @@ internal sealed class CliArguments
     }
 
     public IReadOnlyList<string> Positionals { get; }
-
     public IReadOnlyList<string> OriginalArguments { get; }
-
     public bool IsJson => HasFlag("json");
 
     public bool IsSilent => HasFlag("silent");
@@ -137,9 +135,11 @@ internal sealed class CliArguments
         var positionals = new List<string>();
         var positionalArgumentIndices = new List<int>();
         var options = new Dictionary<string, List<string?>>(StringComparer.OrdinalIgnoreCase);
+
         for (var index = 0; index < arguments.Count; index++)
         {
             var argument = arguments[index];
+
             if (argument is "-h" or "-?")
             {
                 AddOption(options, "help", null);
@@ -155,6 +155,7 @@ internal sealed class CliArguments
 
             var optionText = argument[2..];
             var separatorIndex = optionText.IndexOf('=', StringComparison.Ordinal);
+
             if (separatorIndex >= 0)
             {
                 AddOption(
@@ -165,6 +166,7 @@ internal sealed class CliArguments
             }
 
             var optionName = NormalizeOptionName(optionText);
+
             if (IsBooleanOption(optionName, arguments))
             {
                 AddOption(options, optionName, null);
@@ -185,33 +187,33 @@ internal sealed class CliArguments
     }
 
     private static bool IsBooleanOption(string optionName, IReadOnlyList<string> arguments)
-        => BooleanOptions.Contains(optionName)
-           && !(string.Equals(optionName, "device", StringComparison.OrdinalIgnoreCase)
+        => booleanOptions.Contains(optionName)
+            && !(string.Equals(optionName, "device", StringComparison.OrdinalIgnoreCase)
                 && IsDeviceValueOptionCommand(arguments));
 
     private static bool IsDeviceValueOptionCommand(IReadOnlyList<string> arguments)
         => IsWorkspaceTestRunCommand(arguments)
-           || IsAppExecutionCommand(arguments)
-           || IsKeyboardCommand(arguments)
-           || arguments.Count >= 1
-           && string.Equals(arguments[0], "replay", StringComparison.OrdinalIgnoreCase);
+            || IsAppExecutionCommand(arguments)
+            || IsKeyboardCommand(arguments)
+            || arguments.Count >= 1
+                && string.Equals(arguments[0], "replay", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsKeyboardCommand(IReadOnlyList<string> arguments)
         => arguments.Count >= 1
-           && string.Equals(arguments[0], "keyboard", StringComparison.OrdinalIgnoreCase);
+            && string.Equals(arguments[0], "keyboard", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAppExecutionCommand(IReadOnlyList<string> arguments)
         => arguments.Count >= 2
-           && string.Equals(arguments[0], "app", StringComparison.OrdinalIgnoreCase)
-           && string.Equals(arguments[1], "execute", StringComparison.OrdinalIgnoreCase);
+            && string.Equals(arguments[0], "app", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(arguments[1], "execute", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsWorkspaceTestRunCommand(IReadOnlyList<string> arguments)
         => arguments.Count >= 2
-           && (string.Equals(arguments[0], "test", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(arguments[0], "tests", StringComparison.OrdinalIgnoreCase))
-           && (string.Equals(arguments[1], "run", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(arguments[1], "run-inline", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(arguments[1], "run-all", StringComparison.OrdinalIgnoreCase));
+            && (string.Equals(arguments[0], "test", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(arguments[0], "tests", StringComparison.OrdinalIgnoreCase))
+            && (string.Equals(arguments[1], "run", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(arguments[1], "run-inline", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(arguments[1], "run-all", StringComparison.OrdinalIgnoreCase));
 
     public bool HasFlag(string name)
         => options.ContainsKey(NormalizeOptionName(name));
@@ -233,16 +235,18 @@ internal sealed class CliArguments
     public string RequireOption(string name)
     {
         var normalizedName = NormalizeOptionName(name);
+
         return GetOption(normalizedName)
-               ?? throw new CliUsageException(
-                   CliRequirementGuidance.Append(
-                       $"--{normalizedName} requires a value.",
-                       $"--{normalizedName}"));
+            ?? throw new CliUsageException(
+                CliRequirementGuidance.Append(
+                    $"--{normalizedName} requires a value.",
+                    $"--{normalizedName}"));
     }
 
     public int GetIntOption(string name, int defaultValue, int minimum, int maximum)
     {
         var source = GetOption(name);
+
         if (source is null)
         {
             return defaultValue;
@@ -262,6 +266,7 @@ internal sealed class CliArguments
     public int GetRequiredIntOption(string name, int minimum, int maximum)
     {
         var source = RequireOption(name);
+
         if (!int.TryParse(source, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             || value < minimum
             || value > maximum)
@@ -276,6 +281,7 @@ internal sealed class CliArguments
     public double GetDoubleOption(string name)
     {
         var source = RequireOption(name);
+
         if (!double.TryParse(source, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
             || !double.IsFinite(value))
         {
@@ -289,6 +295,7 @@ internal sealed class CliArguments
     public TimeSpan GetSecondsOption(string name, TimeSpan defaultValue, int maximumSeconds = 86_400)
     {
         var source = GetOption(name);
+
         if (source is null)
         {
             return defaultValue;
@@ -365,6 +372,7 @@ internal sealed class CliArguments
             .Where(option => !allowedOptions.Contains(option))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         if (unknownOptions.Length > 0)
         {
             var display = string.Join(", ", unknownOptions.Select(static option => $"--{option}"));

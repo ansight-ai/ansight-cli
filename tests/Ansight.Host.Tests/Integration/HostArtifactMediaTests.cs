@@ -11,22 +11,31 @@ public sealed class HostArtifactMediaTests
         using var environment = new TestEnvironment();
         var snapshot = CreateMediaSnapshot();
         new SessionCaptureStore(environment.ApplicationPaths).Save(snapshot);
+
         var artifactDirectory = SessionFileLocator.ResolveArtifactSnapshotDirectoryPath(
             environment.ApplicationPaths, snapshot, Assert.Single(snapshot.ArtifactSnapshots));
         Directory.CreateDirectory(artifactDirectory);
+
         byte[] content = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         await File.WriteAllBytesAsync(Path.Combine(artifactDirectory, "recording.mp4"), content);
+
         await using var runtime = environment.CreateRuntime();
         var started = await runtime.SessionReplays.StartAsync(new SessionReplayStartRequest(snapshot.SessionId));
         Assert.True(started.IsSuccess, started.Message);
+
         var replayUrl = Assert.IsType<Uri>(started.ReplayUrl);
         var route = $"api/sessions/{snapshot.SessionId}/artifacts";
         var contentUri = new Uri(replayUrl, $"{route}/content?path=recording.mp4&snapshotId=media-001");
         using var client = new HttpClient();
 
         using var previewResponse = await client.PostAsJsonAsync(new Uri(replayUrl, $"{route}/preview"),
-            new { path = "recording.mp4", snapshotId = "media-001" });
+            new
+            {
+                path = "recording.mp4",
+                snapshotId = "media-001"
+            });
         Assert.Equal(HttpStatusCode.OK, previewResponse.StatusCode);
+
         var preview = Assert.IsType<FileVisualization>(await previewResponse.Content.ReadFromJsonAsync<FileVisualization>());
         Assert.True(preview.IsSuccess, preview.Message);
         Assert.Equal(FileViewerKinds.Video, preview.ViewerKind);
@@ -46,6 +55,7 @@ public sealed class HostArtifactMediaTests
 
         using var headRequest = new HttpRequestMessage(HttpMethod.Head, contentUri);
         headRequest.Headers.Range = new RangeHeaderValue(2, 4);
+
         using var headResponse = await client.SendAsync(headRequest);
         Assert.Equal(HttpStatusCode.OK, headResponse.StatusCode);
         Assert.Equal(content.Length, headResponse.Content.Headers.ContentLength);
@@ -63,12 +73,18 @@ public sealed class HostArtifactMediaTests
         using var staleRangeRequest = new HttpRequestMessage(HttpMethod.Get, contentUri);
         staleRangeRequest.Headers.Range = new RangeHeaderValue(2, 4);
         staleRangeRequest.Headers.TryAddWithoutValidation("If-Range", "\"unknown-version\"");
+
         using var staleRangeResponse = await client.SendAsync(staleRangeRequest);
         Assert.Equal(HttpStatusCode.OK, staleRangeResponse.StatusCode);
         Assert.Equal(content, await staleRangeResponse.Content.ReadAsByteArrayAsync());
 
         using var forceTextResponse = await client.PostAsJsonAsync(new Uri(replayUrl, $"{route}/preview"),
-            new { path = "recording.mp4", snapshotId = "media-001", forceText = true });
+            new
+            {
+                path = "recording.mp4",
+                snapshotId = "media-001",
+                forceText = true
+            });
         var textPreview = Assert.IsType<FileVisualization>(await forceTextResponse.Content.ReadFromJsonAsync<FileVisualization>());
         Assert.Equal(FileViewerKinds.Text, textPreview.ViewerKind);
         Assert.Equal(content.Length, textPreview.BytesRead);
@@ -81,6 +97,7 @@ public sealed class HostArtifactMediaTests
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.TryAddWithoutValidation("Range", range);
+
         using var response = await client.SendAsync(request);
         Assert.Equal(statusCode, response.StatusCode);
         Assert.Equal(contentRange, response.Content.Headers.ContentRange?.ToString());
@@ -91,6 +108,7 @@ public sealed class HostArtifactMediaTests
     private static AppSessionSnapshot CreateMediaSnapshot()
     {
         var capturedUtc = DateTimeOffset.UtcNow;
+
         return new AppSessionSnapshot
         {
             SessionId = "artifact-media-001",
@@ -131,10 +149,8 @@ public sealed class HostArtifactMediaTests
                             FileExtension = ".mp4",
                             MimeType = "application/octet-stream",
                             SizeBytes = 10
-                        }
-                    ]
-                }
-            ]
+                        }                    ]
+                }            ]
         };
     }
 }

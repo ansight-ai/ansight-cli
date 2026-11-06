@@ -35,6 +35,7 @@ internal abstract class TrimSessionTool : Operation
         var beforeCounts = BuildCountsPayload(snapshot!);
         var rangePayload = BuildRangePayload(startUtc, endUtc);
         var result = runtimeState.TrimSessionTimeline(snapshot!.SessionId, startUtc, endUtc, mode);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(RequestResult.ToolResult(
@@ -57,6 +58,7 @@ internal abstract class TrimSessionTool : Operation
         }
 
         var afterCounts = BuildCountsPayload(updatedSnapshot);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -79,6 +81,7 @@ internal abstract class TrimSessionTool : Operation
         var properties = SessionReviewToolSchemas.ReviewSessionProperties();
         properties["startUtc"] = ToolSchema.String("Inclusive trim selection start timestamp in ISO-8601 UTC.", format: "date-time");
         properties["endUtc"] = ToolSchema.String("Inclusive trim selection end timestamp in ISO-8601 UTC.", format: "date-time");
+
         return properties;
     }
 
@@ -90,6 +93,7 @@ internal abstract class TrimSessionTool : Operation
     {
         startUtc = default;
         endUtc = default;
+
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "startUtc", out var parsedStartUtc, out errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out var parsedEndUtc, out errorMessage))
         {
@@ -99,11 +103,13 @@ internal abstract class TrimSessionTool : Operation
         if (!parsedStartUtc.HasValue || !parsedEndUtc.HasValue)
         {
             errorMessage = "startUtc and endUtc are required.";
+
             return false;
         }
 
         startUtc = parsedStartUtc.Value.ToUniversalTime();
         endUtc = parsedEndUtc.Value.ToUniversalTime();
+
         if (endUtc < startUtc)
         {
             (startUtc, endUtc) = (endUtc, startUtc);
@@ -112,10 +118,12 @@ internal abstract class TrimSessionTool : Operation
         if (endUtc == startUtc)
         {
             errorMessage = "startUtc and endUtc must define a non-empty range.";
+
             return false;
         }
 
         errorMessage = null;
+
         return true;
     }
 

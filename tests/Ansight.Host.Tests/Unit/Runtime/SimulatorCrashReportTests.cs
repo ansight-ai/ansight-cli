@@ -77,6 +77,7 @@ public sealed class SimulatorCrashReportTests : IDisposable
             capturedAt: "2026-07-13 13:26:10.0000 +1000",
             incidentId: "22222222-2222-2222-2222-222222222222",
             simulatorUdid: "AC42C25B-229C-4EAC-B7F7-3BC888988022");
+
         var nearestPath = WriteReport(
             "nearest-match.ips",
             bundleId: "com.example.app",
@@ -187,6 +188,7 @@ public sealed class SimulatorCrashReportTests : IDisposable
                 }
             },
             profileJson: null);
+
         var reportPath = WriteReport(
             "ExampleApp-artifact.ips",
             bundleId: "com.example.app",
@@ -195,6 +197,7 @@ public sealed class SimulatorCrashReportTests : IDisposable
             incidentId: "55555555-5555-5555-5555-555555555555",
             simulatorUdid: "AC42C25B-229C-4EAC-B7F7-3BC888988022");
         Assert.True(SimulatorCrashReportParser.TryParse(reportPath, out var report));
+
         var collector = new SimulatorCrashReportCollector(
             runtimeState,
             environment.ApplicationPaths.ApplicationTempPath,
@@ -213,10 +216,12 @@ public sealed class SimulatorCrashReportTests : IDisposable
         Assert.True(collector.AttachReport(sessionId, report!));
 
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot));
+
         var artifact = Assert.Single(snapshot!.ArtifactSnapshots);
         Assert.Equal("simulator-crash-55555555-5555-5555-5555-555555555555", artifact.SnapshotId);
         Assert.Equal("crash-report", artifact.Kind);
         Assert.Equal("ansight.simulator.crash-report", artifact.Source);
+
         var entry = Assert.Single(artifact.Entries);
         Assert.Equal("ExampleApp-artifact.ips", entry.Name);
         Assert.Equal(".ips", entry.FileExtension);
@@ -276,6 +281,7 @@ public sealed class SimulatorCrashReportTests : IDisposable
         File.WriteAllText(
             filePath,
             JsonSerializer.Serialize(header) + Environment.NewLine + JsonSerializer.Serialize(body));
+
         return Path.GetFullPath(filePath);
     }
 }

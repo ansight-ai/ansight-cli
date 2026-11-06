@@ -22,16 +22,18 @@ internal static class AppCommands
         }
 
         var action = arguments.RequirePositional(1, "app action").ToLowerInvariant();
+
         if (action == "learn")
         {
             return await AppLearnCommand.RunAsync(arguments, output, cancellationToken).ConfigureAwait(false);
         }
+
         if (action == "execute")
         {
             return await AppExecutionService.RunAppExecuteAsync(
-                    arguments,
-                    output,
-                    cancellationToken)
+                arguments,
+                output,
+                cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -64,6 +66,7 @@ internal static class AppCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(2, "ansight app list");
+
         var apps = runtime.Apps.List();
         output.Write(
             new AppListOutput("ansight.apps/v1", apps),
@@ -73,7 +76,8 @@ internal static class AppCommands
                     Environment.NewLine,
                     apps.Select(app =>
                         $"{app.AppId}\t{app.Name}\tsessions={app.SessionCount}\tlive={app.LiveSessionCount}"
-                        + $"\ttrends-monitoring={(app.AutomaticTrendsMonitoringEnabled ? "automatic" : "needs-codebase")}")));
+                            + $"\ttrends-monitoring={(app.AutomaticTrendsMonitoringEnabled ? "automatic" : "needs-codebase")}")));
+
         return CliExitCodes.Success;
     }
 
@@ -83,6 +87,7 @@ internal static class AppCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight app get <app-id>");
+
         var appId = arguments.RequirePositional(2, "app identifier");
         var app = runtime.Apps.Get(appId);
         output.Write(
@@ -90,7 +95,8 @@ internal static class AppCommands
             () => app is null
                 ? $"App '{appId}' was not found."
                 : $"{app.AppId}\t{app.Name}\tsessions={app.SessionCount}\tlive={app.LiveSessionCount}"
-                  + $"\ttrends-monitoring={(app.AutomaticTrendsMonitoringEnabled ? "automatic" : "needs-codebase")}");
+                    + $"\ttrends-monitoring={(app.AutomaticTrendsMonitoringEnabled ? "automatic" : "needs-codebase")}");
+
         return app is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -102,10 +108,12 @@ internal static class AppCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight app register <app-id> [--name <name>] [--codebase <path>]");
+
         var result = runtime.Apps.Register(new AppRegistrationRequest(
             arguments.RequirePositional(2, "app identifier"),
             arguments.GetOption("name"),
             arguments.GetOption("codebase")));
+
         return WriteAppOperation("register", result, output);
     }
 
@@ -115,7 +123,9 @@ internal static class AppCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight app remove <app-id>");
+
         var result = runtime.Apps.Remove(arguments.RequirePositional(2, "app identifier"));
+
         return WriteAppOperation("remove", result, output);
     }
 
@@ -127,6 +137,7 @@ internal static class AppCommands
         output.Write(
             new AppOperationOutput("ansight.app-operation/v1", operation, result),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -137,6 +148,7 @@ internal static class AppCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(3, "ansight app tools <session-id>");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var filters = ReadToolCatalogFilters(arguments);
         var response = filters is null
@@ -148,6 +160,7 @@ internal static class AppCommands
                 sessionId,
                 filters,
                 cancellationToken).ConfigureAwait(false);
+
         return WriteResponse("tools", sessionId, response, output);
     }
 
@@ -164,6 +177,7 @@ internal static class AppCommands
         if (arguments.HasFlag("policy"))
         {
             var policy = RequireNonEmptyOption(arguments, "policy").ToLowerInvariant();
+
             if (policy is not ("read" or "write" or "critical"))
             {
                 throw new CliUsageException("--policy must be read, write, or critical.");
@@ -181,11 +195,13 @@ internal static class AppCommands
 
         var executableOnly = arguments.HasFlag("executable-only");
         var includeUnavailable = arguments.HasFlag("include-unavailable");
+
         if (executableOnly && includeUnavailable)
         {
             throw new CliUsageException(
                 "Use either --executable-only or --include-unavailable, not both.");
         }
+
         if (executableOnly || includeUnavailable)
         {
             filters["executableOnly"] = executableOnly;
@@ -193,9 +209,11 @@ internal static class AppCommands
         }
 
         var hasDetail = arguments.HasFlag("detail");
+
         if (hasDetail)
         {
             var detail = RequireNonEmptyOption(arguments, "detail").ToLowerInvariant();
+
             if (detail is not ("summary" or "full"))
             {
                 throw new CliUsageException("--detail must be summary or full.");
@@ -213,6 +231,7 @@ internal static class AppCommands
         {
             filters["executableOnly"] = hasFocusedFilter;
         }
+
         if (arguments.GetOption("if-revision") is { } ifRevision)
         {
             filters["ifRevision"] = ifRevision;
@@ -233,12 +252,14 @@ internal static class AppCommands
         }
 
         filters[propertyName] = RequireNonEmptyOption(arguments, optionName);
+
         return true;
     }
 
     private static string RequireNonEmptyOption(CliArguments arguments, string optionName)
     {
         var value = arguments.RequireOption(optionName).Trim();
+
         if (value.Length == 0)
         {
             throw new CliUsageException($"--{optionName} requires a non-empty value.");
@@ -256,6 +277,7 @@ internal static class AppCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight app call <session-id> <tool-id> [--arguments <JSON>|--arguments-file <path>] [evidence options]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var toolId = arguments.RequirePositional(3, "tool identifier");
         var toolArguments = ReadArguments(arguments);
@@ -272,6 +294,7 @@ internal static class AppCommands
                 toolArguments,
                 after,
                 cancellationToken).ConfigureAwait(false);
+
         return WriteResponse("call", sessionId, response, output, toolId);
     }
 
@@ -284,6 +307,7 @@ internal static class AppCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight app batch <session-id> --calls <JSON>|--calls-file <path> [--continue-on-error]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var calls = ReadBatchCalls(arguments);
         var response = await runtime.AppTools.CallBatchAsync(
@@ -291,6 +315,7 @@ internal static class AppCommands
             calls,
             arguments.HasFlag("continue-on-error"),
             cancellationToken).ConfigureAwait(false);
+
         return WriteResponse("batch", sessionId, response, output);
     }
 
@@ -303,8 +328,10 @@ internal static class AppCommands
         arguments.EnsurePositionalCount(
             5,
             "ansight app push-file <session-id> <local-path> <remote-directory> [options]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var localPath = Path.GetFullPath(arguments.RequirePositional(3, "local file path"));
+
         if (!File.Exists(localPath))
         {
             throw new CliUsageException($"Local file '{localPath}' was not found.");
@@ -319,6 +346,7 @@ internal static class AppCommands
             arguments.HasFlag("overwrite"),
             !arguments.HasFlag("no-create-directory"),
             cancellationToken).ConfigureAwait(false);
+
         return WriteResponse("push-file", sessionId, response, output);
     }
 
@@ -329,35 +357,42 @@ internal static class AppCommands
     {
         var explicitAfter = ReadJsonObject(arguments, "after", required: false);
         var include = new JsonArray();
+
         if (arguments.HasFlag("after-tree"))
         {
             include.Add("visualTree");
         }
+
         if (arguments.HasFlag("after-screenshot"))
         {
             include.Add("screenshot");
         }
 
         var delaySource = arguments.GetOption("after-delay-ms");
+
         if (explicitAfter is null && include.Count == 0 && delaySource is null)
         {
             return null;
         }
+
         if (explicitAfter is not null && (include.Count > 0 || delaySource is not null))
         {
             throw new CliUsageException(
                 "Use either --after/--after-file or the --after-tree, --after-screenshot, and --after-delay-ms shortcuts.");
         }
+
         if (explicitAfter is not null)
         {
             return explicitAfter;
         }
 
         var after = new JsonObject();
+
         if (include.Count > 0)
         {
             after["include"] = include;
         }
+
         if (delaySource is not null)
         {
             if (!int.TryParse(delaySource, out var delayMilliseconds)
@@ -365,14 +400,17 @@ internal static class AppCommands
             {
                 throw new CliUsageException("--after-delay-ms must be an integer from 0 through 2000.");
             }
+
             after["delayMilliseconds"] = delayMilliseconds;
         }
+
         return after;
     }
 
     private static IReadOnlyList<RuntimeAppToolBatchCall> ReadBatchCalls(CliArguments arguments)
     {
         var source = ReadJsonSource(arguments, "calls", required: true);
+
         try
         {
             var array = JsonNode.Parse(
@@ -383,29 +421,35 @@ internal static class AppCommands
                     CommentHandling = JsonCommentHandling.Skip
                 }) as JsonArray
                 ?? throw new CliUsageException("App tool calls must be a JSON array.");
+
             if (array.Count is < 1 or > 32)
             {
                 throw new CliUsageException("App tool calls must contain between 1 and 32 entries.");
             }
 
             var calls = new List<RuntimeAppToolBatchCall>(array.Count);
+
             foreach (var item in array)
             {
                 if (item is not JsonObject call)
                 {
                     throw new CliUsageException("Every app tool call must be a JSON object.");
                 }
+
                 var toolId = call["toolId"]?.GetValue<string>();
+
                 if (string.IsNullOrWhiteSpace(toolId))
                 {
                     throw new CliUsageException("Every app tool call requires toolId.");
                 }
+
                 calls.Add(new RuntimeAppToolBatchCall(
                     toolId,
                     call["arguments"] as JsonObject,
                     call["after"] as JsonObject,
                     call["callId"]?.GetValue<string>()));
             }
+
             return calls;
         }
         catch (JsonException exception)
@@ -420,6 +464,7 @@ internal static class AppCommands
         bool required)
     {
         var source = ReadJsonSource(arguments, optionName, required);
+
         if (string.IsNullOrWhiteSpace(source))
         {
             return null;
@@ -434,7 +479,7 @@ internal static class AppCommands
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip
                 }) as JsonObject
-                   ?? throw new CliUsageException($"--{optionName} must be a JSON object.");
+                ?? throw new CliUsageException($"--{optionName} must be a JSON object.");
         }
         catch (JsonException exception)
         {
@@ -449,15 +494,18 @@ internal static class AppCommands
     {
         var inlineJson = arguments.GetOption(optionName);
         var filePath = arguments.GetOption($"{optionName}-file");
+
         if (inlineJson is not null && filePath is not null)
         {
             throw new CliUsageException($"Use only one of --{optionName} or --{optionName}-file.");
         }
 
         string? source = inlineJson;
+
         if (filePath is not null)
         {
             var fullPath = Path.GetFullPath(filePath);
+
             if (!File.Exists(fullPath))
             {
                 throw new CliUsageException($"Arguments file '{fullPath}' was not found.");
@@ -472,8 +520,10 @@ internal static class AppCommands
             {
                 throw new CliUsageException($"Use --{optionName} or --{optionName}-file.");
             }
+
             return null;
         }
+
         return source;
     }
 
@@ -495,6 +545,7 @@ internal static class AppCommands
                 response.Message,
                 response.Envelope),
             () => FormatFriendlyResponse(response));
+
         return isSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -505,6 +556,7 @@ internal static class AppCommands
         {
             return false;
         }
+
         return response.Envelope.Payload?["success"]?.GetValue<bool>() != false;
     }
 
@@ -514,13 +566,16 @@ internal static class AppCommands
         {
             return response.Message;
         }
+
         if (string.Equals(response.Envelope.Type, "tool.catalog", StringComparison.Ordinal))
         {
             var revision = payload["revision"]?.GetValue<string>() ?? "unknown";
+
             if (payload["unchanged"]?.GetValue<bool>() == true)
             {
                 return $"Tool catalog is unchanged (revision {revision}).";
             }
+
             if (payload["tools"] is JsonArray tools)
             {
                 var lines = tools.OfType<JsonObject>().Select(tool =>
@@ -528,21 +583,25 @@ internal static class AppCommands
                     var executionStatus = tool["executable"]?.GetValue<bool>() != false
                         ? "executable"
                         : $"blocked:{tool["denial"]?["code"]?.GetValue<string>() ?? "unavailable"}";
+
                     return $"{tool["id"]?.GetValue<string>()}\t{tool["policy"]?.GetValue<string>()}"
-                           + $"\t{executionStatus}"
-                           + $"\t{tool["argumentEncoding"]?.GetValue<string>() ?? "legacy"}"
-                           + $"\t{tool["description"]?.GetValue<string>()}";
+                        + $"\t{executionStatus}"
+                        + $"\t{tool["argumentEncoding"]?.GetValue<string>() ?? "legacy"}"
+                        + $"\t{tool["description"]?.GetValue<string>()}";
                 });
+
                 return $"Catalog revision {revision} ({tools.Count} tools)"
-                       + Environment.NewLine + string.Join(Environment.NewLine, lines);
+                    + Environment.NewLine + string.Join(Environment.NewLine, lines);
             }
         }
 
         var error = payload["error"] as JsonObject;
+
         if (error is not null)
         {
             var code = error["code"]?.GetValue<string>() ?? "tool_error";
             var message = error["message"]?.GetValue<string>() ?? response.Message;
+
             return code == "stale_node_reference"
                 ? $"{code}: {message}{Environment.NewLine}Re-query ui.query_nodes and retry with the returned reference."
                 : $"{code}: {message}";
@@ -552,8 +611,10 @@ internal static class AppCommands
         {
             var succeeded = results.OfType<JsonObject>().Count(
                 result => result["success"]?.GetValue<bool>() == true);
+
             return $"Batch completed {results.Count} call(s): {succeeded} succeeded, {results.Count - succeeded} failed.";
         }
+
         return response.Message;
     }
 
@@ -687,5 +748,4 @@ internal static class AppCommands
              ansight app execute --device-id <ios-id> --device-id <android-id> --app-id com.example.app --prompt "Verify the profile"
              ansight app call <session-id> data.query --arguments-file query.json --json
            """;
-
 }

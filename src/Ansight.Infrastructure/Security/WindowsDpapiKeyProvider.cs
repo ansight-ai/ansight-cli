@@ -15,23 +15,30 @@ internal static class WindowsDpapiKeyProvider
         }
 
         var keyFilePath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(encryptedStorageFilePath);
+
         if (File.Exists(keyFilePath))
         {
             return Unprotect(Convert.FromBase64String(File.ReadAllText(keyFilePath).Trim()));
         }
 
-        if (!createIfMissing) throw new FileNotFoundException("The protected secret-store key is unavailable.");
+        if (!createIfMissing)
+        {
+            throw new FileNotFoundException("The protected secret-store key is unavailable.");
+        }
 
         var parent = Path.GetDirectoryName(keyFilePath);
+
         if (!string.IsNullOrWhiteSpace(parent))
         {
             Directory.CreateDirectory(parent);
         }
 
         var key = RandomNumberGenerator.GetBytes(KeySizeInBytes);
+
         try
         {
             var protectedKey = Protect(key);
+
             try
             {
                 using var stream = new FileStream(
@@ -45,11 +52,13 @@ internal static class WindowsDpapiKeyProvider
                 writer.Write(Convert.ToBase64String(protectedKey));
                 writer.Flush();
                 stream.Flush(flushToDisk: true);
+
                 return key;
             }
             catch (IOException) when (File.Exists(keyFilePath))
             {
                 CryptographicOperations.ZeroMemory(key);
+
                 return Unprotect(Convert.FromBase64String(File.ReadAllText(keyFilePath).Trim()));
             }
             finally
@@ -67,16 +76,17 @@ internal static class WindowsDpapiKeyProvider
     private static byte[] Protect(byte[] plaintext)
     {
         var input = CreateBlob(plaintext);
+
         try
         {
             if (!WindowsDpapiNative.CryptProtectData(
-                    ref input,
-                    "Ansight secret-store master key",
-                    0,
-                    0,
-                    0,
-                    WindowsDpapiNative.UiForbidden,
-                    out var output))
+                ref input,
+                "Ansight secret-store master key",
+                0,
+                0,
+                0,
+                WindowsDpapiNative.UiForbidden,
+                out var output))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
@@ -92,22 +102,25 @@ internal static class WindowsDpapiKeyProvider
     private static byte[] Unprotect(byte[] protectedValue)
     {
         var input = CreateBlob(protectedValue);
+
         try
         {
             if (!WindowsDpapiNative.CryptUnprotectData(
-                    ref input,
-                    out var description,
-                    0,
-                    0,
-                    0,
-                    WindowsDpapiNative.UiForbidden,
-                    out var output))
+                ref input,
+                out var description,
+                0,
+                0,
+                0,
+                WindowsDpapiNative.UiForbidden,
+                out var output))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
             WindowsDpapiNative.LocalFree(description);
+
             var key = CopyAndFree(output);
+
             if (key.Length != KeySizeInBytes)
             {
                 CryptographicOperations.ZeroMemory(key);
@@ -127,6 +140,7 @@ internal static class WindowsDpapiKeyProvider
     {
         var data = Marshal.AllocHGlobal(value.Length);
         Marshal.Copy(value, 0, data, value.Length);
+
         return new WindowsDataBlob { Size = value.Length, Data = data };
     }
 
@@ -136,6 +150,7 @@ internal static class WindowsDpapiKeyProvider
         {
             var value = new byte[blob.Size];
             Marshal.Copy(blob.Data, value, 0, value.Length);
+
             return value;
         }
         finally

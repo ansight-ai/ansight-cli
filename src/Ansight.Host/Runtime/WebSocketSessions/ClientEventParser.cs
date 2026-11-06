@@ -36,6 +36,7 @@ internal static class ClientEventParser
             var deviceProfileJson = string.Equals(type, WebSocketClientEventConstants.DeviceAppProfile, StringComparison.Ordinal)
                 ? PrettyPrintJson(payload)
                 : null;
+
             return new ParsedClientEvent(type, data, channels, metrics, events, touches, networkRequest, appState, appStateChangedUtc, deviceProfile, deviceProfileJson, imageFrame, visualTreeSnapshot);
         }
         catch
@@ -96,9 +97,9 @@ internal static class ClientEventParser
     private static SessionNetworkRequest? ParseNetworkRequest(JsonElement root)
     {
         if (!string.Equals(
-                JsonUtil.TryGetString(root, "type"),
-                WebSocketClientEventConstants.ClientNetworkRequest,
-                StringComparison.Ordinal)
+            JsonUtil.TryGetString(root, "type"),
+            WebSocketClientEventConstants.ClientNetworkRequest,
+            StringComparison.Ordinal)
             || !root.TryGetProperty("request", out var requestElement)
             || requestElement.ValueKind != JsonValueKind.Object)
         {
@@ -124,10 +125,12 @@ internal static class ClientEventParser
         }
 
         var channels = new List<SessionMetricChannel>();
+
         foreach (var channelElement in channelsElement.EnumerateArray())
         {
             var id = TryReadByte(channelElement, "id");
             var name = JsonUtil.TryGetString(channelElement, "name");
+
             if (id is null || string.IsNullOrWhiteSpace(name))
             {
                 continue;
@@ -167,11 +170,13 @@ internal static class ClientEventParser
         }
 
         var samples = new List<SessionMetricSample>();
+
         foreach (var metricElement in metricsElement.EnumerateArray())
         {
             var channelId = TryReadByte(metricElement, "channel");
             var value = TryReadDouble(metricElement, "value");
             var capturedAtUtc = JsonUtil.TryGetString(metricElement, "capturedAtUtc");
+
             if (channelId is null || value is null)
             {
                 continue;
@@ -200,10 +205,12 @@ internal static class ClientEventParser
         }
 
         var events = new List<SessionApplicationEvent>();
+
         foreach (var eventElement in eventsElement.EnumerateArray())
         {
             var id = JsonUtil.TryGetString(eventElement, "id");
             var label = JsonUtil.TryGetString(eventElement, "label");
+
             if (string.IsNullOrWhiteSpace(label))
             {
                 continue;
@@ -212,8 +219,8 @@ internal static class ClientEventParser
             var eventType = JsonUtil.TryGetString(eventElement, "eventType");
             var details = JsonUtil.TryGetString(eventElement, "details") ?? string.Empty;
             var channelId = TryReadByte(eventElement, "channel")
-                            ?? TryReadByte(eventElement, "channelId")
-                            ?? 0;
+                ?? TryReadByte(eventElement, "channelId")
+                ?? 0;
             var capturedAtUtc = JsonUtil.TryGetString(eventElement, "capturedAtUtc");
             var parsedTimestamp = DateTimeOffset.TryParse(capturedAtUtc, out var parsed)
                 ? parsed
@@ -234,6 +241,7 @@ internal static class ClientEventParser
     private static IReadOnlyList<SessionTouchInputRecord> ParseTouchInputRecords(JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientTouchInput, StringComparison.Ordinal)
             || !string.Equals(JsonUtil.TryGetString(root, "schema"), SessionTouchPacking.SchemaName, StringComparison.Ordinal))
         {
@@ -243,6 +251,7 @@ internal static class ClientEventParser
         try
         {
             var batch = JsonSerializer.Deserialize<SessionTouchPackedBatch>(root.GetRawText(), JsonUtil.Compact);
+
             if (batch is null)
             {
                 return Array.Empty<SessionTouchInputRecord>();
@@ -329,6 +338,7 @@ internal static class ClientEventParser
         }
 
         var trimmed = colorHex.Trim();
+
         if (trimmed.Length == 7 && trimmed[0] == '#')
         {
             return trimmed.ToUpperInvariant();
@@ -340,6 +350,7 @@ internal static class ClientEventParser
     private static DeviceAppProfile? ParseDeviceAppProfile(string payload, JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.DeviceAppProfile, StringComparison.Ordinal))
         {
             return null;
@@ -360,6 +371,7 @@ internal static class ClientEventParser
         try
         {
             using var document = JsonDocument.Parse(payload, JsonUtil.Document);
+
             return JsonSerializer.Serialize(document.RootElement, JsonUtil.Pretty);
         }
         catch
@@ -371,12 +383,14 @@ internal static class ClientEventParser
     private static ParsedSessionImageFrame? ParseSessionImageFrame(JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientJpeg, StringComparison.Ordinal))
         {
             return null;
         }
 
         var base64 = JsonUtil.TryGetString(root, "base64");
+
         if (string.IsNullOrWhiteSpace(base64))
         {
             return null;
@@ -402,6 +416,7 @@ internal static class ClientEventParser
     internal static SessionVisualTreeSnapshot? ParseSessionVisualTreeSnapshot(JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientVisualTree, StringComparison.Ordinal)
             || !root.TryGetProperty("payload", out var payloadElement)
             || payloadElement.ValueKind != JsonValueKind.Object)
@@ -414,6 +429,7 @@ internal static class ClientEventParser
             var payload = JsonNode.Parse(
                 payloadElement.GetRawText(),
                 documentOptions: JsonUtil.Document) as JsonObject;
+
             if (payload is null || payload.Count == 0)
             {
                 return null;
@@ -421,10 +437,11 @@ internal static class ClientEventParser
 
             var capturedAtUtc = ReadCapturedAtUtc(root);
             var reportedKind = LiveUiNodeQuery.ReadString(payload, "treeKind")
-                               ?? JsonUtil.TryGetString(root, "visualTreeKind");
+                ?? JsonUtil.TryGetString(root, "visualTreeKind");
             var source = LiveUiNodeQuery.ReadString(payload, "source");
             var format = JsonUtil.TryGetString(root, "visualTreeFormat")
-                         ?? LiveUiNodeQuery.ReadString(payload, "format");
+                ?? LiveUiNodeQuery.ReadString(payload, "format");
+
             return new SessionVisualTreeSnapshot
             {
                 SnapshotId = JsonUtil.TryGetString(root, "snapshotId")?.Trim() is { Length: > 0 } snapshotId
@@ -439,11 +456,11 @@ internal static class ClientEventParser
                 VisualTreeFormat = VisualTreeContract.NormalizeFormat(format),
                 RuntimePlatform = VisualTreeContract.NormalizeRuntimePlatform(
                     JsonUtil.TryGetString(root, "runtimePlatform")
-                    ?? LiveUiNodeQuery.ReadString(payload, "platform")),
+                        ?? LiveUiNodeQuery.ReadString(payload, "platform")),
                 Source = JsonUtil.TryGetString(root, "source") ?? "sdk.sessionCapture",
                 RootScope = VisualTreeContract.NormalizeRootScope(
                     JsonUtil.TryGetString(root, "rootScope")
-                    ?? LiveUiNodeQuery.ReadString(payload, "rootScope")),
+                        ?? LiveUiNodeQuery.ReadString(payload, "rootScope")),
                 MaxDepth = Math.Max(0, TryReadInt32(root, "maxDepth") ?? 0),
                 IncludeProperties = TryReadBoolean(root, "includeProperties") ?? false,
                 IncludeBindableProperties = TryReadBoolean(root, "includeBindableProperties") ?? false,
@@ -462,6 +479,7 @@ internal static class ClientEventParser
     private static DateTimeOffset ReadCapturedAtUtc(JsonElement root)
     {
         var capturedAtUtc = JsonUtil.TryGetString(root, "capturedAtUtc");
+
         return DateTimeOffset.TryParse(capturedAtUtc, out var parsed)
             ? parsed
             : DateTimeOffset.UtcNow;
@@ -470,6 +488,7 @@ internal static class ClientEventParser
     private static DateTimeOffset? ParseOptionalDateTimeOffset(JsonElement root, string propertyName)
     {
         var value = JsonUtil.TryGetString(root, propertyName);
+
         return DateTimeOffset.TryParse(value, out var parsed)
             ? parsed
             : null;
@@ -478,12 +497,14 @@ internal static class ClientEventParser
     private static AppLifecycleState? ParseAppLifecycleState(JsonElement root)
     {
         var type = JsonUtil.TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientAppState, StringComparison.Ordinal))
         {
             return null;
         }
 
         var value = JsonUtil.TryGetString(root, "state");
+
         return value?.Trim().ToLowerInvariant() switch
         {
             "foreground" => AppLifecycleState.Foreground,

@@ -14,31 +14,18 @@ internal sealed class FakeHostDeviceService : IDeviceService
     public List<string> ShownDeviceIdentifiers { get; } = [];
 
     public DeviceStartOptions? StartOptions { get; private set; }
-
     public string? InstalledDeviceIdentifier { get; private set; }
-
     public string? InstalledApplicationPath { get; private set; }
-
     public bool InstalledApplicationPathExisted { get; private set; }
-
     public string? LaunchedDeviceIdentifier { get; private set; }
-
     public string? LaunchedApplicationIdentifier { get; private set; }
-
     public ApplicationLaunchOptions? LaunchOptions { get; private set; }
-
     public string? StartedSerial { get; set; }
-
     public string? PhysicalIosProcessIdentity { get; set; }
-
     public DeviceOperationResult? LaunchResult { get; set; }
-
     public DeviceOperationResult? TerminateResult { get; set; }
-
     public string? TerminatedDeviceIdentifier { get; private set; }
-
     public string? TerminatedApplicationIdentifier { get; private set; }
-
     public List<string> Operations { get; } = [];
 
     public void SetApplications(
@@ -69,6 +56,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
     {
         StartOptions = options;
         StartedDeviceIdentifiers.Add(deviceIdentifier);
+
         return Task.FromResult(DeviceOperationResult.Success(
             "start",
             platform,
@@ -82,6 +70,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
         CancellationToken cancellationToken = default)
     {
         ShownDeviceIdentifiers.Add(deviceIdentifier);
+
         return Task.FromResult(DeviceOperationResult.Success(
             "show-window",
             platform,
@@ -118,6 +107,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
         InstalledDeviceIdentifier = deviceIdentifier;
         InstalledApplicationPath = applicationPath;
         InstalledApplicationPathExisted = File.Exists(applicationPath) || Directory.Exists(applicationPath);
+
         return Task.FromResult(DeviceOperationResult.Success(
             "install-app",
             platform,
@@ -134,6 +124,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
         Operations.Add("launch");
         LaunchedDeviceIdentifier = deviceIdentifier;
         LaunchedApplicationIdentifier = applicationIdentifier;
+
         return Task.FromResult(LaunchResult ?? DeviceOperationResult.Success(
             "launch-app",
             platform,
@@ -149,6 +140,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
         CancellationToken cancellationToken = default)
     {
         LaunchOptions = launchOptions;
+
         return LaunchApplicationAsync(
             platform,
             deviceIdentifier,
@@ -165,6 +157,7 @@ internal sealed class FakeHostDeviceService : IDeviceService
         Operations.Add("terminate");
         TerminatedDeviceIdentifier = deviceIdentifier;
         TerminatedApplicationIdentifier = applicationIdentifier;
+
         return Task.FromResult(TerminateResult ?? DeviceOperationResult.Success(
             "terminate-app",
             platform,

@@ -10,11 +10,17 @@ internal static class UiResultProjection
         var result = content.DeepClone().AsObject();
         var budget = new ProjectionBudget();
         ProjectEnvelope(result, options, budget);
+
         if (budget.SourceNodes > 0)
         {
             result["projectionSourceNodeCount"] = budget.SourceNodes;
             result["projectionReturnedNodeCount"] = budget.ReturnedNodes;
-            if (budget.Truncated) result["projectionTruncated"] = true;
+
+            if (budget.Truncated)
+            {
+                result["projectionTruncated"] = true;
+            }
+
             if (budget.Characters > Math.Max(0, options.MaximumCharacters)
                 || budget.ReturnedNodes > Math.Max(0, options.MaximumNodes))
             {
@@ -22,14 +28,17 @@ internal static class UiResultProjection
                 result["projectionBudgetExceeded"] = true;
             }
         }
+
         UiNodeProjection.CompactBoundsInPlace(result);
         UiObservationBudget.Apply(result, options);
+
         return result;
     }
 
     private static void ProjectEnvelope(JsonObject envelope, UiProjectionOptions options, ProjectionBudget budget)
     {
         var groups = new List<NodeGroup>();
+
         foreach (var name in new[] { "selected", "target" })
         {
             if (envelope[name] is JsonObject node)
@@ -37,10 +46,16 @@ internal static class UiResultProjection
                 groups.Add(new NodeGroup(name, false, 1, [UiNodeProjection.FromResult(node, options)]));
             }
         }
+
         var availableNodes = Math.Max(0, options.MaximumNodes - budget.ReturnedNodes - groups.Count);
+
         foreach (var name in new[] { "matches", "diagnosticMatches" })
         {
-            if (envelope[name] is not JsonArray nodes) continue;
+            if (envelope[name] is not JsonArray nodes)
+            {
+                continue;
+            }
+
             var limit = Math.Min(availableNodes, Math.Max(0, options.MaximumMatches));
             var projected = nodes.OfType<JsonObject>().Take(limit)
                 .Select(node => UiNodeProjection.FromResult(node, options)).ToList();
@@ -52,24 +67,40 @@ internal static class UiResultProjection
         {
             var projection = BuildProjection(groups, envelope["ancestors"] as JsonArray, options);
             var maximumCharacters = Math.Max(0, options.MaximumCharacters - budget.Characters);
+
             while (projection.ToJsonString().Length > maximumCharacters)
             {
                 // Drop diagnostic candidates first. Preserve selected/action targets and their verdicts.
                 var removable = groups.LastOrDefault(group => group.IsArray && group.Nodes.Count > 0);
-                if (removable is null) break;
+
+                if (removable is null)
+                {
+                    break;
+                }
+
                 removable.Nodes.RemoveAt(removable.Nodes.Count - 1);
                 projection = BuildProjection(groups, envelope["ancestors"] as JsonArray, options);
             }
-            foreach (var field in projection) envelope[field.Key] = field.Value?.DeepClone();
+
+            foreach (var field in projection)
+            {
+                envelope[field.Key] = field.Value?.DeepClone();
+            }
+
             var sourceCount = groups.Sum(group => group.SourceCount);
             var returnedCount = groups.Sum(group => group.Nodes.Count);
             var truncated = returnedCount < sourceCount
-                            || ContainsTruncation(projection);
+                || ContainsTruncation(projection);
             budget.SourceNodes += sourceCount;
             budget.ReturnedNodes += returnedCount;
             budget.Characters += projection.ToJsonString().Length;
             budget.Truncated |= truncated;
-            if (truncated) envelope["projectionTruncated"] = true;
+
+            if (truncated)
+            {
+                envelope["projectionTruncated"] = true;
+            }
+
             envelope["projectionSourceNodeCount"] = sourceCount;
             envelope["projectionReturnedNodeCount"] = returnedCount;
         }
@@ -84,7 +115,10 @@ internal static class UiResultProjection
             }
             else if (envelope[name] is JsonArray children)
             {
-                foreach (var child in children.OfType<JsonObject>()) ProjectEnvelope(child, options, budget);
+                foreach (var child in children.OfType<JsonObject>())
+                {
+                    ProjectEnvelope(child, options, budget);
+                }
             }
         }
     }
@@ -94,6 +128,7 @@ internal static class UiResultProjection
     {
         var result = new JsonObject();
         var projectedNodes = new List<JsonObject>();
+
         foreach (var group in groups)
         {
             if (group.IsArray)
@@ -109,11 +144,17 @@ internal static class UiResultProjection
                 projectedNodes.Add(node);
             }
         }
+
         var ancestors = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+
         foreach (var ancestor in existingAncestors?.OfType<JsonObject>() ?? [])
         {
-            if (ReadIdentity(ancestor) is { } id) ancestors.TryAdd(id, UiNodeProjection.Ancestor(ancestor, null, options));
+            if (ReadIdentity(ancestor) is { } id)
+            {
+                ancestors.TryAdd(id, UiNodeProjection.Ancestor(ancestor, null, options));
+            }
         }
+
         foreach (var node in projectedNodes)
         {
             if (!options.ShareAncestors || node["ancestorPath"] is not JsonArray path || path.Count == 0
@@ -122,35 +163,53 @@ internal static class UiResultProjection
                 // Matching labels or automation IDs alone cannot establish shared source identity.
                 continue;
             }
+
             string? parentId = null;
+
             foreach (var ancestor in path.OfType<JsonObject>())
             {
                 var id = ReadIdentity(ancestor)!;
+
                 if (!ancestors.TryGetValue(id, out var shared))
                 {
                     shared = ancestor.DeepClone().AsObject();
                     ancestors.Add(id, shared);
                 }
-                if (parentId is not null && parentId != id) shared["parentId"] = parentId;
+
+                if (parentId is not null && parentId != id)
+                {
+                    shared["parentId"] = parentId;
+                }
+
                 parentId = id;
             }
-            if (parentId is not null && parentId != ReadIdentity(node)) node["parentId"] = parentId;
+
+            if (parentId is not null && parentId != ReadIdentity(node))
+            {
+                node["parentId"] = parentId;
+            }
+
             node.Remove("ancestorPath");
         }
+
         var reachable = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var node in projectedNodes)
         {
             var parentId = ReadText(node, "parentId");
+
             while (parentId is not null && ancestors.TryGetValue(parentId, out var ancestor) && reachable.Add(parentId))
             {
                 parentId = ReadText(ancestor, "parentId");
             }
         }
+
         if (reachable.Count > 0 || existingAncestors is not null)
         {
             result["ancestors"] = new JsonArray(ancestors.Where(entry => reachable.Contains(entry.Key))
                 .Select(entry => (JsonNode?)entry.Value).ToArray());
         }
+
         return result;
     }
 
@@ -158,7 +217,7 @@ internal static class UiResultProjection
         => node switch
         {
             JsonObject value => value["projectionTruncated"] is JsonValue flag && flag.TryGetValue<bool>(out var truncated) && truncated
-                                || value.Any(property => property.Value is { } child && ContainsTruncation(child)),
+                || value.Any(property => property.Value is { } child && ContainsTruncation(child)),
             JsonArray values => values.OfType<JsonNode>().Any(ContainsTruncation),
             _ => false
         };
@@ -170,8 +229,12 @@ internal static class UiResultProjection
     {
         foreach (var name in new[] { "id", "nodeId" })
         {
-            if (node[name] is JsonValue value && value.TryGetValue<string>(out var id) && !string.IsNullOrWhiteSpace(id)) return id;
+            if (node[name] is JsonValue value && value.TryGetValue<string>(out var id) && !string.IsNullOrWhiteSpace(id))
+            {
+                return id;
+            }
         }
+
         return null;
     }
 

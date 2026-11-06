@@ -9,8 +9,6 @@ internal sealed class AppGraphDocumentEdge
     public string To { get; init; } = string.Empty;
 
     public AppGraphDocumentAction? Action { get; init; }
-
     public System.Text.Json.Nodes.JsonObject? NavigationContext { get; init; }
-
     public IReadOnlyList<string> Postconditions { get; init; } = [];
 }

@@ -11,11 +11,8 @@ public readonly struct Color : IEquatable<Color>
     }
 
     public byte Red { get; }
-
     public byte Green { get; }
-
     public byte Blue { get; }
-
     public byte Alpha { get; }
 
     public static Color FromHex(string value)
@@ -61,9 +58,9 @@ public readonly struct Color : IEquatable<Color>
     public bool Equals(Color other)
     {
         return Red == other.Red
-               && Green == other.Green
-               && Blue == other.Blue
-               && Alpha == other.Alpha;
+            && Green == other.Green
+            && Blue == other.Blue
+            && Alpha == other.Alpha;
     }
 
     public override bool Equals(object? obj)

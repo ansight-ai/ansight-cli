@@ -17,6 +17,7 @@ public sealed class PairingConfigServiceTests
             pairingCache);
 
         string? inviteFilePath = null;
+
         try
         {
             var result = service.Issue(
@@ -26,6 +27,7 @@ public sealed class PairingConfigServiceTests
             inviteFilePath = result.DesktopPath;
 
             Assert.True(File.Exists(inviteFilePath));
+
             if (!OperatingSystem.IsWindows())
             {
                 Assert.Equal(

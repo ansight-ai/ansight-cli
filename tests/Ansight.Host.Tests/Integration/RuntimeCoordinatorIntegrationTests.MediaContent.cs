@@ -15,28 +15,35 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var pairingConfig = environment.SeedPairingConfig("com.example.live-media", "Live Media");
         await using var runtime = environment.CreateRuntime();
         await runtime.StartAsync();
+
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(new Uri(
             $"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}"), CancellationToken.None);
+
         string? sessionId = null;
         await TestWait.UntilAsync(() =>
         {
             sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
             return sessionId is not null;
         });
 
         var explorer = await runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest(InitialSessionId: sessionId));
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         using var client = new HttpClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(Assert.IsType<Uri>(explorer.ExplorerUrl),
             $"api/sessions/{sessionId}/files/content?root=appData&path=recording.wav"));
         request.Headers.TryAddWithoutValidation("Range", rangeHeader);
+
         var responseTask = client.SendAsync(request);
 
         var catalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, catalogRequest["type"]?.GetValue<string>());
+
         var catalogRequestId = catalogRequest["id"]!.GetValue<string>();
         await SendJsonAsync(socket, new JsonObject
         {
@@ -59,6 +66,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await ReplyWithMediaChunkAsync(socket, sessionId!, metadataRequest, 0, [0]);
 
         byte[] expected = Enumerable.Range(offset, count).Select(value => (byte)value).ToArray();
+
         if (offset > 0)
         {
             var chunkRequest = await ReceiveJsonAsync(socket);
@@ -84,6 +92,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
     private static Task ReplyWithMediaChunkAsync(ClientWebSocket socket, string sessionId, JsonObject request, int offset, byte[] bytes)
     {
         var requestId = request["id"]!.GetValue<string>();
+
         return SendJsonAsync(socket, new JsonObject
         {
             ["type"] = ToolProtocolMessageTypes.ResultType,

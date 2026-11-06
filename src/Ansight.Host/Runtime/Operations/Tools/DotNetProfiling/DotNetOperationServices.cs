@@ -12,7 +12,5 @@ internal sealed class DotNetOperationServices
     }
 
     public DotNetProfilingEngine Profiling { get; }
-
     public DotNetTraceAnalysisService Analysis { get; }
-
 }

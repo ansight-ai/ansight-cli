@@ -8,26 +8,39 @@ namespace Ansight.Cli.Tests.Commands.Mcp;
 public sealed class ReplayMcpTests
 {
     private static JsonObject Parse(string value) => JsonNode.Parse(value)!.AsObject();
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public JsonArray Annotations { get; } = JsonNode.Parse("""
             [{"annotationId":"marker-1","label":"Search result","startUtc":"2026-10-11T00:00:12Z"}]
             """)!.AsArray();
         public int Writes { get; private set; }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.Equal("127.0.0.1", request.RequestUri!.Host);
+
             if (request.Method == HttpMethod.Post)
             {
                 Writes++;
                 Annotations.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken)));
-                return new(HttpStatusCode.OK) { Content = new StringContent("{\"isSuccess\":true}", Encoding.UTF8, "application/json") };
+
+                return new(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"isSuccess\":true}", Encoding.UTF8, "application/json")
+                };
             }
-            return new(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) { Headers = { ContentType = new("image/webp") } } };
+
+            return new(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3]) { Headers = { ContentType = new("image/webp") } }
+            };
         }
+
         public Task<JsonObject> Run(string[] args, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
+
             var result = args[0] == "host" ? Parse("""{"isRunning":true,"explorerUrl":"http://127.0.0.1:47231/ansight/"}""") : args[1] switch
             {
                 "list" => Parse("""{"sessions":[{"sessionId":"capture-1","name":"Search","clientName":"Test app","createdUtc":"2026-10-11T00:00:00Z","lastUpdatedUtc":"2026-10-11T00:00:30Z"}]}"""),
@@ -36,6 +49,7 @@ public sealed class ReplayMcpTests
                 "annotations" => new JsonObject { ["items"] = Annotations.DeepClone() },
                 _ => throw new InvalidOperationException("Unexpected command.")
             };
+
             return Task.FromResult(result);
         }
     }
@@ -57,6 +71,7 @@ public sealed class ReplayMcpTests
         Assert.Equal(ReplayBackend.Time("2026-10-11T00:00:12Z"), result["_meta"]!["replay"]!["initialTimeMs"]!.GetValue<long>());
         Assert.Equal(7, command.Tools().Count);
         Assert.Contains(command.ResourceUri, command.Tools().ToJsonString());
+
         var read = await command.InvokeAsync("read_replay_annotation", Parse("""{"sessionId":"capture-1","annotationId":"marker-1"}"""), default);
         Assert.Equal("image", read["content"]![1]!["type"]!.GetValue<string>());
     }
@@ -67,16 +82,25 @@ public sealed class ReplayMcpTests
         using var handler = new RecordingHandler();
         using var http = new HttpClient(handler);
         var opened = new List<Uri>();
+
         Task<JsonObject> Run(string[] args, CancellationToken token) => args[0] == "host"
             ? Task.FromResult(Parse("""{"isRunning":true,"explorerUrl":"http://127.0.0.1:49000/review/"}"""))
             : handler.Run(args, token);
-        var backend = new ReplayBackend(Run, http, url => { opened.Add(url); return null; });
+
+        var backend = new ReplayBackend(Run, http, url =>
+        {
+            opened.Add(url);
+
+            return null;
+        }
+);
         var command = new ReplayMcpCommand("<html></html>", backend);
         var result = await command.InvokeAsync("open_replay_in_browser", Parse("""{"sessionId":"capture-1"}"""), default);
 
         Assert.Null(result["isError"]);
         Assert.Equal("http://127.0.0.1:49000/review/?sessionId=capture-1", Assert.Single(opened).AbsoluteUri);
         Assert.Equal(opened[0].AbsoluteUri, result["structuredContent"]!["replayUrl"]!.GetValue<string>());
+
         var tool = command.Tools().Single(item => item!["name"]!.GetValue<string>() == "open_replay_in_browser")!;
         Assert.Equal("app", Assert.Single(tool["_meta"]!["ui"]!["visibility"]!.AsArray())!.GetValue<string>());
         Assert.False(tool["annotations"]!["readOnlyHint"]!.GetValue<bool>());
@@ -103,7 +127,13 @@ public sealed class ReplayMcpTests
         using var handler = new RecordingHandler();
         using var http = new HttpClient(handler);
         var opened = new List<Uri>();
-        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(handler.Run, http, url => { opened.Add(url); return null; }));
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(handler.Run, http, url =>
+        {
+            opened.Add(url);
+
+            return null;
+        }
+));
         var result = await command.InvokeAsync("open_replay_in_browser", Parse(input), default);
         Assert.True(result["isError"]!.GetValue<bool>());
         Assert.Empty(opened);
@@ -117,9 +147,17 @@ public sealed class ReplayMcpTests
         using var handler = new RecordingHandler();
         using var http = new HttpClient(handler);
         var opened = new List<Uri>();
+
         Task<JsonObject> Run(string[] args, CancellationToken token) => args[0] == "host"
             ? Task.FromResult(Parse(status)) : handler.Run(args, token);
-        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(Run, http, url => { opened.Add(url); return null; }));
+
+        var command = new ReplayMcpCommand("<html></html>", new ReplayBackend(Run, http, url =>
+        {
+            opened.Add(url);
+
+            return null;
+        }
+));
         var result = await command.InvokeAsync("open_replay_in_browser", Parse("""{"sessionId":"capture-1"}"""), default);
         Assert.True(result["isError"]!.GetValue<bool>());
         Assert.Empty(opened);

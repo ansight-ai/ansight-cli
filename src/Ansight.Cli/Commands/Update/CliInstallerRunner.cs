@@ -42,6 +42,7 @@ internal sealed class CliInstallerRunner
                     ArchiveUrl = status.ArchiveUrl,
                     InstalledAtUtc = DateTimeOffset.UtcNow
                 });
+
             return CreateResult(
                 status,
                 wasUpdated: false,
@@ -51,6 +52,7 @@ internal sealed class CliInstallerRunner
 
         var installerExtension = OperatingSystem.IsWindows() ? "ps1" : "sh";
         var installerUrl = Environment.GetEnvironmentVariable("ANSIGHT_INSTALLER_URL");
+
         if (string.IsNullOrWhiteSpace(installerUrl))
         {
             installerUrl = $"{DefaultInstallerBaseUrl}/install.{installerExtension}";
@@ -59,21 +61,25 @@ internal sealed class CliInstallerRunner
         var installerPath = Path.Combine(
             Path.GetTempPath(),
             $"ansight-update-{Guid.NewGuid():N}.{installerExtension}");
+
         try
         {
             progress?.Report(new CliUpdateProgress("Downloading the platform installer..."));
+
             var installer = await httpClient.GetStringAsync(installerUrl, cancellationToken)
                 .ConfigureAwait(false);
             await File.WriteAllTextAsync(installerPath, installer, cancellationToken)
                 .ConfigureAwait(false);
             progress?.Report(new CliUpdateProgress(
                 $"Installing Ansight CLI {status.LatestVersion} ({status.LatestBuildNumber})..."));
+
             var result = await RunInstallerAsync(
-                    installerPath,
-                    status,
-                    progress,
-                    cancellationToken)
+                installerPath,
+                status,
+                progress,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (result.ExitCode != 0)
             {
                 throw new InvalidOperationException(
@@ -108,6 +114,7 @@ internal sealed class CliInstallerRunner
             RedirectStandardOutput = true,
             UseShellExecute = false
         };
+
         if (OperatingSystem.IsWindows())
         {
             startInfo.ArgumentList.Add("-NoProfile");
@@ -141,6 +148,7 @@ internal sealed class CliInstallerRunner
         startInfo.Environment["ANSIGHT_INSTALL_CHANNEL"] = status.Channel;
         startInfo.Environment["ANSIGHT_RELEASE_URL"] = status.ReleaseUrl;
         startInfo.Environment["ANSIGHT_DOWNLOAD_BASE_URL"] = status.DownloadBaseUrl;
+
         if (!string.IsNullOrWhiteSpace(installationState.Receipt?.InstallRoot))
         {
             startInfo.Environment["ANSIGHT_INSTALL_ROOT"] = installationState.Receipt.InstallRoot;
@@ -152,7 +160,7 @@ internal sealed class CliInstallerRunner
         }
 
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException("The Ansight installer process could not be started.");
+            ?? throw new InvalidOperationException("The Ansight installer process could not be started.");
         var standardOutput = new StringBuilder();
         var standardError = new StringBuilder();
         var standardOutputPump = PumpInstallerOutputAsync(
@@ -165,6 +173,7 @@ internal sealed class CliInstallerRunner
             standardError,
             progress,
             cancellationToken);
+
         try
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
@@ -190,10 +199,12 @@ internal sealed class CliInstallerRunner
         CancellationToken cancellationToken)
     {
         var buffer = new char[1024];
+
         while (true)
         {
             var read = await reader.ReadAsync(buffer.AsMemory(), cancellationToken)
                 .ConfigureAwait(false);
+
             if (read == 0)
             {
                 return;
@@ -208,6 +219,7 @@ internal sealed class CliInstallerRunner
     internal static string BuildFailureDetail(CliInstallerProcessResult result)
     {
         var detail = new StringBuilder();
+
         if (!string.IsNullOrWhiteSpace(result.StandardOutput))
         {
             detail.Append("stdout: ");
@@ -277,8 +289,3 @@ internal sealed class CliInstallerRunner
             channelChanged,
             message);
 }
-
-internal sealed record CliInstallerProcessResult(
-    int ExitCode,
-    string StandardOutput,
-    string StandardError);

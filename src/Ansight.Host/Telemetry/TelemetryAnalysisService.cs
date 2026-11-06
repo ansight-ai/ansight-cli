@@ -15,9 +15,11 @@ public sealed class TelemetryAnalysisService
 
         var windows = FpsDropDetector.AnalyzeFpsDrops(chart);
         var events = new List<FpsDropTelemetryEvent>(windows.Count);
+
         foreach (var window in windows)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var minimumFps = Math.Max(0, window.Minimum.Value);
             events.Add(new FpsDropTelemetryEvent(
                 window.ChannelId,
@@ -45,12 +47,15 @@ public sealed class TelemetryAnalysisService
 
         var chart = CreateChart(metrics, channels);
         cancellationToken.ThrowIfCancellationRequested();
+
         var detectorOptions = MemorySpikeTelemetryAnalysisOptions.FromAnalysisOptions(options);
         var windows = MemorySpikeDetector.AnalyzeMemorySpikes(chart, detectorOptions);
         var events = new List<MemorySpikeTelemetryEvent>(windows.Count);
+
         foreach (var window in windows)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var deltaPercent = window.Baseline.Value <= 0
                 ? 0d
                 : window.DeltaBytes / (double)window.Baseline.Value * 100d;
@@ -80,6 +85,7 @@ public sealed class TelemetryAnalysisService
 
         var metricSnapshot = metrics.ToArray();
         var channelMap = new Dictionary<byte, SessionMetricChannel>();
+
         foreach (var channel in channels)
         {
             ArgumentNullException.ThrowIfNull(channel);
@@ -92,6 +98,7 @@ public sealed class TelemetryAnalysisService
         var sessionEndUtc = metricSnapshot.Length == 0
             ? DateTimeOffset.MinValue
             : metricSnapshot.Max(static sample => sample.CapturedAtUtc).ToUniversalTime();
+
         return new MetricChartState(
             metricSnapshot,
             channelMap,
@@ -141,6 +148,7 @@ public sealed class TelemetryAnalysisService
     private static TelemetryAnalysisSeverity ResolveMemorySeverity(double deltaBytes)
     {
         var deltaMegabytes = deltaBytes / (double)BytesPerMegabyte;
+
         if (deltaMegabytes >= 512d)
         {
             return TelemetryAnalysisSeverity.Critical;

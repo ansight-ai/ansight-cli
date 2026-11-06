@@ -9,7 +9,6 @@ public abstract class AssemblyCompositionExportResolver : BaseExportResolver
     private ExternalPartComponentCatalog? externalParts;
 
     protected CompositionContainer? CompositionRoot { get; private set; }
-
     public AggregateCatalog? Catalog { get; private set; }
 
     public override void Prepare()
@@ -20,6 +19,7 @@ public abstract class AssemblyCompositionExportResolver : BaseExportResolver
         }
 
         Catalog = new AggregateCatalog();
+
         foreach (var assembly in Assemblies)
         {
             Catalog.Catalogs.Add(new AssemblyCatalog(assembly));
@@ -46,18 +46,21 @@ public abstract class AssemblyCompositionExportResolver : BaseExportResolver
     public sealed override Lazy<T> GetExport<T>()
     {
         EnsurePrepared();
+
         return CompositionRoot!.GetExport<T>()!;
     }
 
     public sealed override T GetExportedValue<T>()
     {
         EnsurePrepared();
+
         return CompositionRoot!.GetExportedValue<T>()!;
     }
 
     public sealed override IEnumerable<T> GetExportedValues<T>()
     {
         EnsurePrepared();
+
         return CompositionRoot!.GetExportedValues<T>();
     }
 

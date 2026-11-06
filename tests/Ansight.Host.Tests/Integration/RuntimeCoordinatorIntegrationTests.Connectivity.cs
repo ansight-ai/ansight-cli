@@ -76,12 +76,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 var connectedSessions = runtime.AppTools.GetConnectedSessionIds();
+
                 if (connectedSessions.Count != 1)
                 {
                     return false;
                 }
 
                 sessionId = connectedSessions[0];
+
                 return true;
             },
             because: "The paired app should appear as a connected session.");
@@ -98,12 +100,12 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 }
 
                 return runtime.Sessions.TryGetSnapshot(sessionId!, out var snapshot)
-                       && snapshot is not null
-                       && string.Equals(snapshot.Status, "WebSocket Closed", StringComparison.Ordinal)
-                       && captureEvents.Any(runtimeEvent =>
+                    && snapshot is not null
+                    && string.Equals(snapshot.Status, "WebSocket Closed", StringComparison.Ordinal)
+                    && captureEvents.Any(runtimeEvent =>
                            runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Stopped
-                           && runtimeEvent.SessionId == sessionId
-                           && string.Equals(runtimeEvent.Message, "Force disconnected from the host.", StringComparison.Ordinal));
+                               && runtimeEvent.SessionId == sessionId
+                               && string.Equals(runtimeEvent.Message, "Force disconnected from the host.", StringComparison.Ordinal));
             },
             timeout: TimeSpan.FromSeconds(15),
             because: "Force disconnect should close the live bridge and persist the disconnect state.");
@@ -115,8 +117,8 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.Contains(
             captureEvents,
             runtimeEvent => runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Stopped
-                            && runtimeEvent.SessionId == sessionId
-                            && string.Equals(runtimeEvent.Message, "Force disconnected from the host.", StringComparison.Ordinal));
+                && runtimeEvent.SessionId == sessionId
+                && string.Equals(runtimeEvent.Message, "Force disconnected from the host.", StringComparison.Ordinal));
     }
 
     [Fact(Timeout = 60000)]
@@ -134,17 +136,20 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         Assert.False(connectResponse.Accepted);
         Assert.Equal("AccessTokenInvalid", connectResponse.Reason);
+
         RuntimePairingEvent? rejectedEvent = null;
         await TestWait.UntilAsync(
             () =>
             {
                 rejectedEvent = pairingEvents.FirstOrDefault(runtimeEvent => runtimeEvent.Kind == RuntimePairingEventKind.PairingRejected);
+
                 return rejectedEvent is not null;
             },
             because: "Rejected pairing attempts should emit a rejection event.");
 
         Assert.NotNull(rejectedEvent);
         Assert.Empty(runtime.Sessions.GetSummaries());
+
         if (!string.IsNullOrWhiteSpace(rejectedEvent!.SessionId))
         {
             Assert.False(runtime.Sessions.TryGetSnapshot(rejectedEvent.SessionId, out _));

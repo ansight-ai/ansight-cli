@@ -5,37 +5,23 @@ namespace Ansight.Host.UiAutomation;
 public sealed class RuntimeFocusedControlSnapshot
 {
     public required string SessionId { get; init; }
-
     public required string AppId { get; init; }
-
     public required string ClientName { get; init; }
-
     public required string Source { get; init; }
-
     public required string NodeId { get; init; }
-
     public required string Type { get; init; }
-
     public required string Label { get; init; }
-
     public required string AutomationId { get; init; }
-
     public required int Depth { get; init; }
-
     public required int ChildCount { get; init; }
-
     public required DateTimeOffset FocusedAtUtc { get; init; }
-
     public string ScreenshotArtifactPath { get; init; } = string.Empty;
 
     public string ScreenshotStatus { get; init; } = string.Empty;
 
     public JsonObject? LocalBounds { get; init; }
-
     public JsonObject? AbsoluteBounds { get; init; }
-
     public JsonObject? NormalizedBounds { get; init; }
-
     public required JsonObject Node { get; init; }
 
     public RuntimeFocusedControlSnapshot Clone()

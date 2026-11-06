@@ -28,6 +28,7 @@ public sealed class KeyboardCommandsTests
             (operation, _, _) =>
             {
                 observedOperation = operation;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -56,6 +57,7 @@ public sealed class KeyboardCommandsTests
             (operation, arguments, _) =>
             {
                 observedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -86,6 +88,7 @@ public sealed class KeyboardCommandsTests
             (operation, arguments, _) =>
             {
                 observedArguments = arguments;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None);
@@ -100,10 +103,10 @@ public sealed class KeyboardCommandsTests
     {
         var exception = await Assert.ThrowsAsync<CliUsageException>(() => KeyboardCommands.RunAsync(
             CliArguments.Parse([
-                "keyboard", "dismiss",
+                    "keyboard", "dismiss",
                 "--session", "session-001",
                 "--device-id", "emulator-5554"
-            ]),
+                ]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (_, _, _) => throw new InvalidOperationException("The host must not be called."),
             CancellationToken.None));
@@ -122,6 +125,7 @@ public sealed class KeyboardCommandsTests
             (operation, arguments, _) =>
             {
                 invoked = true;
+
                 return Task.FromResult(Success(operation));
             },
             CancellationToken.None));
@@ -158,6 +162,7 @@ public sealed class KeyboardCommandsTests
             CancellationToken.None);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var json = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("ansight.keyboard-operation/v1", json["schema"]!.GetValue<string>());
         Assert.Equal("is-open", json["operation"]!.GetValue<string>());

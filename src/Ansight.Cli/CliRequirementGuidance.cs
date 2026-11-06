@@ -5,6 +5,7 @@ internal static class CliRequirementGuidance
     public static string Append(string message, string requirement)
     {
         var suggestions = BuildSuggestions(requirement);
+
         if (suggestions.Count == 0)
         {
             return message;
@@ -12,8 +13,7 @@ internal static class CliRequirementGuidance
 
         return string.Join(
             Environment.NewLine,
-            new[] { message, "How to find or supply it:" }
-                .Concat(suggestions.Select(static suggestion => $"  {suggestion}")));
+            new[] { message, "How to find or supply it:" }.Concat(suggestions.Select(static suggestion => $"  {suggestion}")));
     }
 
     private static IReadOnlyList<string> BuildSuggestions(string requirement)
@@ -82,6 +82,7 @@ internal static class CliRequirementGuidance
         }
 
         AppendCommandHelpSuggestion(normalized, suggestions);
+
         return suggestions.Distinct(StringComparer.Ordinal).ToArray();
     }
 

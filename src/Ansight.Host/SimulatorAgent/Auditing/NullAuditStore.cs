@@ -10,6 +10,7 @@ internal sealed class NullAuditStore : IAuditStore
     public AuditSaveResult Save(SimulatorAgentRunAudit audit)
     {
         ArgumentNullException.ThrowIfNull(audit);
+
         return new AuditSaveResult(null, null);
     }
 

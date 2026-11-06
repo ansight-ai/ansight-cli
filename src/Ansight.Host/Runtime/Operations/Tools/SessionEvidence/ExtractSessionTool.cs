@@ -34,6 +34,7 @@ internal sealed class ExtractSessionTool : Operation
 
         var sourcePayload = new JsonObject();
         SessionExtractionResult result;
+
         if (string.Equals(source, "annotation", StringComparison.OrdinalIgnoreCase))
         {
             if (annotationId is null)
@@ -43,6 +44,7 @@ internal sealed class ExtractSessionTool : Operation
 
             var annotation = snapshot!.Annotations.FirstOrDefault(candidate =>
                 string.Equals(candidate.AnnotationId, annotationId, StringComparison.Ordinal));
+
             if (annotation is null)
             {
                 return Task.FromResult(ToolError($"Annotation '{annotationId}' was not found for session '{snapshot.SessionId}'."));
@@ -117,6 +119,7 @@ internal sealed class ExtractSessionTool : Operation
         properties["endUtc"] = ToolSchema.String("Inclusive extraction end timestamp in ISO-8601 UTC when source is timeRange.", nullable: true, format: "date-time");
         properties["annotationId"] = ToolSchema.String("Annotation id whose timeline bounds should be extracted when source is annotation.", nullable: true);
         properties["name"] = ToolSchema.String("Optional display name for the extracted session.", nullable: true);
+
         return properties;
     }
 

@@ -33,6 +33,7 @@ internal sealed partial class SecretStore
     public IReadOnlyList<SimulatorAgentSecretMetadata> List(string appId)
     {
         var normalizedAppId = NormalizeAppId(appId);
+
         lock (gate)
         {
             return ReadIndex(normalizedAppId)
@@ -46,7 +47,12 @@ internal sealed partial class SecretStore
         lock (gate)
         {
             var source = encryptedStorage.Get(BuildIndexKey(NormalizeAppId(appId)));
-            if (string.IsNullOrWhiteSpace(source)) return [];
+
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                return [];
+            }
+
             return JsonSerializer.Deserialize<List<SimulatorAgentSecretMetadata>>(source, jsonOptions)
                 ?? throw new InvalidDataException("Secret metadata could not be decoded.");
         }
@@ -57,10 +63,12 @@ internal sealed partial class SecretStore
         var normalizedAppId = NormalizeAppId(appId);
         var normalizedAlias = NormalizeAlias(alias);
         ArgumentNullException.ThrowIfNull(value);
+
         if (value.Length == 0)
         {
             throw new ArgumentException("The secret value cannot be empty.", nameof(value));
         }
+
         if (value.Length > MaximumSecretValueCharacters)
         {
             throw new ArgumentException(
@@ -84,6 +92,7 @@ internal sealed partial class SecretStore
                 normalizedAlias,
                 StringComparison.OrdinalIgnoreCase));
             index.Add(metadata);
+
             try
             {
                 WriteIndex(normalizedAppId, index);
@@ -93,6 +102,7 @@ internal sealed partial class SecretStore
                 encryptedStorage.Set(valueKey, previousValue);
                 throw;
             }
+
             return metadata;
         }
     }
@@ -101,6 +111,7 @@ internal sealed partial class SecretStore
     {
         var normalizedAppId = NormalizeAppId(appId);
         var normalizedAlias = NormalizeAlias(alias);
+
         lock (gate)
         {
             var index = ReadIndex(normalizedAppId).ToList();
@@ -109,10 +120,12 @@ internal sealed partial class SecretStore
                 item.Alias,
                 normalizedAlias,
                 StringComparison.OrdinalIgnoreCase)) > 0;
+
             if (removed)
             {
                 WriteIndex(normalizedAppId, index);
             }
+
             try
             {
                 encryptedStorage.Remove(BuildValueKey(normalizedAppId, normalizedAlias));
@@ -123,8 +136,10 @@ internal sealed partial class SecretStore
                 {
                     WriteIndex(normalizedAppId, previousIndex);
                 }
+
                 throw;
             }
+
             return removed;
         }
     }
@@ -135,24 +150,30 @@ internal sealed partial class SecretStore
         Func<string, string?>? secretResolver = null)
     {
         var normalizedAliases = NormalizeAliases(aliases);
+
         if (normalizedAliases.Count == 0)
         {
             return SecretAccess.Empty;
         }
+
         var normalizedAppId = NormalizeAppId(appId);
+
         lock (gate)
         {
             var index = ReadIndex(normalizedAppId);
             var metadata = new List<SimulatorAgentSecretMetadata>(normalizedAliases.Count);
             var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var alias in normalizedAliases)
             {
                 var resolved = Resolve(index, normalizedAppId, alias, secretResolver);
+
                 if (resolved is null)
                 {
                     throw new InvalidOperationException(
                         $"Required test secret '{alias}' is not configured for {normalizedAppId}.");
                 }
+
                 metadata.Add(resolved.Metadata);
                 values[resolved.Metadata.Alias] = resolved.Value;
             }
@@ -170,6 +191,7 @@ internal sealed partial class SecretStore
     {
         var normalizedAppId = NormalizeAppId(appId);
         var normalizedAlias = NormalizeAlias(alias);
+
         lock (gate)
         {
             return Resolve(ReadIndex(normalizedAppId), normalizedAppId, normalizedAlias, secretResolver)?.Metadata;
@@ -189,21 +211,25 @@ internal sealed partial class SecretStore
         var storedValue = storedMetadata is null
             ? null
             : encryptedStorage.Get(BuildValueKey(appId, storedMetadata.Alias));
+
         if (storedMetadata is not null && storedValue is not null)
         {
             return new ResolvedSecret(storedMetadata, storedValue);
         }
 
         var environmentValue = (secretResolver ?? environmentVariableResolver)(alias);
+
         if (string.IsNullOrEmpty(environmentValue))
         {
             return null;
         }
+
         if (environmentValue.Length > MaximumSecretValueCharacters)
         {
             throw new InvalidOperationException(
                 $"Environment variable for test secret '{alias}' must be {MaximumSecretValueCharacters:N0} characters or fewer.");
         }
+
         return new ResolvedSecret(
             new SimulatorAgentSecretMetadata(
                 alias,
@@ -216,10 +242,12 @@ internal sealed partial class SecretStore
     private IReadOnlyList<SimulatorAgentSecretMetadata> ReadIndex(string appId)
     {
         var source = encryptedStorage.Get(BuildIndexKey(appId));
+
         if (string.IsNullOrWhiteSpace(source))
         {
             return [];
         }
+
         try
         {
             return JsonSerializer.Deserialize<List<SimulatorAgentSecretMetadata>>(source, jsonOptions) ?? [];
@@ -239,6 +267,7 @@ internal sealed partial class SecretStore
         {
             return [];
         }
+
         return aliases
             .Select(NormalizeAlias)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -253,13 +282,16 @@ internal sealed partial class SecretStore
     private static string NormalizeAlias(string alias)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(alias);
+
         var normalized = alias.Trim();
+
         if (!SecretAliasPattern().IsMatch(normalized))
         {
             throw new ArgumentException(
                 "Secret aliases must start with a letter or number and contain only letters, numbers, '.', '_' or '-' (maximum 128 characters).",
                 nameof(alias));
         }
+
         return normalized;
     }
 

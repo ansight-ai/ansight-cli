@@ -72,6 +72,7 @@ internal sealed partial class WebSocketSessionManager
         var telemetrySegmentId = runtimeState.BeginSessionConnection(sessionId);
         var liveConnection = new LiveSessionConnection(sessionId, socket, authorization);
         RegisterConnection(sessionId, liveConnection);
+
         var catalogCaptureStarted = false;
         var geometryJoin = new ScreenshotGeometryJoin((frameId, geometry) => runtimeState.SetSessionImageGeometry(sessionId, frameId, geometry));
 
@@ -88,6 +89,7 @@ internal sealed partial class WebSocketSessionManager
             while (socket.State == WebSocketState.Open)
             {
                 var incoming = await ReceiveMessageAsync(socket, CancellationToken.None);
+
                 if (incoming is null)
                 {
                     if (liveConnection.IsDisconnectRequested)
@@ -100,9 +102,13 @@ internal sealed partial class WebSocketSessionManager
                 }
 
                 if (incoming.MessageType == WebSocketMessageType.Text
-                    && geometryJoin.TryAcceptMetadata(incoming.TextPayload ?? string.Empty)) continue;
+                    && geometryJoin.TryAcceptMetadata(incoming.TextPayload ?? string.Empty))
+                {
+                    continue;
+                }
 
                 ParsedClientEvent parsedEvent;
+
                 if (incoming.MessageType == WebSocketMessageType.Text
                     && TryHandleToolBridgeResponse(sessionId, incoming.TextPayload ?? string.Empty))
                 {
@@ -116,8 +122,12 @@ internal sealed partial class WebSocketSessionManager
                     var controlResponse = await HandleControlRequestAsync(sessionId, controlRequest);
                     await SendJsonAsync(socket, controlResponse, CancellationToken.None);
                     runtimeState.AddSessionLog(sessionId, CreateLogEntry($"Sent control response for {controlRequest.Action}.", "WebSocket"));
+
                     if (controlResponse.Success && controlRequest.Action == PairingControlActions.DeviceProfile)
+                    {
                         UpdatePeriodicScreenshotPolicyAsync(sessionId).SafeFireAndForget();
+                    }
+
                     // SDKs install their tool receiver before opening the logical session.
                     // Sending on the WebSocket handshake can otherwise lose the first query.
                     if (!catalogCaptureStarted && controlResponse.Success
@@ -127,6 +137,7 @@ internal sealed partial class WebSocketSessionManager
                         catalogCaptureStarted = true;
                         CaptureSessionAppToolCatalogAsync(sessionId, liveConnection).SafeFireAndForget();
                     }
+
                     if (string.Equals(controlRequest.Action, PairingControlActions.SessionComplete, StringComparison.Ordinal))
                     {
                         break;
@@ -136,10 +147,16 @@ internal sealed partial class WebSocketSessionManager
                 }
 
                 if (incoming.MessageType == WebSocketMessageType.Binary &&
-                    artifactPublications.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload)) continue;
+                    artifactPublications.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload))
+                {
+                    continue;
+                }
 
                 if (incoming.MessageType == WebSocketMessageType.Binary &&
-                    offlineCaptureTransfers.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload)) continue;
+                    offlineCaptureTransfers.TryHandleBinaryMessage(sessionId, incoming.BinaryPayload))
+                {
+                    continue;
+                }
 
                 if (incoming.MessageType == WebSocketMessageType.Binary
                     && annotatedFeedbackTransfers.TryHandleBinaryMessage(
@@ -158,6 +175,7 @@ internal sealed partial class WebSocketSessionManager
                                 importResult.Message,
                                 "Annotated Feedback",
                                 importResult.IsSuccess ? LogPriority.Information : LogPriority.Warning));
+
                         if (importResult.IsSuccess)
                         {
                             PublishSessionTransferEvent(
@@ -181,6 +199,7 @@ internal sealed partial class WebSocketSessionManager
                 parsedEvent = incoming.MessageType == WebSocketMessageType.Binary
                     ? ClientEventParser.ParseBinary(incoming.BinaryPayload)
                     : ClientEventParser.ParseText(incoming.TextPayload ?? string.Empty);
+
                 if (string.Equals(parsedEvent.Type, WebSocketClientEventConstants.ClientLog, StringComparison.Ordinal))
                 {
                     runtimeState.AddSessionLog(sessionId, CreateClientLogEntry(parsedEvent.Data ?? "<empty>", WebSocketClientEventConstants.ClientLog));
@@ -222,6 +241,7 @@ internal sealed partial class WebSocketSessionManager
                     runtimeState.AddSessionLogs(
                         sessionId,
                         parsedEvent.Events.Select(CreateClientEventLog).ToArray());
+
                     foreach (var appEvent in parsedEvent.Events)
                     {
                         PublishAppEvent(sessionId, appEvent);
@@ -249,7 +269,7 @@ internal sealed partial class WebSocketSessionManager
                             : parsedEvent.Touches.Max(touch => touch.CapturedAtUtc));
                 }
                 else if (string.Equals(parsedEvent.Type, WebSocketClientEventConstants.ClientNetworkRequest, StringComparison.Ordinal)
-                         && parsedEvent.NetworkRequest is not null)
+                    && parsedEvent.NetworkRequest is not null)
                 {
                     runtimeState.AddSessionNetworkRequests(sessionId, [parsedEvent.NetworkRequest]);
                     PublishSessionTransferEvent(
@@ -268,6 +288,7 @@ internal sealed partial class WebSocketSessionManager
                     runtimeState.SetSessionDeviceProfile(sessionId, parsedEvent.DeviceProfile, parsedEvent.DeviceProfileJson);
                     sdkIosInstrumentsCaptureManager?.Attach(
                         sessionId, parsedEvent.DeviceProfile, parsedEvent.DeviceProfileJson);
+
                     if (nativeSessionLogCaptureManager is not null)
                     {
                         nativeSessionLogCaptureManager.AttachAsync(
@@ -295,8 +316,12 @@ internal sealed partial class WebSocketSessionManager
                         parsedEvent.ImageFrame.Quality,
                         parsedEvent.ImageFrame.Bytes,
                         parsedEvent.ImageFrame.Geometry ?? geometryJoin.BeforeFrame(parsedEvent.ImageFrame), allowDuplicate: false);
+
                     if (persistedFrame is not null && parsedEvent.ImageFrame.Geometry is null)
+                    {
                         geometryJoin.AfterFrame(parsedEvent.ImageFrame, persistedFrame.FrameId);
+                    }
+
                     PublishSessionTransferEvent(
                         sessionId,
                         RuntimeSessionTransferKind.Screenshot,
@@ -307,6 +332,7 @@ internal sealed partial class WebSocketSessionManager
                 else if (string.Equals(parsedEvent.Type, WebSocketClientEventConstants.ClientVisualTree, StringComparison.Ordinal) && parsedEvent.VisualTreeSnapshot is not null)
                 {
                     var ingestionResult = runtimeState.ReceiveSessionVisualTreeSnapshot(sessionId, parsedEvent.VisualTreeSnapshot);
+
                     if (ingestionResult.WasSaved)
                     {
                         PublishSessionTransferEvent(
@@ -350,6 +376,7 @@ internal sealed partial class WebSocketSessionManager
             }
 
             runtimeState.SetSessionStatus(sessionId, "WebSocket Complete", "WebSocket session completed.");
+
             return true;
         }
         catch (Exception ex) when (liveConnection.IsDisconnectRequested && IsExpectedForcedDisconnectException(ex))
@@ -365,12 +392,6 @@ internal sealed partial class WebSocketSessionManager
         }
     }
 
-}
-
-
-internal sealed partial class WebSocketSessionManager
-{
-
     private void DisconnectAllConnections(string reason)
     {
         var connections = connectionRegistry.GetConnections();
@@ -378,6 +399,7 @@ internal sealed partial class WebSocketSessionManager
         foreach (var connection in connections)
         {
             connection.RequestDisconnect(reason);
+
             try
             {
                 connection.Abort();
@@ -419,126 +441,141 @@ internal sealed partial class WebSocketSessionManager
             switch (request.Action)
             {
                 case PairingControlActions.SessionOpen:
-                {
-                    var clientName = request.Payload?["clientName"]?.GetValue<string>()?.Trim();
-                    var configId = request.Payload?["configId"]?.GetValue<string>()?.Trim();
-                    if (!TryParseCustomProperties(request.Payload, requireCustomProperties: false, out var customProperties, out var customPropertiesError))
                     {
-                        return CreateControlResponse(request, success: false, customPropertiesError ?? "Invalid session properties payload.");
-                    }
+                        var clientName = request.Payload?["clientName"]?.GetValue<string>()?.Trim();
+                        var configId = request.Payload?["configId"]?.GetValue<string>()?.Trim();
 
-                    if (request.Payload?.ContainsKey("customProperties") == true)
-                    {
-                        runtimeState.SetSessionCustomProperties(sessionId, customProperties);
-                    }
+                        if (!TryParseCustomProperties(request.Payload, requireCustomProperties: false, out var customProperties, out var customPropertiesError))
+                        {
+                            return CreateControlResponse(request, success: false, customPropertiesError ?? "Invalid session properties payload.");
+                        }
 
-                    var message = string.IsNullOrWhiteSpace(clientName)
-                        ? "Session open accepted."
-                        : $"Session open accepted for {clientName}.";
-                    runtimeState.AddSessionLog(sessionId, CreateClientLogEntry(
-                        string.IsNullOrWhiteSpace(configId)
-                            ? message
-                            : $"{message} configId={configId}",
-                        "Session"));
-                    return CreateControlResponse(request, success: true, message);
-                }
+                        if (request.Payload?.ContainsKey("customProperties") == true)
+                        {
+                            runtimeState.SetSessionCustomProperties(sessionId, customProperties);
+                        }
+
+                        var message = string.IsNullOrWhiteSpace(clientName)
+                            ? "Session open accepted."
+                            : $"Session open accepted for {clientName}.";
+                        runtimeState.AddSessionLog(sessionId, CreateClientLogEntry(
+                            string.IsNullOrWhiteSpace(configId)
+                                ? message
+                                : $"{message} configId={configId}",
+                            "Session"));
+
+                        return CreateControlResponse(request, success: true, message);
+                    }
                 case PairingControlActions.SessionProperties:
-                {
-                    if (!TryParseCustomProperties(request.Payload, requireCustomProperties: true, out var customProperties, out var error))
                     {
-                        return CreateControlResponse(request, success: false, error ?? "Invalid session properties payload.");
-                    }
+                        if (!TryParseCustomProperties(request.Payload, requireCustomProperties: true, out var customProperties, out var error))
+                        {
+                            return CreateControlResponse(request, success: false, error ?? "Invalid session properties payload.");
+                        }
 
-                    runtimeState.SetSessionCustomProperties(sessionId, customProperties);
-                    return CreateControlResponse(request, success: true, "Session properties received.");
-                }
+                        runtimeState.SetSessionCustomProperties(sessionId, customProperties);
+
+                        return CreateControlResponse(request, success: true, "Session properties received.");
+                    }
                 case PairingControlActions.ClientLog:
-                {
-                    var logLine = request.Payload?["data"]?.GetValue<string>() ?? "<empty>";
-                    runtimeState.AddSessionLog(sessionId, CreateClientLogEntry(logLine, WebSocketClientEventConstants.ClientLog));
-                    PublishSessionTransferEvent(
-                        sessionId,
-                        RuntimeSessionTransferKind.Log,
-                        itemCount: 1,
-                        message: "Received client log entry.");
-                    return CreateControlResponse(request, success: true, "Client log received.");
-                }
+                    {
+                        var logLine = request.Payload?["data"]?.GetValue<string>() ?? "<empty>";
+                        runtimeState.AddSessionLog(sessionId, CreateClientLogEntry(logLine, WebSocketClientEventConstants.ClientLog));
+                        PublishSessionTransferEvent(
+                            sessionId,
+                            RuntimeSessionTransferKind.Log,
+                            itemCount: 1,
+                            message: "Received client log entry.");
+
+                        return CreateControlResponse(request, success: true, "Client log received.");
+                    }
                 case PairingControlActions.DeviceProfile:
-                {
-                    var profileJson = request.Payload?.ToJsonString(JsonUtil.Pretty);
-                    var compactProfileJson = request.Payload?.ToJsonString(JsonUtil.Compact);
-                    DeviceAppProfile? deviceProfile = null;
-                    if (!string.IsNullOrWhiteSpace(compactProfileJson))
                     {
-                        try
-                        {
-                            deviceProfile = JsonSerializer.Deserialize<DeviceAppProfile>(compactProfileJson, JsonUtil.Compact);
-                        }
-                        catch (JsonException ex)
-                        {
-                            return CreateControlResponse(request, success: false, $"Invalid device profile payload: {ex.Message}");
-                        }
-                    }
+                        var profileJson = request.Payload?.ToJsonString(JsonUtil.Pretty);
+                        var compactProfileJson = request.Payload?.ToJsonString(JsonUtil.Compact);
+                        DeviceAppProfile? deviceProfile = null;
 
-                    runtimeState.SetSessionDeviceProfile(sessionId, deviceProfile, profileJson);
-                    sdkIosInstrumentsCaptureManager?.Attach(sessionId, deviceProfile, profileJson);
-                    if (nativeSessionLogCaptureManager is not null)
-                    {
-                        nativeSessionLogCaptureManager.AttachAsync(sessionId, deviceProfile, profileJson).SafeFireAndForget();
-                    }
+                        if (!string.IsNullOrWhiteSpace(compactProfileJson))
+                        {
+                            try
+                            {
+                                deviceProfile = JsonSerializer.Deserialize<DeviceAppProfile>(compactProfileJson, JsonUtil.Compact);
+                            }
+                            catch (JsonException ex)
+                            {
+                                return CreateControlResponse(request, success: false, $"Invalid device profile payload: {ex.Message}");
+                            }
+                        }
 
-                    var supportsHostCapturePolicy =
-                        ExternalSessionScreenshotCapturePolicy.SupportsHostControl(request.Payload);
-                    var screenshotCaptureRequest =
-                        ExternalSessionScreenshotCaptureRequest.FromPayload(request.Payload);
-                    var needsSdkGeometry = request.Payload?["sessionJpegCapture"]?["includeSystemUiMetadata"] is JsonValue geometryOption
-                        && geometryOption.TryGetValue<bool>(out var includeGeometry) && includeGeometry;
-                    if (needsSdkGeometry && externalSessionScreenshotCaptureManager is not null)
-                        await externalSessionScreenshotCaptureManager.StopAsync(sessionId, "SDK capture supplies system-UI metadata.").ConfigureAwait(false);
-                    var capturePolicy = needsSdkGeometry
-                        ? ExternalSessionScreenshotCapturePolicy.App("The SDK captures image-bound system-UI metadata; this external provider cannot supply it.")
-                        : !supportsHostCapturePolicy
-                        ? ExternalSessionScreenshotCapturePolicy.App("The SDK does not support host-managed screenshot capture.")
-                        : externalSessionScreenshotCaptureManager is null
-                            ? ExternalSessionScreenshotCapturePolicy.App("Host external screenshot capture is unavailable.")
-                            : await externalSessionScreenshotCaptureManager
-                                .AttachAsync(sessionId, deviceProfile, profileJson, screenshotCaptureRequest)
-                                .ConfigureAwait(false);
-                    runtimeState.AddSessionLog(sessionId, CreateClientLogEntry("Received device/app properties payload.", WebSocketClientEventConstants.DeviceAppProfile));
-                    PublishSessionTransferEvent(
-                        sessionId,
-                        RuntimeSessionTransferKind.AppProfile,
-                        itemCount: 1,
-                        message: "Received device/app profile payload.");
-                    return CreateControlResponse(
-                        request,
-                        success: true,
-                        "Device profile received.",
-                        capturePolicy.ToResponsePayload(externalSessionScreenshotCaptureManager?.IsPeriodicCaptureSuspended(sessionId) == true));
-                }
+                        runtimeState.SetSessionDeviceProfile(sessionId, deviceProfile, profileJson);
+                        sdkIosInstrumentsCaptureManager?.Attach(sessionId, deviceProfile, profileJson);
+
+                        if (nativeSessionLogCaptureManager is not null)
+                        {
+                            nativeSessionLogCaptureManager.AttachAsync(sessionId, deviceProfile, profileJson).SafeFireAndForget();
+                        }
+
+                        var supportsHostCapturePolicy =
+                            ExternalSessionScreenshotCapturePolicy.SupportsHostControl(request.Payload);
+                        var screenshotCaptureRequest =
+                            ExternalSessionScreenshotCaptureRequest.FromPayload(request.Payload);
+                        var needsSdkGeometry = request.Payload?["sessionJpegCapture"]?["includeSystemUiMetadata"] is JsonValue geometryOption
+                            && geometryOption.TryGetValue<bool>(out var includeGeometry) && includeGeometry;
+
+                        if (needsSdkGeometry && externalSessionScreenshotCaptureManager is not null)
+                        {
+                            await externalSessionScreenshotCaptureManager.StopAsync(sessionId, "SDK capture supplies system-UI metadata.").ConfigureAwait(false);
+                        }
+
+                        var capturePolicy = needsSdkGeometry
+                            ? ExternalSessionScreenshotCapturePolicy.App("The SDK captures image-bound system-UI metadata; this external provider cannot supply it.")
+                            : !supportsHostCapturePolicy
+                                ? ExternalSessionScreenshotCapturePolicy.App("The SDK does not support host-managed screenshot capture.")
+                                : externalSessionScreenshotCaptureManager is null
+                                    ? ExternalSessionScreenshotCapturePolicy.App("Host external screenshot capture is unavailable.")
+                                    : await externalSessionScreenshotCaptureManager
+                                        .AttachAsync(sessionId, deviceProfile, profileJson, screenshotCaptureRequest)
+                                        .ConfigureAwait(false);
+                        runtimeState.AddSessionLog(sessionId, CreateClientLogEntry("Received device/app properties payload.", WebSocketClientEventConstants.DeviceAppProfile));
+                        PublishSessionTransferEvent(
+                            sessionId,
+                            RuntimeSessionTransferKind.AppProfile,
+                            itemCount: 1,
+                            message: "Received device/app profile payload.");
+
+                        return CreateControlResponse(
+                            request,
+                            success: true,
+                            "Device profile received.",
+                            capturePolicy.ToResponsePayload(externalSessionScreenshotCaptureManager?.IsPeriodicCaptureSuspended(sessionId) == true));
+                    }
                 case PairingControlActions.AppState:
-                {
-                    var appState = ParseControlAppLifecycleState(request.Payload);
-                    if (appState is null)
                     {
-                        return CreateControlResponse(request, success: false, "App state payload was invalid.");
-                    }
+                        var appState = ParseControlAppLifecycleState(request.Payload);
 
-                    var changedAtUtc = ParseControlChangedAtUtc(request.Payload);
-                    runtimeState.SetSessionAppState(sessionId, appState.Value, changedAtUtc);
-                    return CreateControlResponse(request, success: true, "App state received.");
-                }
+                        if (appState is null)
+                        {
+                            return CreateControlResponse(request, success: false, "App state payload was invalid.");
+                        }
+
+                        var changedAtUtc = ParseControlChangedAtUtc(request.Payload);
+                        runtimeState.SetSessionAppState(sessionId, appState.Value, changedAtUtc);
+
+                        return CreateControlResponse(request, success: true, "App state received.");
+                    }
                 case PairingControlActions.SessionComplete:
-                {
-                    runtimeState.AddSessionLog(sessionId, CreateClientLogEntry("Client marked session complete.", "Stream"));
-                    return CreateControlResponse(request, success: true, "Session complete acknowledged.");
-                }
+                    {
+                        runtimeState.AddSessionLog(sessionId, CreateClientLogEntry("Client marked session complete.", "Stream"));
+
+                        return CreateControlResponse(request, success: true, "Session complete acknowledged.");
+                    }
                 case CrashReportReceiver.HandoffAction:
-                {
-                    var result = crashReportReceiver?.Receive(sessionId, request.Payload)
-                        ?? HostOperationResult.Failure("Crash report storage is unavailable.");
-                    return CreateControlResponse(request, result.IsSuccess, result.Message);
-                }
+                    {
+                        var result = crashReportReceiver?.Receive(sessionId, request.Payload)
+                            ?? HostOperationResult.Failure("Crash report storage is unavailable.");
+
+                        return CreateControlResponse(request, result.IsSuccess, result.Message);
+                    }
                 case Ansight.Host.Runtime.OfflineCapture.OfflineCaptureTransferManager.BeginAction:
                     offlineCaptureTransfers.Begin(sessionId, request.Payload);
                     return CreateControlResponse(request, true, "Offline capture transfer accepted.");
@@ -555,13 +592,14 @@ internal sealed partial class WebSocketSessionManager
                     artifactPublications.Abort(sessionId, request.Payload);
                     return CreateControlResponse(request, true, "Artifact publication aborted.");
                 case AnnotatedFeedbackTransferManager.SubmitAction:
-                {
-                    var accepted = annotatedFeedbackTransfers.TryRegister(
-                        sessionId,
-                        request.Payload,
-                        out var message);
-                    return CreateControlResponse(request, accepted, message);
-                }
+                    {
+                        var accepted = annotatedFeedbackTransfers.TryRegister(
+                            sessionId,
+                            request.Payload,
+                            out var message);
+
+                        return CreateControlResponse(request, accepted, message);
+                    }
                 default:
                     return CreateControlResponse(request, success: false, $"Unsupported control action '{request.Action}'.");
             }
@@ -598,5 +636,4 @@ internal sealed partial class WebSocketSessionManager
             CreateLogEntry(args.Reason, "External Screenshot", LogPriority.Warning));
         Task.Run(() => ForceDisconnectSession(args.SessionId)).SafeFireAndForget();
     }
-
 }

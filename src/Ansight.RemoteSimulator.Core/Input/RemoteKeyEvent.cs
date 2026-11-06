@@ -25,6 +25,7 @@ public sealed record RemoteKeyEvent(
         }
 
         var normalizedPhase = Phase.Trim().ToLowerInvariant();
+
         if (normalizedPhase is not ("down" or "up"))
         {
             throw new ArgumentException("Keyboard phase must be down or up.", nameof(Phase));

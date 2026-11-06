@@ -18,6 +18,5 @@ internal sealed class SessionListingFilterCriteria
     public HashSet<int> DeviceClassCodes { get; } = [];
 
     public bool? IsVirtual { get; init; }
-
     public bool? IsEmulator { get; init; }
 }

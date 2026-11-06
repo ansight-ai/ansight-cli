@@ -12,7 +12,11 @@ internal static class ExternalScriptExtractionPrompt
         var trees = snapshot.VisualTreeSnapshots.Where(tree => tree.CapturedAtUtc >= startUtc && tree.CapturedAtUtc <= endUtc).ToArray();
         var selectors = ReplayExtractionEvidence.SelectUiEvidence(trees).Select(node => new
         {
-            node.CapturedAtUtc, node.AutomationId, node.Role, Text = node.TextValues.Take(3).ToArray(), node.Source
+            node.CapturedAtUtc,
+            node.AutomationId,
+            node.Role,
+            Text = node.TextValues.Take(3).ToArray(),
+            node.Source
         });
         var annotations = snapshot.Annotations
             .Where(annotation => annotation.StartUtc >= startUtc && (annotation.EndUtc ?? annotation.StartUtc) <= endUtc)
@@ -37,6 +41,7 @@ internal static class ExternalScriptExtractionPrompt
             Do not add filesystem access, shell commands, network requests, or dependencies beyond node:test,
             node:assert/strict and webdriverio. Return JavaScript, not TypeScript or Markdown.
             """;
+
         return $"""
             Analyze the entire selected replay and author a reviewable {format} test.
             The programmatic draft is a starting point. Reason about the screens, recorded actions, transitions,

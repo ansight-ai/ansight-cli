@@ -3,16 +3,6 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.NativeProfiling;
 
-internal sealed class NativeProfileOperationServices
-{
-    public NativeProfileOperationServices(NativeProfilingService profiling)
-    {
-        Profiling = profiling ?? throw new ArgumentNullException(nameof(profiling));
-    }
-
-    public NativeProfilingService Profiling { get; }
-}
-
 internal abstract class NativeProfileOperation : IOperation
 {
     protected NativeProfileOperation(NativeProfileOperationServices services)
@@ -21,15 +11,10 @@ internal abstract class NativeProfileOperation : IOperation
     }
 
     protected NativeProfileOperationServices Services { get; }
-
     public abstract string Name { get; }
-
     protected abstract string Title { get; }
-
     protected abstract string Description { get; }
-
     protected abstract JsonObject InputSchema { get; }
-
     public JsonObject Definition => PayloadJson.CreateToolDefinition(Name, Title, Description, InputSchema);
 
     public abstract Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId);
@@ -49,13 +34,16 @@ internal abstract class NativeProfileOperation : IOperation
         out RequestResult? error)
     {
         captureId = arguments?["captureId"]?.GetValue<string>()?.Trim();
+
         if (string.IsNullOrWhiteSpace(captureId))
         {
             error = ToolError("captureId is required.");
+
             return false;
         }
 
         error = null;
+
         return true;
     }
 

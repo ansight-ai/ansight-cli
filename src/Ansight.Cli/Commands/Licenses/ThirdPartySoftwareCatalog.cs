@@ -23,7 +23,7 @@ internal static class ThirdPartySoftwareCatalog
         {
             warnings.Add(
                 "The runtime dependency manifest is not available in this single-file build; "
-                + "the maintained bundled-software catalog is shown.");
+                    + "the maintained bundled-software catalog is shown.");
         }
         else
         {
@@ -50,10 +50,12 @@ internal static class ThirdPartySoftwareCatalog
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(dependencyManifestPath));
+
             if (!document.RootElement.TryGetProperty("libraries", out var libraries)
                 || libraries.ValueKind != JsonValueKind.Object)
             {
                 warnings.Add($"Dependency manifest '{dependencyManifestPath}' has no libraries catalog.");
+
                 return;
             }
 
@@ -113,6 +115,7 @@ internal static class ThirdPartySoftwareCatalog
             nuGetPackageRoot,
             package.Name.ToLowerInvariant(),
             package.Version.ToLowerInvariant());
+
         if (!Directory.Exists(packageDirectory))
         {
             return null;
@@ -120,6 +123,7 @@ internal static class ThirdPartySoftwareCatalog
 
         var nuspecPath = Directory.EnumerateFiles(packageDirectory, "*.nuspec", SearchOption.TopDirectoryOnly)
             .FirstOrDefault();
+
         if (nuspecPath is null)
         {
             return null;
@@ -134,9 +138,10 @@ internal static class ThirdPartySoftwareCatalog
                 .FirstOrDefault(static element => element.Name.LocalName == "license");
             var licenseUrl = ReadElement(metadata, "licenseUrl");
             var license = licenseElement?.Value.Trim();
+
             if (licenseElement?.Attribute("type")?.Value.Equals(
-                    "file",
-                    StringComparison.OrdinalIgnoreCase) == true
+                "file",
+                StringComparison.OrdinalIgnoreCase) == true
                 && !string.IsNullOrWhiteSpace(license))
             {
                 license = $"See packaged license file: {license}";
@@ -162,8 +167,8 @@ internal static class ThirdPartySoftwareCatalog
     {
         return parent?.Elements()
             .FirstOrDefault(element => element.Name.LocalName == name)
-            ?.Value
-            .Trim() is { Length: > 0 } value
+                ?.Value
+                    .Trim() is { Length: > 0 } value
             ? value
             : null;
     }
@@ -172,9 +177,9 @@ internal static class ThirdPartySoftwareCatalog
     {
         return metadata?.Elements()
             .FirstOrDefault(static element => element.Name.LocalName == "repository")
-            ?.Attribute("url")
-            ?.Value
-            .Trim() is { Length: > 0 } value
+                ?.Attribute("url")
+                ?.Value
+                    .Trim() is { Length: > 0 } value
             ? value
             : null;
     }
@@ -182,6 +187,7 @@ internal static class ThirdPartySoftwareCatalog
     private static PackageIdentity? ParsePackageIdentity(string libraryName)
     {
         var separatorIndex = libraryName.LastIndexOf('/');
+
         return separatorIndex <= 0 || separatorIndex == libraryName.Length - 1
             ? null
             : new PackageIdentity(libraryName[..separatorIndex], libraryName[(separatorIndex + 1)..]);
@@ -190,7 +196,7 @@ internal static class ThirdPartySoftwareCatalog
     private static bool IsFirstPartyPackage(string packageName)
     {
         return packageName.Equals("Ansight", StringComparison.OrdinalIgnoreCase)
-               || packageName.StartsWith("Ansight.", StringComparison.OrdinalIgnoreCase);
+            || packageName.StartsWith("Ansight.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ThirdPartySoftwareEntry? FindKnownPackage(
@@ -198,8 +204,8 @@ internal static class ThirdPartySoftwareCatalog
         string packageName)
     {
         return entries.FirstOrDefault(entry =>
-            entry.Source == "nuget"
-            && string.Equals(entry.Name, packageName, StringComparison.OrdinalIgnoreCase));
+                entry.Source == "nuget"
+                    && string.Equals(entry.Name, packageName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string CreateKey(ThirdPartySoftwareEntry entry)
@@ -213,6 +219,7 @@ internal static class ThirdPartySoftwareCatalog
         {
             Path.Combine(AppContext.BaseDirectory, "ansight.deps.json")
         };
+
         if (!string.IsNullOrWhiteSpace(typeof(LicensesCommands).Assembly.Location))
         {
             candidates.Add(Path.ChangeExtension(
@@ -226,12 +233,14 @@ internal static class ThirdPartySoftwareCatalog
     private static string? ResolveNuGetPackageRoot()
     {
         var configuredRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES");
+
         if (!string.IsNullOrWhiteSpace(configuredRoot))
         {
             return Path.GetFullPath(configuredRoot);
         }
 
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
         return string.IsNullOrWhiteSpace(userProfile)
             ? null
             : Path.Combine(userProfile, ".nuget", "packages");
@@ -240,8 +249,8 @@ internal static class ThirdPartySoftwareCatalog
     private static IReadOnlyList<ThirdPartySoftwareEntry> CreateKnownEntries()
     {
         return
-        [
-            NuGet("Microsoft.Bcl.HashCode", "6.0.0", "MIT", "Hash code compatibility", "https://github.com/dotnet/maintenance-packages"),
+            [
+                NuGet("Microsoft.Bcl.HashCode", "6.0.0", "MIT", "Hash code compatibility", "https://github.com/dotnet/maintenance-packages"),
             NuGet("Microsoft.Data.Sqlite.Core", "10.0.10", "MIT", "SQLite data access", "https://github.com/dotnet/efcore"),
             NuGet("Microsoft.Diagnostics.NETCore.Client", "0.2.510501", "MIT", ".NET diagnostics transport", "https://github.com/dotnet/diagnostics"),
             NuGet("Microsoft.Diagnostics.Tracing.TraceEvent", "3.2.5", "MIT", ".NET trace processing", "https://github.com/microsoft/perfview"),
@@ -289,7 +298,7 @@ internal static class ThirdPartySoftwareCatalog
             External("BlackHole", null, "GPL-3.0", "Optional user-installed CoreAudio loopback driver for iOS Simulator microphone injection; not bundled or redistributed", "https://github.com/ExistentialAudio/BlackHole", "https://github.com/ExistentialAudio/BlackHole/blob/master/LICENSE"),
             External("Appium", null, "Apache-2.0", "Optional physical-device automation", "https://github.com/appium/appium"),
             External("Android Debug Bridge", null, "Apache-2.0", "Android app installation, logs, and device automation", "https://android.googlesource.com/platform/packages/modules/adb")
-        ];
+            ];
     }
 
     private static IReadOnlyList<ThirdPartySoftwareEntry> CreateScrcpyEntries()

@@ -7,7 +7,9 @@ internal static class CompanionCommands
     public static Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
     {
         if (CliCommandHelp.IsRequested(arguments) || arguments.Positionals.Count == 1)
+        {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp()));
+        }
 
         return Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CompanionCommands.RunAsync", [arguments, output, cancellationToken]);
     }
@@ -29,6 +31,13 @@ internal static class CompanionCommands
              ansight companion connections list
              ansight companion connections disconnect <session-id>
              ansight companion connections disconnect-all
+             ansight companion handoff create --provider codex|claude --thread-id <id> --workspace <path>
+               --device-id <id> --app-id <bundle-id> --build-id <build> --title <title>
+               [--machine-id <uuid>] [--summary <text>] [--checks <text>] [--session-id <id>]
+               [--turn-id <id>] [--codex-socket <path>] [--agent-executable <path>] [--notify false] [--id <uuid>]
+             ansight companion handoff list
+             ansight companion handoff get <id>
+             ansight companion handoff revoke <id>
 
            Aliases:
              remote, remote-simulator

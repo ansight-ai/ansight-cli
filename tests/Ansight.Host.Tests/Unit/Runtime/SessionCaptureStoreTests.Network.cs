@@ -32,8 +32,7 @@ public sealed partial class SessionCaptureStoreTests
                     Url = "https://example.test/orders?token=secret&view=full",
                     RequestHeaders =
                     [
-                        new SessionNetworkHeader { Name = "Authorization", Value = "Bearer secret" }
-                    ],
+                        new SessionNetworkHeader {Name = "Authorization", Value = "Bearer secret" }                    ],
                     RequestBody = new SessionNetworkBody
                     {
                         ContentType = "application/json",
@@ -44,8 +43,7 @@ public sealed partial class SessionCaptureStoreTests
                         Truncated = false
                     },
                     StatusCode = 200
-                }
-            ],
+                }            ],
             MetricChannels = [],
             Metrics = []
         };
@@ -60,6 +58,7 @@ public sealed partial class SessionCaptureStoreTests
             "network",
             "requests");
         var requestFilePath = Assert.Single(Directory.GetFiles(requestDirectoryPath, "*.json"));
+
         using (var document = JsonDocument.Parse(File.ReadAllText(requestFilePath)))
         {
             Assert.Equal("ansight.network-request.v1", document.RootElement.GetProperty("schema").GetString());
@@ -74,6 +73,7 @@ public sealed partial class SessionCaptureStoreTests
         }
 
         Assert.True(store.TryLoad(snapshot.SessionId, out var loaded));
+
         var request = Assert.Single(loaded!.NetworkRequests);
         Assert.Equal("GET", request.Method);
         Assert.Equal("<redacted>", request.RequestHeaders[0].Value);

@@ -28,9 +28,9 @@ public class TaskDebouncer
 
             await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), currentToken.Token)
                 .ContinueWith(async task => await onDebounce(),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnRanToCompletion,
-                    TaskScheduler.FromCurrentSynchronizationContext());
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.FromCurrentSynchronizationContext());
         }
         catch (TaskCanceledException)
         {

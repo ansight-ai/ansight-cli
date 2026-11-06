@@ -20,7 +20,6 @@ public sealed record RemoteRecordingSummary(
     public string AppId { get; init; } = string.Empty;
 
     public string? AppIconCacheKey { get; init; }
-
     public RemoteRecordingCapabilities Capabilities { get; } = new(
         HasScreenReplay: FrameCount > 0,
         HasLogs: LogCount > 0,

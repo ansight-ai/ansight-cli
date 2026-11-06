@@ -11,7 +11,10 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         var connection = new FakeWebSocketConnection(CompletedEvent("resp_warmup"), CompletedEvent("resp_generation"));
         var transport = new RecordingModelTransport();
         await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
-        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with { Transport = transport };
+        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with
+        {
+            Transport = transport
+        };
 
         await session.WarmupAsync(request, CancellationToken.None);
         Assert.Equal("resp_warmup", Assert.Single(transport.Usage).ResponseId);
@@ -27,10 +30,14 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
     {
         var terminal = JsonNode.Parse(CompletedEvent("resp_terminal"))!.AsObject();
         terminal["type"] = eventType;
+
         var transport = new RecordingModelTransport();
         var connection = new FakeWebSocketConnection(terminal.ToJsonString());
         await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
-        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with { Transport = transport };
+        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with
+        {
+            Transport = transport
+        };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.CreateResponseAsync(request, CancellationToken.None));
 
@@ -46,7 +53,10 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         var connection = new FakeWebSocketConnection(CompletedEvent("resp_durable"));
         var transport = new RecordingModelTransport { RecordingFailure = new IOException("Disk full") };
         await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
-        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with { Transport = transport };
+        var request = CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true) with
+        {
+            Transport = transport
+        };
 
         await Assert.ThrowsAsync<ModelUsageRecordingException>(async () =>
         {

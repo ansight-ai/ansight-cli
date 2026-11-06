@@ -6,9 +6,11 @@ public sealed class DeviceLaunchContextTests
     public void NestedScopesRestorePreviousPreference()
     {
         Assert.False(DeviceLaunchContext.Headless);
+
         using (DeviceLaunchContext.Push(true))
         {
             Assert.True(DeviceLaunchContext.Headless);
+
             using (DeviceLaunchContext.Push(false))
             {
                 Assert.False(DeviceLaunchContext.Headless);
@@ -34,9 +36,11 @@ public sealed class DeviceLaunchContextTests
         });
 
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
         try
         {
             Assert.False(DeviceLaunchContext.Headless);
+
             using var visibleCommand = DeviceLaunchContext.Push(false);
             await Task.Yield();
             Assert.False(DeviceLaunchContext.Headless);
@@ -53,11 +57,13 @@ public sealed class DeviceLaunchContextTests
     {
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<bool> capture;
+
         using (DeviceLaunchContext.Push(true))
         {
             capture = Task.Run(async () =>
             {
                 await release.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
                 return DeviceLaunchContext.Headless;
             });
         }

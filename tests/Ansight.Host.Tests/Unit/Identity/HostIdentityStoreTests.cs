@@ -13,6 +13,7 @@ public sealed class HostIdentityStoreTests
         string hostId;
         string publicKeyBase64;
         string fingerprint;
+
         using (var store = new IdentityStore(environment.ApplicationPaths, storage))
         {
             hostId = store.Current.HostId;

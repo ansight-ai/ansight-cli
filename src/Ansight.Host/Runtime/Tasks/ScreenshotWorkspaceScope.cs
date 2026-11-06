@@ -10,11 +10,19 @@ internal static class ScreenshotWorkspaceScope
     {
         var previous = repositoryRoot.Value;
         repositoryRoot.Value = Path.GetFullPath(root);
+
         return new Scope(previous);
     }
 
-    private sealed class Scope(string? previous) : IDisposable
+    private sealed class Scope : IDisposable
     {
+        private readonly string? previous;
+
+        public Scope(string? previous)
+        {
+            this.previous = previous;
+        }
+
         public void Dispose() => repositoryRoot.Value = previous;
     }
 }

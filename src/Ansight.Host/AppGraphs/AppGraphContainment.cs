@@ -7,6 +7,7 @@ public static class AppGraphContainment
     {
         var errors = new List<string>();
         var parents = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var relation in relations)
         {
             if (relation.ParentDestinationId == relation.ChildDestinationId)
@@ -14,6 +15,7 @@ public static class AppGraphContainment
                 errors.Add($"Destination '{relation.ChildDestinationId}' cannot own itself.");
                 continue;
             }
+
             if (parents.TryGetValue(relation.ChildDestinationId, out var parent)
                 && parent != relation.ParentDestinationId)
             {
@@ -28,6 +30,7 @@ public static class AppGraphContainment
         {
             var visited = new HashSet<string>(StringComparer.Ordinal) { child };
             var current = child;
+
             while (parents.TryGetValue(current, out var parent))
             {
                 if (!visited.Add(parent))

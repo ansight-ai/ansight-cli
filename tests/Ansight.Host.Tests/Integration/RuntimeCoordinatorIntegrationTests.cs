@@ -43,6 +43,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 AESKeySize = 256
             };
             archive.PutNextEntry(entry);
+
             var bytes = Encoding.UTF8.GetBytes(entryValue.Value + Environment.NewLine);
             archive.Write(bytes);
             archive.CloseEntry();
@@ -59,6 +60,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         IPAddress? hostAddress = null)
     {
         hostAddress ??= IPAddress.Loopback;
+
         using var client = new UdpClient(hostAddress.AddressFamily);
         var payload = JsonSerializer.SerializeToUtf8Bytes(new EnrollmentConnectRequest
         {
@@ -73,34 +75,26 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var remoteEndPoint = new IPEndPoint(hostAddress, ProtocolDefaults.DiscoveryPort);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while (true)
-        {
-            await client.SendAsync(payload, payload.Length, remoteEndPoint);
 
-            using var attemptTimeout = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
-            attemptTimeout.CancelAfter(TimeSpan.FromMilliseconds(300));
+        // The host is already running. Resending can allocate another session and
+        // exhaust a single-port fixture before the first response is consumed.
+        await client.SendAsync(payload, payload.Length, remoteEndPoint);
 
-            try
-            {
-                var receiveResult = await client.ReceiveAsync(attemptTimeout.Token);
-                using var document = JsonDocument.Parse(receiveResult.Buffer);
-                var root = document.RootElement;
-                return new UdpConnectResponse(
-                    root.GetProperty("accepted").GetBoolean(),
-                    root.GetProperty("reason").GetString() ?? string.Empty,
-                    root.TryGetProperty("reasonMessage", out var reasonMessageElement) ? reasonMessageElement.GetString() : null,
-                    root.TryGetProperty("hostId", out var hostIdElement) ? hostIdElement.GetString() : null,
-                    root.TryGetProperty("hostName", out var hostNameElement) ? hostNameElement.GetString() : null,
-                    root.TryGetProperty("webSocketPort", out var portElement) && portElement.ValueKind != JsonValueKind.Null
-                        ? portElement.GetInt32()
-                        : null,
-                    root.TryGetProperty("webSocketPath", out var pathElement) ? pathElement.GetString() : null,
-                    root.TryGetProperty("webSocketToken", out var tokenElement) ? tokenElement.GetString() : null);
-            }
-            catch (OperationCanceledException) when (!timeout.IsCancellationRequested)
-            {
-            }
-        }
+        var receiveResult = await client.ReceiveAsync(timeout.Token);
+        using var document = JsonDocument.Parse(receiveResult.Buffer);
+        var root = document.RootElement;
+
+        return new UdpConnectResponse(
+            root.GetProperty("accepted").GetBoolean(),
+            root.GetProperty("reason").GetString() ?? string.Empty,
+            root.TryGetProperty("reasonMessage", out var reasonMessageElement) ? reasonMessageElement.GetString() : null,
+            root.TryGetProperty("hostId", out var hostIdElement) ? hostIdElement.GetString() : null,
+            root.TryGetProperty("hostName", out var hostNameElement) ? hostNameElement.GetString() : null,
+            root.TryGetProperty("webSocketPort", out var portElement) && portElement.ValueKind != JsonValueKind.Null
+                ? portElement.GetInt32()
+                : null,
+            root.TryGetProperty("webSocketPath", out var pathElement) ? pathElement.GetString() : null,
+            root.TryGetProperty("webSocketToken", out var tokenElement) ? tokenElement.GetString() : null);
     }
 
     private static async Task OpenClientSessionAsync(ClientWebSocket socket)
@@ -111,6 +105,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             ["id"] = "session-open",
             ["action"] = PairingControlActions.SessionOpen
         });
+
         var response = await ReceiveJsonAsync(socket);
         Assert.Equal(PairingControlEnvelope.ResponseType, response["type"]?.GetValue<string>());
         Assert.Equal("session-open", response["replyTo"]?.GetValue<string>());
@@ -132,12 +127,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         while (true)
         {
             var result = await socket.ReceiveAsync(buffer, timeout.Token);
+
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 throw new InvalidOperationException("Expected a JSON message but the WebSocket was closed.");
             }
 
             stream.Write(buffer, 0, result.Count);
+
             if (result.EndOfMessage)
             {
                 break;
@@ -145,16 +142,18 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         }
 
         return JsonNode.Parse(Encoding.UTF8.GetString(stream.ToArray()))?.AsObject()
-               ?? throw new InvalidOperationException("Expected a JSON object payload.");
+            ?? throw new InvalidOperationException("Expected a JSON object payload.");
     }
 
     private static async Task DrainSocketAsync(ClientWebSocket socket)
     {
         var buffer = new byte[2048];
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
         while (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseReceived)
         {
             var result = await socket.ReceiveAsync(buffer, timeout.Token);
+
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 if (socket.State == WebSocketState.CloseReceived)
@@ -187,6 +186,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(20, 4), height);
         BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(24, 4), imageBytes.Length);
         imageBytes.CopyTo(payload.AsSpan(28));
+
         return payload;
     }
 

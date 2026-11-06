@@ -27,15 +27,18 @@ public sealed class AnnotatedFeedbackTests
         Assert.Equal(expectedCaptureTime.AddSeconds(-1), annotation.StartUtc);
         Assert.Equal(expectedCaptureTime.AddSeconds(1), annotation.EndUtc);
         Assert.Equal(3, annotation.Geometry.Count);
+
         var geometry = Assert.Single(annotation.Geometry, item => item.Text == "Save action");
         Assert.Equal(SessionAnnotationGeometryKind.Ellipse, geometry.Kind);
         Assert.Equal(expectedCaptureTime, geometry.CapturedAtUtc);
         Assert.Equal("Save action", geometry.Text);
         Assert.Equal("#FFFF3B30", geometry.StrokeColor);
         Assert.Equal(3d, geometry.StrokeWidth);
+
         var rectanglePath = Assert.Single(annotation.Geometry, item => item.Text == "Footer overlap");
         Assert.Equal(SessionAnnotationGeometryKind.FreeDraw, rectanglePath.Kind);
         Assert.Equal(9, rectanglePath.Points.Count);
+
         var ellipsePath = Assert.Single(annotation.Geometry, item => item.Text == "Circular issue");
         Assert.Equal(SessionAnnotationGeometryKind.FreeDraw, ellipsePath.Kind);
         Assert.Equal(9, ellipsePath.Points.Count);
@@ -43,9 +46,11 @@ public sealed class AnnotatedFeedbackTests
         var rectangleInference = Assert.IsType<JsonObject>(
             PayloadJson.BuildSessionAnnotationGeometryPayload(rectanglePath)["inferredShape"]);
         Assert.Equal("rectangle", rectangleInference["kind"]?.GetValue<string>());
+
         var rectangleBounds = Assert.IsType<JsonObject>(rectangleInference["bounds"]);
         Assert.Equal(0.15, rectangleBounds["x"]!.GetValue<double>(), precision: 6);
         Assert.Equal(0.3, rectangleBounds["width"]!.GetValue<double>(), precision: 6);
+
         var ellipseInference = Assert.IsType<JsonObject>(
             PayloadJson.BuildSessionAnnotationGeometryPayload(ellipsePath)["inferredShape"]);
         Assert.Equal("oval", ellipseInference["kind"]?.GetValue<string>());
@@ -71,13 +76,12 @@ public sealed class AnnotatedFeedbackTests
             X = 0.1,
             Y = 0.1,
             Points =
-            [
-                new SessionAnnotationGeometryPoint { X = 0.1, Y = 0.1 },
-                new SessionAnnotationGeometryPoint { X = 0.2, Y = 0.4 },
-                new SessionAnnotationGeometryPoint { X = 0.5, Y = 0.2 },
-                new SessionAnnotationGeometryPoint { X = 0.7, Y = 0.6 },
-                new SessionAnnotationGeometryPoint { X = 0.9, Y = 0.8 }
-            ]
+                [
+                    new SessionAnnotationGeometryPoint {X = 0.1, Y = 0.1 },
+                new SessionAnnotationGeometryPoint {X = 0.2, Y = 0.4 },
+                new SessionAnnotationGeometryPoint {X = 0.5, Y = 0.2 },
+                new SessionAnnotationGeometryPoint {X = 0.7, Y = 0.6 },
+                new SessionAnnotationGeometryPoint {X = 0.9, Y = 0.8 }            ]
         };
 
         var payload = PayloadJson.BuildSessionAnnotationGeometryPayload(geometry);
@@ -97,12 +101,11 @@ public sealed class AnnotatedFeedbackTests
             X = 0.1,
             Y = 0.2,
             Points =
-            [
-                new SessionAnnotationGeometryPoint { X = 0.1, Y = 0.2 },
-                new SessionAnnotationGeometryPoint { X = 0.3, Y = 0.3 },
-                new SessionAnnotationGeometryPoint { X = 0.5, Y = 0.4 },
-                new SessionAnnotationGeometryPoint { X = 0.7, Y = 0.5 }
-            ]
+                [
+                    new SessionAnnotationGeometryPoint {X = 0.1, Y = 0.2 },
+                new SessionAnnotationGeometryPoint {X = 0.3, Y = 0.3 },
+                new SessionAnnotationGeometryPoint {X = 0.5, Y = 0.4 },
+                new SessionAnnotationGeometryPoint {X = 0.7, Y = 0.5 }            ]
         };
 
         var payload = PayloadJson.BuildSessionAnnotationGeometryPayload(geometry);
@@ -125,15 +128,14 @@ public sealed class AnnotatedFeedbackTests
             X = 0.1,
             Y = 0.42,
             Points =
-            [
-                new SessionAnnotationGeometryPoint { X = 0.1, Y = 0.5 },
-                new SessionAnnotationGeometryPoint { X = 0.3, Y = 0.5 },
-                new SessionAnnotationGeometryPoint { X = 0.5, Y = 0.5 },
-                new SessionAnnotationGeometryPoint { X = 0.7, Y = 0.5 },
-                new SessionAnnotationGeometryPoint { X = 0.62, Y = 0.42 },
-                new SessionAnnotationGeometryPoint { X = 0.7, Y = 0.5 },
-                new SessionAnnotationGeometryPoint { X = 0.62, Y = 0.58 }
-            ]
+                [
+                    new SessionAnnotationGeometryPoint {X = 0.1, Y = 0.5 },
+                new SessionAnnotationGeometryPoint {X = 0.3, Y = 0.5 },
+                new SessionAnnotationGeometryPoint {X = 0.5, Y = 0.5 },
+                new SessionAnnotationGeometryPoint {X = 0.7, Y = 0.5 },
+                new SessionAnnotationGeometryPoint {X = 0.62, Y = 0.42 },
+                new SessionAnnotationGeometryPoint {X = 0.7, Y = 0.5 },
+                new SessionAnnotationGeometryPoint {X = 0.62, Y = 0.58 }            ]
         };
 
         var payload = PayloadJson.BuildSessionAnnotationGeometryPayload(geometry);
@@ -196,6 +198,7 @@ public sealed class AnnotatedFeedbackTests
             out var completion));
 
         Assert.NotNull(completion);
+
         try
         {
             Assert.Equal(bundleBytes, File.ReadAllBytes(completion.BundlePath));
@@ -212,6 +215,7 @@ public sealed class AnnotatedFeedbackTests
     {
         var bundleBytes = CreateBundle();
         using var archiveStream = new MemoryStream();
+
         using (var archive = new ZipArchive(archiveStream, ZipArchiveMode.Create, leaveOpen: true))
         {
             WriteTextEntry(archive, "manifest.json", """
@@ -224,12 +228,14 @@ public sealed class AnnotatedFeedbackTests
                   "clientName": "Example App"
                 }
                 """);
+
             var bundleEntry = archive.CreateEntry("annotations/bundles/feedback.ansightannotation");
             using var output = bundleEntry.Open();
             output.Write(bundleBytes);
         }
 
         archiveStream.Position = 0;
+
         using var inputArchive = new ZipArchive(archiveStream, ZipArchiveMode.Read);
         var success = SessionArchiveExternalPayloadReader.TryReadJsonLinesArchive(
             inputArchive,
@@ -239,6 +245,7 @@ public sealed class AnnotatedFeedbackTests
 
         Assert.True(success, error);
         Assert.NotNull(payload);
+
         var annotation = Assert.Single(payload.Snapshot.Annotations);
         Assert.Equal("sdk.annotatedFeedback", annotation.Source);
         Assert.Equal(new DateTimeOffset(2026, 7, 17, 1, 2, 2, TimeSpan.Zero), annotation.StartUtc);
@@ -255,6 +262,7 @@ public sealed class AnnotatedFeedbackTests
     private static byte[] CreateBundle()
     {
         using var stream = new MemoryStream();
+
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
             WriteBytesEntry(archive, "evidence/screenshot.jpg", [1, 2, 3, 4]);
@@ -405,6 +413,7 @@ public sealed class AnnotatedFeedbackTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44, 8), offsetBytes);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52, 4), payload.Length);
         payload.CopyTo(frame, BinaryFileTransferProtocol.HeaderSize);
+
         return frame;
     }
 }

@@ -22,11 +22,8 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
     }
 
     public string SourcePath { get; }
-
     public string InstallPath { get; }
-
     public string Platform { get; }
-
     public string? RequiredDeviceKind { get; }
 
     public async Task<ApplicationChecksum?> GetChecksumAsync(
@@ -45,6 +42,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
             bufferSize: 128 * 1024,
             useAsync: true);
         var checksum = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+
         return new ApplicationChecksum(Convert.ToHexStringLower(checksum));
     }
 
@@ -57,6 +55,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
 
         var fullPath = Path.GetFullPath(applicationPath.Trim());
         var extension = Path.GetExtension(fullPath);
+
         if (string.Equals(extension, ".app", StringComparison.OrdinalIgnoreCase))
         {
             if (!Directory.Exists(fullPath))
@@ -116,6 +115,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"ansight-ipa-{Guid.NewGuid():N}");
         Directory.CreateDirectory(temporaryPath);
+
         try
         {
             using var archive = ZipFile.OpenRead(ipaPath);
@@ -125,6 +125,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
                 .Cast<string>()
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
             if (applicationRoots.Length != 1)
             {
                 throw new InvalidDataException(
@@ -135,10 +136,12 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
 
             var applicationRoot = applicationRoots[0];
             var destinationRoot = Path.GetFullPath(temporaryPath + Path.DirectorySeparatorChar);
+
             foreach (var entry in archive.Entries.Where(entry => IsWithinApplication(entry.FullName, applicationRoot)))
             {
                 var normalizedEntryPath = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
                 var destinationPath = Path.GetFullPath(Path.Combine(temporaryPath, normalizedEntryPath));
+
                 if (!destinationPath.StartsWith(destinationRoot, StringComparison.Ordinal))
                 {
                     throw new InvalidDataException($"IPA '{ipaPath}' contains an unsafe archive path.");
@@ -151,6 +154,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
                 }
 
                 var parentPath = Path.GetDirectoryName(destinationPath);
+
                 if (!string.IsNullOrWhiteSpace(parentPath))
                 {
                     Directory.CreateDirectory(parentPath);
@@ -163,6 +167,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
             var installPath = Path.Combine(
                 temporaryPath,
                 applicationRoot.Replace('/', Path.DirectorySeparatorChar));
+
             return new WorkspaceTestApplicationPackage(
                 ipaPath,
                 installPath,
@@ -180,9 +185,10 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
     private static string? GetIpaApplicationRoot(string entryPath)
     {
         var parts = entryPath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+
         return parts.Length >= 2
-               && string.Equals(parts[0], "Payload", StringComparison.OrdinalIgnoreCase)
-               && parts[1].EndsWith(".app", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(parts[0], "Payload", StringComparison.OrdinalIgnoreCase)
+            && parts[1].EndsWith(".app", StringComparison.OrdinalIgnoreCase)
             ? $"{parts[0]}/{parts[1]}"
             : null;
     }
@@ -190,8 +196,9 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
     private static bool IsWithinApplication(string entryPath, string applicationRoot)
     {
         var normalizedPath = entryPath.Replace('\\', '/');
+
         return string.Equals(normalizedPath.TrimEnd('/'), applicationRoot, StringComparison.OrdinalIgnoreCase)
-               || normalizedPath.StartsWith(applicationRoot + "/", StringComparison.OrdinalIgnoreCase);
+            || normalizedPath.StartsWith(applicationRoot + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyUnixFileMode(ZipArchiveEntry entry, string destinationPath)
@@ -202,6 +209,7 @@ internal sealed class WorkspaceTestApplicationPackage : IDisposable
         }
 
         var rawMode = (entry.ExternalAttributes >> 16) & 0xFFF;
+
         if (rawMode != 0)
         {
             File.SetUnixFileMode(destinationPath, (UnixFileMode)rawMode);

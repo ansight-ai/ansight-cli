@@ -10,14 +10,13 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
     }
 
     public string Source { get; }
-
     private IReadOnlyList<int> Core { get; }
-
     private IReadOnlyList<string> Prerelease { get; }
 
     public static bool TryParse(string? source, out CliReleaseVersion? version)
     {
         version = null;
+
         if (string.IsNullOrWhiteSpace(source))
         {
             return false;
@@ -25,6 +24,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
 
         var normalized = source.Trim();
         var metadataSeparator = normalized.IndexOf('+', StringComparison.Ordinal);
+
         if (metadataSeparator >= 0)
         {
             normalized = normalized[..metadataSeparator];
@@ -38,6 +38,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
             ? normalized[(prereleaseSeparator + 1)..]
             : string.Empty;
         var coreParts = coreSource.Split('.', StringSplitOptions.None);
+
         if (coreParts.Length == 0
             || coreParts.Any(static part => !int.TryParse(part, out var value) || value < 0))
         {
@@ -45,6 +46,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
         }
 
         var core = new List<int>(coreParts.Length);
+
         foreach (var part in coreParts)
         {
             core.Add(int.Parse(part, System.Globalization.CultureInfo.InvariantCulture));
@@ -53,14 +55,16 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
         IReadOnlyList<string> prerelease = string.IsNullOrEmpty(prereleaseSource)
             ? Array.Empty<string>()
             : prereleaseSource.Split('.', StringSplitOptions.None).ToList();
+
         if (prerelease.Any(static part => string.IsNullOrEmpty(part)
-                                          || part.Any(character => !char.IsAsciiLetterOrDigit(character)
-                                                                   && character != '-')))
+            || part.Any(character => !char.IsAsciiLetterOrDigit(character)
+                && character != '-')))
         {
             return false;
         }
 
         version = new CliReleaseVersion(source.Trim(), core, prerelease);
+
         return true;
     }
 
@@ -72,11 +76,13 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
         }
 
         var coreLength = Math.Max(Core.Count, other.Core.Count);
+
         for (var index = 0; index < coreLength; index++)
         {
             var left = index < Core.Count ? Core[index] : 0;
             var right = index < other.Core.Count ? other.Core[index] : 0;
             var comparison = left.CompareTo(right);
+
             if (comparison != 0)
             {
                 return comparison;
@@ -91,6 +97,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
         }
 
         var prereleaseLength = Math.Max(Prerelease.Count, other.Prerelease.Count);
+
         for (var index = 0; index < prereleaseLength; index++)
         {
             if (index >= Prerelease.Count)
@@ -104,6 +111,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
             }
 
             var comparison = ComparePrereleaseIdentifier(Prerelease[index], other.Prerelease[index]);
+
             if (comparison != 0)
             {
                 return comparison;
@@ -117,6 +125,7 @@ internal sealed class CliReleaseVersion : IComparable<CliReleaseVersion>
     {
         var leftIsNumeric = int.TryParse(left, out var leftNumber);
         var rightIsNumeric = int.TryParse(right, out var rightNumber);
+
         if (leftIsNumeric && rightIsNumeric)
         {
             return leftNumber.CompareTo(rightNumber);

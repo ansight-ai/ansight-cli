@@ -27,11 +27,13 @@ internal sealed class AppGraphExplorationDatabase
     public void Save(SimulatorAgentAppGraphLiveRun run)
     {
         ArgumentNullException.ThrowIfNull(run);
+
         lock (databaseGate)
         {
             try
             {
                 EnsureDatabase();
+
                 using var connection = OpenConnection();
                 using var transaction = connection.BeginTransaction();
                 SaveRun(connection, transaction, run);
@@ -43,8 +45,8 @@ internal sealed class AppGraphExplorationDatabase
                 transaction.Commit();
             }
             catch (Exception exception) when (exception is SqliteException
-                                               or IOException
-                                               or UnauthorizedAccessException)
+                or IOException
+                or UnauthorizedAccessException)
             {
                 // Exploration must remain available even if local persistence is unavailable.
             }
@@ -58,11 +60,13 @@ internal sealed class AppGraphExplorationDatabase
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(graphName);
+
         lock (databaseGate)
         {
             try
             {
                 EnsureDatabase();
+
                 using var connection = OpenConnection();
                 using var command = connection.CreateCommand();
                 var hasAppId = !string.IsNullOrWhiteSpace(appId);
@@ -81,6 +85,7 @@ internal sealed class AppGraphExplorationDatabase
 
                 string? runId = null;
                 SimulatorAgentAppGraphPendingOutcome? pendingOutcome = null;
+
                 using (var reader = command.ExecuteReader())
                 {
                     if (reader.Read()
@@ -100,13 +105,16 @@ internal sealed class AppGraphExplorationDatabase
                         ReadEdges(connection, runId),
                         ReadNavigationHosts(connection, runId),
                         ReadTabGroups(connection, runId),
-                        ReadActions(connection, runId)) { PendingOutcome = pendingOutcome };
+                        ReadActions(connection, runId))
+                    {
+                        PendingOutcome = pendingOutcome
+                    };
             }
             catch (Exception exception) when (exception is SqliteException
-                                               or IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException
-                                               or FormatException)
+                or IOException
+                or UnauthorizedAccessException
+                or JsonException
+                or FormatException)
             {
                 return null;
             }
@@ -116,11 +124,13 @@ internal sealed class AppGraphExplorationDatabase
     public IReadOnlyList<SimulatorAgentAppGraphLiveRun> List(string? sessionId, int limit)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
         lock (databaseGate)
         {
             try
             {
                 EnsureDatabase();
+
                 using var connection = OpenConnection();
                 using var command = connection.CreateCommand();
                 command.CommandText = """
@@ -138,6 +148,7 @@ internal sealed class AppGraphExplorationDatabase
                 command.Parameters.AddWithValue("$limit", limit);
 
                 var retainedRuns = new List<SimulatorAgentAppGraphLiveRun>();
+
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -177,10 +188,10 @@ internal sealed class AppGraphExplorationDatabase
                 }).ToArray();
             }
             catch (Exception exception) when (exception is SqliteException
-                                               or IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException
-                                               or FormatException)
+                or IOException
+                or UnauthorizedAccessException
+                or JsonException
+                or FormatException)
             {
                 return [];
             }
@@ -191,6 +202,7 @@ internal sealed class AppGraphExplorationDatabase
     {
         EnsureProviderInitialized();
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -326,7 +338,9 @@ internal sealed class AppGraphExplorationDatabase
     {
         using var inspect = connection.CreateCommand();
         inspect.CommandText = $"PRAGMA table_info({tableName});";
+
         using var reader = inspect.ExecuteReader();
+
         while (reader.Read())
         {
             if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
@@ -334,6 +348,7 @@ internal sealed class AppGraphExplorationDatabase
                 return;
             }
         }
+
         reader.Close();
 
         using var alter = connection.CreateCommand();
@@ -351,6 +366,7 @@ internal sealed class AppGraphExplorationDatabase
         };
         var connection = new SqliteConnection(builder.ConnectionString);
         connection.Open();
+
         return connection;
     }
 
@@ -422,6 +438,7 @@ internal sealed class AppGraphExplorationDatabase
         SimulatorAgentAppGraphLiveRun run)
     {
         DeleteRunRows(connection, transaction, "app_graph_nodes", run.RunId);
+
         foreach (var node in run.Nodes)
         {
             using var command = connection.CreateCommand();
@@ -459,6 +476,7 @@ internal sealed class AppGraphExplorationDatabase
         SimulatorAgentAppGraphLiveRun run)
     {
         DeleteRunRows(connection, transaction, "app_graph_edges", run.RunId);
+
         foreach (var edge in run.Edges)
         {
             using var command = connection.CreateCommand();
@@ -496,6 +514,7 @@ internal sealed class AppGraphExplorationDatabase
         SimulatorAgentAppGraphLiveRun run)
     {
         DeleteRunRows(connection, transaction, "app_graph_action_candidates", run.RunId);
+
         foreach (var action in run.Frontier)
         {
             using var command = connection.CreateCommand();
@@ -538,6 +557,7 @@ internal sealed class AppGraphExplorationDatabase
         SimulatorAgentAppGraphLiveRun run)
     {
         DeleteRunRows(connection, transaction, "app_graph_navigation_hosts", run.RunId);
+
         foreach (var navigationHost in run.NavigationHosts)
         {
             using var command = connection.CreateCommand();
@@ -580,6 +600,7 @@ internal sealed class AppGraphExplorationDatabase
         SimulatorAgentAppGraphLiveRun run)
     {
         DeleteRunRows(connection, transaction, "app_graph_tab_groups", run.RunId);
+
         foreach (var tabGroup in run.TabGroups)
         {
             using var command = connection.CreateCommand();
@@ -637,8 +658,10 @@ internal sealed class AppGraphExplorationDatabase
             ORDER BY first_observed_utc, node_id;
             """;
         command.Parameters.AddWithValue("$run_id", runId);
+
         var nodes = new List<SimulatorAgentAppGraphLiveNode>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             var synonyms = JsonNode.Parse(reader.GetString(4)) as JsonArray;
@@ -657,6 +680,7 @@ internal sealed class AppGraphExplorationDatabase
                 DateTimeOffset.Parse(reader.GetString(9)),
                 DateTimeOffset.Parse(reader.GetString(10))));
         }
+
         return nodes;
     }
 
@@ -674,8 +698,10 @@ internal sealed class AppGraphExplorationDatabase
             ORDER BY first_observed_utc, edge_id;
             """;
         command.Parameters.AddWithValue("$run_id", runId);
+
         var edges = new List<SimulatorAgentAppGraphLiveEdge>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             edges.Add(new SimulatorAgentAppGraphLiveEdge(
@@ -691,6 +717,7 @@ internal sealed class AppGraphExplorationDatabase
                 reader.GetString(9),
                 reader.IsDBNull(10) ? null : new SimulatorAgentAppGraphNavigationContext(reader.GetString(10))));
         }
+
         return edges;
     }
 
@@ -707,8 +734,10 @@ internal sealed class AppGraphExplorationDatabase
             ORDER BY first_observed_utc, host_id;
             """;
         command.Parameters.AddWithValue("$run_id", runId);
+
         var navigationHosts = new List<SimulatorAgentAppGraphLiveNavigationHost>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             navigationHosts.Add(new SimulatorAgentAppGraphLiveNavigationHost(
@@ -727,6 +756,7 @@ internal sealed class AppGraphExplorationDatabase
                     7,
                     AppGraphNavigationTechnologyCatalog.NavigationHostScope)));
         }
+
         return navigationHosts;
     }
 
@@ -743,8 +773,10 @@ internal sealed class AppGraphExplorationDatabase
             ORDER BY first_observed_utc, tab_group_id;
             """;
         command.Parameters.AddWithValue("$run_id", runId);
+
         var tabGroups = new List<SimulatorAgentAppGraphLiveTabGroup>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             tabGroups.Add(new SimulatorAgentAppGraphLiveTabGroup(
@@ -760,6 +792,7 @@ internal sealed class AppGraphExplorationDatabase
                     4,
                     AppGraphNavigationTechnologyCatalog.TabGroupScope)));
         }
+
         return tabGroups;
     }
 
@@ -777,8 +810,10 @@ internal sealed class AppGraphExplorationDatabase
             ORDER BY first_observed_utc, action_id;
             """;
         command.Parameters.AddWithValue("$run_id", runId);
+
         var actions = new List<SimulatorAgentAppGraphLiveAction>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             actions.Add(new SimulatorAgentAppGraphLiveAction(
@@ -800,6 +835,7 @@ internal sealed class AppGraphExplorationDatabase
                 LastRecheckReason = reader.GetString(14)
             });
         }
+
         return actions;
     }
 
@@ -855,6 +891,7 @@ internal sealed class AppGraphExplorationDatabase
                 SQLitePCL.raw.SetProvider(provider);
                 SQLitePCL.raw.FreezeProvider();
             }
+
             providerInitialized = true;
         }
     }

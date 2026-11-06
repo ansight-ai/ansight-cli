@@ -77,7 +77,9 @@ public sealed class LocalSessionSummaryRunnerTests
     private static AppSessionSnapshot CreateSnapshot()
     {
         var seconds = new[] { 0, 10, 15, 20, 30 };
+
         string Label(int second) => second >= 10 && second <= 20 ? "inside" : "outside";
+
         return new AppSessionSnapshot
         {
             SessionId = "section-summary",
@@ -93,37 +95,56 @@ public sealed class LocalSessionSummaryRunnerTests
             Logs = seconds.Select(second => new LogEntry(At(second), Label(second))).ToArray(),
             Images = seconds.Select(second => new SessionImageFrame
             {
-                FrameId = $"frame-{second}", CapturedAtUtc = At(second), Format = "png", Width = 1, Height = 1, Quality = 100, ByteCount = 1
+                FrameId = $"frame-{second}",
+                CapturedAtUtc = At(second),
+                Format = "png",
+                Width = 1,
+                Height = 1,
+                Quality = 100,
+                ByteCount = 1
             }).ToArray(),
             Touches = seconds.Select(second => new SessionTouchInputRecord
             {
-                Id = $"touch-{second}", CapturedAtUtc = At(second), Action = Label(second), PointerId = 0, PointerIndex = 0,
-                PointerCount = 1, X = 1, Y = 1, CoordinateUnit = "px"
+                Id = $"touch-{second}",
+                CapturedAtUtc = At(second),
+                Action = Label(second),
+                PointerId = 0,
+                PointerIndex = 0,
+                PointerCount = 1,
+                X = 1,
+                Y = 1,
+                CoordinateUnit = "px"
             }).ToArray(),
             NetworkRequests = seconds.Select(second => new SessionNetworkRequest
             {
-                Id = $"network-{second}", Source = "test", StartedAtUtc = At(second), CompletedAtUtc = At(second + 1),
-                DurationMilliseconds = 1000, Method = "GET", Url = $"https://example.com/{Label(second)}"
+                Id = $"network-{second}",
+                Source = "test",
+                StartedAtUtc = At(second),
+                CompletedAtUtc = At(second + 1),
+                DurationMilliseconds = 1000,
+                Method = "GET",
+                Url = $"https://example.com/{Label(second)}"
             }).ToArray(),
             ApplicationEvents = seconds.Select(second => new SessionApplicationEvent($"event-{second}", Label(second), "test", "", At(second), 1)).ToArray(),
             VisualTreeSnapshots = seconds.Select(second => new SessionVisualTreeSnapshot
             {
-                SnapshotId = $"tree-{second}", CapturedAtUtc = At(second), Source = Label(second), NodeCount = 0
+                SnapshotId = $"tree-{second}",
+                CapturedAtUtc = At(second),
+                Source = Label(second),
+                NodeCount = 0
             }).ToArray(),
             Metrics = seconds.Select(second => new SessionMetricSample { ChannelId = 1, CapturedAtUtc = At(second), Value = second }).ToArray(),
             MetricChannels =
             [
-                new SessionMetricChannel { ChannelId = 1, Name = "FPS", ColorHex = "#00ff00" },
-                new SessionMetricChannel { ChannelId = 2, Name = "outside channel", ColorHex = "#ff0000" }
-            ],
+                new SessionMetricChannel {ChannelId = 1, Name = "FPS", ColorHex = "#00ff00" },
+                new SessionMetricChannel {ChannelId = 2, Name = "outside channel", ColorHex = "#ff0000" }            ],
             Annotations =
             [
-                new SessionAnnotation { AnnotationId = "before", StartUtc = At(0), EndUtc = At(5), Label = "outside" },
-                new SessionAnnotation { AnnotationId = "overlap-start", StartUtc = At(5), EndUtc = At(15), Label = "outside" },
-                new SessionAnnotation { AnnotationId = "inside", StartUtc = At(10), EndUtc = At(20), Label = "inside" },
-                new SessionAnnotation { AnnotationId = "point", StartUtc = At(15), Label = "inside" },
-                new SessionAnnotation { AnnotationId = "overlap-end", StartUtc = At(15), EndUtc = At(25), Label = "outside" }
-            ]
+                new SessionAnnotation {AnnotationId = "before", StartUtc = At(0), EndUtc = At(5), Label = "outside" },
+                new SessionAnnotation {AnnotationId = "overlap-start", StartUtc = At(5), EndUtc = At(15), Label = "outside" },
+                new SessionAnnotation {AnnotationId = "inside", StartUtc = At(10), EndUtc = At(20), Label = "inside" },
+                new SessionAnnotation {AnnotationId = "point", StartUtc = At(15), Label = "inside" },
+                new SessionAnnotation {AnnotationId = "overlap-end", StartUtc = At(15), EndUtc = At(25), Label = "outside" }            ]
         };
     }
 }

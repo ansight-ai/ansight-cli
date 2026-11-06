@@ -32,6 +32,7 @@ internal static class LiveUiOcrSearch
             "current",
             correlationId,
             cancellationToken, afterScreenUpdates: true, externalScreenshots: externalScreenshots);
+
         if (screenshot is null || !File.Exists(screenshot.ArtifactPath))
         {
             return LiveUiOcrSearchResult.Unavailable(
@@ -39,6 +40,7 @@ internal static class LiveUiOcrSearch
         }
 
         SessionScreenshotOcrResult scan;
+
         try
         {
             scan = await Task.Run(
@@ -46,14 +48,15 @@ internal static class LiveUiOcrSearch
                 cancellationToken);
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or UnauthorizedAccessException)
+            or InvalidOperationException
+            or UnauthorizedAccessException)
         {
             scan = SessionScreenshotOcrResult.Unavailable(
                 $"Screenshot OCR failed: {exception.Message}");
         }
 
         using var bitmap = SKBitmap.Decode(screenshot.ArtifactPath);
+
         if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
         {
             return LiveUiOcrSearchResult.Unavailable(
@@ -65,6 +68,7 @@ internal static class LiveUiOcrSearch
             scan,
             bitmap.Width,
             bitmap.Height);
+
         if (!scan.Available)
         {
             return LiveUiOcrSearchResult.Unavailable(
@@ -88,10 +92,11 @@ internal static class LiveUiOcrSearch
                 bitmap.Height,
                 viewport,
                 includeTapHint: selector.MatchMode != LiveUiStringMatchMode.Fuzzy
-                                && (blockMatches.Length == 1 || selector.IndexSpecified),
+                    && (blockMatches.Length == 1 || selector.IndexSpecified),
                 evaluation: match.Evaluation,
                 matchMode: selector.MatchMode))
             .ToArray();
+
         return new LiveUiOcrSearchResult(
             true,
             scan.Provider,
@@ -143,12 +148,14 @@ internal static class LiveUiOcrSearch
             ["confidence"] = Math.Clamp(block.Confidence / 100, 0, 1),
             ["bounds"] = bounds.ToJson()
         };
+
         if (matchMode == LiveUiStringMatchMode.Fuzzy)
         {
             result["matchMode"] = "fuzzy";
             result["matchScore"] = evaluation.Score;
             result["matchReason"] = evaluation.Reason;
         }
+
         if (includeTapHint)
         {
             result["tapHint"] = new JsonObject
@@ -164,59 +171,4 @@ internal static class LiveUiOcrSearch
 
         return result;
     }
-}
-
-internal sealed record LiveUiOcrTextMatch(
-    SessionScreenshotTextBlock Block,
-    LiveUiSelectorMatchResult Evaluation);
-
-internal sealed record LiveUiOcrSearchResult(
-    bool Available,
-    string? Provider,
-    string? Message,
-    IReadOnlyList<JsonObject> Matches,
-    JsonObject? TraceEvidence)
-{
-    public static LiveUiOcrSearchResult NotAttempted { get; } = new(false, null, null, [], null);
-
-    public bool Attempted => !ReferenceEquals(this, NotAttempted);
-
-    public static LiveUiOcrSearchResult Unavailable(string message, JsonObject? traceEvidence = null)
-        => new(false, null, message, [], traceEvidence);
-
-    public bool TryGetUniqueTapPoint(out LiveUiScreenPoint point, out JsonObject? match)
-        => TryGetTapPoint(index: 0, indexSpecified: false, out point, out match);
-
-    public bool TryGetTapPoint(
-        int index,
-        bool indexSpecified,
-        out LiveUiScreenPoint point,
-        out JsonObject? match)
-    {
-        match = indexSpecified
-            ? Matches.ElementAtOrDefault(index)
-            : Matches.Count == 1 ? Matches[0] : null;
-        if (match?["tapHint"]?["selector"] is not JsonObject selector
-            || selector["normalizedX"] is not JsonValue normalizedXValue
-            || !normalizedXValue.TryGetValue<double>(out var normalizedX)
-            || selector["normalizedY"] is not JsonValue normalizedYValue
-            || !normalizedYValue.TryGetValue<double>(out var normalizedY))
-        {
-            point = default;
-            return false;
-        }
-
-        point = new LiveUiScreenPoint(normalizedX, normalizedY);
-        return true;
-    }
-
-    public JsonObject ToJson()
-        => new()
-        {
-            ["attempted"] = Attempted,
-            ["available"] = Available,
-            ["provider"] = Provider,
-            ["message"] = Message,
-            ["matchCount"] = Matches.Count
-        };
 }

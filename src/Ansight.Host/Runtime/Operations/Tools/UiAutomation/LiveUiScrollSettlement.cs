@@ -12,6 +12,7 @@ internal static class LiveUiScrollSettlement
     {
         var previous = initial;
         var unchangedSamples = 0;
+
         for (var sample = 0; sample < MaximumSamples; sample++)
         {
             if (previous.Capture is not { } before || before.Viewport is null)
@@ -21,17 +22,20 @@ internal static class LiveUiScrollSettlement
 
             var matches = LiveUiNodeQuery.PrioritizeActionTargets(
                 LiveUiNodeQuery.Find(before.Root, selector, before.TypeRegistry), before.Payload, before.Viewport);
+
             if (matches.Count <= selector.Index)
             {
                 return new SettledScrollCapture(previous, false);
             }
 
             await Task.Delay(SampleIntervalMilliseconds, cancellationToken).ConfigureAwait(false);
+
             var next = await capture(cancellationToken).ConfigureAwait(false);
             var observation = LiveUiScrollObservation.Compare(before, next.Capture, matches[selector.Index], selector);
             var status = observation["status"]?.GetValue<string>();
             unchangedSamples = status == "unchanged" ? unchangedSamples + 1 : 0;
             previous = next;
+
             if (unchangedSamples >= 2)
             {
                 return new SettledScrollCapture(next, true);
@@ -48,5 +52,3 @@ internal static class LiveUiScrollSettlement
         return new SettledScrollCapture(previous, false);
     }
 }
-
-internal sealed record SettledScrollCapture(LiveUiCaptureResult Result, bool IsSettled);

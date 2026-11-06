@@ -23,31 +23,62 @@ internal static class DoctorCommand
         }
 
         var options = CliRuntime.ResolveOptions(arguments);
+
         if (arguments.HasFlag("target") && string.IsNullOrWhiteSpace(arguments.GetOption("target")))
+        {
             throw new CliUsageException("--target requires android-device or android-emulator.");
+        }
+
         var target = ResolveTarget(arguments);
+
         if (target is not ("auto" or "android-device" or "android-emulator"))
+        {
             throw new CliUsageException("--target must be android-device or android-emulator.");
+        }
+
         var full = arguments.HasFlag("full");
         var credentialsOnly = arguments.HasFlag("credentials-only");
+
         if (credentialsOnly && (full || target != "auto"))
+        {
             throw new CliUsageException("--credentials-only cannot be combined with --full or --target.");
-        if (full && target != "auto") throw new CliUsageException("--target cannot be combined with --full.");
+        }
+
+        if (full && target != "auto")
+        {
+            throw new CliUsageException("--target cannot be combined with --full.");
+        }
+
         if (arguments.GetOption("include-secret-metadata") is not null)
+        {
             throw new CliUsageException("--include-secret-metadata takes no value. Omit the flag to exclude secret metadata.");
+        }
+
         if (!full && (arguments.HasFlag("include-secret-metadata") || arguments.GetOption("output") is not null))
+        {
             throw new CliUsageException("--include-secret-metadata and --output require --full.");
+        }
+
         if (full)
         {
             if (arguments.GetOptions("require").Count > 0)
+            {
                 throw new CliUsageException("--require applies to the quick health check. Full reports describe observed state.");
+            }
+
             var report = await new SystemReportService(CliRuntime.CreateHostOptions(options))
                 .CollectAsync(arguments.HasFlag("include-secret-metadata"), cancellationToken).ConfigureAwait(false);
+
             if (arguments.GetOption("output") is { } destination)
+            {
                 await SaveReportAsync(report, destination, cancellationToken).ConfigureAwait(false);
+            }
+
             output.Write(report, () => SystemReportRenderer.Render(report));
+
             return CliExitCodes.Success;
         }
+
         var checks = new List<DoctorCheck>();
         checks.Add(CheckDataDirectory(options.DataDirectory));
 
@@ -57,6 +88,7 @@ internal static class DoctorCommand
         var secretProvider = EncryptedStorageFactory.ResolveDefaultProviderName(
             options.SecureStorageFilePath,
             options.SecureStorageKeyFilePath);
+
         switch (secretProvider)
         {
             case "macos-keychain":
@@ -78,7 +110,10 @@ internal static class DoctorCommand
             case "protected-file":
                 checks.Add(CheckSecretStore(secureStoragePath));
                 checks.Add(CheckSecretKey(options));
-                if (File.Exists(secureStoragePath)) checks.Add(CheckStoreDecryption(secureStoragePath, options.SecureStorageKeyFilePath));
+                if (File.Exists(secureStoragePath))
+                {
+                    checks.Add(CheckStoreDecryption(secureStoragePath, options.SecureStorageKeyFilePath));
+                }
                 break;
             default:
                 checks.Add(new DoctorCheck(
@@ -90,20 +125,23 @@ internal static class DoctorCommand
                     null));
                 break;
         }
+
         if (!credentialsOnly)
         {
             checks.AddRange(CheckDotNetTools());
             checks.Add(CheckExecutable("node", required: false));
             checks.Add(await TesseractDoctor.CheckAsync(
-                    Environment.GetEnvironmentVariable(TesseractDoctor.ExecutablePathEnvironmentVariable),
-                    Environment.GetEnvironmentVariable("PATH"),
-                    cancellationToken)
+                Environment.GetEnvironmentVariable(TesseractDoctor.ExecutablePathEnvironmentVariable),
+                Environment.GetEnvironmentVariable("PATH"),
+                cancellationToken)
                 .ConfigureAwait(false));
+
             var scrcpyResolution = await ScrcpyToolLocator.ResolveAsync(
-                    cancellationToken: cancellationToken)
+                cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             checks.Add(CreateScrcpyCheck(scrcpyResolution));
             checks.Add(CheckSkiaSharp());
+
             if (OperatingSystem.IsMacOS())
             {
                 checks.Add(await MacAccessibilityDoctor.CheckAsync(cancellationToken).ConfigureAwait(false));
@@ -115,15 +153,17 @@ internal static class DoctorCommand
                 var appiumPath = FindExecutable("appium");
                 checks.Add(CheckExecutable("appium", required: false));
                 checks.AddRange(await AppiumDoctor.CheckAsync(
-                        appiumPath,
-                        Environment.GetEnvironmentVariable("ANSIGHT_APPIUM_SERVER_URL"),
-                        cancellationToken)
+                    appiumPath,
+                    Environment.GetEnvironmentVariable("ANSIGHT_APPIUM_SERVER_URL"),
+                    cancellationToken)
                     .ConfigureAwait(false));
             }
             else
             {
                 foreach (var name in new[] { "tool.appium", "device.ios.appium.xcuitest", "device.ios.appium.server" })
+                {
                     checks.Add(NotApplicable(name));
+                }
             }
 
             var deviceService = new DeviceService(CliRuntime.CreateHostOptions(options));
@@ -132,6 +172,7 @@ internal static class DoctorCommand
             checks.AddRange(await AndroidReadinessDoctor.CheckAsync(target, options.AdbPath, cancellationToken));
             await AddVersionAdviceAsync(checks, cancellationToken).ConfigureAwait(false);
         }
+
         RequireChecks(checks, arguments.GetOptions("require"));
 
         var result = new DoctorResult(
@@ -144,6 +185,7 @@ internal static class DoctorCommand
             checks.All(static check => check.IsSuccess || !check.IsRequired),
             DateTimeOffset.UtcNow);
         output.Write(result, () => Render(result, arguments.HasFlag("verbose")));
+
         return result.IsHealthy ? CliExitCodes.Success : CliExitCodes.CapabilityUnavailable;
     }
 
@@ -151,22 +193,45 @@ internal static class DoctorCommand
     {
         var path = Path.GetFullPath(destination);
         var temporary = path + ".pending-" + Guid.NewGuid().ToString("N");
+
         try
         {
             var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
-            if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+            if (!OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            }
+
             await using (var stream = new FileStream(temporary, options))
+            {
                 await JsonSerializer.SerializeAsync(stream, report, new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }, token);
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                }, token);
+            }
+
             File.Move(temporary, path, overwrite: true);
         }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        finally
+        {
+            if (File.Exists(temporary))
+            {
+                File.Delete(temporary);
+            }
+        }
     }
 
     internal static string ResolveTarget(CliArguments arguments)
     {
         var target = arguments.GetOption("target") ?? "auto";
-        if (target != "auto" || arguments.HasFlag("full") || arguments.HasFlag("credentials-only")) return target;
+
+        if (target != "auto" || arguments.HasFlag("full") || arguments.HasFlag("credentials-only"))
+        {
+            return target;
+        }
+
         return arguments.GetOptions("require").Contains("android.connection", StringComparer.OrdinalIgnoreCase)
             ? "android-device"
             : "auto";
@@ -175,8 +240,12 @@ internal static class DoctorCommand
     internal static DoctorCheck CreateDeviceCheck(DeviceCapability capability)
     {
         ArgumentNullException.ThrowIfNull(capability);
+
         if ((capability.Platform == "ios" || capability.Platform.StartsWith("ios.", StringComparison.Ordinal)) && !OperatingSystem.IsMacOS())
+        {
             return NotApplicable($"device.{capability.Platform}");
+        }
+
         return new DoctorCheck(
             $"device.{capability.Platform}",
             capability.Status ?? (capability.IsAvailable ? "available" : "unavailable"),
@@ -196,25 +265,33 @@ internal static class DoctorCommand
     {
         ArgumentNullException.ThrowIfNull(checks);
         ArgumentNullException.ThrowIfNull(requestedCheckNames);
+
         var requestedNames = requestedCheckNames
             .Where(static name => !string.IsNullOrWhiteSpace(name))
             .Select(static name => name.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         if (requestedNames.Count == 0)
         {
             return;
         }
 
         var matchedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         for (var index = 0; index < checks.Count; index++)
         {
             var check = checks[index];
+
             if (!requestedNames.Contains(check.Name))
             {
                 continue;
             }
 
-            checks[index] = check with { IsRequired = true, IsSuccess = check.IsSuccess && check.Status != "not-applicable" };
+            checks[index] = check with
+            {
+                IsRequired = true,
+                IsSuccess = check.IsSuccess && check.Status != "not-applicable"
+            };
             matchedNames.Add(check.Name);
         }
 
@@ -222,6 +299,7 @@ internal static class DoctorCommand
             .Except(matchedNames, StringComparer.OrdinalIgnoreCase)
             .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         if (missingNames.Length > 0)
         {
             throw new CliUsageException(
@@ -234,9 +312,11 @@ internal static class DoctorCommand
         try
         {
             Directory.CreateDirectory(dataDirectory);
+
             var probePath = Path.Combine(dataDirectory, $".ansight-write-probe-{Guid.NewGuid():N}");
             File.WriteAllText(probePath, string.Empty);
             File.Delete(probePath);
+
             return new DoctorCheck(
                 "data-directory",
                 "available",
@@ -273,6 +353,7 @@ internal static class DoctorCommand
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path));
+
             if (!document.RootElement.TryGetProperty("schema", out var schema)
                 || schema.ValueKind != JsonValueKind.String
                 || !string.Equals(
@@ -290,8 +371,8 @@ internal static class DoctorCommand
             }
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or JsonException)
+            or UnauthorizedAccessException
+            or JsonException)
         {
             return new DoctorCheck(
                 "secret-store",
@@ -317,11 +398,12 @@ internal static class DoctorCommand
         {
             var mode = File.GetUnixFileMode(path);
             var unsafeBits = mode & (UnixFileMode.GroupRead
-                                     | UnixFileMode.GroupWrite
-                                     | UnixFileMode.GroupExecute
-                                     | UnixFileMode.OtherRead
-                                     | UnixFileMode.OtherWrite
-                                     | UnixFileMode.OtherExecute);
+                | UnixFileMode.GroupWrite
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead
+                | UnixFileMode.OtherWrite
+                | UnixFileMode.OtherExecute);
+
             return new DoctorCheck(
                 "secret-store",
                 unsafeBits == 0 ? "permission-restricted" : "insecure-permissions",
@@ -333,8 +415,8 @@ internal static class DoctorCommand
                 path);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
             return new DoctorCheck(
                 "secret-store",
@@ -351,8 +433,16 @@ internal static class DoctorCommand
         try
         {
             var key = FileEncryptionKeyProvider.Resolve(path, keyFile);
-            try { _ = FileBackedEncryptedStorage.OpenReadOnly(path, key); }
-            finally { CryptographicOperations.ZeroMemory(key); }
+
+            try
+            {
+                _ = FileBackedEncryptedStorage.OpenReadOnly(path, key);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
+
             return new("secret-store-access", "readable", true, true, "The configured key can read the existing encrypted store.", path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or CryptographicException)
@@ -365,6 +455,7 @@ internal static class DoctorCommand
     {
         var environmentKey = Environment.GetEnvironmentVariable(
             FileEncryptionKeyProvider.MasterKeyEnvironmentVariable);
+
         if (!string.IsNullOrWhiteSpace(environmentKey))
         {
             try
@@ -373,6 +464,7 @@ internal static class DoctorCommand
                     environmentKey,
                     FileEncryptionKeyProvider.MasterKeyEnvironmentVariable);
                 CryptographicOperations.ZeroMemory(key);
+
                 return new DoctorCheck(
                     "secret-master-key",
                     "environment",
@@ -396,6 +488,7 @@ internal static class DoctorCommand
         var configuredKeyPath = FirstNonEmpty(
             options.SecureStorageKeyFilePath,
             Environment.GetEnvironmentVariable(FileEncryptionKeyProvider.KeyFileEnvironmentVariable));
+
         if (configuredKeyPath is not null)
         {
             return CheckSecretKeyFile(
@@ -406,11 +499,13 @@ internal static class DoctorCommand
 
         var credentialsDirectory = Environment.GetEnvironmentVariable(
             FileEncryptionKeyProvider.SystemdCredentialsDirectoryEnvironmentVariable);
+
         if (!string.IsNullOrWhiteSpace(credentialsDirectory))
         {
             var credentialPath = Path.Combine(
                 credentialsDirectory.Trim(),
                 FileEncryptionKeyProvider.SystemdCredentialFileName);
+
             if (File.Exists(credentialPath))
             {
                 return CheckSecretKeyFile(
@@ -460,15 +555,17 @@ internal static class DoctorCommand
                 File.ReadAllText(path),
                 $"Secret key file '{path}'");
             CryptographicOperations.ZeroMemory(key);
+
             if (!OperatingSystem.IsWindows())
             {
                 var mode = File.GetUnixFileMode(path);
                 var unsafeBits = mode & (UnixFileMode.GroupRead
-                                         | UnixFileMode.GroupWrite
-                                         | UnixFileMode.GroupExecute
-                                         | UnixFileMode.OtherRead
-                                         | UnixFileMode.OtherWrite
-                                         | UnixFileMode.OtherExecute);
+                    | UnixFileMode.GroupWrite
+                    | UnixFileMode.GroupExecute
+                    | UnixFileMode.OtherRead
+                    | UnixFileMode.OtherWrite
+                    | UnixFileMode.OtherExecute);
+
                 if (unsafeBits != 0)
                 {
                     return new DoctorCheck(
@@ -490,9 +587,9 @@ internal static class DoctorCommand
                 path);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or InvalidOperationException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or InvalidOperationException
+            or PlatformNotSupportedException)
         {
             return new DoctorCheck(
                 "secret-master-key",
@@ -507,6 +604,7 @@ internal static class DoctorCommand
     private static DoctorCheck CheckExecutable(string executableName, bool required)
     {
         var path = FindExecutable(executableName);
+
         return new DoctorCheck(
             $"tool.{executableName}",
             path is null ? "unavailable" : "available",
@@ -521,10 +619,10 @@ internal static class DoctorCommand
     internal static IReadOnlyList<DoctorCheck> CheckDotNetTools()
     {
         return
-        [
-            CheckExecutable("dotnet-trace", required: false),
+            [
+                CheckExecutable("dotnet-trace", required: false),
             CheckExecutable("dotnet-dsrouter", required: false)
-        ];
+            ];
     }
 
     private static DoctorCheck CheckSkiaSharp()
@@ -532,6 +630,7 @@ internal static class DoctorCommand
         try
         {
             using var data = SKData.CreateCopy([0]);
+
             return new DoctorCheck(
                 "native.skia",
                 "available",
@@ -543,6 +642,7 @@ internal static class DoctorCommand
         catch (Exception exception)
         {
             var cause = exception.GetBaseException().Message;
+
             return new DoctorCheck(
                 "native.skia",
                 "unavailable",
@@ -556,6 +656,7 @@ internal static class DoctorCommand
     internal static DoctorCheck CreateScrcpyCheck(ScrcpyToolResolution resolution)
     {
         ArgumentNullException.ThrowIfNull(resolution);
+
         return new DoctorCheck(
             "tool.scrcpy",
             resolution.IsFound ? "available" : "unavailable",
@@ -573,7 +674,12 @@ internal static class DoctorCommand
         for (var index = 0; index < checks.Count; index++)
         {
             var check = checks[index];
-            if (!check.IsSuccess || check.VersionAdvice is not null || check.Path is null) continue;
+
+            if (!check.IsSuccess || check.VersionAdvice is not null || check.Path is null)
+            {
+                continue;
+            }
+
             var dependency = check.Name switch
             {
                 "tool.node" => "node",
@@ -584,9 +690,13 @@ internal static class DoctorCommand
                 "android.emulator" => "emulator",
                 _ => null
             };
-            if (dependency is null || !File.Exists(check.Path)) continue;
-            var arguments = dependency == "adb" ? new[] { "version" }
-                : dependency == "emulator" ? ["-version"] : ["--version"];
+
+            if (dependency is null || !File.Exists(check.Path))
+            {
+                continue;
+            }
+
+            var arguments = dependency == "adb" ? new[] { "version" } : dependency == "emulator" ? ["-version"] : ["--version"];
             var probe = await DiagnosticProcess.RunAsync(check.Path, arguments, token).ConfigureAwait(false);
             checks[index] = check with
             {
@@ -602,16 +712,18 @@ internal static class DoctorCommand
             ? executableName + ".exe"
             : executableName;
         var path = Environment.GetEnvironmentVariable("PATH");
+
         if (string.IsNullOrWhiteSpace(path))
         {
             return null;
         }
 
         foreach (var directory in path.Split(
-                     Path.PathSeparator,
-                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            Path.PathSeparator,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var candidate = Path.Combine(directory.Trim('"'), effectiveName);
+
             if (File.Exists(candidate))
             {
                 return Path.GetFullPath(candidate);
@@ -628,19 +740,33 @@ internal static class DoctorCommand
             $"{GetTrafficLight(result.Signal)} Ansight doctor: {result.Signal.ToUpperInvariant()} — {GetSignalSummary(result.Signal)}",
             $"Platform: {result.OperatingSystem} ({result.Architecture})"
         };
-        if (verbose) lines.Add($"Data: {result.DataDirectory}");
+
+        if (verbose)
+        {
+            lines.Add($"Data: {result.DataDirectory}");
+        }
+
         foreach (var check in result.Checks)
         {
             var label = check.Status == "not-applicable" ? "n/a" : check.IsSuccess ? "ok" : check.IsRequired ? "error" : "warn";
             lines.Add($"{GetTrafficLight(check.Signal)} [{label}] {check.Name}"
                 + (check.VersionAdvice?.DetectedVersion is { } version ? $" {version}" : string.Empty)
                 + (verbose || !check.IsSuccess ? $": {check.Message}" : string.Empty));
+
             if (!check.IsSuccess && !string.IsNullOrWhiteSpace(check.InstallInstructions))
+            {
                 lines.Add($"  Fix: {check.InstallInstructions}");
+            }
         }
+
         lines.AddRange(result.Checks.Where(check => check.VersionAdvice?.Notice is not null)
             .Select(check => $"[notice] {check.VersionAdvice!.Notice}"));
-        if (!verbose) lines.Add("Details: ansight doctor --verbose · Structured results: --json");
+
+        if (!verbose)
+        {
+            lines.Add("Details: ansight doctor --verbose · Structured results: --json");
+        }
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -717,5 +843,4 @@ internal static class DoctorCommand
            Required failures return the capability-unavailable exit code. Optional tool failures are
            warnings so Linux headless hosts can remain healthy without Apple-only capabilities.
            """;
-
 }

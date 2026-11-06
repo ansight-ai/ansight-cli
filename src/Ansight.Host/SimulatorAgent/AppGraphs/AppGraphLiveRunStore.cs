@@ -47,27 +47,37 @@ internal sealed partial class AppGraphLiveRunStore
                 appId,
                 graphName,
                 startedUtc);
+
             if (resumeState is not null)
             {
                 run.PendingOutcome = resumeState.PendingOutcome;
+
                 foreach (var node in resumeState.Nodes)
                 {
                     run.Nodes[node.Id] = node;
                 }
+
                 foreach (var edge in resumeState.Edges)
                 {
                     run.Edges[edge.Id] = edge;
                 }
+
                 foreach (var navigationHost in resumeState.NavigationHosts)
                 {
                     run.NavigationHosts[navigationHost.Id] = navigationHost;
                 }
+
                 foreach (var tabGroup in resumeState.TabGroups.OrderBy(group => group.FirstObservedUtc))
                 {
                     if (run.TabGroups.Values.Any(group => group.ParentDestinationId == tabGroup.ParentDestinationId
-                        && group.TabDestinationIds.SequenceEqual(tabGroup.TabDestinationIds))) continue;
+                        && group.TabDestinationIds.SequenceEqual(tabGroup.TabDestinationIds)))
+                    {
+                        continue;
+                    }
+
                     run.TabGroups[tabGroup.Id] = tabGroup;
                 }
+
                 foreach (var action in resumeState.Actions)
                 {
                     var automationId = NormalizeOptional(action.AutomationId)
@@ -119,6 +129,7 @@ internal sealed partial class AppGraphLiveRunStore
                 run.Coverage = DeriveCoverage(run, SimulatorAgentAppGraphLiveCoverage.Empty);
                 run.Message = $"Resumed the incomplete frontier from run '{resumeState.RunId}'.";
             }
+
             runs[runId] = run;
             TrimRetainedRuns();
             database.Save(CreateSnapshot(run));
@@ -131,7 +142,7 @@ internal sealed partial class AppGraphLiveRunStore
         {
             var liveSnapshots = runs.Values
                 .Where(run => string.IsNullOrWhiteSpace(sessionId)
-                              || string.Equals(run.SessionId, sessionId.Trim(), StringComparison.Ordinal))
+                    || string.Equals(run.SessionId, sessionId.Trim(), StringComparison.Ordinal))
                 .Select(CreateSnapshot)
                 .ToArray();
 
@@ -142,8 +153,7 @@ internal sealed partial class AppGraphLiveRunStore
                         Status = "partial",
                         ActiveToolName = null,
                         Message = "Exploration was interrupted. Retained coverage is incomplete and can be resumed."
-                    }
-                    : run);
+                    } : run);
 
             return liveSnapshots.Concat(retainedSnapshots)
                 .DistinctBy(static run => run.RunId, StringComparer.Ordinal)
@@ -156,6 +166,7 @@ internal sealed partial class AppGraphLiveRunStore
     public SimulatorAgentAppGraphLiveRun? Get(string runId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
         lock (gate)
         {
             return runs.TryGetValue(runId.Trim(), out var run)
@@ -167,6 +178,7 @@ internal sealed partial class AppGraphLiveRunStore
     public IReadOnlyList<string> GetStructureGaps(string runId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
         lock (gate)
         {
             return runs.TryGetValue(runId.Trim(), out var run)
@@ -233,10 +245,12 @@ internal sealed partial class AppGraphLiveRunStore
                 Math.Max(0, turn),
                 NormalizeOptional(toolName),
                 occurredUtc));
+
             if (run.Trace.Count > MaximumRetainedTraceEntries)
             {
                 run.Trace.RemoveRange(0, run.Trace.Count - MaximumRetainedTraceEntries);
             }
+
             run.UpdatedUtc = occurredUtc;
         }
     }
@@ -261,6 +275,7 @@ internal sealed partial class AppGraphLiveRunStore
         int turn)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         lock (gate)
         {
             if (!runs.TryGetValue(runId, out var run))
@@ -286,6 +301,7 @@ internal sealed partial class AppGraphLiveRunStore
             run = run.CopyForReport();
 
             var aliasError = ApplyDestinationAliases(run, arguments);
+
             if (aliasError is not null)
             {
                 return AppGraphLiveUpdateResult.Failure(aliasError);
@@ -293,6 +309,7 @@ internal sealed partial class AppGraphLiveRunStore
 
             var now = DateTimeOffset.UtcNow;
             var destinationCount = 0;
+
             foreach (var value in destinationValues)
             {
                 if (value is JsonObject candidate && ValidateNewDestinationIdentity(candidate, run) is { } identityError)
@@ -302,6 +319,7 @@ internal sealed partial class AppGraphLiveRunStore
 
                 SimulatorAgentAppGraphLiveNode? node = null;
                 string? error = null;
+
                 if (value is not JsonObject destination
                     || !TryReadDestination(destination, run.Nodes, now, out node, out error))
                 {
@@ -314,10 +332,12 @@ internal sealed partial class AppGraphLiveRunStore
             }
 
             var navigationHostCount = 0;
+
             foreach (var value in navigationHostValues)
             {
                 SimulatorAgentAppGraphLiveNavigationHost? navigationHost = null;
                 string? error = null;
+
                 if (value is not JsonObject navigationHostValue
                     || !TryReadNavigationHost(
                         navigationHostValue,
@@ -335,10 +355,12 @@ internal sealed partial class AppGraphLiveRunStore
             }
 
             var tabGroupCount = 0;
+
             foreach (var value in tabGroupValues)
             {
                 SimulatorAgentAppGraphLiveTabGroup? tabGroup = null;
                 string? error = null;
+
                 if (value is not JsonObject tabGroupValue
                     || !TryReadTabGroup(
                         tabGroupValue,
@@ -354,14 +376,17 @@ internal sealed partial class AppGraphLiveRunStore
                 run.TabGroups[tabGroup!.Id] = tabGroup;
                 tabGroupCount++;
             }
+
             ApplyStructureParents(run, now);
 
             var actionCount = 0;
             var reconciledActionIds = new Dictionary<string, string>(StringComparer.Ordinal);
+
             foreach (var value in actionValues)
             {
                 SimulatorAgentAppGraphLiveAction? action = null;
                 string? error = null;
+
                 if (value is not JsonObject actionValue
                     || !TryReadAction(actionValue, run.Actions, now, out action, out error))
                 {
@@ -370,6 +395,7 @@ internal sealed partial class AppGraphLiveRunStore
                 }
 
                 var reportedId = ReadString(actionValue, "id")!;
+
                 if (!string.Equals(reportedId, action!.Id, StringComparison.Ordinal))
                 {
                     reconciledActionIds[reportedId] = action.Id;
@@ -381,10 +407,12 @@ internal sealed partial class AppGraphLiveRunStore
 
             var transitionCount = 0;
             var reconciledTransitionIds = new Dictionary<string, string>(StringComparer.Ordinal);
+
             foreach (var value in transitionValues)
             {
                 SimulatorAgentAppGraphLiveEdge? edge = null;
                 string? error = null;
+
                 if (value is not JsonObject transition
                     || !TryReadTransition(transition, run.Edges, run.Nodes, run.Actions.Values, now, out edge, out error))
                 {
@@ -393,6 +421,7 @@ internal sealed partial class AppGraphLiveRunStore
                 }
 
                 var reportedId = ReadString(transition, "id")!;
+
                 if (!string.Equals(reportedId, edge!.Id, StringComparison.Ordinal))
                 {
                     reconciledTransitionIds[reportedId] = edge.Id;
@@ -404,22 +433,30 @@ internal sealed partial class AppGraphLiveRunStore
             }
 
             var correctionError = ApplyTransitionCorrections(run, arguments, now);
+
             if (correctionError is not null)
             {
                 return AppGraphLiveUpdateResult.Failure(correctionError);
             }
 
             run.CurrentDestinationId = NormalizeOptional(ReadString(arguments, "currentDestinationId"));
+
             var referenceError = ValidateReportReferences(run, arguments);
+
             if (referenceError is not null)
+            {
                 return AppGraphLiveUpdateResult.Failure(referenceError);
+            }
+
             var outcomeError = ResolvePendingOutcome(run, arguments, now);
+
             if (outcomeError is not null)
             {
                 return AppGraphLiveUpdateResult.Failure(outcomeError);
             }
+
             run.Message = NormalizeOptional(ReadString(arguments, "message"))
-                          ?? $"Observed {run.Nodes.Count} destinations and {run.Edges.Count} transitions.";
+                ?? $"Observed {run.Nodes.Count} destinations and {run.Edges.Count} transitions.";
             run.Coverage = DeriveCoverage(
                 run,
                 MergeCoverage(run.Coverage, coverageValue));
@@ -427,9 +464,11 @@ internal sealed partial class AppGraphLiveRunStore
             run.Turn = Math.Max(run.Turn, turn);
             run.ActiveToolName = null;
             run.UpdatedUtc = now;
+
             var snapshot = CreateSnapshot(run);
             database.Save(snapshot);
             runs[runId] = run;
+
             return AppGraphLiveUpdateResult.Success(
                 destinationCount,
                 transitionCount,
@@ -460,6 +499,7 @@ internal sealed partial class AppGraphLiveRunStore
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
         ArgumentNullException.ThrowIfNull(selector);
         selector = AppGraphActionIdentity.NormalizeSelector(selector);
+
         lock (gate)
         {
             if (!runs.TryGetValue(runId, out var run) || run.CompletedUtc.HasValue)
@@ -480,9 +520,9 @@ internal sealed partial class AppGraphLiveRunStore
             var status = existing is not null && existing.Status is ("unsafe" or "blocked" or "unavailable")
                 ? existing.Status
                 : navigationKind.Length > 0 ? "navigation"
-                : existing is not null && terminalActionStatuses.Contains(existing.Status)
-                ? existing.Status
-                : succeeded ? "attempted" : existing?.Status ?? "queued";
+                    : existing is not null && terminalActionStatuses.Contains(existing.Status)
+                        ? existing.Status
+                        : succeeded ? "attempted" : existing?.Status ?? "queued";
             run.Actions[id] = new SimulatorAgentAppGraphLiveAction(
                 id,
                 destinationId,
@@ -503,6 +543,7 @@ internal sealed partial class AppGraphLiveRunStore
             };
             run.Coverage = DeriveCoverage(run, run.Coverage);
             run.UpdatedUtc = now;
+
             if (persist)
             {
                 database.Save(CreateSnapshot(run));
@@ -524,6 +565,7 @@ internal sealed partial class AppGraphLiveRunStore
             if (!runs.TryGetValue(runId, out var run))
             {
                 message = string.Empty;
+
                 return false;
             }
 
@@ -533,22 +575,28 @@ internal sealed partial class AppGraphLiveRunStore
                 toolName,
                 automationId,
                 selector);
+
             if (action is null)
             {
                 message = string.Empty;
+
                 return false;
             }
 
             var guidance = BuildFrontierGuidance(run);
+
             // Completion of a return path must never remove the ability to traverse it again.
             // Explicit unsafe/blocked/unavailable classifications still apply.
             if (AppGraphActionIdentity.NavigationKind(toolName, automationId, selector ?? action.Selector, action.NavigationKind).Length > 0
                 && action.Status is not ("unsafe" or "blocked" or "unavailable"))
             {
                 message = string.Empty;
+
                 return false;
             }
+
             // An explored edge is also a route to other work. Its recorded transition
+
             // permits traversal without resetting exploration status or retrying a no-op.
             var hasVerifiedRoute = action.Status == "explored"
                 && toolName == "ansight_tap_ui"
@@ -562,13 +610,17 @@ internal sealed partial class AppGraphLiveRunStore
                         ? edge.AutomationId == action.AutomationId
                         : AppGraphActionIdentity.HasObservedSelector(edge.Selector)
                             && JsonNode.DeepEquals(action.Selector, edge.Selector);
+
                     return sameEndpoints && sameAction;
                 });
+
             if (hasVerifiedRoute)
             {
                 message = string.Empty;
+
                 return false;
             }
+
             var recheckBaseline = Math.Clamp(action.RecheckAttemptBaseline, 0, action.AttemptCount);
             var attemptsSinceRecheck = action.AttemptCount - recheckBaseline;
             // Sorting and filtering can change visible state without changing the
@@ -579,9 +631,11 @@ internal sealed partial class AppGraphLiveRunStore
                 && action.ResultDestinationId == destinationId
                 && action.LastOutcome.StartsWith("verified:", StringComparison.Ordinal)
                 && attemptsSinceRecheck < maximumAttempts;
+
             if (canRestoreVerifiedState)
             {
                 message = string.Empty;
+
                 return false;
             }
 
@@ -596,6 +650,7 @@ internal sealed partial class AppGraphLiveRunStore
                         ["STATUS"] = action.Status,
                         ["FRONTIER_GUIDANCE"] = guidance
                     });
+
                 return true;
             }
 
@@ -605,12 +660,15 @@ internal sealed partial class AppGraphLiveRunStore
                     var untouchedHere = candidate.DestinationId == destinationId
                         && candidate.AttemptCount == 0
                         && candidate.Status == "queued";
+
                     return untouchedHere;
                 });
+
             if (attemptsSinceRecheck > 0 && untriedHere is not null)
             {
                 message = $"Resolve the retained outcome through observation before repeating '{action.Id}'. "
                     + $"Untouched action '{untriedHere.Id}' remains on this destination. Navigation essentials remain available.";
+
                 return true;
             }
 
@@ -625,10 +683,12 @@ internal sealed partial class AppGraphLiveRunStore
                         ["ATTEMPT_COUNT"] = attemptsSinceRecheck.ToString(),
                         ["FRONTIER_GUIDANCE"] = guidance
                     });
+
                 return true;
             }
 
             message = string.Empty;
+
             return false;
         }
     }
@@ -641,6 +701,7 @@ internal sealed partial class AppGraphLiveRunStore
         }
 
         JsonObject? root;
+
         try
         {
             root = JsonNode.Parse(summary) as JsonObject;
@@ -737,21 +798,26 @@ internal sealed partial class AppGraphLiveRunStore
     {
         node = null;
         error = null;
+
         var id = NormalizeOptional(ReadString(value, "id"));
         var kind = NormalizeOptional(ReadString(value, "kind"))?.ToLowerInvariant();
         var name = NormalizeOptional(ReadString(value, "name"));
         var purpose = NormalizeOptional(ReadString(value, "purpose"));
+
         if (id is null || name is null || purpose is null || kind is null || !supportedKinds.Contains(kind))
         {
             error = "Each destination requires id, supported kind, name, and purpose.";
+
             return false;
         }
 
         var scrollStatus = NormalizeOptional(ReadString(value, "scrollStatus"))?.ToLowerInvariant()
-                           ?? "unknown";
+            ?? "unknown";
+
         if (!supportedScrollStatuses.Contains(scrollStatus))
         {
             error = $"Destination '{id}' has unsupported scroll status '{scrollStatus}'.";
+
             return false;
         }
 
@@ -768,6 +834,7 @@ internal sealed partial class AppGraphLiveRunStore
             ClampConfidence(ReadDecimal(value, "confidence", previous?.Confidence ?? 0.8m)),
             previous?.FirstObservedUtc ?? now,
             now);
+
         return true;
     }
 
@@ -782,6 +849,7 @@ internal sealed partial class AppGraphLiveRunStore
     {
         edge = null;
         error = null;
+
         var id = NormalizeOptional(ReadString(value, "id"));
         var from = NormalizeOptional(ReadString(value, "from"));
         var to = NormalizeOptional(ReadString(value, "to"));
@@ -790,13 +858,16 @@ internal sealed partial class AppGraphLiveRunStore
             || from is null
             || to is null
             || semanticMeaning is null;
+
         if (missingIdentity)
         {
             error = "Each transition requires id, from, to, and semanticMeaning.";
+
             return false;
         }
 
         existing.TryGetValue(id!, out var reportedPrevious);
+
         var reportedSelector = reportedPrevious is not null && reportedPrevious.From == from
             ? reportedPrevious.Selector
             : null;
@@ -805,6 +876,7 @@ internal sealed partial class AppGraphLiveRunStore
         var automationId = NormalizeOptional(ReadString(value, "automationId"))
             ?? NormalizeOptional(ReadString(selector, "automationId"))
             ?? string.Empty;
+
         if (automationId.Length > 0)
         {
             selector["automationId"] = automationId;
@@ -830,9 +902,11 @@ internal sealed partial class AppGraphLiveRunStore
                 ?? previous?.NavigationKind
                 ?? (hasSameReportedIdentity ? reportedPrevious?.NavigationKind : null));
         var isReturn = navigationKind is "back" or "pop" or "dismiss";
+
         if (!isReturn && previous is null)
         {
             var owningTransition = matches.FirstOrDefault(candidate => IsDestinationWithin(nodes, to!, candidate.To));
+
             if (owningTransition is not null)
             {
                 // Entering a known screen can restore one of its internal states.
@@ -844,24 +918,29 @@ internal sealed partial class AppGraphLiveRunStore
         }
 
         var conflictingDestination = matches.FirstOrDefault(candidate => candidate.To != to);
+
         if (!isReturn && conflictingDestination is not null)
         {
             error = $"Action '{automationId}' from '{from}' already leads to '{conflictingDestination.To}'. "
                 + "A different destination requires a distinct observed state or return-navigation context.";
+
             return false;
         }
 
         var reportedReturnDestination = ReadString(value["navigationContext"] as JsonObject, "returnDestinationId");
         var hasInvalidReturnContext = reportedReturnDestination is not null
             && (!isReturn || reportedReturnDestination != to);
+
         if (hasInvalidReturnContext)
         {
             error = "Return-navigation context must identify this return transition's destination.";
+
             return false;
         }
 
         var needsDistinctTransitionId = reportedPrevious is not null
             && (!hasSameReportedIdentity || reportedPrevious.To != to);
+
         if (previous is not null)
         {
             id = previous.Id;
@@ -871,6 +950,7 @@ internal sealed partial class AppGraphLiveRunStore
             if (hasSameReportedIdentity && !isReturn)
             {
                 error = $"Transition '{id}' cannot replace its previously observed destination.";
+
                 return false;
             }
 
@@ -893,6 +973,7 @@ internal sealed partial class AppGraphLiveRunStore
             selector,
             navigationKind,
             isReturn ? new SimulatorAgentAppGraphNavigationContext(to!) : null);
+
         return true;
     }
 
@@ -923,6 +1004,7 @@ internal sealed partial class AppGraphLiveRunStore
             ["selector"] = selector.DeepClone()
         };
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(identity.ToJsonString()));
+
         return $"edge_{Convert.ToHexString(hash)[..24].ToLowerInvariant()}";
     }
 
@@ -935,6 +1017,7 @@ internal sealed partial class AppGraphLiveRunStore
     {
         navigationHost = null;
         error = null;
+
         var id = NormalizeOptional(ReadString(value, "id"));
         var kind = NormalizeOptional(ReadString(value, "kind"))?.ToLowerInvariant();
         var name = NormalizeOptional(ReadString(value, "name"));
@@ -942,6 +1025,7 @@ internal sealed partial class AppGraphLiveRunStore
         var activeChildDestinationId = NormalizeOptional(
             ReadString(value, "activeChildDestinationId"));
         var childDestinationIds = ReadStringArray(value, "childDestinationIds");
+
         if (id is null
             || kind is null
             || !supportedNavigationHostKinds.Contains(kind)
@@ -951,34 +1035,42 @@ internal sealed partial class AppGraphLiveRunStore
             || childDestinationIds.Count == 0)
         {
             error = "Each navigation host requires id, supported kind, name, destinationId, "
-                    + "activeChildDestinationId, and at least one childDestinationId.";
+                + "activeChildDestinationId, and at least one childDestinationId.";
+
             return false;
         }
 
         existing.TryGetValue(id, out var previous);
+
         AppGraphNavigationTechnologyDescriptor? technology = previous?.Technology;
+
         if (value["technology"] is JsonObject technologyValue)
         {
             if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
-                    technologyValue,
-                    AppGraphNavigationTechnologyCatalog.NavigationHostScope,
-                    out technology,
-                    out var normalizedRole,
-                    out var technologyError))
+                technologyValue,
+                AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                out technology,
+                out var normalizedRole,
+                out var technologyError))
             {
                 error = technologyError;
+
                 return false;
             }
+
             if (!string.Equals(kind, normalizedRole, StringComparison.Ordinal))
             {
                 error = $"Navigation host '{id}' kind must be '{normalizedRole}' for technology '{technology!.Framework}/{technology.Kind}'.";
+
                 return false;
             }
         }
+
         if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
-                technology, childDestinationIds, activeChildDestinationId, out var orderError))
+            technology, childDestinationIds, activeChildDestinationId, out var orderError))
         {
             error = orderError;
+
             return false;
         }
 
@@ -997,6 +1089,7 @@ internal sealed partial class AppGraphLiveRunStore
             previous?.FirstObservedUtc ?? now,
             now,
             technology);
+
         return true;
     }
 
@@ -1009,30 +1102,38 @@ internal sealed partial class AppGraphLiveRunStore
     {
         tabGroup = null;
         error = null;
+
         var id = NormalizeOptional(ReadString(value, "id"));
         var parentDestinationId = NormalizeOptional(ReadString(value, "parentDestinationId"));
         var selectedDestinationId = NormalizeOptional(ReadString(value, "selectedDestinationId"));
         var tabDestinationIds = ReadStringArray(value, "tabDestinationIds");
+
         if (id is null
             || parentDestinationId is null
             || selectedDestinationId is null
             || tabDestinationIds.Count == 0)
         {
             error = "Each tab group requires id, parentDestinationId, selectedDestinationId, "
-                    + "and at least one tabDestinationId.";
+                + "and at least one tabDestinationId.";
+
             return false;
         }
 
         existing.TryGetValue(id, out var previous);
+
         var duplicate = existing.Values.FirstOrDefault(group => group.Id != id
             && group.ParentDestinationId == parentDestinationId
             && group.TabDestinationIds.SequenceEqual(tabDestinationIds));
+
         if (duplicate is not null)
         {
             error = $"This tab group is already tracked as '{duplicate.Id}'. Update that canonical group.";
+
             return false;
         }
+
         AppGraphNavigationTechnologyDescriptor? technology = previous?.Technology;
+
         if (value["technology"] is JsonObject technologyValue
             && !AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
                 technologyValue,
@@ -1043,6 +1144,7 @@ internal sealed partial class AppGraphLiveRunStore
         {
             return false;
         }
+
         tabGroup = new SimulatorAgentAppGraphLiveTabGroup(
             id,
             parentDestinationId,
@@ -1052,6 +1154,7 @@ internal sealed partial class AppGraphLiveRunStore
             previous?.FirstObservedUtc ?? now,
             now,
             technology);
+
         return true;
     }
 
@@ -1101,6 +1204,7 @@ internal sealed partial class AppGraphLiveRunStore
     {
         action = null;
         error = null;
+
         var id = NormalizeOptional(ReadString(value, "id"));
         var destinationId = NormalizeOptional(ReadString(value, "destinationId"));
         var toolName = NormalizeOptional(ReadString(value, "toolName"));
@@ -1113,22 +1217,27 @@ internal sealed partial class AppGraphLiveRunStore
             || semanticMeaning is null
             || status is null
             || !supportedActionStatuses.Contains(status);
+
         if (hasInvalidIdentityOrStatus)
         {
             error = "Each action requires id, destinationId, toolName, semanticMeaning, and a supported status.";
+
             return false;
         }
 
         existing.TryGetValue(id!, out var previous);
+
         var canReuseReportedSelector = previous is not null
             && previous.DestinationId == destinationId
             && previous.ToolName == toolName;
         var selector = AppGraphActionIdentity.NormalizeSelector(
             value["selector"] as JsonObject ?? (canReuseReportedSelector ? previous?.Selector : null));
+
         if (automationId.Length == 0)
         {
             automationId = NormalizeOptional(ReadString(selector, "automationId")) ?? string.Empty;
         }
+
         if (automationId.Length > 0)
         {
             selector["automationId"] = automationId;
@@ -1141,6 +1250,7 @@ internal sealed partial class AppGraphLiveRunStore
             && (automationId.Length > 0
                 ? previous.AutomationId == automationId
                 : JsonNode.DeepEquals(AppGraphActionIdentity.NormalizeSelector(previous.Selector), selector));
+
         if (previousMatchesIdentity && matchingAction?.Status == "unavailable")
         {
             matchingAction = previous;
@@ -1148,6 +1258,7 @@ internal sealed partial class AppGraphLiveRunStore
 
         var isExplicitRetirement = status == "unavailable"
             && !string.IsNullOrWhiteSpace(ReadString(value, "lastOutcome"));
+
         if (matchingAction is not null && !isExplicitRetirement)
         {
             id = matchingAction.Id;
@@ -1161,11 +1272,14 @@ internal sealed partial class AppGraphLiveRunStore
 
         var navigationKind = AppGraphActionIdentity.NavigationKind(toolName!, automationId, selector,
             NormalizeOptional(ReadString(value, "navigationKind")) ?? previous?.NavigationKind);
+
         if (status == "navigation" && navigationKind.Length == 0)
         {
             error = $"Action '{id}' needs a back, pop, dismiss, tab, or menu navigationKind to use navigation status.";
+
             return false;
         }
+
         if (navigationKind.Length > 0 && status is not ("unsafe" or "blocked" or "unavailable"))
         {
             status = "navigation";
@@ -1177,6 +1291,7 @@ internal sealed partial class AppGraphLiveRunStore
             && terminalActionStatuses.Contains(previous.Status)
             && !explicitlyRechecksAction
             && status is "queued" or "attempted" or "needs_verification" or "deferred";
+
         if (isStaleDiscoveryStatus)
         {
             status = previous!.Status;
@@ -1191,9 +1306,11 @@ internal sealed partial class AppGraphLiveRunStore
             && !restoresNavigation
             && !explicitlyRechecksAction
             && !string.Equals(previous.Status, status, StringComparison.Ordinal);
+
         if (changesTerminalStatus)
         {
             error = $"Terminal action '{id}' cannot move from '{previous!.Status}' back to '{status}'.";
+
             return false;
         }
 
@@ -1218,6 +1335,7 @@ internal sealed partial class AppGraphLiveRunStore
             LastRecheckReason = explicitlyRechecksAction
                 ? recheckReason! : previous?.LastRecheckReason ?? string.Empty
         };
+
         return true;
     }
 
@@ -1230,6 +1348,7 @@ internal sealed partial class AppGraphLiveRunStore
             && status is "queued" or "navigation"
             && reason is not null
             && !string.Equals(reason, previous?.LastRecheckReason, StringComparison.OrdinalIgnoreCase);
+
         return explicitlyRechecks;
     }
 
@@ -1254,11 +1373,12 @@ internal sealed partial class AppGraphLiveRunStore
     {
         var safeActionsObserved = legacyCoverage.SafeActionsObserved;
         var actionsExplored = legacyCoverage.ActionsExplored;
+
         if (run.Actions.Count > 0)
         {
             safeActionsObserved = run.Actions.Values.Count(static action =>
-                !action.IsNavigationEssential &&
-                action.Status is not ("unsafe" or "unavailable"));
+                        !action.IsNavigationEssential &&
+                        action.Status is not ("unsafe" or "unavailable"));
             actionsExplored = run.Actions.Values.Count(static action =>
                 !action.IsNavigationEssential && action.Status == "explored");
         }
@@ -1287,10 +1407,11 @@ internal sealed partial class AppGraphLiveRunStore
         DateTimeOffset now)
     {
         var action = run.Actions.Values.FirstOrDefault(candidate =>
-            string.Equals(candidate.DestinationId, edge.From, StringComparison.Ordinal)
-            && (edge.AutomationId.Length > 0
-                ? string.Equals(candidate.AutomationId, edge.AutomationId, StringComparison.Ordinal)
-                : AppGraphActionIdentity.HasObservedSelector(edge.Selector) && JsonNode.DeepEquals(candidate.Selector, edge.Selector)));
+                string.Equals(candidate.DestinationId, edge.From, StringComparison.Ordinal)
+                    && (edge.AutomationId.Length > 0
+                        ? string.Equals(candidate.AutomationId, edge.AutomationId, StringComparison.Ordinal)
+                        : AppGraphActionIdentity.HasObservedSelector(edge.Selector) && JsonNode.DeepEquals(candidate.Selector, edge.Selector)));
+
         if (action is null)
         {
             return;
@@ -1313,13 +1434,14 @@ internal sealed partial class AppGraphLiveRunStore
         JsonObject? selector = null)
     {
         var normalizedAutomationId = NormalizeOptional(automationId) ?? string.Empty;
+
         return actions.OrderBy(action => action.Status == "unavailable").FirstOrDefault(action =>
             string.Equals(action.DestinationId, destinationId, StringComparison.Ordinal)
-            && string.Equals(action.ToolName, toolName, StringComparison.Ordinal)
-            && (normalizedAutomationId.Length > 0
-                ? string.Equals(action.AutomationId, normalizedAutomationId, StringComparison.Ordinal)
-                : selector is not null && (AppGraphActionIdentity.HasObservedSelector(selector) || toolName == "ansight_back_ui")
-                  && JsonNode.DeepEquals(action.Selector, AppGraphActionIdentity.NormalizeSelector(selector))));
+                && string.Equals(action.ToolName, toolName, StringComparison.Ordinal)
+                && (normalizedAutomationId.Length > 0
+                    ? string.Equals(action.AutomationId, normalizedAutomationId, StringComparison.Ordinal)
+                    : selector is not null && (AppGraphActionIdentity.HasObservedSelector(selector) || toolName == "ansight_back_ui")
+                        && JsonNode.DeepEquals(action.Selector, AppGraphActionIdentity.NormalizeSelector(selector))));
     }
 
     private static IReadOnlyList<string> BuildStructureGaps(MutableRun run)
@@ -1329,14 +1451,22 @@ internal sealed partial class AppGraphLiveRunStore
         foreach (var action in run.Actions.Values)
         {
             if (!run.Nodes.ContainsKey(action.DestinationId))
+            {
                 gaps.Add($"Action '{action.Id}' is missing destination '{action.DestinationId}'.");
+            }
+
             if (action.ResultDestinationId is { } result && !run.Nodes.ContainsKey(result))
+            {
                 gaps.Add($"Action '{action.Id}' is missing result destination '{result}'.");
+            }
         }
+
         foreach (var edge in run.Edges.Values)
         {
             if (!run.Nodes.ContainsKey(edge.From) || !run.Nodes.ContainsKey(edge.To))
+            {
                 gaps.Add($"Transition '{edge.Id}' references an unknown destination.");
+            }
         }
 
         foreach (var navigationHost in run.NavigationHosts.Values)
@@ -1345,19 +1475,22 @@ internal sealed partial class AppGraphLiveRunStore
             {
                 gaps.Add($"Navigation host '{navigationHost.Id}' is missing destination '{navigationHost.DestinationId}'.");
             }
+
             if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
-                    navigationHost.Technology, navigationHost.ChildDestinationIds,
-                    navigationHost.ActiveChildDestinationId, out var orderError))
+                navigationHost.Technology, navigationHost.ChildDestinationIds,
+                navigationHost.ActiveChildDestinationId, out var orderError))
             {
                 gaps.Add(orderError);
             }
+
             if (navigationHost.ChildDestinationIds.Count == 0)
             {
                 gaps.Add($"Navigation host '{navigationHost.Id}' has no observed children; inventory its direct destinations.");
             }
+
             if (!navigationHost.ChildDestinationIds.Contains(
-                    navigationHost.ActiveChildDestinationId,
-                    StringComparer.Ordinal))
+                navigationHost.ActiveChildDestinationId,
+                StringComparer.Ordinal))
             {
                 gaps.Add($"Navigation host '{navigationHost.Id}' does not include active child '{navigationHost.ActiveChildDestinationId}'.");
             }
@@ -1377,13 +1510,15 @@ internal sealed partial class AppGraphLiveRunStore
             {
                 gaps.Add($"Tab group '{tabGroup.Id}' is missing parent destination '{tabGroup.ParentDestinationId}'.");
             }
+
             if (tabGroup.TabDestinationIds.Count == 0)
             {
                 gaps.Add($"Tab group '{tabGroup.Id}' has no observed tabs; record the selected tab and every visible sibling before navigating.");
             }
+
             if (!tabGroup.TabDestinationIds.Contains(
-                    tabGroup.SelectedDestinationId,
-                    StringComparer.Ordinal))
+                tabGroup.SelectedDestinationId,
+                StringComparer.Ordinal))
             {
                 gaps.Add($"Tab group '{tabGroup.Id}' does not include selected tab '{tabGroup.SelectedDestinationId}'.");
             }
@@ -1400,20 +1535,23 @@ internal sealed partial class AppGraphLiveRunStore
         gaps.AddRange(AppGraphContainment.FindErrors(
             run.NavigationHosts.Values.SelectMany(host => host.ChildDestinationIds.Select(child =>
                 new AppGraphContainmentRelation(host.DestinationId, child)))
-            .Concat(run.TabGroups.Values.SelectMany(group => group.TabDestinationIds.Select(child =>
+                .Concat(run.TabGroups.Values.SelectMany(group => group.TabDestinationIds.Select(child =>
                 new AppGraphContainmentRelation(group.ParentDestinationId, child))))));
+
         return gaps.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     private static string BuildFrontierGuidance(MutableRun run)
     {
         var pending = AppGraphFrontier.Pending(run.Actions.Values, run.Nodes.Values, run.CurrentDestinationId);
+
         if (pending.Count == 0)
         {
             return ReadPrompt("action-frontier-complete");
         }
 
         var next = pending[0];
+
         return RenderPrompt(
             "action-frontier-next",
             new Dictionary<string, string>(StringComparer.Ordinal)
@@ -1446,6 +1584,7 @@ internal sealed partial class AppGraphLiveRunStore
         var source = $"{destinationId}\n{toolName}\n{selector.ToJsonString()}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))
             .ToLowerInvariant();
+
         return $"action_{hash[..16]}";
     }
 
@@ -1454,6 +1593,7 @@ internal sealed partial class AppGraphLiveRunStore
         var usedIds = new HashSet<string>(existingIds, StringComparer.Ordinal);
         var id = proposedId;
         var suffix = 2;
+
         while (usedIds.Contains(id))
         {
             id = $"{proposedId}_{suffix}";
@@ -1483,7 +1623,10 @@ internal sealed partial class AppGraphLiveRunStore
             run.StartedUtc,
             run.UpdatedUtc,
             run.CompletedUtc,
-            run.Coverage with { Gaps = run.Coverage.Gaps.ToArray() },
+            run.Coverage with
+            {
+                Gaps = run.Coverage.Gaps.ToArray()
+            },
             run.Nodes.Values.OrderBy(static node => node.FirstObservedUtc).ToArray(),
             run.Edges.Values.OrderBy(static edge => edge.FirstObservedUtc).ToArray(),
             run.NavigationHosts.Values
@@ -1507,10 +1650,10 @@ internal sealed partial class AppGraphLiveRunStore
     private void TrimRetainedRuns()
     {
         foreach (var runId in runs.Values
-                     .OrderByDescending(static run => run.UpdatedUtc)
-                     .Skip(MaximumRetainedRuns)
-                     .Select(static run => run.RunId)
-                     .ToArray())
+            .OrderByDescending(static run => run.UpdatedUtc)
+            .Skip(MaximumRetainedRuns)
+            .Select(static run => run.RunId)
+            .ToArray())
         {
             runs.Remove(runId);
         }
@@ -1518,7 +1661,7 @@ internal sealed partial class AppGraphLiveRunStore
 
     private static string? ReadString(JsonObject? value, string propertyName)
         => value?[propertyName] is JsonValue stringValue
-           && stringValue.TryGetValue<string>(out var text)
+            && stringValue.TryGetValue<string>(out var text)
             ? text
             : null;
 
@@ -1540,15 +1683,27 @@ internal sealed partial class AppGraphLiveRunStore
             return fallback;
         }
 
-        if (number.TryGetValue<decimal>(out var decimalValue)) return decimalValue;
-        if (number.TryGetValue<double>(out var doubleValue)) return (decimal)doubleValue;
-        if (number.TryGetValue<int>(out var intValue)) return intValue;
+        if (number.TryGetValue<decimal>(out var decimalValue))
+        {
+            return decimalValue;
+        }
+
+        if (number.TryGetValue<double>(out var doubleValue))
+        {
+            return (decimal)doubleValue;
+        }
+
+        if (number.TryGetValue<int>(out var intValue))
+        {
+            return intValue;
+        }
+
         return fallback;
     }
 
     private static int ReadNonNegativeInt(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue number
-           && number.TryGetValue<int>(out var result)
+            && number.TryGetValue<int>(out var result)
             ? Math.Max(0, result)
             : 0;
 
@@ -1569,19 +1724,33 @@ internal sealed partial class AppGraphLiveRunStore
             ["navigationHosts"] = ["destinationId", "activeChildDestinationId", "childDestinationIds"],
             ["tabGroups"] = ["parentDestinationId", "selectedDestinationId", "tabDestinationIds"]
         };
+
         foreach (var collection in fields)
-        foreach (var record in (report[collection.Key] as JsonArray ?? []).OfType<JsonObject>())
-        foreach (var field in collection.Value)
         {
-            var references = record[field] is JsonArray ? ReadStringArray(record, field)
-                : new[] { ReadString(record, field) ?? string.Empty };
-            foreach (var reference in references.Where(value => !string.IsNullOrWhiteSpace(value)))
-                if (!run.Nodes.ContainsKey(reference))
-                    return $"{collection.Key} record '{ReadString(record, "id")}' references unknown destination '{reference}' in {field}. "
-                           + "Reuse a retained destination ID or include its observed destination in this report. No changes were applied.";
+            foreach (var record in (report[collection.Key] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                foreach (var field in collection.Value)
+                {
+                    var references = record[field] is JsonArray ? ReadStringArray(record, field)
+                        : new[] { ReadString(record, field) ?? string.Empty };
+
+                    foreach (var reference in references.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    {
+                        if (!run.Nodes.ContainsKey(reference))
+                        {
+                            return $"{collection.Key} record '{ReadString(record, "id")}' references unknown destination '{reference}' in {field}. "
+                                + "Reuse a retained destination ID or include its observed destination in this report. No changes were applied.";
+                        }
+                    }
+                }
+            }
         }
+
         if (run.CurrentDestinationId is { } current && !run.Nodes.ContainsKey(current))
+        {
             return $"currentDestinationId '{current}' is unknown. Report the observed destination first. No changes were applied.";
+        }
+
         return null;
     }
 
@@ -1603,29 +1772,19 @@ internal sealed partial class AppGraphLiveRunStore
         }
 
         public string RunId { get; }
-
         public string SessionId { get; set; }
-
         public string? AppId { get; }
-
         public string GraphName { get; }
-
         public string Status { get; set; } = "starting";
 
         public string Message { get; set; } = "Preparing exhaustive App Graph exploration.";
 
         public string? CurrentDestinationId { get; set; }
-
         public string? ActiveToolName { get; set; }
-
         public int Turn { get; set; }
-
         public DateTimeOffset StartedUtc { get; }
-
         public DateTimeOffset UpdatedUtc { get; set; }
-
         public DateTimeOffset? CompletedUtc { get; set; }
-
         public SimulatorAgentAppGraphLiveCoverage Coverage { get; set; } = SimulatorAgentAppGraphLiveCoverage.Empty;
 
         public Dictionary<string, SimulatorAgentAppGraphLiveNode> Nodes { get; } = new(StringComparer.Ordinal);
@@ -1639,26 +1798,52 @@ internal sealed partial class AppGraphLiveRunStore
         public Dictionary<string, SimulatorAgentAppGraphLiveAction> Actions { get; } = new(StringComparer.Ordinal);
 
         public SimulatorAgentAppGraphPendingOutcome? PendingOutcome { get; set; }
-
         public long TraceSequence { get; set; }
-
         public List<SimulatorAgentAppGraphLiveTraceEntry> Trace { get; } = [];
 
         public MutableRun CopyForReport()
         {
             var copy = new MutableRun(RunId, SessionId, AppId, GraphName, StartedUtc)
             {
-                Status = Status, Message = Message, CurrentDestinationId = CurrentDestinationId,
-                ActiveToolName = ActiveToolName, Turn = Turn, UpdatedUtc = UpdatedUtc,
-                CompletedUtc = CompletedUtc, Coverage = Coverage, TraceSequence = TraceSequence,
+                Status = Status,
+                Message = Message,
+                CurrentDestinationId = CurrentDestinationId,
+                ActiveToolName = ActiveToolName,
+                Turn = Turn,
+                UpdatedUtc = UpdatedUtc,
+                CompletedUtc = CompletedUtc,
+                Coverage = Coverage,
+                TraceSequence = TraceSequence,
                 PendingOutcome = PendingOutcome
             };
-            foreach (var entry in Nodes) copy.Nodes.Add(entry.Key, entry.Value);
-            foreach (var entry in Edges) copy.Edges.Add(entry.Key, entry.Value);
-            foreach (var entry in NavigationHosts) copy.NavigationHosts.Add(entry.Key, entry.Value);
-            foreach (var entry in TabGroups) copy.TabGroups.Add(entry.Key, entry.Value);
-            foreach (var entry in Actions) copy.Actions.Add(entry.Key, entry.Value);
+
+            foreach (var entry in Nodes)
+            {
+                copy.Nodes.Add(entry.Key, entry.Value);
+            }
+
+            foreach (var entry in Edges)
+            {
+                copy.Edges.Add(entry.Key, entry.Value);
+            }
+
+            foreach (var entry in NavigationHosts)
+            {
+                copy.NavigationHosts.Add(entry.Key, entry.Value);
+            }
+
+            foreach (var entry in TabGroups)
+            {
+                copy.TabGroups.Add(entry.Key, entry.Value);
+            }
+
+            foreach (var entry in Actions)
+            {
+                copy.Actions.Add(entry.Key, entry.Value);
+            }
+
             copy.Trace.AddRange(Trace);
+
             return copy;
         }
     }

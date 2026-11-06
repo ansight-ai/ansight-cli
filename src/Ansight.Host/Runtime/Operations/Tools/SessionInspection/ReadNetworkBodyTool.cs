@@ -4,7 +4,9 @@ namespace Ansight.Host.Runtime.Operations.Tools.SessionInspection;
 
 internal sealed class ReadNetworkBodyTool : Operation
 {
-    public ReadNetworkBodyTool(OperationServices services) : base(services) { }
+    public ReadNetworkBodyTool(OperationServices services) : base(services)
+    {
+    }
 
     public override string Name => "ansight_read_network_body";
     protected override string Title => "Read Network Body";
@@ -17,18 +19,21 @@ internal sealed class ReadNetworkBodyTool : Operation
         {
             var requestId = NetworkInspectionArguments.ReadString(arguments, "requestId", required: true)!;
             var side = NetworkInspectionArguments.ReadString(arguments, "side", required: true)!;
+
             if (side is not ("request" or "response"))
             {
                 return Task.FromResult(ToolError("side must be request or response."));
             }
 
             var maximumBytes = NetworkInspectionArguments.ReadLimit(arguments, "maxBytes", 16 * 1024, 64 * 1024);
+
             if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var session, out var error))
             {
                 return Task.FromResult(ToolError(error));
             }
 
             var request = session!.NetworkRequests.FirstOrDefault(item => string.Equals(item.Id, requestId, StringComparison.Ordinal));
+
             return Task.FromResult(request is null
                 ? ToolError($"Network request '{requestId}' was not found in this session.")
                 : NetworkInspectionPayload.Result(NetworkInspectionPayload.ReadBody(session, request, side, maximumBytes)));

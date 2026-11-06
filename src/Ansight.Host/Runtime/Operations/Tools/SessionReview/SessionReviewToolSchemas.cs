@@ -22,6 +22,7 @@ internal static class SessionReviewToolSchemas
         var properties = ReviewSessionProperties();
         properties["startUtc"] = ToolSchema.String("Optional inclusive start timestamp in ISO-8601 UTC.", nullable: true, format: "date-time");
         properties["endUtc"] = ToolSchema.String("Optional inclusive end timestamp in ISO-8601 UTC.", nullable: true, format: "date-time");
+
         return properties;
     }
 
@@ -38,6 +39,7 @@ internal static class SessionReviewToolSchemas
             nullable: true);
         properties["minPointerCount"] = ToolSchema.Integer("Optional minimum simultaneous pointer count.", nullable: true);
         properties["maxPointerCount"] = ToolSchema.Integer("Optional maximum simultaneous pointer count.", nullable: true);
+
         return properties;
     }
 }

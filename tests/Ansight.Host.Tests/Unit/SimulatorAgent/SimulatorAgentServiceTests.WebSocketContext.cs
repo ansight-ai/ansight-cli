@@ -5,7 +5,6 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class SimulatorAgentServiceTests
 {
-
     [Fact]
     public async Task RunAsync_WebSocketDoesNotTrimAtTheLegacyItemLimit()
     {
@@ -40,18 +39,23 @@ public sealed partial class SimulatorAgentServiceTests
             new JsonObject { ["screenX"] = 200, ["screenY"] = 200 });
         var checkpoint = new JsonObject
         {
-            ["type"] = "compaction", ["id"] = "cmp-1", ["encrypted_content"] = "opaque-checkpoint"
+            ["type"] = "compaction",
+            ["id"] = "cmp-1",
+            ["encrypted_content"] = "opaque-checkpoint"
         };
         var reasoning = new JsonObject
         {
-            ["type"] = "reasoning", ["id"] = "reason-1", ["encrypted_content"] = "opaque-reasoning",
+            ["type"] = "reasoning",
+            ["id"] = "reason-1",
+            ["encrypted_content"] = "opaque-reasoning",
             ["summary"] = new JsonArray()
         };
         compacted.Output.Insert(0, checkpoint);
         compacted.Output.Insert(1, reasoning);
+
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("tap-before-compaction", "ansight_tap_ui",
-                new JsonObject { ["screenX"] = 100, ["screenY"] = 200 }),
+                new JsonObject {["screenX"] = 100, ["screenY"] = 200 }),
             compacted,
             CompleteWebSocketTurn()
         ]);
@@ -64,6 +68,7 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var finalRequest = session.Requests[2];
         Assert.False(finalRequest.StartNewConversation);
         Assert.True(JsonNode.DeepEquals(checkpoint, finalRequest.Input[0]));
@@ -82,9 +87,9 @@ public sealed partial class SimulatorAgentServiceTests
     public async Task RunAsync_WebSocketCompletionGracePreservesToolDefinitions()
     {
         var session = new FakeOpenAiSession([
-            CreateFunctionTurn("tap", "ansight_tap_ui", new JsonObject { ["screenX"] = 100, ["screenY"] = 200 }),
+                CreateFunctionTurn("tap", "ansight_tap_ui", new JsonObject {["screenX"] = 100, ["screenY"] = 200 }),
             CompleteWebSocketTurn()
-        ]);
+            ]);
         using var service = CreateWebSocketService(session);
 
         var result = await service.RunAsync(new SimulatorAgentRunRequest("session-123", ["Tap the control."],
@@ -116,6 +121,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(enableWarmup ? 1 : 0, session.WarmupRequests.Count);
+
         if (enableWarmup)
         {
             var warmup = Assert.Single(session.WarmupRequests);
@@ -125,6 +131,7 @@ public sealed partial class SimulatorAgentServiceTests
             Assert.Empty(warmup.Input);
             Assert.Equal(generated.CompactThresholdTokens, warmup.CompactThresholdTokens);
         }
+
         Assert.Equal(new SimulatorAgentWebSocketOptions(64_000, enableWarmup), result.Audit.WebSocketOptions);
     }
 
@@ -142,7 +149,10 @@ public sealed partial class SimulatorAgentServiceTests
             WarmupTokens = warmupTokens,
             WarmupResponses = [warmupUsage]
         };
-        var turn = CompleteWebSocketTurn() with { Transport = diagnostics };
+        var turn = CompleteWebSocketTurn() with
+        {
+            Transport = diagnostics
+        };
         var session = new FakeOpenAiSession([turn]);
         using var service = CreateWebSocketService(session);
 
@@ -195,8 +205,15 @@ public sealed partial class SimulatorAgentServiceTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class WarmupAccountingSession(CancellationTokenSource? cancelAfterWarmup) : IOpenAiSession
+    private sealed class WarmupAccountingSession : IOpenAiSession
     {
+        private readonly CancellationTokenSource? cancelAfterWarmup;
+
+        public WarmupAccountingSession(CancellationTokenSource? cancelAfterWarmup)
+        {
+            this.cancelAfterWarmup = cancelAfterWarmup;
+        }
+
         public SimulatorAgentTransportDiagnostics? LastTransportDiagnostics { get; private set; }
 
         public Task WarmupAsync(OpenAiRequest request, CancellationToken cancellationToken)
@@ -208,6 +225,7 @@ public sealed partial class SimulatorAgentServiceTests
                 WarmupResponses = [new("warmup-1", request.Model, null, DateTimeOffset.UtcNow, tokens)]
             };
             cancelAfterWarmup?.Cancel();
+
             return Task.CompletedTask;
         }
 
@@ -222,12 +240,14 @@ public sealed partial class SimulatorAgentServiceTests
         var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), new FakeOpenAiClient([]),
             new FakeToolGateway(), openAiWebSocketSessionFactory: new FakeOpenAiSessionFactory(session));
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         return service;
     }
 
     private static OpenAiTurn CompleteWebSocketTurn()
         => CreateFunctionTurn("complete", "complete_instruction", new JsonObject
         {
-            ["outcome"] = "succeeded", ["summary"] = "Done."
+            ["outcome"] = "succeeded",
+            ["summary"] = "Done."
         });
 }

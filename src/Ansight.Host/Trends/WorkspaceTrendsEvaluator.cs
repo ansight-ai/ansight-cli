@@ -14,6 +14,7 @@ public sealed class WorkspaceTrendsEvaluator
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(trends);
+
         if (!string.Equals(trends.AppId, snapshot.AppId, StringComparison.Ordinal))
         {
             return new WorkspaceTrendsCheckResult(
@@ -25,11 +26,14 @@ public sealed class WorkspaceTrendsEvaluator
                 [],
                 trends.DefinitionHash);
         }
+
         var span = trends.Span;
         var resolution = WorkspaceTrendsSpanResolver.Resolve(snapshot, span);
+
         if (resolution.Status != WorkspaceTrendsStatus.Passed)
         {
             var missingStatus = ResolveMissingDataStatus(trends);
+
             return new WorkspaceTrendsCheckResult(
                 trends.TrendsId,
                 trends.Required,
@@ -43,9 +47,10 @@ public sealed class WorkspaceTrendsEvaluator
         var platform = ResolvePlatform(snapshot);
         var applicableDefinitions = trends.Metrics
             .Where(definition => string.IsNullOrWhiteSpace(definition.Platform)
-                                 || string.Equals(definition.Platform, platform, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(definition.Platform, platform, StringComparison.OrdinalIgnoreCase))
             .ToArray();
         var metrics = new List<WorkspaceTrendsMetricResult>();
+
         foreach (var instance in resolution.Instances)
         {
             foreach (var definition in applicableDefinitions)
@@ -67,6 +72,7 @@ public sealed class WorkspaceTrendsEvaluator
         var message = status == WorkspaceTrendsStatus.Passed
             ? $"All {metrics.Count:N0} trends metric(s) passed."
             : $"{passedCount:N0} of {metrics.Count:N0} trends metric(s) passed.";
+
         return new WorkspaceTrendsCheckResult(
             trends.TrendsId,
             trends.Required,
@@ -79,13 +85,18 @@ public sealed class WorkspaceTrendsEvaluator
 
     internal static string MeasurementIdentity(AppSessionSnapshot snapshot, SessionMetricChannel channel, string definitionHash)
     {
-        if (snapshot.CaptureSource != WorkspaceExecutionModes.Device) return definitionHash;
+        if (snapshot.CaptureSource != WorkspaceExecutionModes.Device)
+        {
+            return definitionHash;
+        }
+
         var execution = snapshot.CustomProperties?["deviceExecution"];
         var identity = string.Join("\u001f", definitionHash, "device", channel.Source, channel.Kind, channel.Unit,
             execution?["collectorVersion"], execution?["sampleIntervalMs"], execution?["processScope"],
             execution?["hostArchitecture"], execution?["hostProcessors"], execution?["hostOs"],
             execution?["deviceMetadata"]?["hostModel"], execution?["deviceMetadata"]?["deviceConfiguration"],
             execution?["deviceMetadata"]?["operatingSystemVersion"]);
+
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
     }
 
@@ -98,6 +109,7 @@ public sealed class WorkspaceTrendsEvaluator
         var channels = MatchChannels(snapshot.MetricChannels, definition.Channel);
         var metricKey = $"{trends.TrendsId}.{definition.MetricId}";
         var metricHash = ComputeMetricHash(trends.Span, definition);
+
         if (channels.Count == 0)
         {
             return Missing(
@@ -108,6 +120,7 @@ public sealed class WorkspaceTrendsEvaluator
                 metricHash,
                 "No telemetry channel matched the metric selector.");
         }
+
         if (definition.Channel.RequireExactlyOne && channels.Count != 1)
         {
             return Missing(
@@ -121,6 +134,7 @@ public sealed class WorkspaceTrendsEvaluator
 
         var channel = channels[0];
         metricHash = MeasurementIdentity(snapshot, channel, metricHash);
+
         var spanSamples = SelectSamples(
             snapshot,
             channel.ChannelId,
@@ -143,6 +157,7 @@ public sealed class WorkspaceTrendsEvaluator
         var primaryStartUtc = RequiresTail(statistic) ? instance.EndUtc : instance.StartUtc;
         var primaryEndUtc = RequiresTail(statistic) ? tailEndUtc : instance.EndUtc;
         var sampleValidation = ValidateSamples(primarySamples, definition, primaryStartUtc, primaryEndUtc);
+
         if (sampleValidation is not null)
         {
             return Missing(
@@ -159,13 +174,18 @@ public sealed class WorkspaceTrendsEvaluator
 
         double? baselineValue = null;
         ComputedMetric computed;
+
         if (IsMemoryDeltaStatistic(statistic))
         {
             var baselineValidation = ValidateSamples(
                 baselineSamples,
-                definition with { MinimumSamples = Math.Min(2, definition.MinimumSamples) },
+                definition with
+                {
+                    MinimumSamples = Math.Min(2, definition.MinimumSamples)
+                },
                 baselineStartUtc,
                 instance.StartUtc);
+
             if (baselineValidation is not null)
             {
                 return Missing(
@@ -179,6 +199,7 @@ public sealed class WorkspaceTrendsEvaluator
                     baselineStartUtc,
                     instance.StartUtc);
             }
+
             baselineValue = Percentile(baselineSamples.Select(static sample => (double)sample.Value).ToArray(), 0.5d);
         }
 
@@ -198,7 +219,7 @@ public sealed class WorkspaceTrendsEvaluator
                 "memoryretainedincreasemib" => new((Percentile(tailSamples.Select(static sample => (double)sample.Value).ToArray(), 0.5d) - baselineValue!.Value) / BytesPerMebibyte, "MiB"),
                 "tailslopemibpersecond" => new(LinearSlope(tailSamples) / BytesPerMebibyte, "MiB/s"),
                 "tailspreadmib" => new((Percentile(tailSamples.Select(static sample => (double)sample.Value).ToArray(), 0.95d)
-                                         - Percentile(tailSamples.Select(static sample => (double)sample.Value).ToArray(), 0.05d)) / BytesPerMebibyte, "MiB"),
+                    - Percentile(tailSamples.Select(static sample => (double)sample.Value).ToArray(), 0.05d)) / BytesPerMebibyte, "MiB"),
                 _ => throw new InvalidDataException($"Unsupported statistic '{statistic}'.")
             };
         }
@@ -215,6 +236,7 @@ public sealed class WorkspaceTrendsEvaluator
         }
 
         var passed = MeetsBudget(computed.Value, definition.Budget);
+
         return new WorkspaceTrendsMetricResult(
             trends.TrendsId,
             definition.MetricId,
@@ -239,16 +261,16 @@ public sealed class WorkspaceTrendsEvaluator
         WorkspaceTrendsMetricSelector selector)
         => channels.Where(channel =>
                 (string.IsNullOrWhiteSpace(selector.Type)
-                 || string.Equals(
-                     MetricChannelClassification.ResolveTelemetryType(channel.ChannelId, channel),
-                     selector.Type,
-                     StringComparison.OrdinalIgnoreCase))
-                && (string.IsNullOrWhiteSpace(selector.Name)
-                    || string.Equals(channel.Name, selector.Name, StringComparison.OrdinalIgnoreCase))
-                && (string.IsNullOrWhiteSpace(selector.Source)
-                    || string.Equals(channel.Source, selector.Source, StringComparison.OrdinalIgnoreCase))
-                && (string.IsNullOrWhiteSpace(selector.Kind)
-                    || string.Equals(channel.Kind, selector.Kind, StringComparison.OrdinalIgnoreCase)))
+                    || string.Equals(
+                        MetricChannelClassification.ResolveTelemetryType(channel.ChannelId, channel),
+                        selector.Type,
+                        StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(selector.Name)
+                        || string.Equals(channel.Name, selector.Name, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(selector.Source)
+                        || string.Equals(channel.Source, selector.Source, StringComparison.OrdinalIgnoreCase))
+                    && (string.IsNullOrWhiteSpace(selector.Kind)
+                        || string.Equals(channel.Kind, selector.Kind, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(static channel => channel.ChannelId)
             .ToArray();
 
@@ -259,8 +281,8 @@ public sealed class WorkspaceTrendsEvaluator
         DateTimeOffset endUtc)
         => snapshot.Metrics
             .Where(sample => sample.ChannelId == channelId
-                             && sample.CapturedAtUtc >= startUtc
-                             && sample.CapturedAtUtc <= endUtc)
+                && sample.CapturedAtUtc >= startUtc
+                && sample.CapturedAtUtc <= endUtc)
             .OrderBy(static sample => sample.CapturedAtUtc)
             .ToArray();
 
@@ -274,24 +296,31 @@ public sealed class WorkspaceTrendsEvaluator
         {
             return $"Captured {samples.Count:N0} sample(s); at least {definition.MinimumSamples:N0} are required.";
         }
+
         var leadingGap = samples[0].CapturedAtUtc - spanStartUtc;
+
         if (leadingGap > definition.MaximumSampleGap)
         {
             return $"The first telemetry sample arrived {leadingGap.TotalMilliseconds:N0} ms after the span began, exceeding the {definition.MaximumSampleGap.TotalMilliseconds:N0} ms limit.";
         }
+
         for (var index = 1; index < samples.Count; index++)
         {
             var gap = samples[index].CapturedAtUtc - samples[index - 1].CapturedAtUtc;
+
             if (gap > definition.MaximumSampleGap)
             {
                 return $"A telemetry gap of {gap.TotalMilliseconds:N0} ms exceeded the {definition.MaximumSampleGap.TotalMilliseconds:N0} ms limit.";
             }
         }
+
         var trailingGap = spanEndUtc - samples[^1].CapturedAtUtc;
+
         if (trailingGap > definition.MaximumSampleGap)
         {
             return $"The final telemetry sample was {trailingGap.TotalMilliseconds:N0} ms before the span ended, exceeding the {definition.MaximumSampleGap.TotalMilliseconds:N0} ms limit.";
         }
+
         return null;
     }
 
@@ -301,15 +330,19 @@ public sealed class WorkspaceTrendsEvaluator
         {
             throw new InvalidOperationException("A percentile requires at least one sample.");
         }
+
         var values = source.OrderBy(static value => value).ToArray();
+
         if (values.Length == 1)
         {
             return values[0];
         }
+
         var position = Math.Clamp(percentile, 0d, 1d) * (values.Length - 1);
         var lower = (int)Math.Floor(position);
         var upper = (int)Math.Ceiling(position);
         var fraction = position - lower;
+
         return values[lower] + ((values[upper] - values[lower]) * fraction);
     }
 
@@ -320,11 +353,14 @@ public sealed class WorkspaceTrendsEvaluator
         DateTimeOffset spanEndUtc)
     {
         var duration = (spanEndUtc - spanStartUtc).TotalMilliseconds;
+
         if (duration <= 0)
         {
             throw new InvalidOperationException("The trends span has no duration.");
         }
+
         double belowMilliseconds = 0;
+
         for (var index = 0; index < samples.Count; index++)
         {
             var sampleStart = samples[index].CapturedAtUtc < spanStartUtc
@@ -333,11 +369,13 @@ public sealed class WorkspaceTrendsEvaluator
             var sampleEnd = index + 1 < samples.Count
                 ? samples[index + 1].CapturedAtUtc
                 : spanEndUtc;
+
             if (samples[index].Value < threshold && sampleEnd > sampleStart)
             {
                 belowMilliseconds += (sampleEnd - sampleStart).TotalMilliseconds;
             }
         }
+
         return Math.Clamp(belowMilliseconds / duration, 0d, 1d);
     }
 
@@ -347,24 +385,27 @@ public sealed class WorkspaceTrendsEvaluator
         {
             throw new InvalidOperationException("A slope requires at least two samples.");
         }
+
         var origin = samples[0].CapturedAtUtc;
         var xAverage = samples.Average(sample => (sample.CapturedAtUtc - origin).TotalSeconds);
         var yAverage = samples.Average(static sample => (double)sample.Value);
         double numerator = 0;
         double denominator = 0;
+
         foreach (var sample in samples)
         {
             var x = (sample.CapturedAtUtc - origin).TotalSeconds - xAverage;
             numerator += x * (sample.Value - yAverage);
             denominator += x * x;
         }
+
         return denominator <= double.Epsilon ? 0d : numerator / denominator;
     }
 
     private static bool MeetsBudget(double value, WorkspaceTrendsBudget budget)
         => (!budget.GreaterThanOrEqual.HasValue || value >= budget.GreaterThanOrEqual.Value)
-           && (!budget.LessThanOrEqual.HasValue || value <= budget.LessThanOrEqual.Value)
-           && (!budget.AbsoluteLessThanOrEqual.HasValue || Math.Abs(value) <= budget.AbsoluteLessThanOrEqual.Value);
+            && (!budget.LessThanOrEqual.HasValue || value <= budget.LessThanOrEqual.Value)
+            && (!budget.AbsoluteLessThanOrEqual.HasValue || Math.Abs(value) <= budget.AbsoluteLessThanOrEqual.Value);
 
     private static string BuildBudgetMessage(
         double value,
@@ -373,29 +414,33 @@ public sealed class WorkspaceTrendsEvaluator
         bool passed)
     {
         var clauses = new List<string>();
+
         if (budget.GreaterThanOrEqual.HasValue)
         {
             clauses.Add($">= {budget.GreaterThanOrEqual.Value.ToString("0.###", CultureInfo.InvariantCulture)}");
         }
+
         if (budget.LessThanOrEqual.HasValue)
         {
             clauses.Add($"<= {budget.LessThanOrEqual.Value.ToString("0.###", CultureInfo.InvariantCulture)}");
         }
+
         if (budget.AbsoluteLessThanOrEqual.HasValue)
         {
             clauses.Add($"absolute <= {budget.AbsoluteLessThanOrEqual.Value.ToString("0.###", CultureInfo.InvariantCulture)}");
         }
+
         return $"{value.ToString("0.###", CultureInfo.InvariantCulture)} {unit} {(passed ? "met" : "did not meet")} budget {string.Join(" and ", clauses)}.";
     }
 
     private static bool RequiresTail(string statistic)
         => statistic.Equals("memoryRetainedIncreaseMiB", StringComparison.OrdinalIgnoreCase)
-           || statistic.Equals("tailSlopeMiBPerSecond", StringComparison.OrdinalIgnoreCase)
-           || statistic.Equals("tailSpreadMiB", StringComparison.OrdinalIgnoreCase);
+            || statistic.Equals("tailSlopeMiBPerSecond", StringComparison.OrdinalIgnoreCase)
+            || statistic.Equals("tailSpreadMiB", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsMemoryDeltaStatistic(string statistic)
         => statistic.Equals("memoryPeakIncreaseMiB", StringComparison.OrdinalIgnoreCase)
-           || statistic.Equals("memoryRetainedIncreaseMiB", StringComparison.OrdinalIgnoreCase);
+            || statistic.Equals("memoryRetainedIncreaseMiB", StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveUnit(SessionMetricChannel channel)
         => string.IsNullOrWhiteSpace(channel.Unit) ? "value" : channel.Unit.Trim();
@@ -403,32 +448,38 @@ public sealed class WorkspaceTrendsEvaluator
     private static string ResolvePlatform(AppSessionSnapshot snapshot)
     {
         var osName = snapshot.DeviceProfile?.Device?.OsName;
+
         if (string.IsNullOrWhiteSpace(osName))
         {
             return "other";
         }
 
         var normalized = osName.Trim();
+
         if (normalized.Contains("android", StringComparison.OrdinalIgnoreCase))
         {
             return "android";
         }
+
         if (normalized.Contains("ios", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("iphone", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("ipad", StringComparison.OrdinalIgnoreCase))
         {
             return "ios";
         }
+
         if (normalized.Contains("windows", StringComparison.OrdinalIgnoreCase))
         {
             return "windows";
         }
+
         if (normalized.Contains("mac", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("catalyst", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("os x", StringComparison.OrdinalIgnoreCase))
         {
             return "macos";
         }
+
         return "other";
     }
 
@@ -520,6 +571,7 @@ public sealed class WorkspaceTrendsEvaluator
             definition.MaximumSampleGap.TotalMilliseconds,
             definition.BaselineBeforeStart.TotalMilliseconds,
             definition.TailAfterEnd.TotalMilliseconds);
+
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
 

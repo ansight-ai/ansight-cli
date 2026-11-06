@@ -8,7 +8,11 @@ public sealed partial class RepositoryTaskTests
     [Fact]
     public void PenPlaybackTypeContractSupportsFileAndRejectsAmbiguousSources()
     {
-        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null) return;
+        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null)
+        {
+            return;
+        }
+
         using var repository = CreateRepository("export const placeholder = true;");
         var path = Path.Combine(repository.RootPath, "pen.ts");
         File.WriteAllText(path, """
@@ -64,6 +68,7 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("fixtures/demo.pen.json", arguments["file"]!.GetValue<string>());
             Assert.Equal("hid+sdk", arguments["mode"]!.GetValue<string>());
             Assert.Equal(repository.RootPath, PenInputScope.CurrentRepositoryRoot);
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["sampleCount"] = 6 }, isError: false));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
 

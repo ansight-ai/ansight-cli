@@ -29,7 +29,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     private const int MaximumRecordingResponseBytes = 20 * 1024 * 1024;
     private const string RecordingReadScope = "recordings.read";
     private const string InspectionReadScope = "inspect.read";
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IRemoteRuntimeSource runtimeSource;
     private readonly ISimulatorFrameSource frameSource;
     private readonly ISimulatorInputSink inputSink;
@@ -105,6 +105,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         this.runtimeSource = runtimeSource ?? throw new ArgumentNullException(nameof(runtimeSource));
         this.frameSource = frameSource ?? throw new ArgumentNullException(nameof(frameSource));
         this.inputSink = inputSink ?? throw new ArgumentNullException(nameof(inputSink));
+
         if (requestedPort is < 0 or > 65535)
         {
             throw new ArgumentOutOfRangeException(nameof(requestedPort));
@@ -129,7 +130,6 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     public event EventHandler? CompanionConnectionsChanged;
 
     public int Port { get; private set; }
-
     public string LoopbackBaseUrl => Port == 0
         ? string.Empty
         : $"http://127.0.0.1:{Port}/?token={Uri.EscapeDataString(sessionToken)}";
@@ -150,20 +150,24 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         out string error)
     {
         deviceIdentifier = string.Empty;
+
         var identifier = reportedIdentifier.Trim();
         var devices = runtimeSource.Current.Devices;
         var exactDevice = devices.FirstOrDefault(device =>
             string.Equals(device.Identifier, identifier, StringComparison.OrdinalIgnoreCase));
+
         if (exactDevice is not null)
         {
             if (!exactDevice.IsBooted)
             {
                 error = $"The selected device '{identifier}' is not booted.";
+
                 return false;
             }
 
             deviceIdentifier = exactDevice.Identifier;
             error = string.Empty;
+
             return true;
         }
 
@@ -172,24 +176,27 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         // of the same AVD or match a physical device's display name.
         var emulators = devices.Where(device =>
                 device.IsBooted
-                && string.Equals(device.Platform, "android", StringComparison.OrdinalIgnoreCase)
-                && device.Identifier.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(
-                    string.IsNullOrWhiteSpace(device.BootIdentifier) ? device.Name : device.BootIdentifier,
-                    identifier,
-                    StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(device.Platform, "android", StringComparison.OrdinalIgnoreCase)
+                    && device.Identifier.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(
+                        string.IsNullOrWhiteSpace(device.BootIdentifier) ? device.Name : device.BootIdentifier,
+                        identifier,
+                        StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToArray();
+
         if (emulators.Length == 1)
         {
             deviceIdentifier = emulators[0].Identifier;
             error = string.Empty;
+
             return true;
         }
 
         error = emulators.Length > 1
             ? $"Multiple booted Android emulators have AVD name '{identifier}'. A device serial is required for Simulator control."
             : $"Could not resolve live simulator device '{identifier}' to a booted device identifier.";
+
         return false;
     }
 
@@ -215,6 +222,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     public Task<bool> DisconnectCompanionAsync(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         if (!webRtcSessions.ContainsKey(sessionId.Trim()))
         {
             return Task.FromResult(false);
@@ -226,6 +234,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     public async Task<int> DisconnectAllCompanionsAsync()
     {
         var sessionIds = webRtcSessions.Keys.ToArray();
+
         foreach (var sessionId in sessionIds)
         {
             await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
@@ -247,12 +256,14 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         Port = ((IPEndPoint)nextListener.LocalEndpoint).Port;
         serverCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         acceptTask = AcceptConnectionsAsync(nextListener, serverCancellation.Token);
+
         return Task.CompletedTask;
     }
 
     private async Task<bool> DisconnectCompanionCoreAsync(string sessionId)
     {
         await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
+
         return true;
     }
 
@@ -266,6 +277,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         var activeListener = listener;
         listener = null;
         activeListener.Stop();
+
         if (serverCancellation is not null)
         {
             await serverCancellation.CancelAsync().ConfigureAwait(false);
@@ -290,10 +302,12 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         serverCancellation?.Dispose();
         serverCancellation = null;
         acceptTask = null;
+
         foreach (var sessionId in webRtcSessions.Keys)
         {
             await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
         }
+
         Port = 0;
     }
 
@@ -310,5 +324,4 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
             _ = HandleClientSafelyAsync(client, cancellationToken);
         }
     }
-
 }

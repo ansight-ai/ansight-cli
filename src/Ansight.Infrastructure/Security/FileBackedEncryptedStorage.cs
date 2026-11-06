@@ -43,6 +43,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             }
 
             ArgumentNullException.ThrowIfNull(encryptionKey);
+
             if (encryptionKey.Length != 32)
             {
                 throw new ArgumentException("The encryption key must contain exactly 32 bytes.", nameof(encryptionKey));
@@ -60,10 +61,12 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             if (readOnly)
             {
                 values = LoadFromDisk(out _);
+
                 return;
             }
 
             var parent = Path.GetDirectoryName(filePath);
+
             if (!string.IsNullOrWhiteSpace(parent) && !Directory.Exists(parent))
             {
                 Directory.CreateDirectory(parent);
@@ -71,6 +74,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
 
             using var fileLock = AcquireFileLock();
             values = LoadFromDisk(out var requiresMigration);
+
             if (requiresMigration)
             {
                 PersistToDisk(values);
@@ -96,16 +100,25 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
 
         lock (gate)
         {
-            if (readOnly) return values.GetValueOrDefault(key);
+            if (readOnly)
+            {
+                return values.GetValueOrDefault(key);
+            }
+
             using var fileLock = AcquireFileLock();
             ReloadFromDisk();
+
             return values.TryGetValue(key, out var value) ? value : null;
         }
     }
 
     public void Set(string key, string? value)
     {
-        if (readOnly) throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        if (readOnly)
+        {
+            throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        }
+
         if (string.IsNullOrWhiteSpace(key))
         {
             throw new ArgumentException("Value cannot be null or whitespace.", nameof(key));
@@ -115,6 +128,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
         {
             using var fileLock = AcquireFileLock();
             ReloadFromDisk();
+
             if (value is null)
             {
                 if (values.Remove(key))
@@ -137,7 +151,11 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
 
     public void Remove(string key)
     {
-        if (readOnly) throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        if (readOnly)
+        {
+            throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        }
+
         if (string.IsNullOrWhiteSpace(key))
         {
             return;
@@ -147,6 +165,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
         {
             using var fileLock = AcquireFileLock();
             ReloadFromDisk();
+
             if (!values.Remove(key))
             {
                 return;
@@ -158,11 +177,16 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
 
     public void Clear()
     {
-        if (readOnly) throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        if (readOnly)
+        {
+            throw new InvalidOperationException("This secret store is a read-only snapshot.");
+        }
+
         lock (gate)
         {
             using var fileLock = AcquireFileLock();
             ReloadFromDisk();
+
             if (values.Count == 0)
             {
                 return;
@@ -179,6 +203,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
         {
             using var fileLock = AcquireFileLock();
             ReloadFromDisk();
+
             return new Dictionary<string, string>(values, StringComparer.Ordinal);
         }
     }
@@ -186,6 +211,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
     private void ReloadFromDisk()
     {
         values = LoadFromDisk(out var requiresMigration);
+
         if (requiresMigration)
         {
             PersistToDisk(values);
@@ -195,12 +221,14 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
     private Dictionary<string, string> LoadFromDisk(out bool requiresMigration)
     {
         requiresMigration = false;
+
         if (!File.Exists(filePath))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
         var content = File.ReadAllText(filePath);
+
         if (string.IsNullOrWhiteSpace(content))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal);
@@ -209,6 +237,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
         try
         {
             using var document = JsonDocument.Parse(content);
+
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
                 throw new InvalidDataException($"Secret store '{filePath}' does not contain a JSON object.");
@@ -217,13 +246,15 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             if (!document.RootElement.TryGetProperty("schema", out _))
             {
                 var legacyValues = JsonSerializer.Deserialize<Dictionary<string, string>>(content, jsonOptions)
-                                   ?? new Dictionary<string, string>(StringComparer.Ordinal);
+                    ?? new Dictionary<string, string>(StringComparer.Ordinal);
                 requiresMigration = true;
+
                 return new Dictionary<string, string>(legacyValues, StringComparer.Ordinal);
             }
 
             var envelope = JsonSerializer.Deserialize<EncryptedStorageEnvelope>(content, jsonOptions)
-                           ?? throw new InvalidDataException($"Secret store '{filePath}' has an invalid envelope.");
+                ?? throw new InvalidDataException($"Secret store '{filePath}' has an invalid envelope.");
+
             if (!string.Equals(envelope.Schema, Schema, StringComparison.Ordinal)
                 || !string.Equals(envelope.Algorithm, Algorithm, StringComparison.Ordinal))
             {
@@ -246,17 +277,21 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             var nonce = Convert.FromBase64String(envelope.Nonce);
             var tag = Convert.FromBase64String(envelope.Tag);
             var ciphertext = Convert.FromBase64String(envelope.Ciphertext);
+
             if (nonce.Length != NonceSizeInBytes || tag.Length != TagSizeInBytes)
             {
                 throw new InvalidDataException($"Secret store '{filePath}' has invalid encryption metadata.");
             }
 
             var plaintext = new byte[ciphertext.Length];
+
             try
             {
                 using var aes = new AesGcm(encryptionKey, TagSizeInBytes);
                 aes.Decrypt(nonce, ciphertext, tag, plaintext, additionalAuthenticatedData);
+
                 var deserialized = JsonSerializer.Deserialize<Dictionary<string, string>>(plaintext, jsonOptions);
+
                 return deserialized is null
                     ? new Dictionary<string, string>(StringComparer.Ordinal)
                     : new Dictionary<string, string>(deserialized, StringComparer.Ordinal);
@@ -284,6 +319,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
         var nonce = RandomNumberGenerator.GetBytes(NonceSizeInBytes);
         var ciphertext = new byte[plaintext.Length];
         var tag = new byte[TagSizeInBytes];
+
         try
         {
             using var aes = new AesGcm(encryptionKey, TagSizeInBytes);
@@ -318,6 +354,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             Share = FileShare.None,
             Options = FileOptions.WriteThrough
         };
+
         if (!OperatingSystem.IsWindows())
         {
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
@@ -336,6 +373,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
     {
         var lockPath = filePath + ".lock";
         var startedUtc = DateTimeOffset.UtcNow;
+
         while (true)
         {
             try
@@ -347,6 +385,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
                     Share = FileShare.None,
                     Options = FileOptions.None
                 };
+
                 if (!OperatingSystem.IsWindows())
                 {
                     options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
@@ -354,6 +393,7 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
 
                 var stream = new FileStream(lockPath, options);
                 TryRestrictFilePermissions(lockPath);
+
                 return stream;
             }
             catch (IOException exception)
@@ -382,8 +422,8 @@ public sealed class FileBackedEncryptedStorage : IEncryptedStorage
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
             System.Diagnostics.Trace.TraceWarning(
                 $"Could not restrict secure-storage permissions for '{path}': {exception.Message}");

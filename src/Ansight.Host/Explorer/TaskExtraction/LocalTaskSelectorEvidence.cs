@@ -39,28 +39,35 @@ internal static class LocalTaskSelectorEvidence
         int screenshotFrameCount = 0)
     {
         ArgumentNullException.ThrowIfNull(visualTrees);
+
         var trees = visualTrees.OrderBy(static tree => tree.CapturedAtUtc).ToArray();
         var nodes = new List<LocalTaskSelectorEvidenceNode>();
         var automationIds = new SortedSet<string>(StringComparer.Ordinal);
+
         foreach (var tree in trees)
         {
             if (tree.Payload["root"] is JsonObject root)
             {
                 var typeRegistry = VisualTreeTypeRegistry.FromPayload(tree.Payload);
+
                 foreach (var match in LiveUiNodeQuery.Enumerate(root, typeRegistry))
                 {
                     if (LiveUiNodeQuery.ReadAutomationId(match.Node) is { } automationId)
                     {
                         automationIds.Add(automationId);
                     }
+
                     if (!LiveUiNodeQuery.IsEffectivelyVisible(match))
                     {
                         continue;
                     }
+
                     // Ground `text` against exactly what live selectors read. A secondary
+
                     // placeholder/value in the raw node is evidence, but is not another
                     // matchable text alias when a label or primary text takes precedence.
                     var textValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                     if (LiveUiNodeQuery.ReadText(match.Node) is { } primaryText)
                     {
                         textValues.Add(primaryText);
@@ -96,8 +103,10 @@ internal static class LocalTaskSelectorEvidence
     public static IReadOnlyList<LocalTaskSelectorCall> ExtractSelectorCalls(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         var tokens = Tokenize(source);
         var calls = new List<LocalTaskSelectorCall>();
+
         for (var index = 0; index + 5 < tokens.Count; index++)
         {
             if (!tokens[index].IsIdentifier
@@ -112,12 +121,14 @@ internal static class LocalTaskSelectorEvidence
             }
 
             var callPath = $"ansight.{tokens[index + 2].Text}.{tokens[index + 4].Text}";
+
             if (!selectorCallToolNames.TryGetValue(callPath, out var toolName))
             {
                 continue;
             }
 
             var argumentIndex = index + 6;
+
             if (argumentIndex >= tokens.Count || tokens[argumentIndex].Text != "{")
             {
                 calls.Add(new LocalTaskSelectorCall(
@@ -134,17 +145,21 @@ internal static class LocalTaskSelectorEvidence
             var dynamicFields = new HashSet<string>(StringComparer.Ordinal);
             var hasDynamicObjectShape = false;
             var depth = 0;
+
             for (var cursor = argumentIndex; cursor < tokens.Count; cursor++)
             {
                 var token = tokens[cursor];
+
                 if (token.Text == "{")
                 {
                     depth++;
                     continue;
                 }
+
                 if (token.Text == "}")
                 {
                     depth--;
+
                     if (depth == 0)
                     {
                         break;
@@ -152,13 +167,15 @@ internal static class LocalTaskSelectorEvidence
 
                     continue;
                 }
+
                 if (depth != 1)
                 {
                     continue;
                 }
 
                 var isPropertyStart = cursor == argumentIndex + 1
-                                      || tokens[cursor - 1].Text is "{" or ",";
+                    || tokens[cursor - 1].Text is "{" or ",";
+
                 if (!isPropertyStart)
                 {
                     continue;
@@ -173,16 +190,19 @@ internal static class LocalTaskSelectorEvidence
                     hasDynamicObjectShape = true;
                     continue;
                 }
+
                 if (!TryReadPropertyName(token, out var propertyName)
                     || !selectorFieldNames.Contains(propertyName))
                 {
                     continue;
                 }
+
                 if (cursor + 1 >= tokens.Count || tokens[cursor + 1].Text != ":")
                 {
                     dynamicFields.Add(propertyName);
                     continue;
                 }
+
                 if (cursor + 2 >= tokens.Count)
                 {
                     dynamicFields.Add(propertyName);
@@ -190,6 +210,7 @@ internal static class LocalTaskSelectorEvidence
                 }
 
                 var value = tokens[cursor + 2];
+
                 if (value.Kind == LocalTaskSourceTokenKind.String)
                 {
                     fields[propertyName] = value.Text;
@@ -218,7 +239,9 @@ internal static class LocalTaskSelectorEvidence
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(evidence);
+
         var issues = new List<LocalTaskSelectorGroundingIssue>();
+
         foreach (var call in ExtractSelectorCalls(source))
         {
             if (!call.IsStaticallyInspectable)
@@ -228,6 +251,7 @@ internal static class LocalTaskSelectorEvidence
                     $"UI selector in {call.CallPath} call {call.Sequence:N0} is not an inline object and cannot be validated against captured UI evidence."));
                 continue;
             }
+
             if (call.DynamicFields.Count > 0)
             {
                 issues.Add(new LocalTaskSelectorGroundingIssue(
@@ -235,10 +259,12 @@ internal static class LocalTaskSelectorEvidence
                     $"UI selector in {call.CallPath} call {call.Sequence:N0} uses non-literal {FormatFieldList(call.DynamicFields)} and cannot be proven from captured UI evidence."));
                 continue;
             }
+
             if (call.Fields.Count == 0)
             {
                 continue;
             }
+
             if (evidence.TreeCount == 0 && evidence.OcrFrameCount == 0)
             {
                 issues.Add(new LocalTaskSelectorGroundingIssue(
@@ -246,6 +272,7 @@ internal static class LocalTaskSelectorEvidence
                     $"UI selector in {call.CallPath} call {call.Sequence:N0} cannot be validated because the selected period contains no readable visual-tree or OCR evidence."));
                 continue;
             }
+
             if (!evidence.Nodes.Any(node => Matches(node, call.Fields)))
             {
                 issues.Add(new LocalTaskSelectorGroundingIssue(
@@ -265,18 +292,21 @@ internal static class LocalTaskSelectorEvidence
         ArgumentNullException.ThrowIfNull(failedCall);
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
+
         var searchTerms = failedCall.Fields.Values
             .SelectMany(SplitSearchTerms)
             .Where(static value => value.Length > 1)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var candidates = new List<LocalTaskSuggestedSelectorCandidate>();
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var node in after.Nodes.Where(node => !before.ContainsIdentity(node)))
         {
             if (!string.IsNullOrWhiteSpace(node.AutomationId))
             {
                 var selector = new JsonObject { ["automationId"] = node.AutomationId };
                 var key = selector.ToJsonString();
+
                 if (keys.Add(key))
                 {
                     candidates.Add(new LocalTaskSuggestedSelectorCandidate(
@@ -292,11 +322,14 @@ internal static class LocalTaskSelectorEvidence
             foreach (var text in node.TextValues.Where(IsUsefulText))
             {
                 var selector = new JsonObject { ["text"] = text };
+
                 if (!string.IsNullOrWhiteSpace(node.Role))
                 {
                     selector["role"] = node.Role;
                 }
+
                 var key = selector.ToJsonString();
+
                 if (!keys.Add(key))
                 {
                     continue;
@@ -337,6 +370,7 @@ internal static class LocalTaskSelectorEvidence
                 "action" => node.Actions.Contains(field.Value),
                 _ => true
             };
+
             if (!matches)
             {
                 return false;
@@ -361,6 +395,7 @@ internal static class LocalTaskSelectorEvidence
             {
                 continue;
             }
+
             if (field.Key == "role"
                 && string.Equals(field.Value, "text", StringComparison.OrdinalIgnoreCase))
             {
@@ -384,56 +419,70 @@ internal static class LocalTaskSelectorEvidence
         if (token.IsIdentifier || token.Kind == LocalTaskSourceTokenKind.String)
         {
             propertyName = token.Text;
+
             return true;
         }
 
         propertyName = string.Empty;
+
         return false;
     }
 
     private static IReadOnlyList<LocalTaskSourceToken> Tokenize(string source)
     {
         var tokens = new List<LocalTaskSourceToken>();
+
         for (var index = 0; index < source.Length;)
         {
             var character = source[index];
+
             if (char.IsWhiteSpace(character))
             {
                 index++;
                 continue;
             }
+
             if (character == '/' && index + 1 < source.Length && source[index + 1] == '/')
             {
                 index += 2;
+
                 while (index < source.Length && source[index] is not '\r' and not '\n')
                 {
                     index++;
                 }
+
                 continue;
             }
+
             if (character == '/' && index + 1 < source.Length && source[index + 1] == '*')
             {
                 index += 2;
+
                 while (index + 1 < source.Length
-                       && (source[index] != '*' || source[index + 1] != '/'))
+                    && (source[index] != '*' || source[index + 1] != '/'))
                 {
                     index++;
                 }
+
                 index = Math.Min(source.Length, index + 2);
                 continue;
             }
+
             if (character is '\'' or '"' or '`')
             {
                 tokens.Add(ReadQuotedToken(source, ref index, character));
                 continue;
             }
+
             if (IsIdentifierStart(character))
             {
                 var end = index + 1;
+
                 while (end < source.Length && IsIdentifierPart(source[end]))
                 {
                     end++;
                 }
+
                 tokens.Add(new LocalTaskSourceToken(
                     source[index..end],
                     LocalTaskSourceTokenKind.Identifier));
@@ -458,13 +507,16 @@ internal static class LocalTaskSelectorEvidence
         var builder = new StringBuilder();
         var dynamic = false;
         index++;
+
         while (index < source.Length)
         {
             var character = source[index++];
+
             if (character == delimiter)
             {
                 break;
             }
+
             if (delimiter == '`'
                 && character == '$'
                 && index < source.Length
@@ -472,6 +524,7 @@ internal static class LocalTaskSelectorEvidence
             {
                 dynamic = true;
             }
+
             if (character != '\\' || index >= source.Length)
             {
                 builder.Append(character);
@@ -496,9 +549,11 @@ internal static class LocalTaskSelectorEvidence
     private static IEnumerable<string> SplitSearchTerms(string value)
     {
         var builder = new StringBuilder();
+
         for (var index = 0; index < value.Length; index++)
         {
             var character = value[index];
+
             if (!char.IsLetterOrDigit(character))
             {
                 if (builder.Length > 0)
@@ -506,8 +561,10 @@ internal static class LocalTaskSelectorEvidence
                     yield return builder.ToString();
                     builder.Clear();
                 }
+
                 continue;
             }
+
             if (builder.Length > 0
                 && char.IsUpper(character)
                 && char.IsLower(builder[^1]))
@@ -515,8 +572,10 @@ internal static class LocalTaskSelectorEvidence
                 yield return builder.ToString();
                 builder.Clear();
             }
+
             builder.Append(char.ToLowerInvariant(character));
         }
+
         if (builder.Length > 0)
         {
             yield return builder.ToString();
@@ -529,6 +588,7 @@ internal static class LocalTaskSelectorEvidence
     private static int Score(string value, IReadOnlySet<string> searchTerms, int baseline)
     {
         var score = baseline;
+
         foreach (var term in searchTerms)
         {
             if (value.Contains(term, StringComparison.OrdinalIgnoreCase))

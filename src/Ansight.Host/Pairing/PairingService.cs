@@ -18,9 +18,9 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         IKnownAppStore knownAppStore)
     {
         this.pairingConfigService = pairingConfigService
-                                    ?? throw new ArgumentNullException(nameof(pairingConfigService));
+            ?? throw new ArgumentNullException(nameof(pairingConfigService));
         this.pairingConfigCache = pairingConfigCache
-                                  ?? throw new ArgumentNullException(nameof(pairingConfigCache));
+            ?? throw new ArgumentNullException(nameof(pairingConfigCache));
         this.knownAppStore = knownAppStore ?? throw new ArgumentNullException(nameof(knownAppStore));
     }
 
@@ -51,6 +51,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
                 : appName.Trim();
         var result = pairingConfigService.Issue(normalizedAppName, normalizedAppId, parsedDuration);
         var cached = pairingConfigCache.Find(result.ConfigId);
+
         if (cached is null)
         {
             return new PairingInviteIssueResult(
@@ -89,11 +90,12 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
     {
         var normalizedAppId = string.IsNullOrWhiteSpace(appId) ? null : appId.Trim();
         var now = DateTimeOffset.UtcNow;
+
         return pairingConfigCache.GetSnapshot()
             .Where(item => PairingProtocolPolicy.IsEnabled(item.Config))
             .Where(item => normalizedAppId is null
-                           || PairingConfig.TargetsAnyApp(item.Config.AppId)
-                           || string.Equals(item.Config.AppId, normalizedAppId, StringComparison.Ordinal))
+                || PairingConfig.TargetsAnyApp(item.Config.AppId)
+                || string.Equals(item.Config.AppId, normalizedAppId, StringComparison.Ordinal))
             .Where(item => includeConsumed || !item.Consumed)
             .Where(item => includeExpired || item.Config.ExpiresAt >= now)
             .OrderByDescending(static item => item.Config.IssuedAt)
@@ -109,6 +111,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
     public CachedPairingConfig? FindLocalConfig(string inviteId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inviteId);
+
         return pairingConfigCache.Find(inviteId.Trim());
     }
 
@@ -121,6 +124,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
     public bool RemoveLocalConfig(string inviteId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inviteId);
+
         return pairingConfigCache.Remove(inviteId.Trim());
     }
 
@@ -134,15 +138,18 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
 
         var codeResult = CreateCode(inviteId, hostAddress);
+
         if (!codeResult.IsSuccess || string.IsNullOrWhiteSpace(codeResult.PairingCode))
         {
             return QrFailure(codeResult.InviteId, codeResult.Message);
         }
 
         var fullOutputPath = Path.GetFullPath(outputPath);
+
         try
         {
             PairingQrPngWriter.Write(codeResult.PairingCode, fullOutputPath, overwrite);
+
             return new PairingQrResult(
                 true,
                 $"Wrote enrollment QR for '{codeResult.InviteId}' to '{fullOutputPath}'.",
@@ -175,6 +182,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         string? appName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
         var normalizedAppName = string.IsNullOrWhiteSpace(appName)
             ? knownAppStore.TryGet(normalizedAppId, out var knownApp) && knownApp is not null
@@ -190,10 +198,13 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
             normalizedAppName,
             DefaultIconGlyph,
             seenAtUtc: DateTimeOffset.UtcNow);
+
         var code = CreateCode(issue.ConfigId, hostAddress: null, source: "workspace-test");
+
         if (!code.IsSuccess || string.IsNullOrWhiteSpace(code.PairingCode))
         {
             pairingConfigCache.Remove(issue.ConfigId);
+
             return UnattendedEnrollmentIssueResult.Failure(code.Message);
         }
 
@@ -211,6 +222,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         }
 
         var item = pairingConfigCache.Find(inviteId.Trim());
+
         if (item is not null
             && !item.Consumed
             && string.Equals(item.Config.AppId, appId.Trim(), StringComparison.Ordinal))
@@ -235,6 +247,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
 
         var normalizedInviteId = inviteId.Trim();
         var item = pairingConfigCache.Find(normalizedInviteId);
+
         if (item is null || !PairingProtocolPolicy.IsEnabled(item.Config))
         {
             return CodeFailure(normalizedInviteId, $"Enrollment invite '{normalizedInviteId}' was not found.");
@@ -254,6 +267,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         var addresses = AddressDiscovery.ApplyAdditionalHostAddresses(
             discovery.Addresses,
             hostAddress);
+
         if (!string.IsNullOrWhiteSpace(hostAddress)
             && !addresses.Contains(hostAddress.Trim(), StringComparer.OrdinalIgnoreCase))
         {
@@ -278,6 +292,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
                 AddressDiscovery.ResolveWifiNetworkName(discovery),
                 source);
             var pairingCode = PairingConfigDocumentFactory.SerializeCompactCode(document);
+
             return new PairingCodeResult(
                 true,
                 $"Created one-time pairing code for '{normalizedInviteId}'.",
@@ -294,7 +309,9 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
     public PairingInviteDetail? Get(string inviteId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inviteId);
+
         var item = pairingConfigCache.Find(inviteId.Trim());
+
         return item is null || !PairingProtocolPolicy.IsEnabled(item.Config)
             ? null
             : new PairingInviteDetail(
@@ -307,9 +324,11 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         string? expectedAppId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inviteId);
+
         var normalizedInviteId = inviteId.Trim();
         var item = pairingConfigCache.Find(normalizedInviteId);
         var summary = item is null ? null : ToSummary(item, DateTimeOffset.UtcNow);
+
         if (item is not null
             && !string.IsNullOrWhiteSpace(expectedAppId)
             && !string.Equals(item.Config.AppId, expectedAppId.Trim(), StringComparison.Ordinal))
@@ -329,6 +348,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
         }
 
         var removed = pairingConfigCache.Remove(normalizedInviteId);
+
         return removed
             ? new PairingOperationResult(true, $"Revoked enrollment invite '{normalizedInviteId}'.", summary)
             : new PairingOperationResult(false, $"Enrollment invite '{normalizedInviteId}' was not found.");
@@ -337,6 +357,7 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
     private static PairingInviteSummary ToSummary(CachedPairingConfig item, DateTimeOffset now)
     {
         var expired = item.Config.ExpiresAt < now;
+
         return new PairingInviteSummary(
             item.Config.ConfigId,
             PairingConfig.TargetsAnyApp(item.Config.AppId) ? "any-app" : "app",
@@ -357,26 +378,4 @@ public sealed class PairingService : Workspaces.Enrollment.IWorkspaceTestEnrollm
 
     private static PairingCodeResult CodeFailure(string inviteId, string message)
         => new(false, message, inviteId, null, Array.Empty<string>());
-}
-
-internal sealed record UnattendedEnrollmentIssueResult(
-    bool IsSuccess,
-    string Message,
-    string? InviteId,
-    string? Payload,
-    DateTimeOffset? ExpiresAtUtc)
-{
-    public static UnattendedEnrollmentIssueResult Success(
-        string inviteId,
-        string payload,
-        DateTimeOffset expiresAtUtc)
-        => new(
-            true,
-            "Issued a one-use enrollment payload for the physical test target.",
-            inviteId,
-            payload,
-            expiresAtUtc);
-
-    public static UnattendedEnrollmentIssueResult Failure(string message)
-        => new(false, message, null, null, null);
 }

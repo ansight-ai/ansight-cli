@@ -7,13 +7,6 @@ using Ansight.Host.Runtime.Operations;
 
 namespace Ansight.Host.Runtime.Tasks;
 
-/// <summary>A reviewable Maestro flow derived from one recorded session interval.</summary>
-public sealed record MaestroFlowExtraction(
-    string SuggestedName,
-    string Source,
-    int GeneratedActionCount,
-    IReadOnlyList<string> Diagnostics);
-
 public static class MaestroFlowExtractor
 {
     public static MaestroFlowExtraction Extract(
@@ -23,6 +16,7 @@ public static class MaestroFlowExtractor
         string title)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         var extracted = TimelineTaskExtractor.Extract(
             snapshot,
             startUtc,
@@ -36,6 +30,7 @@ public static class MaestroFlowExtractor
         foreach (var action in extracted.Actions)
         {
             var command = RenderAction(action, diagnostics);
+
             if (command is null)
             {
                 continue;
@@ -64,6 +59,7 @@ public static class MaestroFlowExtractor
             .AppendLine()
             .AppendLine("# Review before running:")
             .AppendLine("# - Confirm the starting state and add an outcome assertion.");
+
         if (diagnostics.Any(static diagnostic => diagnostic.Contains("viewport coordinate", StringComparison.Ordinal)))
         {
             source.AppendLine("# - Verify coordinate taps on the target device.");
@@ -93,15 +89,17 @@ public static class MaestroFlowExtractor
                 || action.EndNormalizedY is not { } endY)
             {
                 diagnostics.Add($"Swipe at {action.CapturedAtUtc:O} has incomplete coordinates.");
+
                 return null;
             }
 
             return $"- swipe:\n    start: {Percent(startX)}, {Percent(startY)}\n"
-                   + $"    end: {Percent(endX)}, {Percent(endY)}\n"
-                   + $"    duration: {Math.Clamp(action.DurationMilliseconds, 50, 2_000).ToString(CultureInfo.InvariantCulture)}\n";
+                + $"    end: {Percent(endX)}, {Percent(endY)}\n"
+                + $"    duration: {Math.Clamp(action.DurationMilliseconds, 50, 2_000).ToString(CultureInfo.InvariantCulture)}\n";
         }
 
         var selector = RenderSelector(action.Selector);
+
         if (selector is null)
         {
             if (action.Kind == "tap"
@@ -109,10 +107,12 @@ public static class MaestroFlowExtractor
                 && action.StartNormalizedY is { } tapY)
             {
                 diagnostics.Add($"Tap at {action.CapturedAtUtc:O} uses a viewport coordinate; confirm it on the target device.");
+
                 return "- tapOn:\n    point: " + Quote($"{Percent(tapX)},{Percent(tapY)}") + "\n";
             }
 
             diagnostics.Add($"{action.Description} at {action.CapturedAtUtc:O} has no Maestro-compatible ID or text selector.");
+
             return null;
         }
 
@@ -124,32 +124,36 @@ public static class MaestroFlowExtractor
         if (action.Kind == "input")
         {
             diagnostics.Add($"Text replacement at {action.CapturedAtUtc:O} clears up to 100 characters; check the field's initial value.");
+
             return "- tapOn:\n" + selector
-                   + "- eraseText: 100\n"
-                   + (string.IsNullOrEmpty(action.InputValue)
-                       ? string.Empty
-                       : "- inputText: " + Quote(action.InputValue) + "\n");
+                + "- eraseText: 100\n"
+                + (string.IsNullOrEmpty(action.InputValue)
+                    ? string.Empty
+                    : "- inputText: " + Quote(action.InputValue) + "\n");
         }
 
         diagnostics.Add($"Unsupported action {action.Kind} at {action.CapturedAtUtc:O} was omitted.");
+
         return null;
     }
 
     private static string? RenderSelector(JsonObject? selector)
     {
         var id = ReadString(selector, "automationId");
+
         if (id is not null)
         {
             return "    id: " + Quote(ExactPattern(id)) + "\n";
         }
 
         var text = ReadString(selector, "text");
+
         return text is null ? null : "    text: " + Quote(ExactPattern(text)) + "\n";
     }
 
     private static string? ReadString(JsonObject? value, string key)
         => value?[key] is JsonValue node && node.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text
             : null;
 

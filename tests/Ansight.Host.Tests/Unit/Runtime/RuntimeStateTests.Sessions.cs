@@ -62,6 +62,7 @@ public sealed partial class RuntimeStateTests
             MetricChannels = [],
             Metrics = []
         });
+
         var runtimeState = new RuntimeState(captureStore);
 
         var deleteResult = runtimeState.DeleteSession("com-example-app-001");
@@ -100,7 +101,7 @@ public sealed partial class RuntimeStateTests
         runtimeState.SetSessionAppState(sessionId, AppLifecycleState.Foreground, DateTimeOffset.Parse("2026-03-22T01:20:00Z"));
         runtimeState.SetSessionAppState(sessionId, AppLifecycleState.Background, DateTimeOffset.Parse("2026-03-22T01:30:00Z"));
         runtimeState.AddSessionApplicationEvents(sessionId,
-        [
+            [
             new SessionApplicationEvent(
                 "sdk-lifecycle-foreground",
                 "lifecycle.foreground",
@@ -142,7 +143,7 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(sessionId, out var persistedSnapshot)
-                  && persistedSnapshot?.ApplicationEvents.Count == 4,
+                && persistedSnapshot?.ApplicationEvents.Count == 4,
             because: "Every distinct lifecycle transition should be persisted.");
 
         var reloadedRuntimeState = new RuntimeState(captureStore);
@@ -298,6 +299,7 @@ public sealed partial class RuntimeStateTests
         await Task.Delay(200);
 
         Assert.Single(snapshots);
+
         var snapshot = Assert.Single(snapshots);
         Assert.Equal("Connect Accepted", snapshot.Status);
         Assert.Equal(AppLifecycleState.Foreground, snapshot.AppState);
@@ -449,8 +451,7 @@ public sealed partial class RuntimeStateTests
                     {
                         Source = "Client",
                         EventId = $"evt-{index}"
-                    }
-                ]);
+                    }                ]);
             runtimeState.SetSessionStatus(sessionId, "WebSocket Closed");
         }
 
@@ -459,9 +460,9 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(sessionIds[0], out var persistedSnapshot)
-                  && persistedSnapshot?.IsHistorical == true
-                  && persistedSnapshot.Status == "WebSocket Closed"
-                  && persistedSnapshot.Logs.Any(log => string.Equals(log.EventId, "evt-0", StringComparison.Ordinal)),
+                && persistedSnapshot?.IsHistorical == true
+                && persistedSnapshot.Status == "WebSocket Closed"
+                && persistedSnapshot.Logs.Any(log => string.Equals(log.EventId, "evt-0", StringComparison.Ordinal)),
             because: "Evicted terminal sessions should be persisted before their loaded state is dropped.");
 
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionIds[0], out var reloadedSnapshot));

@@ -35,18 +35,34 @@ internal sealed class PermissionTool : Operation
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         if (arguments?["permission"] is not JsonValue value || !value.TryGetValue<string>(out var permission) || string.IsNullOrWhiteSpace(permission))
+        {
             return ToolError("permission must be a non-empty string.");
+        }
+
         if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var session, out var error))
+        {
             return ToolError(error);
+        }
+
         var device = uiInputRouter.ResolveDeviceIdentifier(session!.SessionId, DeviceLifecycleTool.ResolveNativeDeviceIdentifier(session));
-        if (device is null) return ToolError("The session does not report a native device identifier.");
+
+        if (device is null)
+        {
+            return ToolError("The session does not report a native device identifier.");
+        }
+
         try
         {
             var result = await router.ExecuteAsync(action, permission, platform, device, session.AppId,
                 ToolExecutionCancellation.Current).ConfigureAwait(false);
             var payload = JsonSerializer.SerializeToNode(result, JsonUtil.Compact)!.AsObject();
             payload["sessionId"] = session.SessionId;
-            if (!result.Supported && !result.IsSuccess) payload["code"] = ExecutionCapabilities.ErrorCode;
+
+            if (!result.Supported && !result.IsSuccess)
+            {
+                payload["code"] = ExecutionCapabilities.ErrorCode;
+            }
+
             return RequestResult.ToolResult(payload, isError: !result.IsSuccess);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)

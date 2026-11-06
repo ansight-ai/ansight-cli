@@ -12,21 +12,26 @@ internal static class SessionReviewContext
     {
         snapshot = null;
         errorMessage = null;
+
         if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var resolvedSnapshot, out var resolutionError))
         {
             errorMessage = resolutionError;
+
             return false;
         }
 
         var platformFilters = SessionPlatformFilters.Read(arguments);
         var platformKey = SessionPlatformFilters.ResolveSessionPlatformKey(resolvedSnapshot!);
+
         if (platformFilters.Count > 0 && !platformFilters.Contains(platformKey))
         {
             errorMessage = $"Session '{resolvedSnapshot!.SessionId}' platform '{platformKey}' does not match the requested platform filters.";
+
             return false;
         }
 
         snapshot = resolvedSnapshot;
+
         return true;
     }
 
@@ -35,6 +40,7 @@ internal static class SessionReviewContext
         startUtc = null;
         endUtc = null;
         errorMessage = null;
+
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "startUtc", out startUtc, out errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out endUtc, out errorMessage))
         {
@@ -44,6 +50,7 @@ internal static class SessionReviewContext
         if (startUtc.HasValue && endUtc.HasValue && startUtc.Value > endUtc.Value)
         {
             errorMessage = "startUtc must be before or equal to endUtc.";
+
             return false;
         }
 
@@ -67,6 +74,7 @@ internal static class SessionReviewContext
         out string? errorMessage)
     {
         targetPayload = null;
+
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "timestampUtc", out var timestampUtc, out errorMessage)
             || !ArgumentReader.TryReadOptionalIntegerArgument(arguments, "logIndex", out var logIndex, out errorMessage))
         {
@@ -76,6 +84,7 @@ internal static class SessionReviewContext
         var eventId = NormalizeOptionalString(arguments?["eventId"]?.GetValue<string>());
         var logs = BuildIndexedReviewLogs(snapshot);
         IndexedReviewLog? targetLog = null;
+
         if (logIndex.HasValue)
         {
             if (logIndex.Value < 0 || logIndex.Value >= logs.Length)
@@ -83,6 +92,7 @@ internal static class SessionReviewContext
                 errorMessage = logs.Length == 0
                     ? "logIndex cannot be used because the session has no logs."
                     : $"logIndex must be between 0 and {logs.Length - 1}.";
+
                 return null;
             }
 
@@ -91,11 +101,13 @@ internal static class SessionReviewContext
         else if (eventId is not null)
         {
             targetLog = logs.FirstOrDefault(entry =>
-                !string.IsNullOrWhiteSpace(entry.Log.EventId)
-                && string.Equals(entry.Log.EventId, eventId, StringComparison.OrdinalIgnoreCase));
+                        !string.IsNullOrWhiteSpace(entry.Log.EventId)
+                            && string.Equals(entry.Log.EventId, eventId, StringComparison.OrdinalIgnoreCase));
+
             if (targetLog is null)
             {
                 errorMessage = $"No log with eventId '{eventId}' was found.";
+
                 return null;
             }
         }
@@ -103,12 +115,14 @@ internal static class SessionReviewContext
         if (targetLog is not null)
         {
             targetPayload = BuildLogTargetPayload(targetLog);
+
             return targetLog.Log.TimestampUtc;
         }
 
         if (!timestampUtc.HasValue)
         {
             errorMessage = "One of timestampUtc, logIndex, or eventId is required.";
+
             return null;
         }
 
@@ -118,6 +132,7 @@ internal static class SessionReviewContext
             ["timestampUtc"] = timestampUtc.Value
         };
         errorMessage = null;
+
         return timestampUtc.Value;
     }
 
@@ -143,6 +158,7 @@ internal static class SessionReviewContext
     {
         var payload = PayloadJson.BuildSessionPayload(snapshot, isLive);
         payload["platformKey"] = SessionPlatformFilters.ResolveSessionPlatformKey(snapshot);
+
         return payload;
     }
 

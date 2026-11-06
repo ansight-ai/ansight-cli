@@ -14,6 +14,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var pairing = environment.SeedPairingConfig(appId, "Automatic Trends App");
         var workspacePath = Path.Combine(environment.RootPath, "workspace");
         WriteAutomaticTrendsWorkspace(workspacePath, appId);
+
         using var runtime = environment.CreateRuntime();
         var registration = runtime.Apps.Register(new AppRegistrationRequest(
             appId,
@@ -21,6 +22,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             workspacePath));
         Assert.True(registration.IsSuccess, registration.Message);
         Assert.True(registration.App?.AutomaticTrendsMonitoringEnabled);
+
         var captureEvents = new ConcurrentQueue<RuntimeSessionCaptureEvent>();
         runtime.SessionCaptureEventOccurred += (_, runtimeEvent) => captureEvents.Enqueue(runtimeEvent);
         await runtime.StartAsync();
@@ -35,12 +37,13 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         Assert.Equal("1.0.0", report.Context.AppVersion);
         Assert.Equal(WorkspaceTrendsStatus.Passed, report.Status);
+
         var observedCheck = Assert.Single(report.Checks, check => check.TrendsId == "checkout-fps");
         Assert.Equal(60d, Assert.Single(observedCheck.Metrics).Value);
         Assert.Single(report.History);
         Assert.Contains(captureEvents, runtimeEvent =>
             runtimeEvent.SessionId == sessionId
-            && runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Finalized);
+                && runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Finalized);
     }
 
     private static async Task<string> StreamTrendsSessionAsync(
@@ -55,6 +58,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             .ToHashSet(StringComparer.Ordinal);
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted, connectResponse.ReasonMessage ?? connectResponse.Reason);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(
             new Uri(
@@ -67,10 +71,11 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             {
                 sessionId = captureEvents
                     .LastOrDefault(runtimeEvent =>
-                        runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Started
-                        && string.Equals(runtimeEvent.AppId, pairingConfig.AppId, StringComparison.Ordinal)
-                        && !previousSessionIds.Contains(runtimeEvent.SessionId))
-                    ?.SessionId;
+                                    runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Started
+                                        && string.Equals(runtimeEvent.AppId, pairingConfig.AppId, StringComparison.Ordinal)
+                                        && !previousSessionIds.Contains(runtimeEvent.SessionId))
+                                ?.SessionId;
+
                 return sessionId is not null;
             },
             because: "The new automatic-trends session should start capture.");
@@ -170,9 +175,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         await TestWait.UntilAsync(
             () => captureEvents.Any(runtimeEvent =>
                 runtimeEvent.SessionId == sessionId
-                && runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Finalized),
+                    && runtimeEvent.Kind == RuntimeSessionCaptureEventKind.Finalized),
             timeout: TimeSpan.FromSeconds(15),
             because: "Automatic trends evaluation should begin after capture sources are finalized.");
+
         return sessionId!;
     }
 
@@ -191,12 +197,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () => File.Exists(reportPath),
             timeout: TimeSpan.FromSeconds(15),
             because: "The finalized session should receive an automatic trends sidecar.");
+
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         serializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+
         return JsonSerializer.Deserialize<WorkspaceTrendsReport>(
-                   await File.ReadAllTextAsync(reportPath),
-                   serializerOptions)
-               ?? throw new InvalidDataException("The automatic trends report could not be read.");
+            await File.ReadAllTextAsync(reportPath),
+            serializerOptions)
+            ?? throw new InvalidDataException("The automatic trends report could not be read.");
     }
 
     private static void WriteAutomaticTrendsWorkspace(string workspacePath, string appId)

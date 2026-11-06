@@ -14,6 +14,7 @@ public sealed class AppExecutionScopeTests
             {
                 Assert.False(token.IsCancellationRequested);
                 calls.Add(Target(platform, device, app));
+
                 return Task.FromResult(Success());
             },
             Output());
@@ -39,6 +40,7 @@ public sealed class AppExecutionScopeTests
         await using var scope = new AppExecutionScope(true, (_, _, _, _) =>
         {
             callCount++;
+
             return Task.FromResult(Success());
         }, Output());
 
@@ -65,6 +67,7 @@ public sealed class AppExecutionScopeTests
                 Assert.False(token.IsCancellationRequested);
                 Assert.NotEqual(executionCancellation.Token, token);
                 closed = true;
+
                 return Task.FromResult(Success());
             }, Output());
             scope.SetTarget(Target());
@@ -138,6 +141,7 @@ public sealed class AppExecutionScopeTests
             await using var scope = new AppExecutionScope(true, (_, identifier, _, _) =>
             {
                 calls.Add(identifier);
+
                 return Task.FromResult(Success());
             }, Output());
             scope.SetTarget(Target(device: device));
@@ -191,9 +195,9 @@ public sealed class AppExecutionScopeTests
     public async Task InlineCompatibilityDoesNotSilentlyIgnoreTheFlag()
     {
         var exception = await Assert.ThrowsAsync<CliUsageException>(() =>
-            AppExecutionService.RunInlineCompatibilityAsync(
-                CliArguments.Parse(["test", "run-inline", "--close-app-on-completion"]),
-                Output(), CancellationToken.None));
+                AppExecutionService.RunInlineCompatibilityAsync(
+                    CliArguments.Parse(["test", "run-inline", "--close-app-on-completion"]),
+                    Output(), CancellationToken.None));
 
         Assert.Contains("ansight app execute", exception.Message, StringComparison.Ordinal);
     }
@@ -218,6 +222,7 @@ public sealed class AppExecutionScopeTests
             {
                 Assert.True(CliArguments.Parse(arguments.OriginalArguments).HasFlag("close-app-on-completion"));
                 forwarded = true;
+
                 return Task.FromResult<int?>(CliExitCodes.Success);
             });
         Assert.True(forwarded);
@@ -240,15 +245,24 @@ public sealed class AppExecutionScopeTests
     private static AppSessionSnapshot Snapshot(string? nativeId)
         => new()
         {
-            SessionId = "session-1", AppId = "com.example.app", ClientName = "Example", RemoteAddress = "localhost",
-            CreatedUtc = DateTimeOffset.UtcNow, ConfigId = null, Status = "Connected",
-            LastUpdatedUtc = DateTimeOffset.UtcNow, IsHistorical = false, MetricChannels = [], Metrics = [],
+            SessionId = "session-1",
+            AppId = "com.example.app",
+            ClientName = "Example",
+            RemoteAddress = "localhost",
+            CreatedUtc = DateTimeOffset.UtcNow,
+            ConfigId = null,
+            Status = "Connected",
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            IsHistorical = false,
+            MetricChannels = [],
+            Metrics = [],
             DeviceProfileJson = nativeId is null ? null : $$$"""{"device":{"nativeDeviceId":"{{{nativeId}}}"}}"""
         };
 
     private sealed class RecordingClaim : IDisposable
     {
         public int DisposeCount { get; private set; }
+
         public void Dispose() => DisposeCount++;
     }
 }

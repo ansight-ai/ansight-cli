@@ -21,6 +21,7 @@ internal static class LiveUiToolSchemas
         properties["exact"] = ToolSchema.Boolean("Use exact string matching. Defaults to true.", nullable: true);
         properties["caseSensitive"] = ToolSchema.Boolean("Use case-sensitive string matching. Defaults to false.", nullable: true);
         properties["index"] = ToolSchema.Integer("Zero-based match index when a selector matches multiple nodes. Defaults to zero.", nullable: true);
+
         return properties;
     }
 
@@ -37,6 +38,7 @@ internal static class LiveUiToolSchemas
         if (arguments?[propertyName] is not JsonValue value)
         {
             result = default;
+
             return false;
         }
 
@@ -48,29 +50,33 @@ internal static class LiveUiToolSchemas
         if (value.TryGetValue<int>(out var integer))
         {
             result = integer;
+
             return true;
         }
 
         if (value.TryGetValue<long>(out var longInteger))
         {
             result = longInteger;
+
             return true;
         }
 
         if (value.TryGetValue<decimal>(out var decimalValue))
         {
             result = (double)decimalValue;
+
             return true;
         }
 
         result = default;
+
         return false;
     }
 
     public static string? ReadString(JsonObject? arguments, string propertyName)
         => arguments?[propertyName] is JsonValue value
-           && value.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && value.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
@@ -83,10 +89,12 @@ internal static class LiveUiToolSchemas
             && jsonValue.TryGetValue<string>(out var text))
         {
             value = text;
+
             return true;
         }
 
         value = string.Empty;
+
         return false;
     }
 }

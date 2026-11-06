@@ -33,6 +33,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
         var descriptors = new List<BinaryToolArtifactTransferDescriptor>();
         CollectDescriptors(envelope.Payload, inheritedToolId: null, descriptors);
+
         if (descriptors.Count == 0)
         {
             return [];
@@ -41,6 +42,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         lock (gate)
         {
             ThrowIfDisposed();
+
             if (completionsByResponse.TryGetValue(envelope, out var existing))
             {
                 return existing.Registrations;
@@ -48,6 +50,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
             var registrations = descriptors.Select(descriptor => Register(sessionId, appId, descriptor)).ToArray();
             completionsByResponse.Add(envelope, new ResponseTransfers(sessionId.Trim(), registrations));
+
             return registrations;
         }
     }
@@ -95,6 +98,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
         ActiveTransfer? activeTransfer;
         var key = new TransferKey(sessionId.Trim(), frame.Header.TransferId);
+
         lock (gate)
         {
             activeByTransfer.TryGetValue(key, out activeTransfer);
@@ -106,12 +110,14 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         }
 
         HandleFrame(activeTransfer, frame);
+
         return true;
     }
 
     public bool TryGetCompletion(string sessionId, ToolProtocolEnvelope envelope, out BinaryToolArtifactTransferRegistration registration)
     {
         registration = TryGetCompletions(sessionId, envelope).FirstOrDefault()!;
+
         return registration is not null;
     }
 
@@ -121,6 +127,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(envelope);
+
         lock (gate)
         {
             if (completionsByResponse.TryGetValue(envelope, out var responseTransfers)
@@ -128,15 +135,18 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
             {
                 // One consumer owns persistence, including when the transfer already completed.
                 completionsByResponse.Remove(envelope);
+
                 return responseTransfers.Registrations;
             }
         }
+
         return [];
     }
 
     public void CancelResponse(string sessionId, ToolProtocolEnvelope envelope, string reason)
     {
         var registrations = TryGetCompletions(sessionId, envelope);
+
         foreach (var registration in registrations)
         {
             FailTransfer(sessionId, registration.TransferId, new OperationCanceledException(reason));
@@ -146,17 +156,20 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     public void CancelSession(string sessionId, string reason)
     {
         List<ActiveTransfer> activeTransfers;
+
         lock (gate)
         {
             foreach (var response in completionsByResponse
-                         .Where(candidate => string.Equals(candidate.Value.SessionId, sessionId.Trim(), StringComparison.Ordinal))
-                         .Select(candidate => candidate.Key).ToArray())
+                .Where(candidate => string.Equals(candidate.Value.SessionId, sessionId.Trim(), StringComparison.Ordinal))
+                .Select(candidate => candidate.Key).ToArray())
             {
                 completionsByResponse.Remove(response);
             }
+
             activeTransfers = activeByTransfer.Values
                 .Where(candidate => string.Equals(candidate.SessionId, sessionId.Trim(), StringComparison.Ordinal)).ToList();
         }
+
         foreach (var transfer in activeTransfers)
         {
             FailActiveTransfer(transfer, new OperationCanceledException(reason));
@@ -166,6 +179,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     public void FailTransfer(string sessionId, string transferId, Exception exception)
     {
         ActiveTransfer? activeTransfer;
+
         lock (gate)
         {
             activeByTransfer.TryGetValue(new TransferKey(sessionId.Trim(), transferId), out activeTransfer);
@@ -185,6 +199,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         }
 
         List<ActiveTransfer> activeTransfers;
+
         lock (gate)
         {
             if (disposed)
@@ -210,6 +225,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         {
             FailActiveTransfer(activeTransfer, new InvalidOperationException(
                 $"Expected ASFT sequence {activeTransfer.ExpectedSequence} but received {frame.Header.Sequence}."));
+
             return;
         }
 
@@ -217,6 +233,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         {
             FailActiveTransfer(activeTransfer, new InvalidOperationException(
                 $"Expected ASFT offset {activeTransfer.BytesWritten} but received {frame.Header.OffsetBytes}."));
+
             return;
         }
 
@@ -328,11 +345,13 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         out BinaryToolArtifactTransferDescriptor? descriptor)
     {
         descriptor = null;
+
         if (envelope.Payload is not JsonObject payload ||
             payload["result"] is not JsonObject result)
         {
             return false;
         }
+
         return TryCreateDescriptor(ReadOptionalString(payload, "toolId"), result, out descriptor);
     }
 
@@ -342,6 +361,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         out BinaryToolArtifactTransferDescriptor? descriptor)
     {
         descriptor = null;
+
         if (
             !string.Equals(ReadOptionalString(result, "deliveryMode"), "websocket_binary", StringComparison.Ordinal) ||
             !string.Equals(ReadOptionalString(result, "wireProtocol"), BinaryFileTransferProtocol.ProtocolName, StringComparison.Ordinal))
@@ -352,18 +372,21 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         if (string.Equals(toolId, UiGetScreenshotToolId, StringComparison.Ordinal))
         {
             descriptor = CreateScreenshotDescriptor(result);
+
             return true;
         }
 
         if (string.Equals(toolId, ArtifactRequestToolId, StringComparison.Ordinal))
         {
             descriptor = CreateArtifactRequestDescriptor(result);
+
             return true;
         }
 
         if (string.Equals(toolId, FilesBeginBinaryDownloadToolId, StringComparison.Ordinal))
         {
             descriptor = CreateFileDownloadDescriptor(result);
+
             return true;
         }
 
@@ -381,6 +404,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
             {
                 CollectDescriptors(item, inheritedToolId: null, descriptors);
             }
+
             return;
         }
 
@@ -390,6 +414,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         }
 
         var toolId = ReadOptionalString(payload, "toolId") ?? inheritedToolId;
+
         if (payload["result"] is JsonObject result
             && TryCreateDescriptor(toolId, result, out var descriptor)
             && descriptor is not null)
@@ -414,8 +439,10 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
             {
                 CollectTransferIds(item, transferIds);
             }
+
             return;
         }
+
         if (node is not JsonObject payload)
         {
             return;
@@ -427,6 +454,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         {
             transferIds.Add(transferId);
         }
+
         foreach (var property in payload)
         {
             if (!string.Equals(property.Key, "result", StringComparison.Ordinal))
@@ -443,6 +471,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         var format = ReadOptionalString(result, "format") ?? "jpeg";
         var mimeType = ReadOptionalString(result, "mimeType") ?? ResolveMimeType(format);
         var fileName = ReadOptionalString(result, "fileName") ?? $"screenshot-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}.{ResolveExtension(format)}";
+
         return new BinaryToolArtifactTransferDescriptor(
             ToolId: UiGetScreenshotToolId,
             TransferId: transferId,
@@ -462,6 +491,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     {
         var transferId = ReadRequiredString(result, "transferId");
         var sizeBytes = ReadRequiredInt64(result, "sizeBytes");
+
         if (sizeBytes < 0)
         {
             throw new InvalidOperationException("Binary file download payload 'sizeBytes' must be a non-negative integer.");
@@ -506,6 +536,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         var artifact = result["artifact"] as JsonObject;
         var transferId = ReadRequiredString(result, "transferId");
         var sizeBytes = ReadOptionalInt64(artifact, "sizeBytes") ?? ReadOptionalInt64(result, "sizeBytes");
+
         if (sizeBytes < 0)
         {
             throw new InvalidOperationException("Binary artifact payload 'sizeBytes' must be a non-negative integer.");
@@ -558,12 +589,14 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         Directory.CreateDirectory(artifactDirectory);
 
         var safeFileName = SanitizeFileName(fileName);
+
         if (string.IsNullOrWhiteSpace(safeFileName))
         {
             safeFileName = $"screenshot-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}.jpg";
         }
 
         var candidatePath = Path.Combine(artifactDirectory, safeFileName);
+
         if (!File.Exists(candidatePath))
         {
             return candidatePath;
@@ -571,9 +604,11 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
         var baseName = Path.GetFileNameWithoutExtension(safeFileName);
         var extension = Path.GetExtension(safeFileName);
+
         for (var attempt = 1; attempt < 1000; attempt++)
         {
             candidatePath = Path.Combine(artifactDirectory, $"{baseName}-{attempt}{extension}");
+
             if (!File.Exists(candidatePath))
             {
                 return candidatePath;
@@ -592,6 +627,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
         var invalidCharacters = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(value.Length);
+
         foreach (var character in value.Trim())
         {
             builder.Append(invalidCharacters.Contains(character) ? '_' : character);
@@ -626,6 +662,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     private static string ReadRequiredString(JsonObject payload, string propertyName)
     {
         var value = ReadOptionalString(payload, propertyName);
+
         if (string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"Binary artifact payload is missing '{propertyName}'.");
@@ -636,13 +673,14 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
 
     private static string? ReadOptionalString(JsonObject? payload, string propertyName)
         => payload?[propertyName] is JsonValue value
-           && value.TryGetValue<string>(out var result)
+            && value.TryGetValue<string>(out var result)
             ? result
             : null;
 
     private static long ReadRequiredInt64(JsonObject payload, string propertyName)
     {
         var parsed = ReadOptionalInt64(payload, propertyName);
+
         if (parsed is not null)
         {
             return parsed.Value;
@@ -654,6 +692,7 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     private static long? ReadOptionalInt64(JsonObject? payload, string propertyName)
     {
         var node = payload?[propertyName];
+
         if (node is JsonValue value)
         {
             if (value.TryGetValue<long>(out var longValue))
@@ -758,39 +797,23 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
         }
 
         public string SessionId { get; }
-
         public string TransferId { get; }
-
         public long? SizeBytes { get; }
-
         public string ArtifactPath { get; }
-
         public FileStream Stream { get; }
-
         public JsonObject ResultPayload { get; }
-
         public string ToolId { get; }
-
         public string Name { get; }
-
         public string Kind { get; }
-
         public string MimeType { get; }
-
         public string FileName { get; }
-
         public string? ProviderId { get; }
-
         public string? ArtifactId { get; }
-
         public DateTimeOffset CapturedAtUtc { get; }
-
         public bool CaptureSessionArtifactSnapshot { get; }
-
         public TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int ExpectedSequence { get; set; }
-
         public long BytesWritten { get; set; }
     }
 }

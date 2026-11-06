@@ -10,6 +10,9 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 csharp_new_line_before_open_brace = all
+csharp_prefer_braces = true:warning
+csharp_preserve_single_line_statements = false
+dotnet_diagnostic.IDE0011.severity = warning
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_style_prefer_primary_constructors = false:silent
 dotnet_style_qualification_for_field = false:suggestion
@@ -26,6 +29,11 @@ dotnet_naming_symbols.non_constant_fields.applicable_accessibilities = private, 
 dotnet_naming_symbols.non_constant_fields.required_modifiers =
 
 dotnet_naming_style.lower_camel.capitalization = camel_case
+
+[**/Qr/**.cs]
+# Preserve the formatting of the vendored QR implementation.
+csharp_prefer_braces = false:none
+dotnet_diagnostic.IDE0011.severity = none
 
 [Ansight.Infrastructure/Utilities/TaskUtilities.cs]
 # Intentionally excluded from the cleanup: retained legacy utility.

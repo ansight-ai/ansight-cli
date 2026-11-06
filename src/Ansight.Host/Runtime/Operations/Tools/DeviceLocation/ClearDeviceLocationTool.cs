@@ -32,6 +32,7 @@ internal sealed class ClearDeviceLocationTool : DeviceHostTargetOperation
         var result = await deviceLocationRouter.ClearLocationAsync(
             new ClearDeviceLocationRequest(target.DeviceIdentifier),
             CancellationToken.None);
+
         return RequestResult.ToolResult(
             BuildResultPayload("clear", target, result),
             isError: !result.IsSuccess);

@@ -55,8 +55,15 @@ public sealed class AdbClientProcessLauncherTests
         var result = await new AdbClient("/fake/adb", launcher)
             .ResolveSessionTargetAsync(null, "com.example.app", 456);
         Assert.Equal(expectedMatch, result.Device is not null);
-        if (expectedMatch) Assert.Equal("emulator-5554", result.Device!.Serial);
-        else Assert.Contains("ambiguous", result.Message);
+
+        if (expectedMatch)
+        {
+            Assert.Equal("emulator-5554", result.Device!.Serial);
+        }
+        else
+        {
+            Assert.Contains("ambiguous", result.Message);
+        }
     }
 
     [Fact]
@@ -89,7 +96,7 @@ public sealed class AdbClientProcessLauncherTests
         var player = new AndroidEmulatorMotionPlayer(new AdbClient("/fake/adb", launcher));
 
         await player.PlayAsync("emulator-5554",
-        [
+            [
             new DeviceMotionSample(new EmulatorAcceleration(20, 0, 0), 10),
             new DeviceMotionSample(new EmulatorAcceleration(-20, 0, 0), 10)
         ]);
@@ -130,6 +137,7 @@ public sealed class AdbClientProcessLauncherTests
         Assert.Equal(3, launcher.Requests.Count);
         Assert.Equal("0:9.81:0", launcher.Requests[2].Arguments[^1]);
     }
+
     [Fact]
     public async Task WaitForEmulatorBootAsync_WaitsForMatchingAvdAndPackageManager()
     {
@@ -159,6 +167,7 @@ public sealed class AdbClientProcessLauncherTests
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
+
         var client = new AdbClient("/fake/adb", new RecordingAdbProcessLauncher());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             client.WaitForEmulatorBootAsync("Demo_AVD", TimeSpan.FromSeconds(5), cancellation.Token));
@@ -234,7 +243,7 @@ public sealed class AdbClientProcessLauncherTests
     {
         var launcher = new RecordingAdbProcessLauncher(
             "List of devices attached\n"
-            + "emulator-5554 device product:sdk_phone model:Pixel_9 device:emu64xa transport_id:1\n");
+                + "emulator-5554 device product:sdk_phone model:Pixel_9 device:emu64xa transport_id:1\n");
         var client = new AdbClient("/fake/adb", launcher);
 
         var devices = await client.GetDevicesAsync();
@@ -498,6 +507,7 @@ public sealed class AdbClientProcessLauncherTests
             Path.GetTempPath(),
             $"ansight-adb-install-{Guid.NewGuid():N}.apk");
         await File.WriteAllTextAsync(packagePath, "fixture");
+
         try
         {
             var launcher = new RecordingAdbProcessLauncher("Success\n");
@@ -560,17 +570,18 @@ public sealed class AdbClientProcessLauncherTests
         public List<AdbProcessStartRequest> Requests { get; } = [];
 
         public AdbProcessStartRequest? LastRequest { get; private set; }
-
         public RecordingAdbProcess? Process { get; private set; }
 
         public IAdbProcess Start(AdbProcessStartRequest request)
         {
             Requests.Add(request);
             LastRequest = request;
+
             var standardOutput = standardOutputs.Count > 0
                 ? standardOutputs.Dequeue()
                 : string.Empty;
             Process = new RecordingAdbProcess(standardOutput);
+
             return Process;
         }
     }
@@ -589,7 +600,6 @@ public sealed class AdbClientProcessLauncherTests
         public Stream StandardInput => standardInput;
 
         public Stream StandardOutput { get; }
-
         public Stream StandardError { get; } = new MemoryStream();
 
         public Task<int> Completion { get; } = Task.FromResult(0);
@@ -610,6 +620,7 @@ public sealed class AdbClientProcessLauncherTests
             StandardOutput.Dispose();
             StandardError.Dispose();
             standardInput.Dispose();
+
             return ValueTask.CompletedTask;
         }
     }

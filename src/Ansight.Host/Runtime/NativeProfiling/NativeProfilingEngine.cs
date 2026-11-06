@@ -26,6 +26,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         IProcessSampleCaptureAdapter? processSampleAdapter = null)
     {
         ArgumentNullException.ThrowIfNull(applicationPaths);
+
         var runner = processRunner ?? new NativeProfilingProcessRunner();
         captureStore = new NativeProfileCaptureStore(applicationPaths);
         analytics = ProductAnalytics.For(applicationPaths);
@@ -55,13 +56,15 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var normalizedPlatform = NormalizePlatform(platform);
         var adapter = adapters.FirstOrDefault(candidate => string.Equals(
-                          candidate.Platform,
-                          normalizedPlatform,
-                          StringComparison.Ordinal))
-                      ?? throw new InvalidOperationException(
-                          $"No native profiling adapter is registered for '{normalizedPlatform}'.");
+            candidate.Platform,
+            normalizedPlatform,
+            StringComparison.Ordinal))
+            ?? throw new InvalidOperationException(
+                $"No native profiling adapter is registered for '{normalizedPlatform}'.");
+
         return adapter.GetToolchainAsync(cancellationToken);
     }
 
@@ -69,6 +72,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         return processSampleAdapter.GetToolchainAsync(cancellationToken);
     }
 
@@ -99,26 +103,29 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             CreatedUtc = DateTimeOffset.UtcNow
         };
         var job = new CaptureJob(manifest);
+
         lock (jobsGate)
         {
             var activeCapture = jobs.Values
                 .Select(static candidate => candidate.CreateSnapshot())
                 .FirstOrDefault(snapshot => !snapshot.IsTerminal
-                                            && string.Equals(
-                                                snapshot.Manifest.DeviceId,
-                                                manifest.DeviceId,
-                                                StringComparison.OrdinalIgnoreCase));
+                    && string.Equals(
+                        snapshot.Manifest.DeviceId,
+                        manifest.DeviceId,
+                        StringComparison.OrdinalIgnoreCase));
+
             if (activeCapture is not null)
             {
                 throw new InvalidOperationException(
                     $"Device '{manifest.DeviceId}' already has active native capture "
-                    + $"'{activeCapture.CaptureId}'. Cancel or wait for it before starting another.");
+                        + $"'{activeCapture.CaptureId}'. Cancel or wait for it before starting another.");
             }
 
             jobs.Add(captureId, job);
         }
 
         string capturePath;
+
         try
         {
             capturePath = captureStore.CreateCaptureDirectory(captureId);
@@ -151,6 +158,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 Preset = normalizedPreset
             }, adapter),
             CancellationToken.None);
+
         return captureId;
     }
 
@@ -160,6 +168,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ValidateProcessSampleRequest(request);
+
         var target = ResolveProcessTarget(request.ProcessId);
         var captureId = Guid.NewGuid().ToString("N");
         var manifest = new NativeProfileCaptureManifest
@@ -180,23 +189,26 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             CreatedUtc = DateTimeOffset.UtcNow
         };
         var job = new CaptureJob(manifest);
+
         lock (jobsGate)
         {
             var activeCapture = jobs.Values
                 .Select(static candidate => candidate.CreateSnapshot())
                 .FirstOrDefault(snapshot => !snapshot.IsTerminal
-                                            && snapshot.Manifest.ProcessId == request.ProcessId);
+                    && snapshot.Manifest.ProcessId == request.ProcessId);
+
             if (activeCapture is not null)
             {
                 throw new InvalidOperationException(
                     $"Process {request.ProcessId} already has active stack sample "
-                    + $"'{activeCapture.CaptureId}'. Cancel or wait for it before starting another.");
+                        + $"'{activeCapture.CaptureId}'. Cancel or wait for it before starting another.");
             }
 
             jobs.Add(captureId, job);
         }
 
         string capturePath;
+
         try
         {
             capturePath = captureStore.CreateCaptureDirectory(captureId);
@@ -219,16 +231,18 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             job,
             Path.Combine(capturePath, "diagnostics", "capture.log"),
             $"Queued stack sample for process {request.ProcessId} ({target.Name}) using "
-            + $"{processSampleAdapter.Engine}.");
+                + $"{processSampleAdapter.Engine}.");
         job.WorkTask = Task.Run(
             () => CaptureProcessSampleAsync(job, request),
             CancellationToken.None);
+
         return captureId;
     }
 
     public bool TryGetCapture(string captureId, out NativeProfileCaptureSnapshot? snapshot)
     {
         CaptureJob? job;
+
         lock (jobsGate)
         {
             jobs.TryGetValue(captureId, out job);
@@ -237,6 +251,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         if (job is not null)
         {
             snapshot = job.CreateSnapshot();
+
             return true;
         }
 
@@ -252,10 +267,12 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 manifest.FailureMessage,
                 manifest,
                 ReadRecentLogLines(captureStore.GetCapturePath(captureId)));
+
             return true;
         }
 
         snapshot = null;
+
         return false;
     }
 
@@ -268,17 +285,19 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         out string? artifactPath)
     {
         artifactPath = null;
+
         return TryGetCapture(captureId, out var snapshot)
-               && snapshot is not null
-               && captureStore.TryResolveArtifactPath(
-                   snapshot.Manifest,
-                   artifactKind,
-                   out artifactPath);
+            && snapshot is not null
+            && captureStore.TryResolveArtifactPath(
+                snapshot.Manifest,
+                artifactKind,
+                out artifactPath);
     }
 
     public bool CancelCapture(string captureId)
     {
         CaptureJob? job;
+
         lock (jobsGate)
         {
             jobs.TryGetValue(captureId, out job);
@@ -290,6 +309,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         }
 
         job.Cancellation.Cancel();
+
         return true;
     }
 
@@ -301,7 +321,9 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         }
 
         disposed = true;
+
         CaptureJob[] activeJobs;
+
         lock (jobsGate)
         {
             activeJobs = jobs.Values.ToArray();
@@ -322,6 +344,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         var cancellationToken = job.Cancellation.Token;
         var capturePath = captureStore.GetCapturePath(job.CaptureId);
         var logPath = Path.Combine(capturePath, "diagnostics", "capture.log");
+
         try
         {
             AppendLog(job, logPath, "Inspecting the supplied application artifact and native toolchain.");
@@ -332,12 +355,13 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             }, cancellationToken).ConfigureAwait(false);
 
             var devices = deviceService
-                          ?? throw new InvalidOperationException(
-                              "The host device service is not configured for native profiling.");
+                ?? throw new InvalidOperationException(
+                    "The host device service is not configured for native profiling.");
             using var package = WorkspaceTestApplicationPackage.Open(request.ApplicationPath);
             var device = await ResolveDeviceAsync(request, package, devices, cancellationToken)
                 .ConfigureAwait(false);
             var toolchain = await adapter.GetToolchainAsync(cancellationToken).ConfigureAwait(false);
+
             if (!toolchain.IsAvailable)
             {
                 throw new InvalidOperationException(toolchain.Message);
@@ -370,6 +394,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             {
                 State = NativeProfileCaptureState.Capturing
             }, cancellationToken).ConfigureAwait(false);
+
             var adapterResult = await adapter.CaptureAsync(
                 new NativeProfileAdapterContext(
                     job.CaptureId,
@@ -389,7 +414,9 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 State = NativeProfileCaptureState.DerivingArtifacts
             }, cancellationToken).ConfigureAwait(false);
             AppendLog(job, logPath, "Native capture completed. Hashing and validating artifacts.");
+
             var artifacts = new List<NativeProfileArtifact>();
+
             foreach (var producedArtifact in adapterResult.Artifacts)
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -419,6 +446,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             TryAppendLog(job, logPath, "Capture cancellation requested. Retaining diagnostic artifacts.");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId).ConfigureAwait(false);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -431,6 +459,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         catch (Exception exception)
         {
             TryAppendLog(job, logPath, $"Capture failed: {exception.Message}");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId).ConfigureAwait(false);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -450,6 +479,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         var cancellationToken = job.Cancellation.Token;
         var capturePath = captureStore.GetCapturePath(job.CaptureId);
         var logPath = Path.Combine(capturePath, "diagnostics", "capture.log");
+
         try
         {
             AppendLog(job, logPath, $"Inspecting process {request.ProcessId} and the sample toolchain.");
@@ -458,9 +488,11 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 State = NativeProfileCaptureState.InspectingProcess,
                 StartedUtc = DateTimeOffset.UtcNow
             }, cancellationToken).ConfigureAwait(false);
+
             var target = ResolveProcessTarget(request.ProcessId);
             var toolchain = await processSampleAdapter.GetToolchainAsync(cancellationToken)
                 .ConfigureAwait(false);
+
             if (!toolchain.IsAvailable || string.IsNullOrWhiteSpace(toolchain.CaptureToolPath))
             {
                 throw new InvalidOperationException(toolchain.Message);
@@ -476,6 +508,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 SupportingToolVersion = toolchain.SupportingToolVersion,
                 State = NativeProfileCaptureState.Capturing
             }, cancellationToken).ConfigureAwait(false);
+
             var adapterResult = await processSampleAdapter.CaptureAsync(
                 new ProcessSampleAdapterContext(
                     capturePath,
@@ -490,7 +523,9 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 State = NativeProfileCaptureState.DerivingArtifacts
             }, cancellationToken).ConfigureAwait(false);
             AppendLog(job, logPath, "Stack sampling completed. Hashing the sampled call graph.");
+
             var artifacts = new List<NativeProfileArtifact>();
+
             foreach (var producedArtifact in adapterResult.Artifacts)
             {
                 artifacts.Add(await captureStore.DescribeArtifactAsync(
@@ -520,6 +555,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             TryAppendLog(job, logPath, "Stack-sample cancellation requested. Retaining diagnostic artifacts.");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId).ConfigureAwait(false);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -532,6 +568,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         catch (Exception exception)
         {
             TryAppendLog(job, logPath, $"Stack sample failed: {exception.Message}");
+
             var artifacts = await DescribeDiagnosticArtifactsAsync(job.CaptureId).ConfigureAwait(false);
             await UpdateManifestIgnoringCancellationAsync(job, manifest => manifest with
             {
@@ -552,10 +589,11 @@ internal sealed partial class NativeProfilingEngine : IDisposable
     {
         var inventory = await devices.ListAsync(cancellationToken).ConfigureAwait(false);
         var device = inventory.Devices.FirstOrDefault(candidate => candidate.IsAvailable
-                                                                  && string.Equals(
-                                                                      candidate.Identifier,
-                                                                      request.DeviceId,
-                                                                      StringComparison.OrdinalIgnoreCase));
+            && string.Equals(
+                candidate.Identifier,
+                request.DeviceId,
+                StringComparison.OrdinalIgnoreCase));
+
         if (device is null)
         {
             throw new InvalidOperationException(
@@ -573,7 +611,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         {
             throw new InvalidOperationException(
                 $"Artifact '{package.SourcePath}' requires a '{package.RequiredDeviceKind}' target, "
-                + $"but device '{device.Identifier}' is '{device.Kind}'.");
+                    + $"but device '{device.Identifier}' is '{device.Kind}'.");
         }
 
         return device;
@@ -653,9 +691,11 @@ internal sealed partial class NativeProfilingEngine : IDisposable
                 Authoritative: false)
         };
         var artifacts = new List<NativeProfileArtifact>();
+
         foreach (var candidate in candidates)
         {
             var exists = candidate.IsDirectory ? Directory.Exists(candidate.Path) : File.Exists(candidate.Path);
+
             if (!exists)
             {
                 continue;
@@ -697,19 +737,20 @@ internal sealed partial class NativeProfilingEngine : IDisposable
 
     private INativeProfileCaptureAdapter ResolveAdapter(string platform, string preset)
         => adapters.FirstOrDefault(candidate => string.Equals(
-                                                   candidate.Platform,
-                                                   platform,
-                                                   StringComparison.Ordinal)
-                                               && candidate.SupportsPreset(preset))
-           ?? throw new ArgumentException(
-               $"Native preset '{preset}' is not available for platform '{platform}'.",
-               nameof(preset));
+            candidate.Platform,
+            platform,
+            StringComparison.Ordinal)
+            && candidate.SupportsPreset(preset))
+            ?? throw new ArgumentException(
+                $"Native preset '{preset}' is not available for platform '{platform}'.",
+                nameof(preset));
 
     private static void ValidateRequest(NativeProfileCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         _ = NormalizePlatform(request.Platform);
         _ = NormalizePreset(request.Preset);
+
         if (string.IsNullOrWhiteSpace(request.ApplicationPath)
             || (!File.Exists(request.ApplicationPath) && !Directory.Exists(request.ApplicationPath)))
         {
@@ -740,6 +781,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
     private static void ValidateProcessSampleRequest(ProcessSampleCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (request.ProcessId <= 0)
         {
             throw new ArgumentOutOfRangeException(
@@ -767,6 +809,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
         try
         {
             using var process = Process.GetProcessById(processId);
+
             if (process.HasExited)
             {
                 throw new InvalidOperationException($"Process {processId} has already exited.");
@@ -774,6 +817,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
 
             var processName = process.ProcessName;
             string? executablePath = null;
+
             try
             {
                 executablePath = process.MainModule?.FileName;
@@ -852,6 +896,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
     private static IReadOnlyList<string> ReadRecentLogLines(string capturePath)
     {
         var logPath = Path.Combine(capturePath, "diagnostics", "capture.log");
+
         if (!File.Exists(logPath))
         {
             return [];
@@ -894,7 +939,11 @@ internal sealed partial class NativeProfilingEngine : IDisposable
 
     private void ReportCaptureUsage(CaptureJob job, NativeProfileCaptureManifest manifest)
     {
-        if (manifest.CompletedUtc is not { } completed || Interlocked.Exchange(ref job.UsageReported, 1) != 0) return;
+        if (manifest.CompletedUtc is not { } completed || Interlocked.Exchange(ref job.UsageReported, 1) != 0)
+        {
+            return;
+        }
+
         analytics.RecordUsage((manifest.Schema == NativeProfileCaptureManifest.ProcessSampleSchema ? "profile_sample" : manifest.Platform == "ios" ? "profile_ios" : "profile_android"),
             outcome: manifest.State == NativeProfileCaptureState.Completed ? "succeeded" : manifest.State == NativeProfileCaptureState.Cancelled ? "cancelled" : "failed",
             durationSeconds: Math.Max(0, (completed - (manifest.StartedUtc ?? manifest.CreatedUtc)).TotalSeconds));
@@ -925,6 +974,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             lock (logGate)
             {
                 File.AppendAllText(logPath, line + Environment.NewLine);
+
                 if (recentLogLines.Count == MaximumRecentLogLineCount)
                 {
                     recentLogLines.Dequeue();
@@ -940,6 +990,7 @@ internal sealed partial class NativeProfilingEngine : IDisposable
             lock (gate)
             {
                 manifest = update(manifest);
+
                 return manifest;
             }
         }

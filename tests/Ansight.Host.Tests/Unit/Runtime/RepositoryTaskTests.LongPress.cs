@@ -5,7 +5,11 @@ public sealed partial class RepositoryTaskTests
     [Fact]
     public void LongPressTypeScriptContractSupportsSelectorsCoordinatesAndSequences()
     {
-        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null) return;
+        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null)
+        {
+            return;
+        }
+
         using var repository = CreateRepository("export const placeholder = true;");
         var path = Path.Combine(repository.RootPath, "long-press.ts");
         File.WriteAllText(path, """
@@ -48,6 +52,7 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("hold-session", arguments["sessionId"]!.GetValue<string>());
             Assert.Equal("card", arguments["automationId"]!.GetValue<string>());
             Assert.Equal(3500, arguments["durationMs"]!.GetValue<int>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["performed"] = true }, isError: false));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest(

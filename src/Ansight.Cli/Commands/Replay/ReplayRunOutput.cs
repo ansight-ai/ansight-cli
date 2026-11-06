@@ -13,12 +13,3 @@ internal sealed record ReplayRunOutput(
     string? TargetAppId,
     SimulatorAgentRunResult? Result,
     ReplaySessionTaggingOutput? SessionTagging);
-
-internal sealed record ReplaySessionTaggingOutput(
-    bool IsSuccess,
-    string Message,
-    IReadOnlyList<string> Tags);
-
-internal sealed record ReplayTargetResolution(
-    AppSessionSnapshot Session,
-    WorkspaceTestTarget? LaunchedTarget);

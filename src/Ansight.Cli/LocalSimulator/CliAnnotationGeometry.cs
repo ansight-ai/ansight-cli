@@ -17,12 +17,14 @@ internal static class CliAnnotationGeometry
             "freedraw" => SessionAnnotationGeometryKind.FreeDraw,
             _ => (SessionAnnotationGeometryKind?)null
         };
+
         if (kind is null)
         {
             return Failure("Choose Draw, Point or Region.");
         }
 
         var geometry = new List<SessionAnnotationGeometry>();
+
         if (kind == SessionAnnotationGeometryKind.FreeDraw)
         {
             if (request.Strokes is null || request.Strokes.Count is < 1 or > 16)
@@ -31,6 +33,7 @@ internal static class CliAnnotationGeometry
             }
 
             var totalPoints = 0;
+
             foreach (var stroke in request.Strokes)
             {
                 if (stroke is null || stroke.Points is null)
@@ -44,6 +47,7 @@ internal static class CliAnnotationGeometry
                 }
 
                 totalPoints += stroke.Points.Count;
+
                 if (totalPoints > 1024 || stroke.Points.Any(point => point is null || !IsCoordinate(point.X, point.Y)))
                 {
                     return Failure("The drawing is too large or contains invalid coordinates.");
@@ -62,6 +66,7 @@ internal static class CliAnnotationGeometry
                 var isDegenerateStroke = !isDot
                     && width == 0
                     && height == 0;
+
                 if (isDegenerateStroke)
                 {
                     return Failure("Draw a stroke or tap to add a dot.");
@@ -91,6 +96,7 @@ internal static class CliAnnotationGeometry
 
             var width = request.Width.GetValueOrDefault();
             var height = request.Height.GetValueOrDefault();
+
             if (kind == SessionAnnotationGeometryKind.Rectangle)
             {
                 var validSize = double.IsFinite(width)
@@ -99,6 +105,7 @@ internal static class CliAnnotationGeometry
                     && height > 0
                     && request.X + width <= 1.000001
                     && request.Y + height <= 1.000001;
+
                 if (!validSize)
                 {
                     return Failure("Drag a region inside the image.");
@@ -130,6 +137,7 @@ internal static class CliAnnotationGeometry
             Height = bottom - top
         };
         var isSinglePoint = right == left && bottom == top;
+
         if (kind == SessionAnnotationGeometryKind.Point || isSinglePoint)
         {
             const double pointSize = 0.018;
@@ -151,6 +159,7 @@ internal static class CliAnnotationGeometry
             && double.IsFinite(y)
             && x is >= 0 and <= 1
             && y is >= 0 and <= 1;
+
         return valid;
     }
 
@@ -166,8 +175,3 @@ internal static class CliAnnotationGeometry
         return new AnnotationGeometryResult(message, new SessionAnnotationTargetBounds(), []);
     }
 }
-
-internal sealed record AnnotationGeometryResult(
-    string? Error,
-    SessionAnnotationTargetBounds Bounds,
-    IReadOnlyList<SessionAnnotationGeometry> Geometry);

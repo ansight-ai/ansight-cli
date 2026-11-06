@@ -15,6 +15,7 @@ internal static class AppiumDoctor
     {
         var xcuiTestCheckTask = CheckXcuiTestDriverAsync(appiumPath, cancellationToken);
         var serverCheckTask = CheckServerAsync(configuredServerUrl, cancellationToken);
+
         return await Task.WhenAll(xcuiTestCheckTask, serverCheckTask).ConfigureAwait(false);
     }
 
@@ -59,7 +60,7 @@ internal static class AppiumDoctor
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or System.ComponentModel.Win32Exception)
+            or System.ComponentModel.Win32Exception)
         {
             return DriverInspectionFailure(appiumPath, exception.Message);
         }
@@ -68,6 +69,7 @@ internal static class AppiumDoctor
         var standardErrorTask = process.StandardError.ReadToEndAsync();
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(TimeSpan.FromSeconds(10));
+
         try
         {
             await process.WaitForExitAsync(timeoutSource.Token).ConfigureAwait(false);
@@ -76,6 +78,7 @@ internal static class AppiumDoctor
         {
             TryKill(process);
             await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+
             return DriverInspectionFailure(
                 appiumPath,
                 "Timed out while listing installed Appium drivers.",
@@ -89,10 +92,12 @@ internal static class AppiumDoctor
 
         var standardOutput = await standardOutputTask.ConfigureAwait(false);
         var standardError = await standardErrorTask.ConfigureAwait(false);
+
         if (process.ExitCode != 0)
         {
             var detail = FirstNonEmpty(standardError, standardOutput)
-                         ?? $"Appium exited with code {process.ExitCode}.";
+                ?? $"Appium exited with code {process.ExitCode}.";
+
             return DriverInspectionFailure(appiumPath, Summarize(detail));
         }
 
@@ -124,11 +129,12 @@ internal static class AppiumDoctor
         {
             Timeout = Timeout.InfiniteTimeSpan
         };
+
         return await CheckServerAsync(
-                configuredServerUrl,
-                httpClient,
-                TimeSpan.FromSeconds(2),
-                cancellationToken)
+            configuredServerUrl,
+            httpClient,
+            TimeSpan.FromSeconds(2),
+            cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -139,7 +145,9 @@ internal static class AppiumDoctor
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+
         var serverUrl = FirstNonEmpty(configuredServerUrl) ?? DefaultServerUrl;
+
         if (!TryCreateStatusEndpoint(serverUrl, out var statusEndpoint))
         {
             return new DoctorCheck(
@@ -153,12 +161,14 @@ internal static class AppiumDoctor
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
+
         try
         {
             using var response = await httpClient.GetAsync(statusEndpoint, timeoutSource.Token)
                 .ConfigureAwait(false);
             var content = await response.Content.ReadAsStringAsync(timeoutSource.Token)
                 .ConfigureAwait(false);
+
             if (!response.IsSuccessStatusCode)
             {
                 return ServerFailure(
@@ -167,6 +177,7 @@ internal static class AppiumDoctor
             }
 
             var readiness = ParseServerReadiness(content);
+
             if (readiness.IsReady == false)
             {
                 return ServerFailure(
@@ -219,6 +230,7 @@ internal static class AppiumDoctor
         try
         {
             using var document = JsonDocument.Parse(output);
+
             return ContainsXcuiTestDriver(document.RootElement);
         }
         catch (JsonException)
@@ -232,22 +244,24 @@ internal static class AppiumDoctor
         using var document = JsonDocument.Parse(content);
         var root = document.RootElement;
         var value = root.ValueKind == JsonValueKind.Object
-                    && root.TryGetProperty("value", out var nestedValue)
+            && root.TryGetProperty("value", out var nestedValue)
             ? nestedValue
             : root;
+
         if (value.ValueKind != JsonValueKind.Object)
         {
             return new AppiumServerReadiness(null, null);
         }
 
         bool? isReady = value.TryGetProperty("ready", out var readyValue)
-                        && readyValue.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && readyValue.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? readyValue.GetBoolean()
             : null;
         var message = value.TryGetProperty("message", out var messageValue)
-                      && messageValue.ValueKind == JsonValueKind.String
+            && messageValue.ValueKind == JsonValueKind.String
             ? messageValue.GetString()
             : null;
+
         return new AppiumServerReadiness(isReady, message);
     }
 
@@ -264,7 +278,6 @@ internal static class AppiumDoctor
                         return true;
                     }
                 }
-
                 break;
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
@@ -274,7 +287,6 @@ internal static class AppiumDoctor
                         return true;
                     }
                 }
-
                 break;
             case JsonValueKind.String:
                 return element.GetString()?.Contains(
@@ -288,6 +300,7 @@ internal static class AppiumDoctor
     private static bool TryCreateStatusEndpoint(string serverUrl, out Uri? statusEndpoint)
     {
         statusEndpoint = null;
+
         if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var endpoint)
             || endpoint.Scheme is not ("http" or "https"))
         {
@@ -298,6 +311,7 @@ internal static class AppiumDoctor
             ? serverUrl
             : serverUrl + "/";
         statusEndpoint = new Uri(new Uri(normalizedUrl, UriKind.Absolute), "status");
+
         return true;
     }
 
@@ -331,6 +345,7 @@ internal static class AppiumDoctor
         var normalized = string.Join(
             " ",
             value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
         return normalized.Length <= maximumLength
             ? normalized
             : normalized[..maximumLength] + "...";
@@ -343,8 +358,8 @@ internal static class AppiumDoctor
             process.Kill(entireProcessTree: true);
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or System.ComponentModel.Win32Exception
-                                           or NotSupportedException)
+            or System.ComponentModel.Win32Exception
+            or NotSupportedException)
         {
             // The process exited while cancellation was being handled.
         }

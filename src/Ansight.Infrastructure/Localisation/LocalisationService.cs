@@ -61,6 +61,7 @@ public sealed class LocalisationService : ILocalisationService
             }
 
             var parameterKey = parameter.Key.Trim();
+
             if (!parameterKey.StartsWith('$'))
             {
                 parameterKey = "$" + parameterKey;
@@ -104,6 +105,7 @@ public sealed class LocalisationService : ILocalisationService
         }
 
         LanguageChanged?.Invoke(this, new LanguagePackEventArgs(CurrentLanguageCode));
+
         return Task.FromResult(true);
     }
 
@@ -112,6 +114,7 @@ public sealed class LocalisationService : ILocalisationService
         ArgumentNullException.ThrowIfNull(languagePack);
 
         var code = LanguageCodeHelper.NormalizeLanguageCode(languagePack.CultureCode);
+
         if (string.IsNullOrWhiteSpace(code))
         {
             return;
@@ -141,6 +144,7 @@ public sealed class LocalisationService : ILocalisationService
         var normalized = LanguageCodeHelper.NormalizeLanguageCode(languageCode);
 
         LanguagePack? next;
+
         lock (gate)
         {
             if (!languagePacks.TryGetValue(normalized, out next))
@@ -170,6 +174,7 @@ public sealed class LocalisationService : ILocalisationService
     private string? FindValue(string key)
     {
         var indexed = currentLanguagePack.GetIndexedValues();
+
         if (indexed.TryGetValue(key, out var value))
         {
             return value.Value;
@@ -178,6 +183,7 @@ public sealed class LocalisationService : ILocalisationService
         if (languagePacks.TryGetValue("en", out var englishPack))
         {
             var englishValues = englishPack.GetIndexedValues();
+
             if (englishValues.TryGetValue(key, out var englishValue))
             {
                 return englishValue.Value;
@@ -197,11 +203,11 @@ public sealed class LocalisationService : ILocalisationService
             CultureCode = "en",
             IsDefaultLanguagePack = true,
             Values =
-            [
-                new LanguageValue { Key = "Global_Ok", Value = "OK" },
-                new LanguageValue { Key = "Global_Cancel", Value = "Cancel" },
-                new LanguageValue { Key = "App_Title", Value = "Ansight" },
-                new LanguageValue { Key = "Licensing_Expired", Value = "Your licence has expired." },
+                [
+                    new LanguageValue {Key = "Global_Ok", Value = "OK" },
+                new LanguageValue {Key = "Global_Cancel", Value = "Cancel" },
+                new LanguageValue {Key = "App_Title", Value = "Ansight" },
+                new LanguageValue {Key = "Licensing_Expired", Value = "Your licence has expired." },
             ],
         };
     }

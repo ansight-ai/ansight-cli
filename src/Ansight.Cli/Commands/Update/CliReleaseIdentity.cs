@@ -16,18 +16,19 @@ internal sealed record CliReleaseIdentity(
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .Where(static attribute => !string.IsNullOrWhiteSpace(attribute.Key))
             .ToDictionary(
-                static attribute => attribute.Key,
-                static attribute => attribute.Value ?? string.Empty,
-                StringComparer.Ordinal);
+            static attribute => attribute.Key,
+            static attribute => attribute.Value ?? string.Empty,
+            StringComparer.Ordinal);
         var informationalVersion = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
         var version = metadata.GetValueOrDefault("AnsightCliVersion");
+
         if (string.IsNullOrWhiteSpace(version))
         {
             version = informationalVersion?.Split('+', 2)[0]
-                      ?? assembly.GetName().Version?.ToString(3)
-                      ?? "0.0.0-dev";
+                ?? assembly.GetName().Version?.ToString(3)
+                ?? "0.0.0-dev";
         }
 
         if (string.IsNullOrWhiteSpace(informationalVersion))
@@ -36,6 +37,7 @@ internal sealed record CliReleaseIdentity(
         }
 
         var commitSha = metadata.GetValueOrDefault("AnsightCommitSha");
+
         if (string.IsNullOrWhiteSpace(commitSha))
         {
             commitSha = informationalVersion.Contains('+', StringComparison.Ordinal)

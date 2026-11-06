@@ -148,6 +148,7 @@ public sealed class SimCtlDevicePowerTests
             Path.GetTempPath(),
             $"ansight-simctl-install-{Guid.NewGuid():N}.app");
         Directory.CreateDirectory(appBundlePath);
+
         try
         {
             var commandRunner = new RecordingCommandRunner(
@@ -190,6 +191,7 @@ public sealed class SimCtlDevicePowerTests
             CancellationToken cancellationToken = default)
         {
             Arguments = arguments.ToArray();
+
             return Task.FromResult(result);
         }
     }

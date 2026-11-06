@@ -28,6 +28,7 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
     public LocalTestExecutionSnapshot? Get(string executionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executionId);
+
         lock (gate)
         {
             return executions.GetValueOrDefault(executionId.Trim())?.Snapshot();
@@ -39,6 +40,7 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(disposed, this);
         runtime.FeatureLifetime.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(request.WorkspacePath))
         {
             throw new InvalidDataException("A workspace path is required.");
@@ -46,15 +48,17 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
 
         var testIds = request.TestIds?
             .Where(static testId => !string.IsNullOrWhiteSpace(testId))
-            .Select(static testId => testId.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? [];
+                .Select(static testId => testId.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray() ?? [];
+
         if (!string.IsNullOrWhiteSpace(request.DraftSource))
         {
             var draft = Ansight.Host.Workspaces.Catalog.WorkspaceTestCatalog.Parse(
                 "ansight/tests", "ansight/tests/draft.yaml", request.DraftSource);
             testIds = [draft.TestId];
         }
+
         var kind = testIds.Length == 1 ? "single" : "batch";
         var execution = new ActiveTestExecution(
             Guid.CreateVersion7().ToString("N"),
@@ -62,6 +66,7 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
             Path.GetFullPath(request.WorkspacePath.Trim()),
             testIds,
             runtime.FeatureLifetime);
+
         lock (gate)
         {
             executions[execution.ExecutionId] = execution;
@@ -71,19 +76,23 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         execution.WorkTask = kind == "single"
             ? RunSingleAsync(execution, request, testIds[0])
             : RunBatchAsync(execution, request, testIds);
+
         return execution.Snapshot();
     }
 
     public LocalTestExecutionSnapshot? Cancel(string executionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executionId);
+
         ActiveTestExecution? execution;
+
         lock (gate)
         {
             execution = executions.GetValueOrDefault(executionId.Trim());
         }
 
         execution?.Cancel();
+
         return execution?.Snapshot();
     }
 
@@ -95,7 +104,9 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         }
 
         disposed = true;
+
         ActiveTestExecution[] active;
+
         lock (gate)
         {
             active = executions.Values.ToArray();
@@ -113,14 +124,15 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         string testId)
     {
         execution.Begin($"Running workspace test '{testId}'.");
+
         try
         {
             var result = await runtime.WorkspaceTests.RunAsync(
-                    CreateSingleRequest(request, execution.WorkspacePath, testId),
-                    new DelegatingProgress<WorkspaceTestRunProgress>(progress => execution.Report(
-                        progress.Stage,
-                        progress.Message)),
-                    execution.Cancellation.Token)
+                CreateSingleRequest(request, execution.WorkspacePath, testId),
+                new DelegatingProgress<WorkspaceTestRunProgress>(progress => execution.Report(
+                    progress.Stage,
+                    progress.Message)),
+                execution.Cancellation.Token)
                 .ConfigureAwait(false);
             execution.Complete(
                 result.IsSuccess ? "succeeded" : result.WasCancelled ? "cancelled" : result.IsSkipped ? "skipped" : "failed",
@@ -137,10 +149,10 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                 {
                     TraceRunId = result.RunAudit?.TraceEnabled == true
                         && (result.AgentResult?.AuditFilePath ?? result.TaskAuditFilePath) is not null
-                            ? result.RunAudit.RunId : null,
+                        ? result.RunAudit.RunId : null,
                     TraceError = request.CaptureTrace
                         ? result.AgentResult?.AuditPersistenceError ?? result.TaskAuditPersistenceError
-                          ?? (result.RunAudit is null ? "The run stopped before the trace began." : null)
+                            ?? (result.RunAudit is null ? "The run stopped before the trace began." : null)
                         : null
                 });
         }
@@ -180,17 +192,18 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         execution.Begin(testIds.Count == 0
             ? "Running all workspace tests."
             : $"Running {testIds.Count:N0} selected workspace test(s).");
+
         try
         {
             var result = await runtime.WorkspaceTests.Batches.RunAllAsync(
-                    CreateBatchRequest(request, execution.WorkspacePath, testIds),
-                    new DelegatingProgress<WorkspaceTestBatchProgress>(progress => execution.Report(
-                        progress.TestProgress?.Stage ?? "test.batch",
-                        progress.Message,
-                        progress.TestIndex,
-                        progress.TestCount,
-                        progress.TestId)),
-                    execution.Cancellation.Token)
+                CreateBatchRequest(request, execution.WorkspacePath, testIds),
+                new DelegatingProgress<WorkspaceTestBatchProgress>(progress => execution.Report(
+                    progress.TestProgress?.Stage ?? "test.batch",
+                    progress.Message,
+                    progress.TestIndex,
+                    progress.TestCount,
+                    progress.TestId)),
+                execution.Cancellation.Token)
                 .ConfigureAwait(false);
             var status = result.WasCancelled
                 ? "cancelled"
@@ -263,13 +276,29 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
 
     private static void DeleteDraftTaskRoot(string? rootPath)
     {
-        if (string.IsNullOrWhiteSpace(rootPath)) return;
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            return;
+        }
+
         var fullPath = Path.GetFullPath(rootPath);
         var parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
-        if (!fullPath.StartsWith(parent + Path.DirectorySeparatorChar + "ansight-draft-test-", StringComparison.Ordinal)) return;
-        try { Directory.Delete(fullPath, recursive: true); }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+
+        if (!fullPath.StartsWith(parent + Path.DirectorySeparatorChar + "ansight-draft-test-", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(fullPath, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private static WorkspaceTestBatchRequest CreateBatchRequest(
@@ -295,9 +324,9 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
 
     private static WorkspaceTestTargetRequest? CreateTarget(LocalWorkspaceTestExecutionRequest request)
         => string.IsNullOrWhiteSpace(request.Platform)
-           && string.IsNullOrWhiteSpace(request.DeviceIdentifier)
-           && string.IsNullOrWhiteSpace(request.ApplicationPath)
-           && string.IsNullOrWhiteSpace(request.DeviceKind)
+            && string.IsNullOrWhiteSpace(request.DeviceIdentifier)
+            && string.IsNullOrWhiteSpace(request.ApplicationPath)
+            && string.IsNullOrWhiteSpace(request.DeviceKind)
             ? null
             : new WorkspaceTestTargetRequest(
                 request.Platform,
@@ -313,11 +342,11 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         }
 
         foreach (var executionId in executions.Values
-                     .Where(static execution => execution.IsTerminal)
-                     .OrderBy(static execution => execution.UpdatedAtUtc)
-                     .Take(executions.Count - MaximumRetainedRuns)
-                     .Select(static execution => execution.ExecutionId)
-                     .ToArray())
+            .Where(static execution => execution.IsTerminal)
+            .OrderBy(static execution => execution.UpdatedAtUtc)
+            .Take(executions.Count - MaximumRetainedRuns)
+            .Select(static execution => execution.ExecutionId)
+            .ToArray())
         {
             if (executions.Remove(executionId, out var removed))
             {
@@ -359,7 +388,6 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
         public DateTimeOffset UpdatedAtUtc { get; private set; }
         public CancellationTokenSource Cancellation { get; }
         public Task? WorkTask { get; set; }
-
         public bool IsTerminal
         {
             get
@@ -466,6 +494,7 @@ internal sealed class LocalTestExecutionCoordinator : IDisposable
                 testIndex,
                 testCount,
                 testId));
+
             if (progress.Count > MaximumProgressEntries)
             {
                 progress.RemoveRange(0, progress.Count - MaximumProgressEntries);

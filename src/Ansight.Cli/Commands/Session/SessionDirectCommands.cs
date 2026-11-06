@@ -21,9 +21,11 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session extract <session-id> (--annotation <id> | --start <timestamp> --end <timestamp>) [--name <name>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -31,6 +33,7 @@ internal static class SessionDirectCommands
 
         SessionExtractionResult result;
         string source;
+
         if (arguments.GetOption("annotation") is { } annotationId)
         {
             if (arguments.GetOption("start") is not null || arguments.GetOption("end") is not null)
@@ -63,9 +66,10 @@ internal static class SessionDirectCommands
                 source,
                 result),
             () => result.Message
-                  + (result.ExtractedSession is null
-                      ? string.Empty
-                      : $"{Environment.NewLine}Session: {result.ExtractedSession.SessionId}"));
+                + (result.ExtractedSession is null
+                    ? string.Empty
+                    : $"{Environment.NewLine}Session: {result.ExtractedSession.SessionId}"));
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -74,6 +78,7 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session trim <session-id> --start <timestamp> --end <timestamp> --mode <cut|keep>");
+
         var mode = arguments.GetOption("mode")?.Trim().ToLowerInvariant() switch
         {
             "cut" or "remove" or "cut-selection" => SessionTimelineTrimMode.CutSelection,
@@ -84,12 +89,14 @@ internal static class SessionDirectCommands
         var startUtc = ParseTimestamp(arguments.RequireOption("start"), "start");
         var endUtc = ParseTimestamp(arguments.RequireOption("end"), "end");
         var result = runtime.SessionEditing.TrimTimeline(sessionId, startUtc, endUtc, mode);
+
         return WriteOperation("trim", sessionId, result, output);
     }
 
     public static int Normalize(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight session normalize <session-id>");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var result = runtime.SessionEditing.Normalize(sessionId);
         output.Write(
@@ -98,6 +105,7 @@ internal static class SessionDirectCommands
                 sessionId,
                 result),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -108,8 +116,9 @@ internal static class SessionDirectCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(3, "ansight session summary <session-id> --local [--team-id <uuid>]");
-        var cloudOnlyOption = new[] { "mode", "provider", "source-part", "slice-start-ms", "slice-end-ms", "instructions" }
-            .FirstOrDefault(arguments.HasFlag);
+
+        var cloudOnlyOption = new[] { "mode", "provider", "source-part", "slice-start-ms", "slice-end-ms", "instructions" }.FirstOrDefault(arguments.HasFlag);
+
         if (cloudOnlyOption is not null)
         {
             throw new CliUsageException($"--{cloudOnlyOption} is for Cloud AI extraction and cannot be used with --local.");
@@ -121,12 +130,14 @@ internal static class SessionDirectCommands
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
         }
 
         Guid? teamId = null;
+
         if (arguments.GetOption("team-id") is { } teamIdText)
         {
             if (!Guid.TryParse(teamIdText, out var parsedTeamId) || parsedTeamId == Guid.Empty)
@@ -138,12 +149,12 @@ internal static class SessionDirectCommands
         }
 
         var analysis = await LocalSessionSummaryRunner.RunAsync(
-                runtime,
-                snapshot,
-                teamId,
-                cancellationToken,
-                reasoning,
-                modelOverride)
+            runtime,
+            snapshot,
+            teamId,
+            cancellationToken,
+            reasoning,
+            modelOverride)
             .ConfigureAwait(false);
         runtime.SessionEditing.AddAnalysis(snapshot.SessionId, analysis);
         output.Write(
@@ -154,6 +165,7 @@ internal static class SessionDirectCommands
                 analysis.AgentId,
                 analysis.FinalResponse ?? string.Empty),
             () => analysis.FinalResponse ?? "Local session summary saved.");
+
         return CliExitCodes.Success;
     }
 
@@ -165,13 +177,16 @@ internal static class SessionDirectCommands
     {
         var action = arguments.RequirePositional(2, "annotation action").ToLowerInvariant();
         var sessionId = arguments.RequirePositional(3, "session identifier");
+
         if (action == "status")
         {
             arguments.EnsurePositionalCount(
                 5,
                 "ansight session annotation status <session-id> <annotation-id> (--status <text> | --clear-status)");
+
             var status = arguments.GetOption("status");
             var clearStatus = arguments.HasFlag("clear-status");
+
             if (clearStatus == (status is not null))
             {
                 throw new CliUsageException("Pass either --status <text> or --clear-status.");
@@ -187,13 +202,16 @@ internal static class SessionDirectCommands
                     clearStatus ? null : status,
                     statusResult),
                 () => statusResult.Message);
+
             return statusResult.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
         }
+
         if (action is "delete" or "remove")
         {
             arguments.EnsurePositionalCount(
                 5,
                 "ansight session annotation delete <session-id> <annotation-id>");
+
             return WriteOperation(
                 "annotation-delete",
                 sessionId,
@@ -212,10 +230,13 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session annotation upsert <session-id> (--file <annotation.json> | --label <label> --start <timestamp>)");
+
         SessionAnnotation annotation;
+
         if (arguments.GetOption("file") is { } filePath)
         {
             var fullPath = Path.GetFullPath(filePath);
+
             if (!File.Exists(fullPath))
             {
                 throw new CliUsageException($"Annotation file '{fullPath}' was not found.");
@@ -224,9 +245,9 @@ internal static class SessionDirectCommands
             try
             {
                 annotation = JsonSerializer.Deserialize<SessionAnnotation>(
-                                 await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false),
-                                 jsonOptions)
-                             ?? throw new CliUsageException("The annotation JSON was empty.");
+                    await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false),
+                    jsonOptions)
+                    ?? throw new CliUsageException("The annotation JSON was empty.");
             }
             catch (JsonException exception)
             {
@@ -255,12 +276,14 @@ internal static class SessionDirectCommands
                 result,
                 annotation),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
     public static int Analysis(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output)
     {
         var action = arguments.RequirePositional(2, "analysis action").ToLowerInvariant();
+
         if (action is not ("delete" or "remove"))
         {
             throw new CliUsageException($"Unknown analysis action '{action}'. Expected delete.");
@@ -269,7 +292,9 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             5,
             "ansight session analysis delete <session-id> <analysis-id>");
+
         var sessionId = arguments.RequirePositional(3, "session identifier");
+
         return WriteOperation(
             "analysis-delete",
             sessionId,
@@ -286,6 +311,7 @@ internal static class SessionDirectCommands
         CancellationToken cancellationToken)
     {
         var action = arguments.RequirePositional(2, "screenshot action").ToLowerInvariant();
+
         if (action is not ("get" or "read" or "export" or "download"))
         {
             throw new CliUsageException(
@@ -295,8 +321,10 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session screenshot export <session-id> [--frame-id <id>|--timestamp <utc>] --output <path>");
+
         var outputPath = Path.GetFullPath(arguments.RequireOption("output"));
         EnsureWritableDestination(outputPath, arguments);
+
         var sessionId = arguments.RequirePositional(3, "session identifier");
         var result = await runtime.SessionEvidence.ExportSessionScreenshotAsync(
             sessionId,
@@ -310,6 +338,7 @@ internal static class SessionDirectCommands
                 sessionId,
                 result),
             () => result.IsSuccess ? $"Screenshot: {result.FilePath}" : result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -320,6 +349,7 @@ internal static class SessionDirectCommands
         CancellationToken cancellationToken)
     {
         var action = arguments.RequirePositional(2, "artifact action").ToLowerInvariant();
+
         if (action is not ("get" or "read" or "export" or "download"))
         {
             throw new CliUsageException(
@@ -329,8 +359,10 @@ internal static class SessionDirectCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session artifact export <session-id> --path <artifact-path> --output <path> [--snapshot-id <id>]");
+
         var outputPath = Path.GetFullPath(arguments.RequireOption("output"));
         EnsureWritableDestination(outputPath, arguments);
+
         var sessionId = arguments.RequirePositional(3, "session identifier");
         var result = await runtime.SessionEvidence.ExportSessionArtifactFileAsync(
             sessionId,
@@ -344,6 +376,7 @@ internal static class SessionDirectCommands
                 sessionId,
                 result),
             () => result.IsSuccess ? $"Artifact: {result.FilePath}" : result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -358,7 +391,7 @@ internal static class SessionDirectCommands
 
     private static DateTimeOffset ParseTimestamp(string value, string optionName)
         => ParseOptionalTimestamp(value, optionName)
-           ?? throw new CliUsageException($"--{optionName} requires a timestamp.");
+            ?? throw new CliUsageException($"--{optionName} requires a timestamp.");
 
     private static DateTimeOffset? ParseOptionalTimestamp(string? value, string optionName)
     {
@@ -368,10 +401,10 @@ internal static class SessionDirectCommands
         }
 
         if (DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var timestamp))
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var timestamp))
         {
             return timestamp.ToUniversalTime();
         }
@@ -382,6 +415,7 @@ internal static class SessionDirectCommands
     private static int WriteSessionNotFound(string sessionId, CliOutput output)
     {
         output.WriteError("session_not_found", $"Session '{sessionId}' was not found.", CliExitCodes.Failure);
+
         return CliExitCodes.Failure;
     }
 
@@ -398,53 +432,7 @@ internal static class SessionDirectCommands
                 sessionId,
                 result),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 }
-
-internal sealed record SessionExtractionOutput(
-    string Schema,
-    string SourceSessionId,
-    string Source,
-    SessionExtractionResult Result);
-
-internal sealed record SessionAnnotationOperationOutput(
-    string Schema,
-    string SessionId,
-    OperationResult Result,
-    SessionAnnotation Annotation);
-
-internal sealed record SessionAnnotationStatusOutput(
-    string Schema,
-    string SessionId,
-    string AnnotationId,
-    string? Status,
-    OperationResult Result);
-
-internal sealed record SessionScreenshotExportOutput(
-    string Schema,
-    string SessionId,
-    SessionScreenshotExportResult Result);
-
-internal sealed record SessionArtifactExportOutput(
-    string Schema,
-    string SessionId,
-    SessionArtifactExportResult Result);
-
-internal sealed record SessionDirectOperationOutput(
-    string Schema,
-    string Operation,
-    string SessionId,
-    OperationResult Result);
-
-internal sealed record SessionNormalizationOutput(
-    string SchemaVersion,
-    string SessionId,
-    SessionNormalizationResult Result);
-
-internal sealed record SessionLocalSummaryOutput(
-    string Schema,
-    string SessionId,
-    string AnalysisId,
-    string AgentId,
-    string Summary);

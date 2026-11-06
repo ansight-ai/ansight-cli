@@ -17,6 +17,7 @@ public sealed class FileBackedEncryptedStoragePermissionsTests
         var path = System.IO.Path.Combine(directory.Path, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(path);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         var storage = new FileBackedEncryptedStorage(path);
 
         storage.Set("test-key", "test-value");

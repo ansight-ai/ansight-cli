@@ -22,10 +22,10 @@ internal static class SessionVisualTreePersistence
         var treeHash = ComputeHash(payload);
         var typeRegistry = VisualTreeTypeRegistry.FromPayload(payload);
         var nodeCount = ReadInteger(payload, "nodeCount")
-                        ?? (payload["root"] is JsonObject root
-                            ? (int?)LiveUiNodeQuery.Enumerate(root, typeRegistry).Count()
-                            : null)
-                        ?? 0;
+            ?? (payload["root"] is JsonObject root
+                ? (int?)LiveUiNodeQuery.Enumerate(root, typeRegistry).Count()
+                : null)
+            ?? 0;
         var snapshotId = action is null
             ? $"ansight-live-tree-{capturedAtUtc:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}"
             : $"{action.ActionId}-{action.Phase}-{Guid.NewGuid():N}";
@@ -56,6 +56,7 @@ internal static class SessionVisualTreePersistence
             Payload = payload.DeepClone() as JsonObject ?? new JsonObject()
         };
         var result = sessionIngestion.AddSessionVisualTreeSnapshot(session.SessionId, snapshot);
+
         return result.IsSuccess
             ? new PersistedVisualTreeResult(true, snapshot, result.Message)
             : new PersistedVisualTreeResult(false, null, result.Message);
@@ -64,6 +65,7 @@ internal static class SessionVisualTreePersistence
     public static string ComputeHash(JsonNode payload)
     {
         var bytes = Encoding.UTF8.GetBytes(payload.ToJsonString());
+
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
@@ -82,21 +84,6 @@ internal static class SessionVisualTreePersistence
 
     private static bool ReadBoolean(JsonObject payload, string propertyName)
         => payload[propertyName] is JsonValue value
-           && value.TryGetValue<bool>(out var result)
-           && result;
+            && value.TryGetValue<bool>(out var result)
+            && result;
 }
-
-internal sealed record ActionEvidenceMetadata(
-    string ActionId,
-    string Capability,
-    string Phase);
-
-internal sealed record PersistedScreenshotEvidence(
-    SessionImageFrame Frame,
-    string Hash,
-    string ArtifactPath);
-
-internal sealed record PersistedVisualTreeResult(
-    bool IsSuccess,
-    SessionVisualTreeSnapshot? Snapshot,
-    string Message);

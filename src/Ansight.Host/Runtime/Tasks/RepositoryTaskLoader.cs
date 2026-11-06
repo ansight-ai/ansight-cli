@@ -33,6 +33,7 @@ internal static class RepositoryTaskLoader
         ArgumentNullException.ThrowIfNull(hostToolResolver);
 
         var repositoryRootPath = Path.GetFullPath(repositoryPath.Trim());
+
         if (!Directory.Exists(repositoryRootPath))
         {
             return new RepositoryTaskLoadResult(
@@ -41,6 +42,7 @@ internal static class RepositoryTaskLoader
         }
 
         var taskDirectoryPath = Path.Combine(repositoryRootPath, TaskDirectoryRelativePath);
+
         if (!Directory.Exists(taskDirectoryPath))
         {
             return new RepositoryTaskLoadResult([], []);
@@ -57,6 +59,7 @@ internal static class RepositoryTaskLoader
         var supportModules = new List<RepositoryTaskSupportModule>();
         var warnings = new List<string>();
         var taskIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var modulePath in modulePaths)
         {
             try
@@ -68,11 +71,13 @@ internal static class RepositoryTaskLoader
                 }
 
                 var source = File.ReadAllText(modulePath);
+
                 if (modulePath.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase)
                     || !RepositoryModuleDescriptorReader.ContainsExportedDescriptor(source, "task"))
                 {
                     var relativePath = Path.GetRelativePath(taskDirectoryPath, modulePath)
                         .Replace(Path.DirectorySeparatorChar, '/');
+
                     if (!string.Equals(relativePath, "ansight-task.d.ts", StringComparison.OrdinalIgnoreCase))
                     {
                         supportModules.Add(new RepositoryTaskSupportModule(
@@ -80,6 +85,7 @@ internal static class RepositoryTaskLoader
                             source,
                             modulePath.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase)));
                     }
+
                     continue;
                 }
 
@@ -95,6 +101,7 @@ internal static class RepositoryTaskLoader
                     modulePath,
                     appId.Trim(),
                     hostToolResolver);
+
                 if (!taskIds.Add(task.TaskId))
                 {
                     throw new InvalidDataException($"Task id '{task.TaskId}' is duplicated.");
@@ -103,10 +110,10 @@ internal static class RepositoryTaskLoader
                 tasks.Add(task);
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException
-                                               or InvalidDataException
-                                               or ArgumentException)
+                or UnauthorizedAccessException
+                or JsonException
+                or InvalidDataException
+                or ArgumentException)
             {
                 warnings.Add($"Repository module '{modulePath}' was not loaded: {exception.Message}");
             }
@@ -122,20 +129,23 @@ internal static class RepositoryTaskLoader
         string repositoryPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+
         var taskDirectoryPath = Path.Combine(
             Path.GetFullPath(repositoryPath.Trim()),
             TaskDirectoryRelativePath);
+
         if (!Directory.Exists(taskDirectoryPath))
         {
             return [];
         }
 
         var supportModules = new List<RepositoryTaskSupportModule>();
+
         foreach (var path in Directory.EnumerateFiles(taskDirectoryPath, "*", SearchOption.AllDirectories)
-                     .Where(path => Path.GetExtension(path).Equals(
-                         SupportedModuleExtension,
-                         StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(path => path, StringComparer.Ordinal))
+            .Where(path => Path.GetExtension(path).Equals(
+                SupportedModuleExtension,
+                StringComparison.OrdinalIgnoreCase))
+            .OrderBy(path => path, StringComparer.Ordinal))
         {
             try
             {
@@ -146,6 +156,7 @@ internal static class RepositoryTaskLoader
 
                 var source = File.ReadAllText(path);
                 var isDeclaration = path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase);
+
                 if (!isDeclaration
                     && RepositoryModuleDescriptorReader.ContainsExportedDescriptor(source, "task"))
                 {
@@ -154,6 +165,7 @@ internal static class RepositoryTaskLoader
 
                 var relativePath = Path.GetRelativePath(taskDirectoryPath, path)
                     .Replace(Path.DirectorySeparatorChar, '/');
+
                 if (!string.Equals(relativePath, "ansight-task.d.ts", StringComparison.OrdinalIgnoreCase))
                 {
                     supportModules.Add(new RepositoryTaskSupportModule(relativePath, source, isDeclaration));
@@ -194,7 +206,9 @@ internal static class RepositoryTaskLoader
             taskJson) ?? throw new InvalidDataException($"Task module '{modulePath}' has an empty descriptor.");
         var schemaVersion = ResolveSchemaVersion(definition.SchemaVersion, taskId);
         definition.Requires?.Validate();
+
         var declaredAppId = NormalizeOptionalValue(definition.AppId);
+
         if (declaredAppId is not null
             && !string.Equals(declaredAppId, appId, StringComparison.Ordinal))
         {
@@ -213,6 +227,7 @@ internal static class RepositoryTaskLoader
         var deviceKinds = LoadTargetMetadata(taskId, "deviceKinds", definition.DeviceKinds, RepositoryTaskTargets.DeviceKinds);
         var frameworks = LoadTargetMetadata(taskId, "frameworks", definition.Frameworks, RepositoryTaskTargets.Frameworks);
         var timeoutSeconds = definition.TimeoutSeconds ?? 120;
+
         if (timeoutSeconds is < 1 or > 300)
         {
             throw new InvalidDataException(
@@ -220,6 +235,7 @@ internal static class RepositoryTaskLoader
         }
 
         var maximumActions = definition.MaximumActions ?? DefaultMaximumActionsPerTask;
+
         if (maximumActions is < 1 or > MaximumActionsPerTask)
         {
             throw new InvalidDataException(
@@ -254,10 +270,18 @@ internal static class RepositoryTaskLoader
 
     private static string? LoadStateHint(string taskId, string propertyName, string? value)
     {
-        if (value is null) return null;
+        if (value is null)
+        {
+            return null;
+        }
+
         var hint = value.Trim();
+
         if (hint.Length is < 1 or > 1000)
+        {
             throw new InvalidDataException($"Task '{taskId}' {propertyName} must contain 1–1000 characters.");
+        }
+
         return hint;
     }
 
@@ -279,9 +303,11 @@ internal static class RepositoryTaskLoader
         }
 
         var values = new List<string>();
+
         foreach (var entry in entries)
         {
             var value = NormalizeOptionalValue(entry)?.ToLowerInvariant();
+
             if (value is null || !allowedValues.Contains(value, StringComparer.Ordinal))
             {
                 throw new InvalidDataException(
@@ -300,6 +326,7 @@ internal static class RepositoryTaskLoader
     private static int ResolveSchemaVersion(int? declaredVersion, string taskId)
     {
         var version = declaredVersion ?? 1;
+
         if (version != 1)
         {
             throw new InvalidDataException(
@@ -312,6 +339,7 @@ internal static class RepositoryTaskLoader
     private static IReadOnlyList<string> LoadKeywords(string taskId, IReadOnlyList<string>? entries)
     {
         entries ??= [];
+
         if (entries.Count > MaximumKeywordsPerTask)
         {
             throw new InvalidDataException(
@@ -334,6 +362,7 @@ internal static class RepositoryTaskLoader
             ["properties"] = new JsonObject(),
             ["additionalProperties"] = false
         };
+
         if (!string.Equals(schema["type"]?.GetValue<string>(), "object", StringComparison.Ordinal))
         {
             throw new InvalidDataException($"Task '{taskId}' inputSchema.type must be 'object'.");
@@ -353,6 +382,7 @@ internal static class RepositoryTaskLoader
         RepositoryTaskHostToolResolver hostToolResolver)
     {
         entries ??= [];
+
         if (entries.Count > MaximumDeclaredHostToolsPerTask)
         {
             throw new InvalidDataException(
@@ -360,14 +390,15 @@ internal static class RepositoryTaskLoader
         }
 
         var hostTools = new Dictionary<string, RepositoryTaskHostToolDescriptor>(StringComparer.Ordinal);
+
         foreach (var entry in entries)
         {
             var toolName = NormalizeRequiredIdentifier(
                 entry,
                 $"Task '{taskId}' hostTools entry");
             var descriptor = hostToolResolver(toolName)
-                             ?? throw new InvalidDataException(
-                                 $"Task '{taskId}' declares host tool '{toolName}', which is unknown or not task-callable.");
+                ?? throw new InvalidDataException(
+                    $"Task '{taskId}' declares host tool '{toolName}', which is unknown or not task-callable.");
             hostTools.TryAdd(toolName, descriptor);
         }
 
@@ -381,15 +412,17 @@ internal static class RepositoryTaskLoader
         var id = withoutExtension
             .Replace(Path.DirectorySeparatorChar, '.')
             .Replace(Path.AltDirectorySeparatorChar, '.');
+
         return NormalizeRequiredIdentifier(id, "Task file name");
     }
 
     private static string NormalizeRequiredIdentifier(string? value, string description)
     {
         var normalized = NormalizeRequiredValue(value, description);
+
         if (normalized.Length > 160
             || normalized.Any(character => !(char.IsLetterOrDigit(character)
-                                              || character is '-' or '_' or '.')))
+                || character is '-' or '_' or '.')))
         {
             throw new InvalidDataException(
                 $"{description} may contain only letters, digits, hyphen, underscore, and period, up to 160 characters.");
@@ -400,7 +433,7 @@ internal static class RepositoryTaskLoader
 
     private static string NormalizeRequiredValue(string? value, string description)
         => NormalizeOptionalValue(value)
-           ?? throw new InvalidDataException($"{description} is required.");
+            ?? throw new InvalidDataException($"{description} is required.");
 
     private static string? NormalizeOptionalValue(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

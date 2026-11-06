@@ -5,7 +5,7 @@ using static RuntimeSnapshotNormalizer;
 
 internal static partial class SessionStateMapper
 {
-    private static readonly TimeSpan TrailingTimelineSilenceTolerance = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan trailingTimelineSilenceTolerance = TimeSpan.FromSeconds(2);
 
     internal static SessionState CreateState(AppSessionSnapshot snapshot)
     {
@@ -47,9 +47,10 @@ internal static partial class SessionStateMapper
             static taskLink => SessionSnapshotCloner.CloneAgentTaskLink(taskLink)));
         state.Images.AddRange(snapshot.Images);
         state.Touches.AddRange(NormalizeTouches(snapshot.Touches));
+
         foreach (var touchId in state.Touches
-                     .Select(touch => touch.Id)
-                     .Where(touchId => !string.IsNullOrWhiteSpace(touchId)))
+            .Select(touch => touch.Id)
+            .Where(touchId => !string.IsNullOrWhiteSpace(touchId)))
         {
             state.SeenTouchIds.Add(touchId);
         }
@@ -60,6 +61,7 @@ internal static partial class SessionStateMapper
             .Cast<SessionNetworkRequest>()
             .OrderBy(static request => request.StartedAtUtc)
             .ThenBy(static request => request.Id, StringComparer.Ordinal));
+
         foreach (var requestId in state.NetworkRequests.Select(static request => request.Id))
         {
             state.SeenNetworkRequestIds.Add(requestId);
@@ -68,15 +70,19 @@ internal static partial class SessionStateMapper
         state.VisualTreeSnapshots.AddRange(NormalizeVisualTreeSnapshots(snapshot.VisualTreeSnapshots));
         state.VideoRecordings.AddRange(snapshot.VideoRecordings);
         state.ArtifactSnapshots.AddRange(NormalizeArtifactSnapshots(snapshot.ArtifactSnapshots));
+
         var normalizedLogStreams = SessionLogStreams.Normalize(snapshot.LogStreams, snapshot.Logs);
+
         foreach (var stream in normalizedLogStreams)
         {
             state.LogStreams[stream.StreamId] = SessionLogStreamState.FromSnapshot(stream);
             state.Logs.AddRange(stream.Entries);
+
             var seenEventIds = state.GetSeenEventIds(stream.StreamId);
+
             foreach (var eventId in stream.Entries
-                         .Select(log => log.EventId)
-                         .Where(eventId => !string.IsNullOrWhiteSpace(eventId)))
+                .Select(log => log.EventId)
+                .Where(eventId => !string.IsNullOrWhiteSpace(eventId)))
             {
                 seenEventIds.Add(eventId!);
             }
@@ -85,10 +91,12 @@ internal static partial class SessionStateMapper
         state.TotalLogCount = Math.Max(snapshot.TotalLogCount, state.Logs.Count);
 
         state.ApplicationEvents.AddRange(snapshot.ApplicationEvents);
+
         var seenApplicationEventIds = state.GetSeenEventIds("application-events");
+
         foreach (var eventId in snapshot.ApplicationEvents
-                     .Select(static appEvent => appEvent.EventId)
-                     .Where(static eventId => !string.IsNullOrWhiteSpace(eventId)))
+            .Select(static appEvent => appEvent.EventId)
+            .Where(static eventId => !string.IsNullOrWhiteSpace(eventId)))
         {
             seenApplicationEventIds.Add(eventId);
         }
@@ -99,6 +107,7 @@ internal static partial class SessionStateMapper
         }
 
         state.AddMetrics(snapshot.Metrics);
+
         foreach (var metric in snapshot.Metrics)
         {
             state.SeenMetricKeys.Add(new MetricDeduplicationKey(metric.ChannelId, metric.Value, metric.CapturedAtUtc));
@@ -110,6 +119,7 @@ internal static partial class SessionStateMapper
     internal static void TouchTimelineEnd(SessionState session, DateTimeOffset candidateUtc)
     {
         var normalizedCandidateUtc = candidateUtc.ToUniversalTime();
+
         if (normalizedCandidateUtc > session.LastUpdatedUtc.ToUniversalTime())
         {
             session.LastUpdatedUtc = normalizedCandidateUtc;
@@ -121,10 +131,14 @@ internal static partial class SessionStateMapper
         var createdUtc = snapshot.CreatedUtc.ToUniversalTime();
         var capturedEndUtc = SessionCaptureEndResolver.TryResolve(snapshot.CaptureSource,
             snapshot.IsHistorical, snapshot.CustomProperties, createdUtc);
+
         if (capturedEndUtc.HasValue)
+        {
             return capturedEndUtc.Value;
+        }
 
         var declaredEndUtc = snapshot.LastUpdatedUtc.ToUniversalTime();
+
         if (declaredEndUtc < createdUtc)
         {
             declaredEndUtc = createdUtc;
@@ -136,6 +150,7 @@ internal static partial class SessionStateMapper
         }
 
         var contentEndUtc = ResolveCapturedContentEndUtc(snapshot, createdUtc);
+
         if (!contentEndUtc.HasValue || contentEndUtc.Value < createdUtc)
         {
             return declaredEndUtc;
@@ -147,12 +162,14 @@ internal static partial class SessionStateMapper
         }
 
         var trailingGap = declaredEndUtc - contentEndUtc.Value;
-        if (trailingGap <= TrailingTimelineSilenceTolerance)
+
+        if (trailingGap <= trailingTimelineSilenceTolerance)
         {
             return declaredEndUtc;
         }
 
         var capturedDuration = contentEndUtc.Value - createdUtc;
+
         return trailingGap > capturedDuration
             ? contentEndUtc.Value
             : declaredEndUtc;
@@ -162,6 +179,7 @@ internal static partial class SessionStateMapper
     {
         DateTimeOffset? latestUtc = null;
         AddCapturedTimestamp(snapshot.AppStateChangedUtc, createdUtc, ref latestUtc);
+
         foreach (var log in snapshot.Logs)
         {
             AddCapturedTimestamp(log.TimestampUtc, createdUtc, ref latestUtc);
@@ -199,7 +217,9 @@ internal static partial class SessionStateMapper
         }
 
         foreach (var recording in snapshot.VideoRecordings)
+        {
             AddCapturedTimestamp(recording.EndedUtc, createdUtc, ref latestUtc);
+        }
 
         foreach (var snapshotRecord in snapshot.ArtifactSnapshots)
         {
@@ -210,6 +230,7 @@ internal static partial class SessionStateMapper
         {
             AddCapturedTimestamp(annotation.StartUtc, createdUtc, ref latestUtc);
             AddCapturedTimestamp(annotation.EndUtc, createdUtc, ref latestUtc);
+
             foreach (var geometry in annotation.Geometry)
             {
                 AddCapturedTimestamp(geometry.CapturedAtUtc, createdUtc, ref latestUtc);
@@ -232,6 +253,7 @@ internal static partial class SessionStateMapper
     private static void AddCapturedTimestamp(DateTimeOffset timestampUtc, DateTimeOffset createdUtc, ref DateTimeOffset? latestUtc)
     {
         var normalizedTimestampUtc = timestampUtc.ToUniversalTime();
+
         if (normalizedTimestampUtc < createdUtc)
         {
             return;
@@ -251,23 +273,22 @@ internal static partial class SessionStateMapper
         }
 
         var highestSegmentId = metrics.Max(metric => metric.SegmentId);
+
         return Math.Max(1, highestSegmentId + 1);
     }
 
     private static bool IsSessionStatusLive(string? status)
     {
         var normalizedStatus = status ?? string.Empty;
-        return !normalizedStatus.Contains("complete", StringComparison.OrdinalIgnoreCase)
-               && !normalizedStatus.Contains("error", StringComparison.OrdinalIgnoreCase)
-               && !normalizedStatus.Contains("closed", StringComparison.OrdinalIgnoreCase)
-               && !normalizedStatus.Contains("timeout", StringComparison.OrdinalIgnoreCase)
-               && !normalizedStatus.Contains("sign in required", StringComparison.OrdinalIgnoreCase)
-               && !normalizedStatus.Contains("rejected", StringComparison.OrdinalIgnoreCase);
-    }
-}
 
-internal static partial class SessionStateMapper
-{
+        return !normalizedStatus.Contains("complete", StringComparison.OrdinalIgnoreCase)
+            && !normalizedStatus.Contains("error", StringComparison.OrdinalIgnoreCase)
+            && !normalizedStatus.Contains("closed", StringComparison.OrdinalIgnoreCase)
+            && !normalizedStatus.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+            && !normalizedStatus.Contains("sign in required", StringComparison.OrdinalIgnoreCase)
+            && !normalizedStatus.Contains("rejected", StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static AppSessionSnapshot CreateSnapshot(SessionState state)
     {
         return CreateSnapshot(state, SessionSnapshotContent.Full);
@@ -289,6 +310,7 @@ internal static partial class SessionStateMapper
             : content == SessionSnapshotContent.Replay
                 ? state.GetLiveReplaySnapshotLogStreams()
                 : state.GetSnapshotLogStreams();
+
         return new AppSessionSnapshot
         {
             SessionId = state.SessionId,
@@ -350,5 +372,4 @@ internal static partial class SessionStateMapper
             TotalNetworkRequestCount = state.NetworkRequests.Count
         };
     }
-
 }

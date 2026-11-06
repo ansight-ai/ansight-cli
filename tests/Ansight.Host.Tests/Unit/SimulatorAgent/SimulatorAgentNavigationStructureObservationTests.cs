@@ -22,8 +22,8 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
                     ["index"] = 0,
                     ["routes"] = new JsonArray
                     {
-                        new JsonObject { ["key"] = "home-1", ["name"] = "Home" },
-                        new JsonObject { ["key"] = "profile-1", ["name"] = "Profile" }
+                        new JsonObject {["key"] = "home-1", ["name"] = "Home" },
+                        new JsonObject {["key"] = "profile-1", ["name"] = "Profile" }
                     }
                 }
             }
@@ -32,6 +32,7 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
         var first = Assert.IsType<JsonObject>(
             NavigationStructureObservation.Build(content));
         content["payload"]!["result"]!["capturedAtUtc"] = "2026-08-28T01:01:00Z";
+
         var second = Assert.IsType<JsonObject>(
             NavigationStructureObservation.Build(content));
 
@@ -40,6 +41,7 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
             first["structureFingerprint"]?.GetValue<string>(),
             second["structureFingerprint"]?.GetValue<string>());
         Assert.Null(first["guidance"]);
+
         var controller = Assert.IsType<JsonObject>(Assert.IsType<JsonArray>(first["availableNavigationControllers"])[0]);
         Assert.Equal("react-native", controller["framework"]?.GetValue<string>());
         Assert.Equal("react.get_navigation_state", controller["navigationToolId"]?.GetValue<string>());
@@ -56,8 +58,8 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
         {
             ["tools"] = new JsonArray
             {
-                new JsonObject { ["id"] = "ui.get_visual_tree" },
-                new JsonObject { ["id"] = "android.compose.get_navigation_state" }
+                new JsonObject {["id"] = "ui.get_visual_tree" },
+                new JsonObject {["id"] = "android.compose.get_navigation_state" }
             }
         };
 
@@ -79,8 +81,8 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
         {
             ["tools"] = new JsonArray
             {
-                new JsonObject { ["id"] = "ios.uikit.get_navigation_state" },
-                new JsonObject { ["id"] = "ios.swiftui.get_navigation_state" }
+                new JsonObject {["id"] = "ios.uikit.get_navigation_state" },
+                new JsonObject {["id"] = "ios.swiftui.get_navigation_state" }
             }
         };
 
@@ -102,8 +104,8 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
         {
             ["tools"] = new JsonArray
             {
-                new JsonObject { ["id"] = "ios.uikit.get_navigation_state" },
-                new JsonObject { ["id"] = "ios.swiftui.get_navigation_state" }
+                new JsonObject {["id"] = "ios.uikit.get_navigation_state" },
+                new JsonObject {["id"] = "ios.swiftui.get_navigation_state" }
             }
         };
 
@@ -137,15 +139,14 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
         var catalog = new JsonObject
         {
             ["tools"] = new JsonArray
-            {
-                new JsonObject { ["id"] = "maui.get_navigation_state" }
-            }
+{                new JsonObject {["id"] = "maui.get_navigation_state" }}
         };
         Assert.True(GetLiveNavigationStructureTool.TryResolveNavigationTool(
             catalog,
             "maui",
             out var controller,
             out _));
+
         var structuredContent = new JsonObject
         {
             ["sessionId"] = "session-1",
@@ -219,9 +220,7 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
                     ["available"] = true,
                     ["guidance"] = "Repeated UIKit instructions",
                     ["technologyKinds"] = new JsonArray
-                    {
-                        new JsonObject { ["kind"] = "ui_tab_bar_controller", ["supportsTabGroup"] = true }
-                    }
+{                        new JsonObject {["kind"] = "ui_tab_bar_controller", ["supportsTabGroup"] = true }}
                 },
                 new JsonObject
                 {
@@ -230,9 +229,7 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
                     ["available"] = false,
                     ["guidance"] = "Repeated SwiftUI instructions",
                     ["technologyKinds"] = new JsonArray
-                    {
-                        new JsonObject { ["kind"] = "navigation_stack", ["supportsNavigationHost"] = true }
-                    }
+{                        new JsonObject {["kind"] = "navigation_stack", ["supportsNavigationHost"] = true }}
                 }
             },
             ["payload"] = new JsonObject
@@ -251,8 +248,10 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
 
         Assert.Equal(original, content.ToJsonString());
         Assert.Null(observation["guidance"]);
+
         var controllers = Assert.IsType<JsonArray>(observation["availableNavigationControllers"]);
         Assert.Equal(2, controllers.Count);
+
         for (var index = 0; index < controllers.Count; index++)
         {
             var expected = Assert.IsType<JsonObject>(content["availableNavigationControllers"]![index]!.DeepClone());
@@ -260,9 +259,11 @@ public sealed class SimulatorAgentNavigationStructureObservationTests
             Assert.True(JsonNode.DeepEquals(expected, controllers[index]));
             Assert.Null(controllers[index]!["guidance"]);
         }
+
         Assert.True(JsonNode.DeepEquals(content["payload"]!["result"], observation["state"]));
 
         content["availableNavigationControllers"]![0]!["guidance"] = "Updated instructions";
+
         var updated = Assert.IsType<JsonObject>(NavigationStructureObservation.Build(content));
         Assert.Equal(observation["structureFingerprint"]!.GetValue<string>(), updated["structureFingerprint"]!.GetValue<string>());
     }

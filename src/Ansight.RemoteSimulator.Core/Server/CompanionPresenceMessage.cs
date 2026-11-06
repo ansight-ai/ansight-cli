@@ -17,6 +17,7 @@ internal sealed record CompanionPresenceMessage(
     public RemoteCompanionDevice? Normalize()
     {
         var identifier = NormalizeRequired(DeviceId, MaximumIdentifierLength);
+
         if (identifier is null)
         {
             return null;
@@ -42,12 +43,14 @@ internal sealed record CompanionPresenceMessage(
     private static string? NormalizeRequired(string? value, int maximumLength)
     {
         var normalized = NormalizeOptional(value, maximumLength);
+
         return normalized.Length == 0 ? null : normalized;
     }
 
     private static string NormalizeOptional(string? value, int maximumLength)
     {
         var normalized = value?.Trim() ?? string.Empty;
+
         return normalized.Length <= maximumLength
             ? normalized
             : normalized[..maximumLength];

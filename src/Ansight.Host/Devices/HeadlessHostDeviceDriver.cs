@@ -50,6 +50,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         iosPhysicalDeviceInput = new IosPhysicalDeviceAppiumClient(
             IosPhysicalDeviceAppiumOptions.Resolve(options));
         iosSimulatorAccessibility = new IosSimulatorAccessibilityClient(options.IosSimulatorAxePath);
+
         var webDriverAgentOptions = IosWebDriverAgentOptions.Resolve(options);
         iosWebDriverAgentAccessibility = webDriverAgentOptions.IsConfigured
             ? new IosWebDriverAgentClient(webDriverAgentOptions)
@@ -61,17 +62,19 @@ public sealed partial class HeadlessHostDeviceDriver :
     {
         var inventory = await devices.ListAsync(cancellationToken).ConfigureAwait(false);
         var results = new List<DeviceLifecycleDevice>(inventory.Devices.Count);
+
         foreach (var device in inventory.Devices)
         {
             IReadOnlyList<DeviceLifecycleApplication> applications = [];
+
             if (device.IsBooted)
             {
                 try
                 {
                     applications = (await devices.ListApplicationsAsync(
-                            device.Platform,
-                            device.Identifier,
-                            cancellationToken)
+                        device.Platform,
+                        device.Identifier,
+                        cancellationToken)
                         .ConfigureAwait(false))
                         .Select(static app => new DeviceLifecycleApplication(
                             app.Identifier,
@@ -103,6 +106,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
         if (device is null)
         {
             return DeviceLifecycleResult.Failure(
@@ -115,6 +119,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             device.Platform,
             device.Identifier,
             cancellationToken).ConfigureAwait(false);
+
         return ToLifecycleResult(result, "startDevice");
     }
 
@@ -124,6 +129,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
         if (device is null)
         {
             return DeviceLifecycleResult.Failure(
@@ -138,6 +144,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             device.Identifier,
             bundleIdentifier,
             cancellationToken).ConfigureAwait(false);
+
         return ToLifecycleResult(result, "launchApplication", bundleIdentifier);
     }
 
@@ -147,6 +154,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
         if (device is null)
         {
             return DeviceLifecycleResult.Failure(
@@ -173,6 +181,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 "home",
                 bundleIdentifier),
             cancellationToken).ConfigureAwait(false);
+
         return new DeviceLifecycleResult(
             result.IsSuccess,
             device.Identifier,
@@ -190,6 +199,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
         if (device is null)
         {
             return DeviceLifecycleResult.Failure(
@@ -204,6 +214,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             device.Identifier,
             bundleIdentifier,
             cancellationToken).ConfigureAwait(false);
+
         return ToLifecycleResult(result, "terminateApplication", bundleIdentifier);
     }
 
@@ -236,6 +247,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
 
         var simulatorHidCapability = devices.GetIosSimulatorHidCapability();
+
         return new UiInputAvailability(
             simulatorHidCapability.IsAvailable,
             simulatorHidCapability.IsAvailable ? IosBackend : string.Empty,
@@ -268,11 +280,14 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var inputGate = GetInputGate(deviceIdentifier);
         await inputGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
             if (device is null || !device.IsBooted)
             {
                 throw new InvalidOperationException(
@@ -292,11 +307,14 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var inputGate = GetInputGate(deviceIdentifier);
         await inputGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
             if (device is null || !device.IsBooted)
             {
                 throw new InvalidOperationException(
@@ -307,6 +325,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             {
                 var size = await GetAndroidDisplaySizeAsync(device.Identifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 return new UiViewport(
                     device.Platform,
                     size.Width,
@@ -321,6 +340,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             }
 
             var simulatorHidCapability = devices.GetIosSimulatorHidCapability();
+
             if (!simulatorHidCapability.IsAvailable)
             {
                 throw new MacSimulatorHidException(simulatorHidCapability.Message);
@@ -330,9 +350,10 @@ public sealed partial class HeadlessHostDeviceDriver :
                 .ConfigureAwait(false);
             var metrics = session.GetMainScreenMetrics(device.Identifier);
             var screenshotSize = await devices.GetIosSimulatorScreenshotSizeAsync(
-                    device.Identifier,
-                    cancellationToken)
+                device.Identifier,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             return CreateIosSimulatorViewport(metrics, screenshotSize);
         }
         finally
@@ -347,12 +368,15 @@ public sealed partial class HeadlessHostDeviceDriver :
     {
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var inputGate = GetInputGate(request.DeviceIdentifier);
         await inputGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var device = await ResolveDeviceAsync(request.DeviceIdentifier, cancellationToken)
                 .ConfigureAwait(false);
+
             if (device is null || !device.IsBooted)
             {
                 return UiAccessibilityResult.Failure(
@@ -375,6 +399,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 var keyboardVisible = await CreateAdbClient()
                     .GetSoftwareKeyboardVisibilityAsync(device.Identifier, cancellationToken)
                     .ConfigureAwait(false);
+
                 if (keyboardVisible.HasValue)
                 {
                     payload["keyboardVisible"] = keyboardVisible.Value;
@@ -404,18 +429,20 @@ public sealed partial class HeadlessHostDeviceDriver :
             if (!device.IsPhysical)
             {
                 string? nativeAxServiceFailure = null;
+
                 try
                 {
                     var session = await GetSimulatorHidSessionAsync(device.Identifier, cancellationToken)
                         .ConfigureAwait(false);
                     var sourceJson = session.CaptureAccessibilityTreeJson(device.Identifier);
                     var source = JsonNode.Parse(sourceJson)
-                                 ?? throw new InvalidDataException(
-                                     "The resident CoreSimulator accessibility service returned invalid JSON.");
+                        ?? throw new InvalidDataException(
+                            "The resident CoreSimulator accessibility service returned invalid JSON.");
                     var payload = DeviceAccessibilityTreeNormalizer.NormalizeIosSimulator(
                         source,
                         request.MaxNodes,
                         request.MaxDepth);
+
                     return new UiAccessibilityResult(
                         true,
                         IosSimulatorAccessibilityBackend,
@@ -428,6 +455,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 }
 
                 string? axeFailure = null;
+
                 if (iosSimulatorAccessibility.IsAvailable)
                 {
                     try
@@ -439,6 +467,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                             source,
                             request.MaxNodes,
                             request.MaxDepth);
+
                         return new UiAccessibilityResult(
                             true,
                             IosSimulatorAccessibilityBackend,
@@ -468,15 +497,15 @@ public sealed partial class HeadlessHostDeviceDriver :
                     {
                         return UiAccessibilityResult.Failure(
                             $"The resident CoreSimulator accessibility bridge was unavailable: {nativeAxServiceFailure} "
-                            + $"The AXe fallback was unavailable: {axeFailure} "
-                            + $"The configured direct WebDriverAgent fallback also failed: {exception.Message}",
+                                + $"The AXe fallback was unavailable: {axeFailure} "
+                                + $"The configured direct WebDriverAgent fallback also failed: {exception.Message}",
                             IosWdaAccessibilityBackend);
                     }
                 }
 
                 return UiAccessibilityResult.Failure(
                     $"The resident CoreSimulator accessibility bridge was unavailable: {nativeAxServiceFailure} "
-                    + $"The AXe fallback was unavailable: {axeFailure}",
+                        + $"The AXe fallback was unavailable: {axeFailure}",
                     IosSimulatorAccessibilityBackend);
             }
 
@@ -505,6 +534,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 pageSource.ViewportHeight,
                 request.MaxNodes,
                 request.MaxDepth);
+
             return new UiAccessibilityResult(
                 true,
                 IosAppiumAccessibilityBackend,
@@ -526,6 +556,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return ExecuteInputAsync(
             request.DeviceIdentifier,
             static (device, _) => Task.FromResult(Success(
@@ -550,6 +581,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                         ToDisplayCoordinate(request.NormalizedX, size.Width),
                         ToDisplayCoordinate(request.NormalizedY, size.Height),
                         token).ConfigureAwait(false);
+
                     return ToInputResult(result, AndroidBackend);
                 }
 
@@ -561,6 +593,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                         request.NormalizedX,
                         request.NormalizedY,
                         token).ConfigureAwait(false);
+
                     return Success(IosPhysicalBackend, "Physical iOS tap delivered through Appium/XCUITest.");
                 }
 
@@ -583,6 +616,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                     request.NormalizedY,
                     pointerId,
                     timestamp + 50);
+
                 return Success(IosBackend, "iOS Simulator tap delivered.");
             },
             cancellationToken);
@@ -595,6 +629,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             async (device, token) =>
             {
                 var duration = Math.Clamp(request.DurationMilliseconds, 50, 2_000);
+
                 if (device.Platform == DevicePlatforms.Android)
                 {
                     var size = await GetAndroidDisplaySizeAsync(device.Identifier, token).ConfigureAwait(false);
@@ -607,6 +642,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                         ToDisplayCoordinate(request.EndNormalizedY, size.Height),
                         duration,
                         token).ConfigureAwait(false);
+
                     return ToInputResult(result, AndroidBackend);
                 }
 
@@ -621,10 +657,12 @@ public sealed partial class HeadlessHostDeviceDriver :
                         request.EndNormalizedY,
                         duration,
                         token).ConfigureAwait(false);
+
                     return Success(IosPhysicalBackend, "Physical iOS swipe delivered through Appium/XCUITest.");
                 }
 
                 await SendSimulatorSwipeAsync(device.Identifier, request, duration, token).ConfigureAwait(false);
+
                 return Success(IosBackend, "iOS Simulator swipe delivered.");
             },
             cancellationToken);
@@ -658,6 +696,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                     request,
                     duration,
                     token).ConfigureAwait(false);
+
                 return Success(IosBackend, "iOS Simulator pinch delivered.");
             },
             cancellationToken);
@@ -690,6 +729,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                         device.Identifier,
                         request.Text,
                         token).ConfigureAwait(false);
+
                     return ToInputResult(result, AndroidBackend);
                 }
 
@@ -701,11 +741,13 @@ public sealed partial class HeadlessHostDeviceDriver :
                         request.Text,
                         request.ReplaceExisting,
                         token).ConfigureAwait(false);
+
                     return Success(IosPhysicalBackend, "Physical iOS text input delivered through Appium/XCUITest.");
                 }
 
                 var session = await GetSimulatorHidSessionAsync(device.Identifier, token)
                     .ConfigureAwait(false);
+
                 if (request.ReplaceExisting)
                 {
                     ClearSimulatorText(session, device.Identifier);
@@ -714,6 +756,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 foreach (var stroke in SimulatorTextInputMapper.Map(request.Text))
                 {
                     token.ThrowIfCancellationRequested();
+
                     if (stroke.RequiresShift)
                     {
                         session.SendKey(device.Identifier, 225, MacSimulatorKeyPhase.Down);
@@ -721,6 +764,7 @@ public sealed partial class HeadlessHostDeviceDriver :
 
                     session.SendKey(device.Identifier, stroke.UsageCode, MacSimulatorKeyPhase.Down);
                     session.SendKey(device.Identifier, stroke.UsageCode, MacSimulatorKeyPhase.Up);
+
                     if (stroke.RequiresShift)
                     {
                         session.SendKey(device.Identifier, 225, MacSimulatorKeyPhase.Up);
@@ -745,6 +789,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                         device.Identifier,
                         request.Button,
                         token).ConfigureAwait(false);
+
                     return ToInputResult(result, AndroidBackend);
                 }
 
@@ -755,11 +800,13 @@ public sealed partial class HeadlessHostDeviceDriver :
                         RequireApplicationIdentifier(request.ApplicationIdentifier),
                         request.Button,
                         token).ConfigureAwait(false);
+
                     return Success(IosPhysicalBackend, "Physical iOS button input delivered through Appium/XCUITest.");
                 }
 
                 var session = await GetSimulatorHidSessionAsync(device.Identifier, token)
                     .ConfigureAwait(false);
+
                 if (request.Button.ToLowerInvariant() is "back" or "enter")
                 {
                     var keyCode = request.Button.Equals("enter", StringComparison.OrdinalIgnoreCase) ? 40u : 41u;
@@ -794,6 +841,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
 
         disposed = true;
+
         lock (simulatorHidSessionsGate)
         {
             foreach (var session in simulatorHidSessions.Values)
@@ -806,6 +854,7 @@ public sealed partial class HeadlessHostDeviceDriver :
 
         iosWebDriverAgentAccessibility?.Dispose();
         iosPhysicalDeviceInput.Dispose();
+
         foreach (var inputGate in inputGates.Values)
         {
             inputGate.Dispose();
@@ -818,11 +867,14 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var inputGate = GetInputGate(deviceIdentifier);
         await inputGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var device = await ResolveDeviceAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
             if (device is null || !device.IsBooted)
             {
                 return UiInputResult.Failure(
@@ -839,6 +891,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             else if (device.Platform == DevicePlatforms.Ios)
             {
                 var simulatorHidCapability = devices.GetIosSimulatorHidCapability();
+
                 if (!simulatorHidCapability.IsAvailable)
                 {
                     return UiInputResult.Failure(simulatorHidCapability.Message);
@@ -884,13 +937,16 @@ public sealed partial class HeadlessHostDeviceDriver :
             request.StartNormalizedY,
             pointerId,
             timestamp);
+
         var stopwatch = Stopwatch.StartNew();
         var moveCount = Math.Clamp((int)Math.Floor(duration / 40d) - 1, 1, 49);
+
         for (var index = 1; index <= moveCount; index++)
         {
             var fraction = index / (double)(moveCount + 1);
             var targetElapsedMilliseconds = (int)Math.Round(duration * fraction);
             var remainingMilliseconds = targetElapsedMilliseconds - stopwatch.ElapsedMilliseconds;
+
             if (remainingMilliseconds > 0)
             {
                 await Task.Delay(
@@ -908,6 +964,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
 
         var finalRemainingMilliseconds = duration - stopwatch.ElapsedMilliseconds;
+
         if (finalRemainingMilliseconds > 0)
         {
             await Task.Delay(
@@ -938,6 +995,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             pageSource.ViewportHeight,
             request.MaxNodes,
             request.MaxDepth);
+
         return new UiAccessibilityResult(
             true,
             IosWdaAccessibilityBackend,
@@ -963,13 +1021,16 @@ public sealed partial class HeadlessHostDeviceDriver :
             pointerId,
             timestamp,
             0);
+
         var stopwatch = Stopwatch.StartNew();
         var moveCount = Math.Clamp((int)Math.Floor(duration / 40d) - 1, 1, 49);
+
         for (var index = 1; index <= moveCount; index++)
         {
             var fraction = index / (double)(moveCount + 1);
             var targetElapsedMilliseconds = (int)Math.Round(duration * fraction);
             var remainingMilliseconds = targetElapsedMilliseconds - stopwatch.ElapsedMilliseconds;
+
             if (remainingMilliseconds > 0)
             {
                 await Task.Delay(
@@ -988,6 +1049,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
 
         var finalRemainingMilliseconds = duration - stopwatch.ElapsedMilliseconds;
+
         if (finalRemainingMilliseconds > 0)
         {
             await Task.Delay(
@@ -1048,6 +1110,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var normalizedIdentifier = string.IsNullOrWhiteSpace(deviceIdentifier)
             ? string.Empty
             : deviceIdentifier.Trim();
+
         return inputGates.GetOrAdd(normalizedIdentifier, static _ => new SemaphoreSlim(1, 1));
     }
 
@@ -1056,7 +1119,9 @@ public sealed partial class HeadlessHostDeviceDriver :
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var normalizedIdentifier = deviceIdentifier.Trim();
+
         lock (simulatorHidSessionsGate)
         {
             if (simulatorHidSessions.TryGetValue(normalizedIdentifier, out var existingSession))
@@ -1065,6 +1130,7 @@ public sealed partial class HeadlessHostDeviceDriver :
             }
 
             var capability = devices.GetIosSimulatorHidCapability();
+
             if (!capability.IsAvailable || string.IsNullOrWhiteSpace(capability.Backend))
             {
                 throw new MacSimulatorHidException(capability.Message);
@@ -1072,6 +1138,7 @@ public sealed partial class HeadlessHostDeviceDriver :
 
             var session = new MacSimulatorHidSession(capability.Backend);
             simulatorHidSessions.Add(normalizedIdentifier, session);
+
             return Task.FromResult(session);
         }
     }
@@ -1088,6 +1155,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var result = await CreateAdbClient().RunAsync(
             ["-s", deviceIdentifier, "shell", "wm", "size"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -1095,6 +1163,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         }
 
         var matches = AndroidDisplaySizePattern().Matches(result.StandardOutput);
+
         if (matches.Count == 0
             || !int.TryParse(matches[^1].Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var width)
             || !int.TryParse(matches[^1].Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var height)
@@ -1123,6 +1192,7 @@ public sealed partial class HeadlessHostDeviceDriver :
                 AndroidAccessibilityDumpPath
             ],
             cancellationToken).ConfigureAwait(false);
+
         if (!dumpResult.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -1135,6 +1205,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var sourceResult = await adb.RunAsync(
             ["-s", deviceIdentifier, "exec-out", "cat", AndroidAccessibilityDumpPath],
             cancellationToken).ConfigureAwait(false);
+
         if (!sourceResult.IsSuccess || string.IsNullOrWhiteSpace(sourceResult.StandardOutput))
         {
             throw new InvalidOperationException(
@@ -1155,6 +1226,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var selection = await client.RunAsync(
             ["-s", deviceIdentifier, "shell", "input", "keycombination", "113", "29"],
             cancellationToken).ConfigureAwait(false);
+
         if (!selection.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -1164,6 +1236,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var deletion = await client.RunAsync(
             ["-s", deviceIdentifier, "shell", "input", "keyevent", "67"],
             cancellationToken).ConfigureAwait(false);
+
         if (!deletion.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -1178,6 +1251,7 @@ public sealed partial class HeadlessHostDeviceDriver :
         var result = await CreateAdbClient().CollapseSystemUiPanelsAsync(
             deviceIdentifier,
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -1191,6 +1265,7 @@ public sealed partial class HeadlessHostDeviceDriver :
     private AdbClient CreateAdbClient()
     {
         var resolution = AdbToolLocator.Resolve(configuredAdbPath);
+
         if (!resolution.IsFound)
         {
             throw new InvalidOperationException(resolution.Message);
@@ -1240,10 +1315,12 @@ public sealed partial class HeadlessHostDeviceDriver :
         HeadlessIosScreenshotSize screenshotSize)
     {
         ArgumentNullException.ThrowIfNull(metrics);
+
         if (!double.IsFinite(metrics.Scale) || metrics.Scale <= 0)
         {
             throw new InvalidOperationException("The iOS Simulator display scale is invalid.");
         }
+
         if (screenshotSize.Width <= 0 || screenshotSize.Height <= 0)
         {
             throw new InvalidOperationException("The iOS Simulator screenshot dimensions are invalid.");
@@ -1277,7 +1354,7 @@ public sealed partial class HeadlessHostDeviceDriver :
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim()
-           ?? string.Empty;
+            ?? string.Empty;
 
     private static string RequireApplicationIdentifier(string? applicationIdentifier)
     {
@@ -1290,8 +1367,6 @@ public sealed partial class HeadlessHostDeviceDriver :
         return applicationIdentifier.Trim();
     }
 
-
     [GeneratedRegex(@"(\d+)x(\d+)", RegexOptions.CultureInvariant)]
     private static partial Regex AndroidDisplaySizePattern();
-
 }

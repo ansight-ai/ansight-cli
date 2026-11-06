@@ -63,6 +63,7 @@ public sealed class LocalAppGraphServiceTests
             evidence);
 
         Assert.True(created.IsSuccess, created.Message);
+
         var createdDetail = Assert.IsType<CloudAppGraphDetail>(created.Detail);
         Assert.Single(createdDetail.Bindings);
         Assert.Equal("open-settings", createdDetail.Bindings[0].EdgeId);
@@ -80,6 +81,7 @@ public sealed class LocalAppGraphServiceTests
                 "Observed profile"));
 
         Assert.True(observation.IsSuccess, observation.Message);
+
         var updated = Assert.IsType<CloudAppGraphDetail>(service.Get(createdDetail.Graph.Id).Detail);
         Assert.Equal(2, updated.Version.VersionNumber);
         Assert.Equal("open-profile", Assert.Single(updated.Bindings).EdgeId);
@@ -128,6 +130,7 @@ public sealed class LocalAppGraphServiceTests
 
         var detail = Assert.IsType<CloudAppGraphDetail>(imported.Detail);
         Assert.Equal(remoteGraphId, detail.Graph.Id);
+
         var link = Assert.IsType<LocalAppGraphSyncLink>(service.GetSyncLink(detail.Graph.Id));
         Assert.Equal(remoteGraphId, link.RemoteGraphId);
         Assert.Equal(detail.Version.Id, link.LocalVersionId);
@@ -203,9 +206,11 @@ public sealed class LocalAppGraphServiceTests
         var databasePath = Path.Combine(paths.ApplicationDataPath, "app-graph", "app-graphs.sqlite");
         var service = new LocalAppGraphService(paths);
         Assert.True(service.List().IsSuccess);
+
         using (var connection = CreateUnpooledConnection(databasePath))
         {
             connection.Open();
+
             using var command = connection.CreateCommand();
             command.CommandText = """
                 DROP TABLE local_app_graph_sync_links;
@@ -238,18 +243,32 @@ public sealed class LocalAppGraphServiceTests
 
         using var verification = CreateUnpooledConnection(databasePath);
         verification.Open();
+
         using var inspect = verification.CreateCommand();
         inspect.CommandText = "PRAGMA table_info(local_app_graph_sync_links);";
+
         using var reader = inspect.ExecuteReader();
         var columns = new List<string>();
-        while (reader.Read()) columns.Add(reader.GetString(1));
+
+        while (reader.Read())
+        {
+            columns.Add(reader.GetString(1));
+        }
+
         Assert.Contains("local_version_id", columns);
         reader.Close();
+
         using var observationInspect = verification.CreateCommand();
         observationInspect.CommandText = "PRAGMA table_info(local_app_graph_observations);";
+
         using var observationReader = observationInspect.ExecuteReader();
         var observationColumns = new List<string>();
-        while (observationReader.Read()) observationColumns.Add(observationReader.GetString(1));
+
+        while (observationReader.Read())
+        {
+            observationColumns.Add(observationReader.GetString(1));
+        }
+
         Assert.Contains("source_kind", observationColumns);
     }
 
@@ -286,12 +305,15 @@ public sealed class LocalAppGraphServiceTests
         Assert.NotNull(committed.GraphId);
         Assert.NotNull(committed.VersionId);
         Assert.Equal("committed", committed.Recording?.Status);
+
         var graph = Assert.IsType<CloudAppGraphDetail>(restoredService.Get(committed.GraphId!.Value).Detail);
         Assert.Equal(1, graph.Version.VersionNumber);
         Assert.Equal("Home", graph.Version.Definition["nodes"]![0]!["name"]!.GetValue<string>());
+
         using var connection = CreateUnpooledConnection(
             Path.Combine(paths.ApplicationDataPath, "app-graph", "app-graphs.sqlite"));
         connection.Open();
+
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT source_kind FROM local_app_graph_observations WHERE graph_id = $graph_id;";
         command.Parameters.AddWithValue("$graph_id", committed.GraphId.Value.ToString("D"));
@@ -319,6 +341,7 @@ public sealed class LocalAppGraphServiceTests
             recording.Id,
             new LocalAppGraphRecordingArmTransitionRequest(),
             CreateSnapshot(now, CreateVisualTree(now, "open-settings-button"))).IsSuccess);
+
         var completed = service.CompleteRecordingTransition(
             recording.Id,
             new LocalAppGraphRecordingCompleteTransitionRequest(
@@ -333,9 +356,11 @@ public sealed class LocalAppGraphServiceTests
                 CreateTap(now.AddMinutes(2))));
 
         Assert.True(completed.IsSuccess, completed.Message);
+
         var updated = Assert.IsType<LocalAppGraphRecording>(completed.Recording);
         var edge = Assert.IsType<JsonObject>(updated.Definition["edges"]![0]);
         Assert.Equal("open-settings-button", edge["action"]!["automationId"]!.GetValue<string>());
+
         var binding = Assert.IsType<JsonObject>(updated.Evidence["bindingCandidates"]![0]);
         Assert.Equal("open-settings-button", binding["configuration"]!["selector"]!["automationId"]!.GetValue<string>());
         Assert.Null(updated.PendingTransition);
@@ -362,11 +387,13 @@ public sealed class LocalAppGraphServiceTests
             recording.Id,
             new LocalAppGraphRecordingDestinationRequest("screen", "Shell", "Host navigation"),
             CreateSnapshot(now)).Recording);
+
         var shellId = recording.CurrentDestinationId!;
         recording = Assert.IsType<LocalAppGraphRecording>(service.CaptureRecordingDestination(
             recording.Id,
             new LocalAppGraphRecordingDestinationRequest("screen", "Home", "Use home"),
             CreateSnapshot(now)).Recording);
+
         var homeId = recording.CurrentDestinationId!;
         Assert.True(service.UpsertRecordingNavigationHost(
             recording.Id,
@@ -421,7 +448,7 @@ public sealed class LocalAppGraphServiceTests
                 ["configuration"] = new JsonObject
                 {
                     ["action"] = "tap",
-                    ["selector"] = new JsonObject { ["automationId"] = $"{edgeId}-button" }
+                    ["selector"] = new JsonObject {["automationId"] = $"{edgeId}-button" }
                 },
                 ["preconditions"] = new JsonArray(),
                 ["postconditions"] = new JsonArray("Destination is visible"),
@@ -510,8 +537,7 @@ public sealed class LocalAppGraphServiceTests
                 NormalizedX = 0.5,
                 NormalizedY = 0.5,
                 CoordinateUnit = "normalized"
-            }
-        ];
+            }        ];
 
     private static SqliteConnection CreateUnpooledConnection(string filePath)
         => new(new SqliteConnectionStringBuilder

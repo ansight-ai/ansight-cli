@@ -34,8 +34,9 @@ internal sealed class ExportSessionArchiveTool : Operation
         }
 
         var archiveFilePath = NormalizeOptionalString(arguments?["archiveFilePath"]?.GetValue<string>())
-                              ?? ResolveDefaultArchivePath(applicationPaths, snapshot!);
+            ?? ResolveDefaultArchivePath(applicationPaths, snapshot!);
         var result = StandardSessionArchiveExporter.Export(applicationPaths, snapshot!, archiveFilePath);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(RequestResult.ToolResult(
@@ -49,6 +50,7 @@ internal sealed class ExportSessionArchiveTool : Operation
         }
 
         var archiveInfo = new FileInfo(archiveFilePath);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -64,6 +66,7 @@ internal sealed class ExportSessionArchiveTool : Operation
     {
         var properties = SessionReviewToolSchemas.ReviewSessionProperties();
         properties["archiveFilePath"] = ToolSchema.String("Optional host-local ZIP destination. Defaults to Ansight's session export directory.", nullable: true);
+
         return properties;
     }
 
@@ -73,6 +76,7 @@ internal sealed class ExportSessionArchiveTool : Operation
             applicationPaths.ApplicationDataPath,
             SessionEvidenceDefaults.SessionExportsDirectoryName);
         var fileName = $"{FileNameUtil.Sanitize(snapshot.AppId)}-{FileNameUtil.Sanitize(snapshot.SessionId)}-native-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip";
+
         return Path.Combine(directoryPath, fileName);
     }
 }

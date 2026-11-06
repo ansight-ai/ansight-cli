@@ -17,9 +17,10 @@ internal sealed class AppToolRepositoryAutomationExecutor : IRepositoryAutomatio
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var startedAtUtc = DateTimeOffset.UtcNow;
         var toolId = request.Trigger.Automation.AppToolId
-                     ?? throw new InvalidOperationException("The app-tool automation does not declare a tool id.");
+            ?? throw new InvalidOperationException("The app-tool automation does not declare a tool id.");
         using var timeoutCts = new CancellationTokenSource(request.Trigger.Automation.ActionTimeout);
         using var executionCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
@@ -44,7 +45,9 @@ internal sealed class AppToolRepositoryAutomationExecutor : IRepositoryAutomatio
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
+
         var sessionId = request.Event.SessionId;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return Complete(
@@ -57,25 +60,34 @@ internal sealed class AppToolRepositoryAutomationExecutor : IRepositoryAutomatio
         if (!appToolBridge.IsSessionConnected(sessionId))
         {
             var unavailable = ExecutionCapabilities.Unavailable("app.tool:" + toolId, null, "No SDK app-tool provider is connected.");
+
             return Complete(AutomationRunStatus.Rejected, startedAtUtc, unavailable["message"]!.GetValue<string>(), unavailable);
         }
+
         var catalog = await appToolBridge.QueryToolsFilteredAsync(sessionId,
             new JsonObject { ["toolId"] = toolId, ["executableOnly"] = false, ["detail"] = "full", ["maxResults"] = 1 },
             executionToken).ConfigureAwait(false);
+
         if (!catalog.Success || catalog.Envelope?.Type != ToolProtocolMessageTypes.CatalogType
             || catalog.Envelope.Payload?["tools"] is not JsonArray tools)
+        {
             return Complete(AutomationRunStatus.Failed, startedAtUtc, catalog.Message, null);
+        }
+
         if (!tools.OfType<JsonObject>().Any(tool => tool["id"]?.GetValue<string>() == toolId
-                && tool["executable"]?.GetValue<bool>() != false && tool["denial"] is null))
+            && tool["executable"]?.GetValue<bool>() != false && tool["denial"] is null))
         {
             var unavailable = ExecutionCapabilities.Unavailable("app.tool:" + toolId, null, "The app does not advertise this executable tool.");
+
             return Complete(AutomationRunStatus.Rejected, startedAtUtc, unavailable["message"]!.GetValue<string>(), unavailable);
         }
+
         AppToolBridgeResponse response;
         var requestContext = new AppToolBridgeRequestContext(
             "automation",
             request.Trigger.Automation.AutomationId,
             request.Event.CorrelationId);
+
         try
         {
             response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
@@ -109,6 +121,7 @@ internal sealed class AppToolRepositoryAutomationExecutor : IRepositoryAutomatio
             response.Envelope.Type,
             ToolProtocolMessageTypes.ErrorType,
             StringComparison.Ordinal);
+
         return Complete(
             isError ? AutomationRunStatus.Failed : AutomationRunStatus.Succeeded,
             startedAtUtc,
@@ -127,6 +140,7 @@ internal sealed class AppToolRepositoryAutomationExecutor : IRepositoryAutomatio
         var message = hostCancellationRequested
             ? "App tool automation execution was cancelled."
             : $"App tool automation exceeded its {request.Trigger.Automation.ActionTimeout.TotalSeconds:0}-second timeout.";
+
         return Complete(status, startedAtUtc, message, output: null);
     }
 

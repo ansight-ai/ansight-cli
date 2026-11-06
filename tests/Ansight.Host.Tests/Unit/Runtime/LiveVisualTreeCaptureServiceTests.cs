@@ -106,7 +106,10 @@ public sealed class LiveVisualTreeCaptureServiceTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "simulator-001", "Phone", "test.app", false, false, true)
-            { DeviceKind = DeviceKinds.Simulator, ExecutionMode = "device" });
+        {
+            DeviceKind = DeviceKinds.Simulator,
+            ExecutionMode = "device"
+        });
         var bridge = new TreeBridge("unrelated-sdk-session");
         var driver = new AccessibilityDriver();
         var service = new LiveVisualTreeCaptureService(state, state, bridge, driver);
@@ -126,11 +129,15 @@ public sealed class LiveVisualTreeCaptureServiceTests
         var sessionId = state.CreateSession("test.app", "Test App", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null,
             """{"device":{"nativeDeviceId":"simulator-001","osName":"iOS"}}""");
+
         return sessionId;
     }
 
     private static JsonObject CreateCatalog(params string[] toolIds)
-        => new() { ["tools"] = new JsonArray(toolIds.Select(toolId => (JsonNode)new JsonObject { ["id"] = toolId }).ToArray()) };
+        => new()
+        {
+            ["tools"] = new JsonArray(toolIds.Select(toolId => (JsonNode)new JsonObject { ["id"] = toolId }).ToArray())
+        };
 
     private static JsonObject CreateTree(string format = VisualTreeContract.NativeFormat)
         => new()
@@ -141,7 +148,9 @@ public sealed class LiveVisualTreeCaptureServiceTests
             ["types"] = new JsonArray("View"),
             ["root"] = new JsonObject
             {
-                ["id"] = "root", ["typeId"] = 0, ["children"] = new JsonArray()
+                ["id"] = "root",
+                ["typeId"] = 0,
+                ["children"] = new JsonArray()
             },
             ["nodeCount"] = 1
         };
@@ -153,33 +162,60 @@ public sealed class LiveVisualTreeCaptureServiceTests
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(UiAccessibilityRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+
             return Task.FromResult(new UiAccessibilityResult(true, "test", "Captured.", CreateTree(VisualTreeContract.DeviceAccessibilityFormat)));
         }
     }
 
-    private sealed class TreeBridge(string sessionId, params string[] toolIds) : IAppToolBridge
+    private sealed class TreeBridge : IAppToolBridge
     {
+        private readonly string sessionId;
+        private readonly string[] toolIds;
+
+        public TreeBridge(string sessionId, params string[] toolIds)
+        {
+            this.sessionId = sessionId;
+            this.toolIds = toolIds;
+        }
+
         public bool CatalogAvailable { get; init; } = true;
         public string? LastToolId { get; private set; }
-        public event EventHandler? ConnectionsChanged { add { } remove { } }
+        public event EventHandler? ConnectionsChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
+
         public bool IsSessionConnected(string id) => id == sessionId;
+
         public OperationResult ForceDisconnectSession(string id) => OperationResult.Failure("Unsupported.");
 
         public Task<AppToolBridgeResponse> QueryToolsAsync(string id, CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
             => Task.FromResult(CatalogAvailable
                 ? AppToolBridgeResponse.FromSuccess("Catalog.", new ToolProtocolEnvelope
                 {
-                    Type = ToolProtocolMessageTypes.CatalogType, Id = "catalog", SessionId = id, Payload = CreateCatalog(toolIds)
+                    Type = ToolProtocolMessageTypes.CatalogType,
+                    Id = "catalog",
+                    SessionId = id,
+                    Payload = CreateCatalog(toolIds)
                 })
                 : AppToolBridgeResponse.FromFailure("Catalog unavailable."));
 
         public Task<AppToolBridgeResponse> CallToolAsync(string id, string toolId, JsonObject? arguments, CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
         {
             LastToolId = toolId;
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess("Captured.", new ToolProtocolEnvelope
             {
-                Type = ToolProtocolMessageTypes.ResultType, Id = "capture", SessionId = id,
+                Type = ToolProtocolMessageTypes.ResultType,
+                Id = "capture",
+                SessionId = id,
                 Payload = new JsonObject { ["toolId"] = toolId, ["success"] = true, ["result"] = CreateTree() }
             }));
         }

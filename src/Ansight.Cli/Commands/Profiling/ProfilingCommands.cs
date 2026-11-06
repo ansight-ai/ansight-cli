@@ -15,6 +15,7 @@ internal static class ProfilingCommands
         }
 
         var technology = arguments.RequirePositional(1, "profiling technology").ToLowerInvariant();
+
         return technology switch
         {
             "dotnet" or ".net" or "net" => await RunDotNetAsync(
@@ -37,7 +38,7 @@ internal static class ProfilingCommands
                 cancellationToken),
             _ => throw new CliUsageException(
                 $"Unknown profiling technology '{technology}'. Available technologies: ios, android, dotnet, sample. "
-                + "Run 'ansight profile help' for available commands.")
+                    + "Run 'ansight profile help' for available commands.")
         };
     }
 
@@ -57,6 +58,7 @@ internal static class ProfilingCommands
             options,
             start: false,
             cancellationToken).ConfigureAwait(false);
+
         return action switch
         {
             "tools" or "requirements" => await ShowToolchainAsync(
@@ -87,7 +89,7 @@ internal static class ProfilingCommands
                     action),
             _ => throw new CliUsageException(
                 $"Unknown .NET profiling action '{action}'. "
-                + "Run 'ansight profile dotnet help' for available commands.")
+                    + "Run 'ansight profile dotnet help' for available commands.")
         };
     }
 
@@ -98,13 +100,15 @@ internal static class ProfilingCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(3, "ansight profile dotnet tools");
+
         var toolchain = await runtime.Profiling.GetToolchainAsync(cancellationToken).ConfigureAwait(false);
         output.Write(
             new ProfilingToolchainOutput("ansight.dotnet-toolchain/v1", toolchain),
             () => $"dotnet-trace: {toolchain.DotNetTracePath ?? "not found"}\n"
-                  + $"dotnet-dsrouter: {toolchain.DotNetDsRouterPath ?? "not found"}\n"
-                  + $"ADB: {toolchain.AdbPath ?? "not found"}\n"
-                  + $"Xcode: {toolchain.XcodeVersion ?? "not available"}");
+                + $"dotnet-dsrouter: {toolchain.DotNetDsRouterPath ?? "not found"}\n"
+                + $"ADB: {toolchain.AdbPath ?? "not found"}\n"
+                + $"Xcode: {toolchain.XcodeVersion ?? "not available"}");
+
         return toolchain.IsAvailable ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -117,7 +121,9 @@ internal static class ProfilingCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight profile dotnet start <app-path> --app-id <id> --device-id <id> [--wait] [options]");
+
         var wait = arguments.HasFlag("wait");
+
         if (CliCommandContext.Current is null && !wait)
         {
             throw new CliHostUnavailableException(
@@ -125,6 +131,7 @@ internal static class ProfilingCommands
         }
 
         var applicationPath = Path.GetFullPath(arguments.RequirePositional(3, "application path"));
+
         if (!File.Exists(applicationPath) && !Directory.Exists(applicationPath))
         {
             throw new CliUsageException($"Application artifact '{applicationPath}' was not found.");
@@ -139,19 +146,24 @@ internal static class ProfilingCommands
             Headless: arguments.HasFlag("headless"));
         var captureId = await runtime.Profiling.StartCaptureAsync(request, cancellationToken)
             .ConfigureAwait(false);
+
         if (!wait)
         {
             var snapshot = runtime.Profiling.GetCapture(captureId);
+
             return WriteCapture("start", captureId, snapshot, output);
         }
 
         string? previousPhase = null;
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var snapshot = runtime.Profiling.GetCapture(captureId)
-                           ?? throw new InvalidOperationException(
-                               $"Capture '{captureId}' disappeared from the profiling service.");
+                ?? throw new InvalidOperationException(
+                    $"Capture '{captureId}' disappeared from the profiling service.");
+
             if (!string.Equals(previousPhase, snapshot.Phase, StringComparison.Ordinal))
             {
                 previousPhase = snapshot.Phase;
@@ -173,7 +185,9 @@ internal static class ProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, "ansight profile dotnet status <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
+
         return WriteCapture("status", captureId, runtime.Profiling.GetCapture(captureId), output);
     }
 
@@ -183,6 +197,7 @@ internal static class ProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, "ansight profile dotnet cancel <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var cancelled = runtime.Profiling.CancelCapture(captureId);
         output.Write(
@@ -193,6 +208,7 @@ internal static class ProfilingCommands
             () => cancelled
                 ? $"Cancellation requested for capture '{captureId}'."
                 : $"Capture '{captureId}' is not active or was not found.");
+
         return cancelled ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -202,6 +218,7 @@ internal static class ProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight profile dotnet list [--limit <count>]");
+
         var limit = arguments.GetIntOption("limit", 100, 1, 1_000);
         var captures = runtime.Profiling.ListCaptures()
             .OrderByDescending(static capture => capture.CreatedUtc)
@@ -215,6 +232,7 @@ internal static class ProfilingCommands
                     Environment.NewLine,
                     captures.Select(capture =>
                         $"{capture.CaptureId}\t{capture.State}\t{capture.ApplicationPath}\t{capture.CreatedUtc:O}")));
+
         return CliExitCodes.Success;
     }
 
@@ -225,6 +243,7 @@ internal static class ProfilingCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(4, "ansight profile dotnet import <trace.nettrace> [options]");
+
         var tracePath = Path.GetFullPath(arguments.RequirePositional(3, "NetTrace path"));
         var manifest = await runtime.Profiling.ImportTraceAsync(
             tracePath,
@@ -234,6 +253,7 @@ internal static class ProfilingCommands
         output.Write(
             new ProfilingImportOutput("ansight.dotnet-capture-import/v1", manifest),
             () => $"Imported capture '{manifest.CaptureId}' with {manifest.Artifacts.Count} artifact(s).");
+
         return CliExitCodes.Success;
     }
 
@@ -243,6 +263,7 @@ internal static class ProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, "ansight profile dotnet manifest <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var manifest = runtime.Profiling.GetManifest(captureId);
         output.Write(
@@ -254,10 +275,11 @@ internal static class ProfilingCommands
             () => manifest is null
                 ? $"Capture '{captureId}' was not found."
                 : $"{manifest.CaptureId}\t{manifest.State}\t{manifest.ApplicationPath}\n"
-                  + string.Join(
-                      Environment.NewLine,
-                      manifest.Artifacts.Select(artifact =>
+                    + string.Join(
+                        Environment.NewLine,
+                        manifest.Artifacts.Select(artifact =>
                           $"{artifact.Kind}\t{artifact.Length}\t{artifact.RelativePath}")));
+
         return manifest is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -267,6 +289,7 @@ internal static class ProfilingCommands
         CliOutput output)
     {
         arguments.EnsurePositionalCount(4, "ansight profile dotnet speedscope <capture-id>");
+
         var captureId = arguments.RequirePositional(3, "capture identifier");
         var speedScope = runtime.Profiling.GetSpeedScopeArtifact(captureId);
         output.Write(
@@ -278,6 +301,7 @@ internal static class ProfilingCommands
             () => speedScope is null
                 ? $"Capture '{captureId}' does not contain a SpeedScope derivative."
                 : speedScope.FilePath);
+
         return speedScope is null ? CliExitCodes.Failure : CliExitCodes.Success;
     }
 
@@ -297,9 +321,10 @@ internal static class ProfilingCommands
             () => snapshot is null
                 ? $"Capture '{captureId}' was not found."
                 : $"{snapshot.CaptureId}\t{snapshot.State}\t{snapshot.Phase}"
-                  + (string.IsNullOrWhiteSpace(snapshot.FailureMessage)
-                      ? string.Empty
-                      : $"\n{snapshot.FailureMessage}"));
+                    + (string.IsNullOrWhiteSpace(snapshot.FailureMessage)
+                        ? string.Empty
+                        : $"\n{snapshot.FailureMessage}"));
+
         if (snapshot is null || snapshot.State is "failed" or "cancelled")
         {
             return CliExitCodes.Failure;
@@ -310,14 +335,14 @@ internal static class ProfilingCommands
 
     private static bool IsTopLevelHelpRequested(CliArguments arguments)
         => (arguments.ShowHelp && arguments.Positionals.Count == 1)
-           || IsHelpAt(arguments, 1);
+            || IsHelpAt(arguments, 1);
 
     private static bool IsHelpAt(CliArguments arguments, int position)
         => arguments.Positionals.Count > position
-           && string.Equals(
-               arguments.Positionals[position],
-               "help",
-               StringComparison.OrdinalIgnoreCase);
+            && string.Equals(
+                arguments.Positionals[position],
+                "help",
+                StringComparison.OrdinalIgnoreCase);
 
     private static string BuildHelp()
         => """
@@ -413,5 +438,4 @@ internal static class ProfilingCommands
            add --wait when using a transient host. Find capture IDs with `ansight profile dotnet
            list`, device IDs with `ansight device list`, and app IDs with `ansight app list`.
            """;
-
 }

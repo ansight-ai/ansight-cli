@@ -13,7 +13,7 @@ internal sealed class SessionState
     private const int MaximumSeenTouchIdCount = 65_536;
     private const int MaximumSeenNetworkRequestIdCount = 65_536;
 
-    private static readonly TimeSpan LiveMetricSnapshotWindow = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan liveMetricSnapshotWindow = TimeSpan.FromMinutes(2);
 
     public required string SessionId { get; init; }
     public required string AppId { get; init; }
@@ -117,17 +117,29 @@ internal sealed class SessionState
     private DateTimeOffset? latestMetricCapturedAtUtc;
 
     public void MarkTagsChanged() => tagsVersion++;
+
     public void MarkAnalysesChanged() => analysesVersion++;
+
     public void MarkAnnotationsChanged() => annotationsVersion++;
+
     public void MarkAgentTaskLinksChanged() => agentTaskLinksVersion++;
+
     public void MarkImagesChanged() => imagesVersion++;
+
     public void MarkTouchesChanged() => touchesVersion++;
+
     public void MarkNetworkRequestsChanged() => networkRequestsVersion++;
+
     public void MarkVisualTreesChanged() => visualTreesVersion++;
+
     public void MarkArtifactsChanged() => artifactsVersion++;
+
     public void MarkApplicationEventsChanged() => applicationEventsVersion++;
+
     public void MarkLogsChanged() => logsVersion++;
+
     public void MarkMetricChannelsChanged() => metricChannelsVersion++;
+
     public void MarkMetricsChanged() => metricsVersion++;
 
     public void AddTouches(IReadOnlyList<SessionTouchInputRecord> touches)
@@ -140,12 +152,14 @@ internal sealed class SessionState
         if (Touches.Count == 0 || CompareTouches(Touches[^1], touches[0]) <= 0)
         {
             Touches.AddRange(touches);
+
             return;
         }
 
         var mergedTouches = new List<SessionTouchInputRecord>(Touches.Count + touches.Count);
         var existingIndex = 0;
         var addedIndex = 0;
+
         while (existingIndex < Touches.Count && addedIndex < touches.Count)
         {
             if (CompareTouches(Touches[existingIndex], touches[addedIndex]) <= 0)
@@ -184,13 +198,15 @@ internal sealed class SessionState
         var incomingLatestUtc = metrics
             .Select(metric => metric.CapturedAtUtc.ToUniversalTime())
             .Max();
+
         if (!latestMetricCapturedAtUtc.HasValue || incomingLatestUtc > latestMetricCapturedAtUtc.Value)
         {
             latestMetricCapturedAtUtc = incomingLatestUtc;
         }
 
-        var earliestRetainedUtc = latestMetricCapturedAtUtc.Value - LiveMetricSnapshotWindow;
+        var earliestRetainedUtc = latestMetricCapturedAtUtc.Value - liveMetricSnapshotWindow;
         var firstRetainedIndex = ResolveFirstMetricIndexAtOrAfter(liveMetrics, earliestRetainedUtc);
+
         if (firstRetainedIndex > 0)
         {
             liveMetrics.RemoveRange(0, firstRetainedIndex);
@@ -201,6 +217,7 @@ internal sealed class SessionState
             .ToList();
         retainedIncomingMetrics.Sort(CompareMetrics);
         MergeLiveMetrics(retainedIncomingMetrics);
+
         if (liveMetrics.Count > MaximumLiveMetricSnapshotCount)
         {
             liveMetrics.RemoveRange(0, liveMetrics.Count - MaximumLiveMetricSnapshotCount);
@@ -217,12 +234,14 @@ internal sealed class SessionState
         if (liveMetrics.Count == 0 || CompareMetrics(liveMetrics[^1], metrics[0]) <= 0)
         {
             liveMetrics.AddRange(metrics);
+
             return;
         }
 
         var mergedMetrics = new List<SessionMetricSample>(liveMetrics.Count + metrics.Count);
         var existingIndex = 0;
         var addedIndex = 0;
+
         while (existingIndex < liveMetrics.Count && addedIndex < metrics.Count)
         {
             if (CompareMetrics(liveMetrics[existingIndex], metrics[addedIndex]) <= 0)
@@ -368,6 +387,7 @@ internal sealed class SessionState
         if (cachedVisualTreesVersion != visualTreesVersion)
         {
             var cachedIndexBySnapshotId = new Dictionary<string, int>(cachedVisualTreeSources.Count, StringComparer.Ordinal);
+
             for (var index = 0; index < cachedVisualTreeSources.Count; index++)
             {
                 cachedIndexBySnapshotId[cachedVisualTreeSources[index].SnapshotId] = index;
@@ -375,12 +395,13 @@ internal sealed class SessionState
 
             var sources = new SessionVisualTreeSnapshot[VisualTreeSnapshots.Count];
             var snapshots = new SessionVisualTreeSnapshot[VisualTreeSnapshots.Count];
+
             for (var index = 0; index < VisualTreeSnapshots.Count; index++)
             {
                 var source = VisualTreeSnapshots[index];
                 sources[index] = source;
                 snapshots[index] = cachedIndexBySnapshotId.TryGetValue(source.SnapshotId, out var cachedIndex)
-                                   && ReferenceEquals(source, cachedVisualTreeSources[cachedIndex])
+                    && ReferenceEquals(source, cachedVisualTreeSources[cachedIndex])
                     ? cachedVisualTrees[cachedIndex]
                     : SessionSnapshotCloner.CloneVisualTreeSnapshot(source);
             }
@@ -436,12 +457,14 @@ internal sealed class SessionState
     public IReadOnlyList<LogEntry> GetLiveReplaySnapshotLogs()
     {
         EnsureLiveReplayLogSnapshot();
+
         return cachedLiveReplayLogs;
     }
 
     public IReadOnlyList<SessionLogStream> GetLiveReplaySnapshotLogStreams()
     {
         EnsureLiveReplayLogSnapshot();
+
         return cachedLiveReplayLogStreams;
     }
 
@@ -477,6 +500,7 @@ internal sealed class SessionState
         var entries = cachedLiveReplayLogs
             .Where(log => string.Equals(log.StreamId, stream.StreamId, StringComparison.Ordinal))
             .ToArray();
+
         return new SessionLogStream
         {
             StreamId = stream.StreamId,
@@ -560,9 +584,11 @@ internal sealed class SessionState
         }
 
         var samplesBySeries = new Dictionary<MetricSeriesKey, List<SessionMetricSample>>();
+
         foreach (var metric in metrics)
         {
             var key = new MetricSeriesKey(metric.ChannelId, metric.SegmentId);
+
             if (!samplesBySeries.TryGetValue(key, out var samples))
             {
                 samples = [];
@@ -584,12 +610,12 @@ internal sealed class SessionState
             .ThenBy(selection => selection.Key.SegmentId)
             .ToArray();
         var mandatoryCount = series.Sum(selection => Math.Min(2, selection.Samples.Count));
+
         if (mandatoryCount > maximumCount)
         {
             return series
                 .SelectMany(selection => selection.Samples.Count == 1
-                    ? new[] { selection.Samples[0] }
-                    : new[] { selection.Samples[0], selection.Samples[^1] })
+                    ? new[] { selection.Samples[0] } : new[] { selection.Samples[0], selection.Samples[^1] })
                 .OrderBy(sample => sample.CapturedAtUtc)
                 .ThenBy(sample => sample.ChannelId)
                 .ThenBy(sample => sample.SegmentId)
@@ -599,6 +625,7 @@ internal sealed class SessionState
 
         var remainingCapacity = maximumCount - mandatoryCount;
         var selectableCount = metrics.Count - mandatoryCount;
+
         foreach (var selection in series)
         {
             var requiredCount = Math.Min(2, selection.Samples.Count);
@@ -612,11 +639,12 @@ internal sealed class SessionState
         }
 
         var unallocatedCount = maximumCount - series.Sum(selection => selection.TargetCount);
+
         foreach (var selection in series
-                     .Where(selection => selection.TargetCount < selection.Samples.Count)
-                     .OrderByDescending(selection => selection.AllocationRemainder)
-                     .ThenBy(selection => selection.Key.ChannelId)
-                     .ThenBy(selection => selection.Key.SegmentId))
+            .Where(selection => selection.TargetCount < selection.Samples.Count)
+            .OrderByDescending(selection => selection.AllocationRemainder)
+            .ThenBy(selection => selection.Key.ChannelId)
+            .ThenBy(selection => selection.Key.SegmentId))
         {
             if (unallocatedCount == 0)
             {
@@ -652,12 +680,14 @@ internal sealed class SessionState
         var selectedIndices = new HashSet<int> { 0, samples.Count - 1 };
         var interiorSampleCount = samples.Count - 2;
         var bucketCount = Math.Min(interiorSampleCount, Math.Max(0, (targetCount - 2) / 2));
+
         for (var bucketIndex = 0; bucketIndex < bucketCount; bucketIndex++)
         {
             var startIndex = 1 + (bucketIndex * interiorSampleCount / bucketCount);
             var endIndex = 1 + ((bucketIndex + 1) * interiorSampleCount / bucketCount);
             var minimumIndex = startIndex;
             var maximumIndex = startIndex;
+
             for (var sampleIndex = startIndex + 1; sampleIndex < endIndex; sampleIndex++)
             {
                 if (samples[sampleIndex].Value < samples[minimumIndex].Value)
@@ -705,6 +735,7 @@ internal sealed class SessionState
     private static int CompareTouches(SessionTouchInputRecord left, SessionTouchInputRecord right)
     {
         var timestampComparison = left.CapturedAtUtc.CompareTo(right.CapturedAtUtc);
+
         return timestampComparison != 0
             ? timestampComparison
             : string.Compare(left.Id, right.Id, StringComparison.Ordinal);
@@ -713,6 +744,7 @@ internal sealed class SessionState
     private static int CompareMetrics(SessionMetricSample left, SessionMetricSample right)
     {
         var timestampComparison = left.CapturedAtUtc.CompareTo(right.CapturedAtUtc);
+
         return timestampComparison != 0
             ? timestampComparison
             : left.ChannelId.CompareTo(right.ChannelId);
@@ -724,9 +756,11 @@ internal sealed class SessionState
     {
         var low = 0;
         var high = metrics.Count - 1;
+
         while (low <= high)
         {
             var middle = low + ((high - low) >> 1);
+
             if (metrics[middle].CapturedAtUtc < capturedAtUtc)
             {
                 low = middle + 1;

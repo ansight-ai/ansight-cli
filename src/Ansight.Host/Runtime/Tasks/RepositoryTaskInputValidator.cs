@@ -12,15 +12,19 @@ internal static class RepositoryTaskInputValidator
     {
         input = suppliedInput?.DeepClone().AsObject() ?? new JsonObject();
         errorMessage = string.Empty;
+
         var properties = schema["properties"] as JsonObject ?? new JsonObject();
         var allowsAdditionalProperties = schema["additionalProperties"]?.GetValue<bool>() ?? true;
+
         if (!allowsAdditionalProperties)
         {
             var unknownProperty = input.Select(static property => property.Key)
                 .FirstOrDefault(name => !properties.ContainsKey(name));
+
             if (unknownProperty is not null)
             {
                 errorMessage = $"Task input contains unknown property '{unknownProperty}'.";
+
                 return false;
             }
         }
@@ -40,9 +44,11 @@ internal static class RepositoryTaskInputValidator
             foreach (var requiredNameNode in required)
             {
                 var requiredName = requiredNameNode?.GetValue<string>();
+
                 if (!string.IsNullOrWhiteSpace(requiredName) && input[requiredName] is null)
                 {
                     errorMessage = $"Task input property '{requiredName}' is required.";
+
                     return false;
                 }
             }
@@ -56,9 +62,11 @@ internal static class RepositoryTaskInputValidator
             }
 
             var expectedType = propertySchema["type"]?.GetValue<string>();
+
             if (expectedType is not null && !MatchesType(property.Value, expectedType))
             {
                 errorMessage = $"Task input property '{property.Key}' must be {expectedType}.";
+
                 return false;
             }
 
@@ -66,6 +74,7 @@ internal static class RepositoryTaskInputValidator
                 && !allowedValues.Any(allowed => JsonNode.DeepEquals(allowed, property.Value)))
             {
                 errorMessage = $"Task input property '{property.Key}' is not one of its allowed values.";
+
                 return false;
             }
 
@@ -77,6 +86,7 @@ internal static class RepositoryTaskInputValidator
                     && number < minimum)
                 {
                     errorMessage = $"Task input property '{property.Key}' must be at least {minimum}.";
+
                     return false;
                 }
 
@@ -85,6 +95,7 @@ internal static class RepositoryTaskInputValidator
                     && number > maximum)
                 {
                     errorMessage = $"Task input property '{property.Key}' must be at most {maximum}.";
+
                     return false;
                 }
             }
@@ -110,11 +121,11 @@ internal static class RepositoryTaskInputValidator
 
     private static bool IsInteger(JsonValue value)
         => value.TryGetValue<int>(out _)
-           || value.TryGetValue<long>(out _)
-           || value.TryGetValue<short>(out _)
-           || value.TryGetValue<byte>(out _)
-           || value.TryGetValue<uint>(out _)
-           || value.TryGetValue<ulong>(out _);
+            || value.TryGetValue<long>(out _)
+            || value.TryGetValue<short>(out _)
+            || value.TryGetValue<byte>(out _)
+            || value.TryGetValue<uint>(out _)
+            || value.TryGetValue<ulong>(out _);
 
     private static bool TryReadNumber(JsonValue value, out decimal number)
     {
@@ -126,24 +137,28 @@ internal static class RepositoryTaskInputValidator
         if (value.TryGetValue<int>(out var integer))
         {
             number = integer;
+
             return true;
         }
 
         if (value.TryGetValue<long>(out var longInteger))
         {
             number = longInteger;
+
             return true;
         }
 
         if (value.TryGetValue<uint>(out var unsignedInteger))
         {
             number = unsignedInteger;
+
             return true;
         }
 
         if (value.TryGetValue<ulong>(out var unsignedLongInteger))
         {
             number = unsignedLongInteger;
+
             return true;
         }
 
@@ -152,10 +167,12 @@ internal static class RepositoryTaskInputValidator
             && doubleValue is >= (double)decimal.MinValue and <= (double)decimal.MaxValue)
         {
             number = (decimal)doubleValue;
+
             return true;
         }
 
         number = default;
+
         return false;
     }
 }

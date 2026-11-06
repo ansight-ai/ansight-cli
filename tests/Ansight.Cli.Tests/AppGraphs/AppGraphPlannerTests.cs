@@ -23,12 +23,24 @@ public sealed class AppGraphPlannerTests
               }]
             }
             """)!.AsObject();
+
         if (includeSelector)
+        {
             summary["transitions"]![0]!["action"]!["selector"] = new JsonObject { ["text"] = "Account", ["role"] = "text" };
+        }
+
         var compiled = AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error);
         Assert.Equal(includeSelector, compiled);
-        if (!includeSelector) { Assert.Contains("observed selector", error); return; }
+
+        if (!includeSelector)
+        {
+            Assert.Contains("observed selector", error);
+
+            return;
+        }
+
         Assert.Empty(candidate!.Definition["edges"]!.AsArray());
+
         var observed = Assert.Single(candidate.Definition["observedTransitions"]!.AsArray());
         Assert.False(observed!["action"]!["hasStableAutomationId"]!.GetValue<bool>());
         Assert.Equal("Account", observed["action"]!["selector"]!["text"]!.GetValue<string>());
@@ -60,6 +72,7 @@ public sealed class AppGraphPlannerTests
         Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error), error);
         Assert.Empty(candidate!.Definition["edges"]!.AsArray());
         Assert.Empty(candidate.Evidence["bindingCandidates"]!.AsArray());
+
         var observed = Assert.Single(candidate.Definition["observedTransitions"]!.AsArray());
         Assert.Equal("screen_home", observed!["navigationContext"]!["returnDestinationId"]!.GetValue<string>());
 
@@ -240,6 +253,7 @@ public sealed class AppGraphPlannerTests
             out var error);
 
         Assert.True(compiled, error);
+
         var definition = Assert.IsType<JsonObject>(candidate?.Definition);
         var nodes = Assert.IsType<JsonArray>(definition["nodes"]);
         Assert.Equal(
@@ -248,6 +262,7 @@ public sealed class AppGraphPlannerTests
         Assert.Equal(
             "Profile",
             nodes.OfType<JsonObject>().Single(node => node["name"]?.GetValue<string>() == "Overview")["parentScreen"]?.GetValue<string>());
+
         var navigationHost = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(definition["navigationHosts"])));
         var tabGroup = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(definition["tabGroups"])));
         Assert.Equal("react_navigation_bottom_tabs", navigationHost["technology"]?["kind"]?.GetValue<string>());
@@ -336,14 +351,15 @@ public sealed class AppGraphPlannerTests
     public void BuildCompilesDestinationPathWithOrderedFallbacks()
     {
         var detail = CreateDetail(
-        [
-            CreateBinding("open", 1, "ui_action"),
+            [
+                CreateBinding("open", 1, "ui_action"),
             CreateBinding("open", 0, "app_tool")
-        ]);
+            ]);
 
         var plan = AppGraphPlanner.Build(detail, "3D guide ready");
 
         Assert.Empty(plan.Errors);
+
         var step = Assert.Single(plan.Steps);
         Assert.Equal("open", step.Edge.Id);
         Assert.Equal(["app_tool", "ui_action"], step.Bindings.Select(binding => binding.Mechanism));
@@ -356,6 +372,7 @@ public sealed class AppGraphPlannerTests
     {
         var detail = CreateDetail([CreateBinding("open", 0, "ui_action")]);
         var edge = detail.Version.Definition["edges"]![0]!;
+
         if (explicitContext)
         {
             edge["navigationContext"] = new JsonObject { ["returnDestinationId"] = "ready" };
@@ -470,11 +487,10 @@ public sealed class AppGraphPlannerTests
                     Configuration = new JsonObject
                     {
                         ["action"] = "tap",
-                        ["selector"] = new JsonObject { ["automationId"] = "settings-button" }
+                        ["selector"] = new JsonObject {["automationId"] = "settings-button" }
                     },
                     Postconditions = ["Settings is visible"]
-                }
-            ]);
+                }            ]);
 
         var plan = AppGraphPlanner.Build(detail, "Preferences");
 
@@ -596,12 +612,11 @@ public sealed class AppGraphPlannerTests
                     Configuration = new JsonObject
                     {
                         ["action"] = "tap",
-                        ["selector"] = new JsonObject { ["automationId"] = "open-3d-guide-button" }
+                        ["selector"] = new JsonObject {["automationId"] = "open-3d-guide-button" }
                     },
                     Postconditions = ["The 3D player is visible"],
                     Confidence = 0.96m
-                }
-            ]);
+                }            ]);
         var catalog = new FakeAppGraphAgentRouteCatalog
         {
             Apps =
@@ -626,8 +641,7 @@ public sealed class AppGraphPlannerTests
                     Name = "Unrelated app graph",
                     Intent = "Open settings",
                     PublishedVersionId = Guid.NewGuid()
-                }
-            ],
+                }            ],
             Details = new Dictionary<Guid, CloudAppGraphDetail> { [graphId] = detail }
         };
 
@@ -643,6 +657,7 @@ public sealed class AppGraphPlannerTests
         var plan = Assert.Single(result.Plans);
         Assert.Equal(graphId, plan.GraphId);
         Assert.Equal("3D guide visible", plan.TargetState);
+
         var transition = Assert.Single(plan.Transitions);
         Assert.Equal("open-guide", transition.EdgeId);
         Assert.Equal("ui_action", Assert.Single(transition.Bindings).Mechanism);
@@ -653,6 +668,7 @@ public sealed class AppGraphPlannerTests
     {
         var graphId = Guid.NewGuid();
         var versionId = Guid.NewGuid();
+
         return new CloudAppGraphDetail(
             new CloudAppGraphSummary
             {
@@ -701,8 +717,7 @@ public sealed class AppGraphPlannerTests
             Priority = priority,
             Mechanism = mechanism,
             Configuration = mechanism == "app_tool"
-                ? new JsonObject { ["toolId"] = "navigation.open_guide" }
-                : new JsonObject
+                ? new JsonObject { ["toolId"] = "navigation.open_guide" } : new JsonObject
                 {
                     ["action"] = "tap",
                     ["selector"] = new JsonObject { ["automationId"] = $"{edgeId}-button" }
@@ -716,13 +731,10 @@ public sealed class AppGraphPlannerTests
 
         public IReadOnlyList<CloudAppGraphSummary> Graphs { get; init; } = [];
 
-        public IReadOnlyDictionary<Guid, CloudAppGraphDetail> Details { get; init; }
-            = new Dictionary<Guid, CloudAppGraphDetail>();
+        public IReadOnlyDictionary<Guid, CloudAppGraphDetail> Details { get; init; } = new Dictionary<Guid, CloudAppGraphDetail>();
 
         public int ListRegisteredAppsCallCount { get; private set; }
-
         public int ListGraphsCallCount { get; private set; }
-
         public int GetGraphCallCount { get; private set; }
 
         public Task<CloudRegisteredAppQueryResult> ListRegisteredAppsAsync(
@@ -730,6 +742,7 @@ public sealed class AppGraphPlannerTests
             CancellationToken cancellationToken)
         {
             ListRegisteredAppsCallCount++;
+
             return Task.FromResult(CloudRegisteredAppQueryResult.Success(Apps));
         }
 
@@ -738,6 +751,7 @@ public sealed class AppGraphPlannerTests
             CancellationToken cancellationToken)
         {
             ListGraphsCallCount++;
+
             return Task.FromResult(CloudAppGraphQueryResult.Success(Graphs));
         }
 
@@ -746,6 +760,7 @@ public sealed class AppGraphPlannerTests
             CancellationToken cancellationToken)
         {
             GetGraphCallCount++;
+
             return Task.FromResult(Details.TryGetValue(graphId, out var detail)
                 ? CloudAppGraphDetailResult.Success(detail)
                 : CloudAppGraphDetailResult.Failure("Graph unavailable."));

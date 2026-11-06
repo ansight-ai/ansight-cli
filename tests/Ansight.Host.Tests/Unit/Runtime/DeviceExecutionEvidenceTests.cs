@@ -22,6 +22,7 @@ public sealed class DeviceExecutionEvidenceTests
         fields[11] = "100";
         fields[12] = "50";
         fields[19] = "900";
+
         var sample = DeviceProcessCounters.ParseAndroid(23, "23 (name with ) spaces) " + string.Join(' ', fields),
             "TOTAL PSS: 1024\nTOTAL RSS: 2048", 100);
         Assert.Equal(1_500_000_000, sample.CpuNanoseconds);
@@ -38,9 +39,11 @@ public sealed class DeviceExecutionEvidenceTests
         var first = AndroidFrameStatistics.Read(history, 0, 1);
         Assert.True(first.Supported);
         Assert.Null(first.FramesPerSecond);
+
         var next = AndroidFrameStatistics.Read(history + "\n0,5,400,\n0,5,400,", 200, 0.5);
         Assert.Equal(1, next.Frames);
         Assert.Equal(2, next.FramesPerSecond);
+
         var full = "Flags,FrameCompleted,\n" + string.Join('\n', Enumerable.Range(1, 120).Select(value => $"0,{value + 1000},"));
         var overflow = AndroidFrameStatistics.Read(full, 100, 1);
         Assert.True(overflow.Overflow);
@@ -88,6 +91,7 @@ public sealed class DeviceExecutionEvidenceTests
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("android", "emulator-5554", "Phone", "test.app", false, false, true) { DeviceKind = DeviceKinds.Emulator });
         state.TryGetSessionSnapshot(id, out var session);
+
         var first = WorkspaceTrendsEvaluator.MeasurementIdentity(session!, channel, "definition");
         state.SetSessionCustomProperties(id, new JsonObject { ["deviceExecution"] = new JsonObject { ["hostProcessors"] = 16 } });
         state.TryGetSessionSnapshot(id, out session);

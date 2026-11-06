@@ -14,6 +14,7 @@ public sealed class RepositoryModuleOperationTests
         using var environment = new TestEnvironment();
         using var repository = TestDirectory.Create();
         WriteSearchableTask(repository.Path);
+
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var bridge = new ContractAppToolBridge();
         var knownApps = new KnownAppStore(environment.ApplicationPaths);
@@ -28,6 +29,7 @@ public sealed class RepositoryModuleOperationTests
             FirstSeenUtc = now,
             LastSeenUtc = now
         });
+
         var catalog = CreateToolCatalog(runtimeState, environment, knownApps, bridge);
 
         var response = await catalog.HandleToolsCallAsync(new JsonObject
@@ -42,11 +44,13 @@ public sealed class RepositoryModuleOperationTests
 
         var payload = GetStructuredContent(response);
         Assert.Equal(1, payload["matchCount"]?.GetValue<int>());
+
         var task = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(payload["tasks"])));
         Assert.Equal("open-area-3d-guide", task["taskId"]?.GetValue<string>());
         Assert.Contains(
             Assert.IsType<JsonArray>(task["behavioralSynonyms"]),
             node => node?.GetValue<string>() == "locate");
+
         var match = Assert.IsType<JsonObject>(task["match"]);
         Assert.Equal(1, match["coverage"]?.GetValue<double>());
         Assert.Empty(Assert.IsType<JsonArray>(match["unmatchedQueryTerms"]));
@@ -58,6 +62,7 @@ public sealed class RepositoryModuleOperationTests
         using var environment = new TestEnvironment();
         using var repository = TestDirectory.Create();
         WriteTask(repository.Path);
+
         var runtimeState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var bridge = new ContractAppToolBridge();
         var knownApps = new KnownAppStore(environment.ApplicationPaths);
@@ -72,6 +77,7 @@ public sealed class RepositoryModuleOperationTests
             FirstSeenUtc = now,
             LastSeenUtc = now
         });
+
         var importResult = runtimeState.ImportSessionSnapshot(
             new AppSessionSnapshot
             {
@@ -89,6 +95,7 @@ public sealed class RepositoryModuleOperationTests
             },
             new Dictionary<string, byte[]>());
         Assert.True(importResult.IsSuccess);
+
         var catalog = CreateToolCatalog(runtimeState, environment, knownApps, bridge);
 
         var response = await catalog.HandleToolsCallAsync(new JsonObject
@@ -131,6 +138,7 @@ public sealed class RepositoryModuleOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
@@ -205,8 +213,12 @@ public sealed class RepositoryModuleOperationTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => [SessionId];
@@ -265,7 +277,7 @@ public sealed class RepositoryModuleOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache

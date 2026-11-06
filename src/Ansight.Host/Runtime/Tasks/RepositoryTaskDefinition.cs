@@ -44,11 +44,8 @@ internal sealed record RepositoryTaskDefinition(
         };
 
     public string? StartingState { get; init; }
-
     public string? SuccessState { get; init; }
-
     public ExecutionRequirements? Requires { get; init; }
-
     public bool Enabled { get; init; } = true;
 
     public IReadOnlyList<string> Platforms { get; init; } = [];
@@ -56,55 +53,4 @@ internal sealed record RepositoryTaskDefinition(
     public IReadOnlyList<string> DeviceKinds { get; init; } = [];
 
     public IReadOnlyList<string> Frameworks { get; init; } = [];
-}
-
-internal sealed record RepositoryTaskLoadResult(
-    IReadOnlyList<RepositoryTaskDefinition> Tasks,
-    IReadOnlyList<string> Warnings)
-{
-    public IReadOnlyList<RepositoryTaskSupportModule> SupportModules { get; init; } = [];
-}
-
-internal sealed record RepositoryTaskSupportModule(
-    string RelativePath,
-    string Source,
-    bool IsDeclaration);
-
-internal sealed class RepositoryTaskModuleDefinition
-{
-    public string? StartingState { get; init; }
-
-    public string? SuccessState { get; init; }
-
-    public ExecutionRequirements? Requires { get; init; }
-
-    public int? SchemaVersion { get; init; }
-
-    public bool? Enabled { get; init; }
-
-    public string? AppId { get; init; }
-
-    public string? Title { get; init; }
-
-    public string? Description { get; init; }
-
-    public string? Feature { get; init; }
-
-    public List<string> Keywords { get; init; } = [];
-
-    public JsonObject? InputSchema { get; init; }
-
-    public JsonObject? OutputSchema { get; init; }
-
-    public List<string> HostTools { get; init; } = [];
-
-    public List<string>? Platforms { get; init; }
-
-    public List<string>? DeviceKinds { get; init; }
-
-    public List<string>? Frameworks { get; init; }
-
-    public int? TimeoutSeconds { get; init; }
-
-    public int? MaximumActions { get; init; }
 }

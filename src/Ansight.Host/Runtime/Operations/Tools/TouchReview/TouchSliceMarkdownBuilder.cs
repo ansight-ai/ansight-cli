@@ -20,6 +20,7 @@ internal static class TouchSliceMarkdownBuilder
         builder.AppendLine($"Gestures: {gestures.Count}");
         builder.AppendLine();
         builder.AppendLine("## Gestures");
+
         foreach (var gesture in gestures.Take(25))
         {
             builder.AppendLine($"- `{gesture.GestureId}` {gesture.Kind} at {gesture.StartUtc:O}, {gesture.Touches.Count} touches, {gesture.DurationMilliseconds} ms");
@@ -27,6 +28,7 @@ internal static class TouchSliceMarkdownBuilder
 
         builder.AppendLine();
         builder.AppendLine("## Touches");
+
         foreach (var touch in touches.Take(50))
         {
             var point = TouchReviewGeometry.ResolveTouchPoint(touch);

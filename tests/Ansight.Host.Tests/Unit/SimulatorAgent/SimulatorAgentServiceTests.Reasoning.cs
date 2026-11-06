@@ -12,7 +12,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var turns = new[]
         {
-            CreateFunctionTurn("observe", "ansight_get_live_visual_tree", new JsonObject { ["maxNodes"] = 100 }),
+            CreateFunctionTurn("observe", "ansight_get_live_visual_tree", new JsonObject {["maxNodes"] = 100 }),
             CreateFunctionTurn("complete", "complete_instruction", new JsonObject
             {
                 ["outcome"] = "succeeded",
@@ -36,6 +36,7 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var requests = protocol == SimulatorAgentOpenAiProtocol.Http ? client.Requests : session.Requests;
         Assert.NotEmpty(requests);
         Assert.All(requests, request =>

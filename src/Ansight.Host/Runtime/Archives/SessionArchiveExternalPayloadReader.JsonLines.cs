@@ -18,6 +18,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         var schema = TryGetString(root, "schema");
+
         if (SessionCaptureDocument.IsSupportedSchema(schema)
             && TryDeserialize(root, out SessionCaptureDocument? document)
             && document?.Session is not null)
@@ -26,10 +27,12 @@ internal static partial class SessionArchiveExternalPayloadReader
                 ? CopySnapshotWithAuthor(document.Session, document.Author)
                 : document.Session;
             builder.ApplySnapshot(session);
+
             return;
         }
 
         var type = TryGetString(root, "type");
+
         if (!IsWireEventType(type)
             && TryGetProperty(root, "sessionId", out _)
             && TryGetProperty(root, "appId", out _)
@@ -59,6 +62,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyDeviceProfile(JsonElement root, JsonLinesSessionBuilder builder)
     {
         var type = TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.DeviceAppProfile, StringComparison.Ordinal))
         {
             return;
@@ -66,6 +70,7 @@ internal static partial class SessionArchiveExternalPayloadReader
 
         var rawJson = root.GetRawText();
         builder.DeviceProfileJson = rawJson;
+
         if (TryDeserialize(root, out DeviceAppProfile? profile))
         {
             builder.DeviceProfile = profile;
@@ -75,6 +80,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyAppState(JsonElement root, JsonLinesSessionBuilder builder)
     {
         var type = TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientAppState, StringComparison.Ordinal))
         {
             return;
@@ -95,7 +101,7 @@ internal static partial class SessionArchiveExternalPayloadReader
 
         builder.AppState = state.Value;
         builder.AppStateChangedUtc = FirstTimestamp(root, "changedAtUtc", "capturedAtUtc", "timestampUtc", "timestamp")
-                                     ?? DateTimeOffset.UtcNow;
+            ?? DateTimeOffset.UtcNow;
     }
 
     private static void ApplyLogs(JsonElement root, JsonLinesSessionBuilder builder)
@@ -112,6 +118,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         var type = TryGetString(root, "type");
+
         if (string.Equals(type, WebSocketClientEventConstants.ClientEvents, StringComparison.Ordinal)
             || TryGetProperty(root, "events", out _))
         {
@@ -123,9 +130,11 @@ internal static partial class SessionArchiveExternalPayloadReader
                 || !TryGetProperty(root, "logs", out _)))
         {
             builder.AddLog(rootLogEntry);
+
             var label = FirstString(root, "label", "l");
             var kind = FirstInt(root, "k");
             var eventType = FirstString(root, "eventType");
+
             if (!string.IsNullOrWhiteSpace(label) && (kind.HasValue || !string.IsNullOrWhiteSpace(eventType)))
             {
                 builder.AddApplicationEvent(new SessionApplicationEvent(
@@ -146,6 +155,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         foreach (var eventElement in eventsElement.EnumerateArray())
         {
             var label = FirstString(eventElement, "label", "message", "name");
+
             if (string.IsNullOrWhiteSpace(label))
             {
                 continue;
@@ -155,7 +165,7 @@ internal static partial class SessionArchiveExternalPayloadReader
             var eventType = FirstString(eventElement, "eventType", "type") ?? "Event";
             var details = FirstString(eventElement, "details", "data") ?? string.Empty;
             var capturedAtUtc = FirstTimestamp(eventElement, "capturedAtUtc", "timestampUtc", "timestamp")
-                                ?? DateTimeOffset.UtcNow;
+                ?? DateTimeOffset.UtcNow;
             var channelIdValue = FirstInt(eventElement, "channelId", "channel");
             var channelId = channelIdValue is >= byte.MinValue and <= byte.MaxValue
                 ? (byte)channelIdValue.Value
@@ -168,6 +178,7 @@ internal static partial class SessionArchiveExternalPayloadReader
                 details.Trim(),
                 capturedAtUtc.ToUniversalTime(),
                 channelId));
+
             var message = string.IsNullOrWhiteSpace(details)
                 ? label.Trim()
                 : $"{label.Trim()}: {details.Trim()}";
@@ -288,10 +299,11 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyNetworkRequest(JsonElement root, JsonLinesSessionBuilder builder)
     {
         var requestElement = root;
+
         if (string.Equals(
-                TryGetString(root, "type"),
-                WebSocketClientEventConstants.ClientNetworkRequest,
-                StringComparison.Ordinal))
+            TryGetString(root, "type"),
+            WebSocketClientEventConstants.ClientNetworkRequest,
+            StringComparison.Ordinal))
         {
             if (!TryGetProperty(root, "request", out requestElement)
                 || requestElement.ValueKind != JsonValueKind.Object)
@@ -300,9 +312,9 @@ internal static partial class SessionArchiveExternalPayloadReader
             }
         }
         else if (!string.Equals(
-                     TryGetString(root, "schema"),
-                     SessionNetworkRequest.SchemaName,
-                     StringComparison.Ordinal))
+            TryGetString(root, "schema"),
+            SessionNetworkRequest.SchemaName,
+            StringComparison.Ordinal))
         {
             return;
         }
@@ -316,6 +328,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyImage(JsonElement root, JsonLinesSessionBuilder builder)
     {
         var type = TryGetString(root, "type");
+
         if (!string.Equals(type, WebSocketClientEventConstants.ClientJpeg, StringComparison.Ordinal)
             && !TryGetProperty(root, "base64", out _)
             && !TryGetProperty(root, "dataBase64", out _))
@@ -324,12 +337,14 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         var base64 = FirstString(root, "base64", "dataBase64", "data", "bytes");
+
         if (string.IsNullOrWhiteSpace(base64))
         {
             return;
         }
 
         byte[] bytes;
+
         try
         {
             bytes = Convert.FromBase64String(base64.Trim());
@@ -345,9 +360,10 @@ internal static partial class SessionArchiveExternalPayloadReader
         }
 
         var capturedAtUtc = FirstTimestamp(root, "capturedAtUtc", "timestampUtc", "timestamp")
-                            ?? DateTimeOffset.UtcNow;
+            ?? DateTimeOffset.UtcNow;
         var format = FirstString(root, "format", "mimeType") ?? "jpeg";
         format = NormalizeImageFormat(format);
+
         var frameId = FirstString(root, "frameId", "id") ?? BuildFrameId(capturedAtUtc, builder.Images.Count);
         var width = FirstInt(root, "width") ?? 0;
         var height = FirstInt(root, "height") ?? 0;
@@ -372,6 +388,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static bool TryCreateLogEntry(JsonElement element, out LogEntry logEntry)
     {
         logEntry = default!;
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             return false;
@@ -381,22 +398,25 @@ internal static partial class SessionArchiveExternalPayloadReader
         var message = string.Equals(type, WebSocketClientEventConstants.ClientLog, StringComparison.Ordinal)
             ? FirstString(element, "message", "data", "log", "text", "l")
             : FirstString(element, "message", "label", "log", "text", "l");
+
         if (string.IsNullOrWhiteSpace(message))
         {
             return false;
         }
 
         var details = FirstString(element, "details", "d");
+
         if (!string.IsNullOrWhiteSpace(details))
         {
             message = $"{message.Trim()}: {details.Trim()}";
         }
 
         var timestamp = FirstTimestamp(element, "timestampUtc", "capturedAtUtc", "timestamp", "time", "t")
-                        ?? DateTimeOffset.UtcNow;
+            ?? DateTimeOffset.UtcNow;
         var priority = TryGetLogPriority(element) ?? LogPriority.Information;
         var source = FirstString(element, "source") ?? "Client";
         var tag = FirstString(element, "tag", "category", "eventType");
+
         if (string.IsNullOrWhiteSpace(tag) && FirstInt(element, "k") is { } eventKind)
         {
             tag = ResolveOfflineEventKind(eventKind);
@@ -418,12 +438,14 @@ internal static partial class SessionArchiveExternalPayloadReader
             ThreadId = FirstInt(element, "threadId"),
             Priority = priority
         };
+
         return true;
     }
 
     private static bool TryCreateMetricChannel(JsonElement element, out SessionMetricChannel channel)
     {
         channel = default!;
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             return false;
@@ -431,12 +453,14 @@ internal static partial class SessionArchiveExternalPayloadReader
 
         var channelId = FirstByte(element, "channelId", "id", "channel");
         var name = FirstString(element, "name", "n");
+
         if (channelId is null || string.IsNullOrWhiteSpace(name))
         {
             return false;
         }
 
         var colorHex = FirstString(element, "colorHex", "color");
+
         if (string.IsNullOrWhiteSpace(colorHex)
             && TryGetProperty(element, "c", out var compactColorElement)
             && compactColorElement.ValueKind == JsonValueKind.String)
@@ -455,12 +479,14 @@ internal static partial class SessionArchiveExternalPayloadReader
             Group = NormalizeOptionalString(FirstString(element, "group")),
             Kind = NormalizeOptionalString(FirstString(element, "kind"))
         };
+
         return true;
     }
 
     private static bool TryCreateMetricSample(JsonElement element, out SessionMetricSample sample)
     {
         sample = default!;
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             return false;
@@ -468,6 +494,7 @@ internal static partial class SessionArchiveExternalPayloadReader
 
         var channelId = FirstByte(element, "channelId", "channel", "c", "id");
         var value = FirstDouble(element, "value", "v");
+
         if (channelId is null || value is null || !double.IsFinite(value.Value))
         {
             return false;
@@ -478,15 +505,17 @@ internal static partial class SessionArchiveExternalPayloadReader
             ChannelId = channelId.Value,
             Value = value.Value,
             CapturedAtUtc = FirstTimestamp(element, "capturedAtUtc", "timestampUtc", "timestamp", "time", "t")
-                            ?? DateTimeOffset.UtcNow,
+                ?? DateTimeOffset.UtcNow,
             SegmentId = FirstInt(element, "segmentId") ?? 0
         };
+
         return true;
     }
 
     private static bool TryCreateTouchInputRecord(JsonElement element, out SessionTouchInputRecord touch)
     {
         touch = default!;
+
         if (element.ValueKind != JsonValueKind.Object)
         {
             return false;
@@ -495,17 +524,19 @@ internal static partial class SessionArchiveExternalPayloadReader
         var action = FirstString(element, "action", "phase", "a") ?? "unknown";
         var x = FirstDouble(element, "x", "clientX");
         var y = FirstDouble(element, "y", "clientY");
+
         if (x is null || y is null)
         {
             return false;
         }
 
         var capturedAtUtc = FirstTimestamp(element, "capturedAtUtc", "timestampUtc", "timestamp", "time", "t")
-                            ?? DateTimeOffset.UtcNow;
+            ?? DateTimeOffset.UtcNow;
         var pointerIndex = FirstInt(element, "pointerIndex", "i") ?? 0;
         var pointerCount = Math.Max(pointerIndex + 1, FirstInt(element, "pointerCount", "pc") ?? 1);
         var pointerId = FirstInt64(element, "pointerId", "pointer", "p") ?? 0;
         SessionTouchSampleDetails? details = null;
+
         if (TryGetProperty(element, "details", out var detailsElement))
         {
             TryDeserialize(detailsElement, out details);
@@ -514,7 +545,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         touch = new SessionTouchInputRecord
         {
             Id = FirstString(element, "id", "touchId")
-                 ?? BuildTouchId(capturedAtUtc, pointerId),
+                ?? BuildTouchId(capturedAtUtc, pointerId),
             Action = NormalizeTouchAction(action),
             CapturedAtUtc = capturedAtUtc,
             PointerId = pointerId,
@@ -531,6 +562,7 @@ internal static partial class SessionArchiveExternalPayloadReader
             SurfaceScale = FirstDouble(element, "surfaceScale", "scale", "s"),
             Details = details
         };
+
         return true;
     }
 
@@ -538,13 +570,15 @@ internal static partial class SessionArchiveExternalPayloadReader
         where T : class
     {
         var entry = archive.GetEntry(entryPath);
+
         if (entry is null)
         {
             return null;
         }
 
         using var stream = entry.Open();
-        return JsonSerializer.Deserialize<T>(stream, ArchiveJsonOptions);
+
+        return JsonSerializer.Deserialize<T>(stream, archiveJsonOptions);
     }
 
     private static AppSessionSnapshot CopySnapshot(
@@ -670,6 +704,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         var imagesWithBytes = snapshot.Images
             .Where(frame => imageBytesByFrameId.TryGetValue(frame.FrameId, out var bytes) && bytes.Length > 0)
             .ToArray();
+
         if (imagesWithBytes.Length == snapshot.Images.Count)
         {
             return snapshot;
@@ -724,5 +759,4 @@ internal static partial class SessionArchiveExternalPayloadReader
             TotalNetworkRequestCount = snapshot.TotalNetworkRequestCount
         };
     }
-
 }

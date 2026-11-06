@@ -8,18 +8,39 @@ public static class EncryptedStorageFactory
     public static IEncryptedStorage CreateReadOnly(string defaultFilePath, string? fileOverride = null, string? keyOverride = null)
     {
         var provider = ResolveDefaultProviderName(fileOverride, keyOverride);
-        if (provider == "macos-keychain") return new MacOsKeychainEncryptedStorage();
+
+        if (provider == "macos-keychain")
+        {
+            return new MacOsKeychainEncryptedStorage();
+        }
+
         if (provider == "linux-secret-service" && LinuxSecretServiceEncryptedStorage.TryResolveExecutable(out var executable))
+        {
             return new LinuxSecretServiceEncryptedStorage(executable);
+        }
+
         if (provider is "protected-file" or "windows-dpapi")
         {
             var path = string.IsNullOrWhiteSpace(fileOverride) ? defaultFilePath : Path.GetFullPath(fileOverride);
-            if (!File.Exists(path)) throw new FileNotFoundException("The secret store has not been created.");
+
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException("The secret store has not been created.");
+            }
+
             var key = provider == "windows-dpapi" ? WindowsDpapiKeyProvider.Resolve(path, createIfMissing: false)
                 : FileEncryptionKeyProvider.Resolve(path, keyOverride);
-            try { return FileBackedEncryptedStorage.OpenReadOnly(path, key); }
-            finally { CryptographicOperations.ZeroMemory(key); }
+
+            try
+            {
+                return FileBackedEncryptedStorage.OpenReadOnly(path, key);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(key);
+            }
         }
+
         throw new InvalidOperationException("The credential provider is unavailable.");
     }
 
@@ -31,6 +52,7 @@ public static class EncryptedStorageFactory
         ArgumentNullException.ThrowIfNull(applicationPaths);
 
         var fileBackedStoragePath = ResolveFileBackedStoragePath(applicationPaths, secureStorageFilePathOverride);
+
         if (!string.IsNullOrWhiteSpace(secureStorageFilePathOverride)
             || FileEncryptionKeyProvider.HasExternalKeySource(secureStorageKeyFilePathOverride))
         {
@@ -43,12 +65,14 @@ public static class EncryptedStorageFactory
         {
             IEncryptedStorage storage = new MacOsKeychainEncryptedStorage();
             MigratePlatformCredentialVault(fileBackedStoragePath, storage);
+
             return storage;
         }
 
         if (OperatingSystem.IsWindows())
         {
             var encryptionKey = WindowsDpapiKeyProvider.Resolve(fileBackedStoragePath);
+
             try
             {
                 return new FileBackedEncryptedStorage(fileBackedStoragePath, encryptionKey);
@@ -64,14 +88,15 @@ public static class EncryptedStorageFactory
             var storage = new LinuxSecretServiceEncryptedStorage(secretToolPath);
             storage.MigrateLegacyEntries();
             MigratePlatformCredentialVault(fileBackedStoragePath, storage);
+
             return storage;
         }
 
         throw new InvalidOperationException(
             "No OS credential vault is available. Linux headless hosts must provide "
-            + $"{FileEncryptionKeyProvider.KeyFileEnvironmentVariable}, "
-            + $"{FileEncryptionKeyProvider.MasterKeyEnvironmentVariable}, or the systemd credential "
-            + $"'{FileEncryptionKeyProvider.SystemdCredentialFileName}'.");
+                + $"{FileEncryptionKeyProvider.KeyFileEnvironmentVariable}, "
+                + $"{FileEncryptionKeyProvider.MasterKeyEnvironmentVariable}, or the systemd credential "
+                + $"'{FileEncryptionKeyProvider.SystemdCredentialFileName}'.");
     }
 
     public static string ResolveDefaultProviderName(
@@ -106,6 +131,7 @@ public static class EncryptedStorageFactory
         var encryptionKey = FileEncryptionKeyProvider.Resolve(
             fileBackedStoragePath,
             secureStorageKeyFilePathOverride);
+
         try
         {
             return new FileBackedEncryptedStorage(fileBackedStoragePath, encryptionKey);

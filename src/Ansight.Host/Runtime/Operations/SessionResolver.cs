@@ -42,8 +42,9 @@ internal sealed class SessionResolver
         }
 
         var sessionId = arguments?["sessionId"]?.GetValue<string>();
+
         return !string.IsNullOrWhiteSpace(sessionId)
-               && TryLoadResolvedSnapshot(sessionId, out snapshot, out error);
+            && TryLoadResolvedSnapshot(sessionId, out snapshot, out error);
     }
 
     public bool TryResolveSession(JsonObject? arguments, bool requireLiveSession, out AppSessionSnapshot? snapshot, out string error)
@@ -52,11 +53,13 @@ internal sealed class SessionResolver
         error = string.Empty;
 
         var sessionId = arguments?["sessionId"]?.GetValue<string>();
+
         if (!string.IsNullOrWhiteSpace(sessionId))
         {
             if (requireLiveSession && !IsLive(sessionId))
             {
                 error = $"Session '{sessionId}' is not currently connected.";
+
                 return false;
             }
 
@@ -79,25 +82,28 @@ internal sealed class SessionResolver
         {
             var matching = candidateSnapshots
                 .Where(item => string.IsNullOrWhiteSpace(appId)
-                               || string.Equals(item.AppId, appId, StringComparison.Ordinal))
+                    || string.Equals(item.AppId, appId, StringComparison.Ordinal))
                 .Where(item => string.IsNullOrWhiteSpace(deviceId)
-                               || string.Equals(
-                                   DeviceLifecycleTool.ResolveNativeDeviceIdentifier(item),
-                                   deviceId.Trim(),
-                                   StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(
+                        DeviceLifecycleTool.ResolveNativeDeviceIdentifier(item),
+                        deviceId.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
                 .ToArray();
+
             if (matching.Length == 0)
             {
                 error = BuildNoMatchingSessionError(
                     appId,
                     deviceId,
                     requireLiveSession);
+
                 return false;
             }
 
             if (matching.Length > 1)
             {
                 error = BuildAmbiguousSessionError(appId, deviceId, matching);
+
                 return false;
             }
 
@@ -114,6 +120,7 @@ internal sealed class SessionResolver
                 ? "No live Ansight app sessions are connected."
                 : "No captured Ansight sessions are available."
             : $"Multiple matching sessions are available. Provide sessionId or appId. Sessions: {string.Join(", ", candidateSnapshots.Select(item => item.SessionId))}";
+
         return false;
     }
 
@@ -123,6 +130,7 @@ internal sealed class SessionResolver
         bool requireLiveSession)
     {
         var source = requireLiveSession ? "live session is connected" : "captured session was found";
+
         if (!string.IsNullOrWhiteSpace(appId) && !string.IsNullOrWhiteSpace(deviceId))
         {
             return $"No {source} for app '{appId}' on device '{deviceId.Trim()}'.";
@@ -139,6 +147,7 @@ internal sealed class SessionResolver
         IReadOnlyCollection<AppSessionSnapshot> matching)
     {
         var sessions = string.Join(", ", matching.Select(item => item.SessionId));
+
         if (!string.IsNullOrWhiteSpace(appId) && !string.IsNullOrWhiteSpace(deviceId))
         {
             return $"App '{appId}' has multiple matching sessions on device '{deviceId.Trim()}'. Provide sessionId instead. Sessions: {sessions}";
@@ -155,14 +164,17 @@ internal sealed class SessionResolver
     public bool TryLoadResolvedSnapshot(string sessionId, out AppSessionSnapshot? snapshot, out string error)
     {
         error = string.Empty;
+
         if (runtimeState.TryGetSessionSnapshot(sessionId, out snapshot) && snapshot is not null)
         {
             SessionActivityOperation.Current?.SetTarget(snapshot.SessionId, snapshot.AppId);
+
             return true;
         }
 
         error = $"Session '{sessionId}' was not found.";
         snapshot = null;
+
         return false;
     }
 

@@ -26,9 +26,11 @@ internal static class DotNetOperationArguments
         captureId = arguments?["captureId"]?.GetValue<string>()?.Trim() ?? string.Empty;
         selection = TraceSelectionWindow.EntireTrace;
         error = null;
+
         if (string.IsNullOrWhiteSpace(captureId))
         {
             error = "captureId is required.";
+
             return false;
         }
 
@@ -43,16 +45,19 @@ internal static class DotNetOperationArguments
         if (start is < 0 || end is < 0)
         {
             error = "Trace selection offsets cannot be negative.";
+
             return false;
         }
 
         if (start is not null && end is not null && end < start)
         {
             error = "endMilliseconds must be greater than or equal to startMilliseconds.";
+
             return false;
         }
 
         selection = new TraceSelectionWindow(start, end, processId, threadId);
+
         return true;
     }
 
@@ -78,6 +83,7 @@ internal static class DotNetOperationArguments
     {
         value = null;
         error = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -92,10 +98,12 @@ internal static class DotNetOperationArguments
                     out parsed)))
         {
             value = parsed;
+
             return true;
         }
 
         error = $"'{propertyName}' must be a number.";
+
         return false;
     }
 }

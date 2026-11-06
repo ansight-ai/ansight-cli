@@ -80,4 +80,4 @@ global using Ansight.Cli.Tests.TestSupport;
 global using Ansight.Cli.Commands;
 global using Ansight.Host.Explorer;
 
-global using Ansight.Analytics;
+global using Ansight.Infrastructure.Analytics;

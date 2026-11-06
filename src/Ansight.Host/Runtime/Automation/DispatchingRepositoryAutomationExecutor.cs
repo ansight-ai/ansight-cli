@@ -21,18 +21,22 @@ internal sealed class DispatchingRepositoryAutomationExecutor : IRepositoryAutom
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         // Queued SDK events do not authenticate a human initiator. Never inherit the
         // context of the command that happened to start this background worker.
         using var eventContext = SessionActivityContext.Push(new(new ActivityCaller { Ingress = "runner", ClientName = "ansight-host" }));
         using var caller = SessionActivityContext.ExecuteAs("automation", request.Trigger.Automation.AutomationId, request.RunId);
+
         return activity is null
             ? await ExecuteCoreAsync(request, cancellationToken).ConfigureAwait(false)
             : await activity.RecordAsync("automation." + request.Trigger.Automation.AutomationId, "automation", request.Event.SessionId,
                 () => ExecuteCoreAsync(request, cancellationToken), result => result.Status switch
-                {
-                    AutomationRunStatus.Succeeded => "succeeded", AutomationRunStatus.Cancelled => "cancelled",
-                    AutomationRunStatus.Rejected => "rejected", _ => "failed"
-                }, request.Event.CorrelationId, request.Event.AppId).ConfigureAwait(false);
+{
+    AutomationRunStatus.Succeeded => "succeeded",
+    AutomationRunStatus.Cancelled => "cancelled",
+    AutomationRunStatus.Rejected => "rejected",
+    _ => "failed"
+}, request.Event.CorrelationId, request.Event.AppId).ConfigureAwait(false);
     }
 
     private Task<RepositoryAutomationExecutionResult> ExecuteCoreAsync(

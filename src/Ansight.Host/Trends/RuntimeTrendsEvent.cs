@@ -2,13 +2,6 @@ using Ansight.Host.Trends;
 
 namespace Ansight.Host.Trends;
 
-public enum RuntimeTrendsEventKind
-{
-    CheckFailed,
-    RegressionDetected,
-    RegressionRecovered
-}
-
 public sealed record RuntimeTrendsEvent(
     DateTimeOffset OccurredAtUtc,
     RuntimeTrendsEventKind Kind,
@@ -20,6 +13,5 @@ public sealed record RuntimeTrendsEvent(
     WorkspaceTrendsHistoryStatus? HistoryStatus = null) : RuntimeEvent(OccurredAtUtc)
 {
     public string? SpanGroup { get; init; }
-
     public WorkspaceTrendsHistoryComparison? HistoryComparison { get; init; }
 }

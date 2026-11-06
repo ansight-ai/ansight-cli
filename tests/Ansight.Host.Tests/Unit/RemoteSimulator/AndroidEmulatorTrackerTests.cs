@@ -11,8 +11,8 @@ public sealed class AndroidEmulatorTrackerTests
         var client = new FakeAndroidEmulatorClient
         {
             Devices =
-            [
-                new AdbDevice("emulator-5554", "device", "sdk_phone", "sdk_gphone64_arm64", "emu64a", "1"),
+                [
+                    new AdbDevice("emulator-5554", "device", "sdk_phone", "sdk_gphone64_arm64", "emu64a", "1"),
                 new AdbDevice("R3CR30PHONE", "device", "phone", "Physical Phone", "phone", "2"),
             ],
         };

@@ -16,10 +16,12 @@ internal static class AnnotationMutationToolSchema
             ["includeHistorical"] = ToolSchema.Boolean("Include historical sessions when resolving by appId. Defaults to true.", nullable: true),
             ["annotationId"] = ToolSchema.String(isCreate ? "Optional new id. An existing id is rejected." : "Existing annotation id.")
         };
+
         if (!isCreate)
         {
             properties["expectedSource"] = ToolSchema.String("Optional exact source guard checked atomically with the mutation.");
         }
+
         if (isCreate || isPatch)
         {
             properties["label"] = ToolSchema.String(isCreate ? "Required non-empty annotation label." : "Replacement non-empty label; omission preserves it.");
@@ -38,10 +40,12 @@ internal static class AnnotationMutationToolSchema
                 additionalProperties: false,
                 nullable: isPatch);
         }
+
         if (isCreate)
         {
             properties["source"] = ToolSchema.String("Annotation source. Tasks default to task:<taskId>; standalone host calls default to ansight-operation.");
         }
+
         return ToolSchema.Object(properties: properties, required: isCreate ? ["label"] : ["annotationId"], additionalProperties: false).ToJson();
     }
 

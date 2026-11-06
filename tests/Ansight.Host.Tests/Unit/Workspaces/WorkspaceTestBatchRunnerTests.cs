@@ -20,6 +20,7 @@ public sealed class WorkspaceTestBatchRunnerTests
         {
             Interlocked.Increment(ref calls);
             Assert.Equal(retention, request.Video?.Retention);
+
             return Task.FromResult(new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []));
         }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
         await runner.RunAllAsync(new WorkspaceTestBatchRequest(workspace)
@@ -42,10 +43,18 @@ public sealed class WorkspaceTestBatchRunnerTests
         var runner = new WorkspaceTestBatchRunner((request, _, _) =>
         {
             Assert.Equal(expectedTrace, request.CaptureTrace);
+
             return Task.FromResult(new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []));
         }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
         var batch = new WorkspaceTestBatchRequest(workspacePath);
-        if (captureTrace.HasValue) batch = batch with { CaptureTrace = captureTrace.Value };
+
+        if (captureTrace.HasValue)
+        {
+            batch = batch with
+            {
+                CaptureTrace = captureTrace.Value
+            };
+        }
 
         var result = await runner.RunAllAsync(batch);
 
@@ -82,9 +91,11 @@ public sealed class WorkspaceTestBatchRunnerTests
             Assert.NotEmpty(request.BatchRunId!);
             Assert.Equal(parallel ? 1 : targetCount, request.BatchCount);
             Assert.InRange(request.BatchIndex!.Value, 1, request.BatchCount!.Value);
+
             var rejection = AudioExecutionPolicy.RejectParallelCall("ansight_inject_audio", request.OperationContext);
             Assert.Equal(shouldReject, rejection is not null);
             Assert.Null(AudioExecutionPolicy.RejectParallelCall("ansight_get_screenshot", request.OperationContext));
+
             return new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []);
         }, new WorkspaceTestBatchAuditStore(environment.ApplicationPaths));
 
@@ -112,6 +123,7 @@ public sealed class WorkspaceTestBatchRunnerTests
                 "\"schemaVersion\": 1,",
                 "\"schemaVersion\": 1,\n                  \"enabled\": false,",
                 StringComparison.Ordinal));
+
         var catalog = WorkspaceTestCatalog.Load(workspacePath);
         var executedTestIds = new List<string>();
         var runner = new WorkspaceTestBatchRunner(
@@ -134,7 +146,9 @@ public sealed class WorkspaceTestBatchRunnerTests
             executedTestIds.Add(request.TestId);
             Assert.Equal("fast", request.Reasoning);
             Assert.Equal(string.Empty, request.Model);
+
             var test = Assert.Single(catalog.Tests, candidate => candidate.TestId == request.TestId);
+
             return Task.FromResult(new WorkspaceTestRunResult(
                 true,
                 "Passed.",
@@ -195,13 +209,15 @@ public sealed class WorkspaceTestBatchRunnerTests
             using var startParticipant = request.StartParticipant;
             Assert.Equal("deep", request.Reasoning);
             Assert.Equal(string.Empty, request.Model);
+
             if (startParticipant is not null)
             {
                 await startParticipant.ArriveAndWaitAsync(cancellationToken);
             }
 
             var deviceIdentifier = request.Target?.DeviceIdentifier
-                                   ?? throw new InvalidOperationException("A target is required.");
+                ?? throw new InvalidOperationException("A target is required.");
+
             lock (stateGate)
             {
                 activeRuns++;
@@ -210,6 +226,7 @@ public sealed class WorkspaceTestBatchRunnerTests
             }
 
             await Task.Delay(25, cancellationToken);
+
             lock (stateGate)
             {
                 activeRuns--;
@@ -224,6 +241,7 @@ public sealed class WorkspaceTestBatchRunnerTests
                 DeviceStarted: false,
                 ApplicationInstalled: false,
                 ApplicationLaunched: true);
+
             return new WorkspaceTestRunResult(
                 true,
                 "Passed.",
@@ -262,7 +280,9 @@ public sealed class WorkspaceTestBatchRunnerTests
             CancellationToken cancellationToken)
         {
             executedTestIds.Add(request.TestId);
+
             var test = Assert.Single(catalog.Tests, candidate => candidate.TestId == request.TestId);
+
             return Task.FromResult(request.TestId == "a-unsupported"
                 ? WorkspaceTestRunResult.Skipped("Unsupported target.", test)
                 : new WorkspaceTestRunResult(true, "Passed.", test, "session", null, []));
@@ -304,13 +324,14 @@ public sealed class WorkspaceTestBatchRunnerTests
             CancellationToken cancellationToken)
         {
             using var startParticipant = request.StartParticipant;
+
             if (startParticipant is not null)
             {
                 await startParticipant.ArriveAndWaitAsync(cancellationToken);
             }
 
             var deviceIdentifier = request.Target?.DeviceIdentifier
-                                   ?? throw new InvalidOperationException("A target is required.");
+                ?? throw new InvalidOperationException("A target is required.");
             var test = Assert.Single(catalog.Tests, candidate => candidate.TestId == request.TestId);
             var target = new WorkspaceTestTarget(
                 DevicePlatforms.Ios,
@@ -320,6 +341,7 @@ public sealed class WorkspaceTestBatchRunnerTests
                 DeviceStarted: false,
                 ApplicationInstalled: false,
                 ApplicationLaunched: true);
+
             if (request.TestId == "first")
             {
                 return WorkspaceTestRunResult.Failure(
@@ -330,6 +352,7 @@ public sealed class WorkspaceTestBatchRunnerTests
             }
 
             await Task.Delay(75, cancellationToken);
+
             return new WorkspaceTestRunResult(
                 true,
                 "Passed.",
@@ -387,14 +410,16 @@ public sealed class WorkspaceTestBatchRunnerTests
         {
             using var startParticipant = request.StartParticipant;
             var deviceIdentifier = request.Target?.DeviceIdentifier
-                                   ?? throw new InvalidOperationException("A target is required.");
+                ?? throw new InvalidOperationException("A target is required.");
             Task releaseTask;
+
             if (request.TestId == "first")
             {
                 if (Interlocked.Increment(ref firstTestStarted) == targets.Length)
                 {
                     firstTestRelease.TrySetResult();
                 }
+
                 releaseTask = firstTestRelease.Task;
             }
             else
@@ -403,10 +428,12 @@ public sealed class WorkspaceTestBatchRunnerTests
                 {
                     Interlocked.Exchange(ref secondTestStartedBeforeFirstCompleted, 1);
                 }
+
                 if (Interlocked.Increment(ref secondTestStarted) == targets.Length)
                 {
                     secondTestRelease.TrySetResult();
                 }
+
                 releaseTask = secondTestRelease.Task;
             }
 
@@ -414,7 +441,9 @@ public sealed class WorkspaceTestBatchRunnerTests
             {
                 await startParticipant.ArriveAndWaitAsync(cancellationToken);
             }
+
             await releaseTask.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
+
             if (request.TestId == "first")
             {
                 Interlocked.Increment(ref firstTestCompleted);
@@ -429,6 +458,7 @@ public sealed class WorkspaceTestBatchRunnerTests
                 DeviceStarted: false,
                 ApplicationInstalled: false,
                 ApplicationLaunched: true);
+
             return new WorkspaceTestRunResult(
                 true,
                 "Passed.",
@@ -445,9 +475,11 @@ public sealed class WorkspaceTestBatchRunnerTests
         var workspacePath = Path.Combine(rootPath, "workspace");
         var testsPath = Path.Combine(workspacePath, "ansight", "tests");
         Directory.CreateDirectory(testsPath);
+
         var testIds = requestedTestIds.Length == 0
             ? ["first", "second"]
             : requestedTestIds;
+
         foreach (var testId in testIds)
         {
             File.WriteAllText(
@@ -462,6 +494,7 @@ public sealed class WorkspaceTestBatchRunnerTests
                 }
                 """);
         }
+
         return workspacePath;
     }
 }

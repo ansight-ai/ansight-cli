@@ -31,6 +31,7 @@ public sealed class HostUiAutomationServiceTests
             observedOperationName = operationName;
             observedArguments = arguments;
             observedCorrelationId = correlationId;
+
             return Task.FromResult(RequestResult.ToolResult(
                 new JsonObject { ["message"] = "completed" },
                 isError: false));
@@ -57,6 +58,7 @@ public sealed class HostUiAutomationServiceTests
             var cancellationToken = ToolExecutionCancellation.Current;
             observedToken.SetResult(cancellationToken);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
             return RequestResult.ToolResult(new JsonObject(), isError: false);
         });
         using var cancellation = new CancellationTokenSource();
@@ -85,6 +87,7 @@ public sealed class HostUiAutomationServiceTests
         var service = new UiAutomationService((_, arguments, _) =>
         {
             dispatchedArguments = arguments;
+
             return Task.FromResult(RequestResult.ToolResult(source, isError: false));
         });
         var supplied = new JsonObject
@@ -93,7 +96,11 @@ public sealed class HostUiAutomationServiceTests
             ["includeProperties"] = includeProperties,
             ["maxNodes"] = 2
         };
-        if (detail is not null) supplied["detail"] = detail;
+
+        if (detail is not null)
+        {
+            supplied["detail"] = detail;
+        }
 
         var result = await service.ExecuteAsync(UiAutomationOperation.Snapshot, supplied);
 
@@ -103,6 +110,7 @@ public sealed class HostUiAutomationServiceTests
         Assert.Equal(2, dispatchedArguments["maxNodes"]!.GetValue<int>());
         Assert.Equal(detail, supplied["detail"]?.GetValue<string>());
         Assert.NotSame(source, result.Payload);
+
         if (expectFull)
         {
             Assert.True(JsonNode.DeepEquals(source, result.Payload));
@@ -115,6 +123,7 @@ public sealed class HostUiAutomationServiceTests
             Assert.True(result.Payload["truncated"]!.GetValue<bool>());
             Assert.DoesNotContain("frameworkOnlyProperty", result.Payload.ToJsonString(), StringComparison.Ordinal);
         }
+
         Assert.Contains("frameworkOnlyProperty", source.ToJsonString(), StringComparison.Ordinal);
     }
 
@@ -173,6 +182,7 @@ public sealed class HostUiAutomationServiceTests
         var service = new UiAutomationService((_, arguments, _) =>
         {
             Assert.False(arguments!.ContainsKey("detail"));
+
             return Task.FromResult(RequestResult.ToolResult(source, isError: false));
         });
 

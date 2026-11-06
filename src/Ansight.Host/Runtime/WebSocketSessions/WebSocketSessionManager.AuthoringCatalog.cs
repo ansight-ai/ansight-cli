@@ -14,42 +14,57 @@ internal sealed partial class WebSocketSessionManager
         try
         {
             SetCatalogStatus(sessionId, "loading", "Discovering app tools…");
+
             var catalogResponse = await toolCatalog.QueryAsync(
-                    sessionId,
-                    filterArguments: null,
-                    callerRevision: null,
-                    CancellationToken.None,
-                    new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"))
+                sessionId,
+                filterArguments: null,
+                callerRevision: null,
+                CancellationToken.None,
+                new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"))
                 .ConfigureAwait(false);
+
             for (var attempt = 0; !catalogResponse.Success && attempt < 2; attempt++)
             {
                 await Task.Delay(TimeSpan.FromSeconds(attempt + 1)).ConfigureAwait(false);
-                if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
+
+                if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection))
+                {
+                    return;
+                }
+
                 catalogResponse = await toolCatalog.QueryAsync(sessionId, null, null, CancellationToken.None,
                     new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog")).ConfigureAwait(false);
             }
-            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
+
+            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection))
+            {
+                return;
+            }
+
             if (!catalogResponse.Success
                 || catalogResponse.Envelope?.Payload is not JsonObject toolCatalogPayload)
             {
                 SetCatalogStatus(sessionId, "failed", catalogResponse.Message);
                 log.Info(
                     $"session_app_tool_catalog_capture_skipped sessionId={sessionId} message={catalogResponse.Message}");
+
                 return;
             }
 
             JsonObject? artifactCatalog = null;
             runtimeState.SetSessionAppToolCatalog(sessionId, new SessionAppToolCatalogSnapshot(
                 "ansight.session-app-tool-catalog/v1", DateTimeOffset.UtcNow, toolCatalogPayload.DeepClone().AsObject(), null));
+
             if (HasExecutableTool(toolCatalogPayload, ArtifactQueryToolId))
             {
                 var artifactResponse = await CallToolAsync(
-                        sessionId,
-                        ArtifactQueryToolId,
-                        new JsonObject(),
-                        CancellationToken.None,
-                        new AppToolBridgeRequestContext("session-capture", "capture_artifact_provider_catalog"))
+                    sessionId,
+                    ArtifactQueryToolId,
+                    new JsonObject(),
+                    CancellationToken.None,
+                    new AppToolBridgeRequestContext("session-capture", "capture_artifact_provider_catalog"))
                     .ConfigureAwait(false);
+
                 if (artifactResponse.Success
                     && artifactResponse.Envelope is not null
                     && !string.Equals(
@@ -62,7 +77,11 @@ internal sealed partial class WebSocketSessionManager
                 }
             }
 
-            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection)) return;
+            if (!ReferenceEquals(connectionRegistry.Get(sessionId), connection))
+            {
+                return;
+            }
+
             runtimeState.SetSessionAppToolCatalog(
                 sessionId,
                 new SessionAppToolCatalogSnapshot(
@@ -74,7 +93,10 @@ internal sealed partial class WebSocketSessionManager
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             if (ReferenceEquals(connectionRegistry.Get(sessionId), connection))
+            {
                 SetCatalogStatus(sessionId, "failed", exception.GetBaseException().Message);
+            }
+
             log.Info(
                 $"session_app_tool_catalog_capture_failed sessionId={sessionId} message={exception.GetBaseException().Message}");
         }
@@ -86,7 +108,11 @@ internal sealed partial class WebSocketSessionManager
         runtimeState.SetSessionAppToolCatalog(sessionId, new SessionAppToolCatalogSnapshot(
             "ansight.session-app-tool-catalog/v1", DateTimeOffset.UtcNow,
             snapshot?.AppToolCatalog?.ToolCatalog.DeepClone().AsObject() ?? new JsonObject(),
-            snapshot?.AppToolCatalog?.ArtifactCatalog?.DeepClone().AsObject()) { Status = status, Message = message });
+            snapshot?.AppToolCatalog?.ArtifactCatalog?.DeepClone().AsObject())
+        {
+            Status = status,
+            Message = message
+        });
     }
 
     private void CaptureQueriedAppToolCatalog(string sessionId, AppToolBridgeResponse response)
@@ -99,6 +125,7 @@ internal sealed partial class WebSocketSessionManager
         }
 
         JsonObject? artifactCatalog = null;
+
         if (runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot))
         {
             artifactCatalog = snapshot?.AppToolCatalog?.ArtifactCatalog?.DeepClone().AsObject();
@@ -115,14 +142,14 @@ internal sealed partial class WebSocketSessionManager
 
     private static bool HasExecutableTool(JsonObject catalog, string toolId)
         => catalog["tools"] is JsonArray tools
-           && tools.OfType<JsonObject>().Any(tool =>
+            && tools.OfType<JsonObject>().Any(tool =>
                string.Equals(ReadCatalogString(tool["id"]), toolId, StringComparison.Ordinal)
-               && ReadCatalogBoolean(tool["executable"], fallback: true));
+                   && ReadCatalogBoolean(tool["executable"], fallback: true));
 
     private static string? ReadCatalogString(JsonNode? node)
         => node is JsonValue value
-           && value.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && value.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 

@@ -59,7 +59,6 @@ public static class LanguagePackParser
                     {
                         throw new JsonException("Expected start of array.");
                     }
-
                     while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
                     {
                         values.Add(ReadLanguageValue(ref reader));
@@ -72,6 +71,7 @@ public static class LanguagePackParser
         }
 
         pack.Values = values;
+
         return pack;
     }
 

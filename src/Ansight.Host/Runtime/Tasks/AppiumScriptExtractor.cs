@@ -5,13 +5,6 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Runtime.Tasks;
 
-/// <summary>A reviewable WebdriverIO/Appium test from recorded session interactions.</summary>
-public sealed record AppiumScriptExtraction(
-    string SuggestedName,
-    string Source,
-    int GeneratedActionCount,
-    IReadOnlyList<string> Diagnostics);
-
 public static class AppiumScriptExtractor
 {
     public static AppiumScriptExtraction Extract(
@@ -21,6 +14,7 @@ public static class AppiumScriptExtractor
         string title)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         var extracted = TimelineTaskExtractor.Extract(
             snapshot, startUtc, endUtc, title, includeCoordinateFallbackTaps: true);
         var diagnostics = new List<string>(extracted.Diagnostics);
@@ -29,6 +23,7 @@ public static class AppiumScriptExtractor
             : snapshot.DeviceProfile?.Device?.OsName?.Contains("ios", StringComparison.OrdinalIgnoreCase) == true
                 ? "iOS"
                 : null;
+
         if (platform is null)
         {
             diagnostics.Add("Capture platform is unknown; set APPIUM_PLATFORM to iOS or Android before running.");
@@ -36,15 +31,25 @@ public static class AppiumScriptExtractor
 
         var actions = new StringBuilder();
         var count = 0;
+
         foreach (var action in extracted.Actions)
         {
             var rendered = RenderAction(action, diagnostics);
-            if (rendered is null) continue;
+
+            if (rendered is null)
+            {
+                continue;
+            }
+
             actions.Append(rendered);
             count++;
         }
 
-        if (count == 0) diagnostics.Add("No Appium actions could be generated from the selected period.");
+        if (count == 0)
+        {
+            diagnostics.Add("No Appium actions could be generated from the selected period.");
+        }
+
         var source = new StringBuilder()
             .Append("// Draft from Ansight session ").AppendLine(Comment(snapshot.SessionId))
             .Append("// Selected period: ").Append(startUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture))
@@ -112,6 +117,7 @@ public static class AppiumScriptExtractor
             .AppendLine("// Review before running:")
             .AppendLine("// - Confirm the starting state and add an outcome assertion.")
             .AppendLine("// - Install WebdriverIO and start Appium with the matching driver.");
+
         if (diagnostics.Any(static diagnostic => diagnostic.Contains("viewport coordinate", StringComparison.Ordinal)))
         {
             source.AppendLine("// - Verify coordinate taps on the target device.");
@@ -136,14 +142,17 @@ public static class AppiumScriptExtractor
         if (action.Kind is not ("tap" or "input"))
         {
             diagnostics.Add($"Unsupported action {action.Kind} at {action.CapturedAtUtc:O} was omitted.");
+
             return null;
         }
 
         var id = ReadString(action.Selector, "automationId");
         var label = ReadString(action.Selector, "text");
+
         if (id is not null || label is not null)
         {
             var target = $"recordedTarget(driver, {Json(id)}, {Json(label)})";
+
             return action.Kind == "tap"
                 ? $"    await (await {target}).click();\n"
                 : $"    await (await {target}).setValue({Json(action.InputValue ?? string.Empty)});\n";
@@ -152,10 +161,12 @@ public static class AppiumScriptExtractor
         if (action.Kind == "tap" && action.StartNormalizedX is { } x && action.StartNormalizedY is { } y)
         {
             diagnostics.Add($"Tap at {action.CapturedAtUtc:O} uses a viewport coordinate; confirm it on the target device.");
+
             return $"    await touchAt(driver, {Number(x)}, {Number(y)});\n";
         }
 
         diagnostics.Add($"{action.Description} at {action.CapturedAtUtc:O} has no Appium locator and was omitted.");
+
         return null;
     }
 
@@ -165,6 +176,8 @@ public static class AppiumScriptExtractor
             : null;
 
     private static string Number(double value) => Math.Clamp(value, 0, 1).ToString("0.######", CultureInfo.InvariantCulture);
+
     private static string Json(string? value) => value is null ? "null" : JsonSerializer.Serialize(value);
+
     private static string Comment(string value) => value.Replace('\r', ' ').Replace('\n', ' ');
 }

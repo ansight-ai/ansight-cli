@@ -48,10 +48,16 @@ public sealed partial class DeviceLocationOperationTests
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var catalog = CreateToolCatalog(state, environment, new TestAppToolBridge(), null);
         var arguments = new JsonObject { ["routeContent"] = PlaybackGpx };
-        if (provideTarget) arguments["deviceId"] = "device-1";
+
+        if (provideTarget)
+        {
+            arguments["deviceId"] = "device-1";
+        }
+
         var response = await catalog.HandleToolsCallAsync(new JsonObject
         {
-            ["name"] = "ansight_play_device_location", ["arguments"] = arguments
+            ["name"] = "ansight_play_device_location",
+            ["arguments"] = arguments
         });
 
         var result = GetStructuredContent(response, expectedToolError: true);
@@ -70,6 +76,7 @@ public sealed partial class DeviceLocationOperationTests
         var sessionId = state.CreateSession("com.example.location", "Location App", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(sessionId, null, """{"device":{"nativeDeviceId":"device-1"}}""");
         bridge.Connect(sessionId);
+
         var locations = new FakeHostDeviceLocationService();
         await using var playback = new DeviceLocationPlaybackService(locations);
         var devices = PlaybackDevices(platform, kind);
@@ -126,7 +133,8 @@ public sealed partial class DeviceLocationOperationTests
 
         var result = await catalog.HandleToolsCallAsync(new JsonObject
         {
-            ["name"] = "ansight_play_device_location", ["arguments"] = arguments
+            ["name"] = "ansight_play_device_location",
+            ["arguments"] = arguments
         });
 
         GetStructuredContent(result, expectedToolError: true);

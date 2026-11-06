@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 public sealed class EventOutbox
 {
@@ -25,18 +25,22 @@ public sealed class EventOutbox
         {
             Directory.CreateDirectory(directoryPath);
             Prune(DateTimeOffset.UtcNow, reserveEventCount: 1);
+
             var filePath = Path.Combine(directoryPath, $"{envelope.InsertId}.json");
+
             if (File.Exists(filePath))
             {
                 return true;
             }
 
             var temporaryPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
+
             try
             {
                 File.WriteAllText(temporaryPath, JsonSerializer.Serialize(envelope, jsonOptions));
                 File.Move(temporaryPath, filePath, overwrite: false);
                 TryRestrictFilePermissions(filePath);
+
                 return true;
             }
             finally
@@ -45,8 +49,8 @@ public sealed class EventOutbox
             }
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or JsonException)
+            or UnauthorizedAccessException
+            or JsonException)
         {
             return false;
         }
@@ -64,17 +68,20 @@ public sealed class EventOutbox
             }
 
             Prune(DateTimeOffset.UtcNow, reserveEventCount: 0);
+
             var events = new List<OutboxEntry>();
+
             foreach (var path in Directory
-                         .EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
-                         .OrderBy(static path => File.GetLastWriteTimeUtc(path))
-                         .Take(maximumCount))
+                .EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(static path => File.GetLastWriteTimeUtc(path))
+                .Take(maximumCount))
             {
                 try
                 {
                     var envelope = JsonSerializer.Deserialize<EventEnvelope>(
                         File.ReadAllText(path),
                         jsonOptions);
+
                     if (envelope is null
                         || string.IsNullOrWhiteSpace(envelope.InsertId)
                         || string.IsNullOrWhiteSpace(envelope.EventName)
@@ -87,8 +94,8 @@ public sealed class EventOutbox
                     events.Add(new OutboxEntry(path, envelope));
                 }
                 catch (Exception exception) when (exception is IOException
-                                                   or UnauthorizedAccessException
-                                                   or JsonException)
+                    or UnauthorizedAccessException
+                    or JsonException)
                 {
                     TryDelete(path);
                 }
@@ -125,11 +132,13 @@ public sealed class EventOutbox
 
         var oldestAllowedUtc = nowUtc - maximumEventAge;
         var retained = new List<string>();
+
         foreach (var path in Directory
-                     .EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
-                     .OrderBy(static path => File.GetLastWriteTimeUtc(path)))
+            .EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
+            .OrderBy(static path => File.GetLastWriteTimeUtc(path)))
         {
             DateTimeOffset lastWriteUtc;
+
             try
             {
                 lastWriteUtc = File.GetLastWriteTimeUtc(path);
@@ -150,6 +159,7 @@ public sealed class EventOutbox
         }
 
         var removeCount = Math.Max(0, retained.Count - Math.Max(0, MaximumEventCount - reserveEventCount));
+
         for (var index = 0; index < removeCount; index++)
         {
             TryDelete(retained[index]);
@@ -179,8 +189,8 @@ public sealed class EventOutbox
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
         }
     }

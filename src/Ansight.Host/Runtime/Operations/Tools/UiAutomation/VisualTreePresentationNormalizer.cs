@@ -15,7 +15,9 @@ internal static class VisualTreePresentationNormalizer
     public static JsonObject Create(JsonObject rawPayload)
     {
         ArgumentNullException.ThrowIfNull(rawPayload);
+
         var presentation = rawPayload.DeepClone() as JsonObject ?? new JsonObject();
+
         if (!ShouldNormalize(presentation)
             || !VisualTreeTypeRegistry.TryCreateCompactV2(
                 presentation,
@@ -28,6 +30,7 @@ internal static class VisualTreePresentationNormalizer
         }
 
         NormalizeBranch(root, ancestorsVisible: true, typeRegistry);
+
         return presentation;
     }
 
@@ -42,8 +45,9 @@ internal static class VisualTreePresentationNormalizer
         var candidatePath = candidate.Ancestors.Append(candidate.Node).ToArray();
         var targetPath = target.Ancestors.Append(target.Node).ToArray();
         var sharedDepth = 0;
+
         while (sharedDepth < Math.Min(candidatePath.Length, targetPath.Length)
-               && ReferenceEquals(candidatePath[sharedDepth], targetPath[sharedDepth]))
+            && ReferenceEquals(candidatePath[sharedDepth], targetPath[sharedDepth]))
         {
             sharedDepth++;
         }
@@ -51,6 +55,7 @@ internal static class VisualTreePresentationNormalizer
         var hasDistinctBranches = sharedDepth > 0
             && sharedDepth < candidatePath.Length
             && sharedDepth < targetPath.Length;
+
         if (!hasDistinctBranches || targetPath[sharedDepth - 1]["children"] is not JsonArray siblings)
         {
             return false;
@@ -69,6 +74,7 @@ internal static class VisualTreePresentationNormalizer
         var hasKnownEarlierPosition = candidateIndex >= 0
             && targetIndex >= 0
             && orderedBehind;
+
         return hasKnownEarlierPosition;
     }
 
@@ -108,20 +114,21 @@ internal static class VisualTreePresentationNormalizer
         }
 
         var childNodes = children.OfType<JsonObject>().ToArray();
+
         for (var index = 0; index < childNodes.Length; index++)
         {
             var child = childNodes[index];
             var childVisible = effectivelyVisible
-                               && LiveUiNodeQuery.ReadBoolean(
-                                   child,
-                                   "visible",
-                                   fallback: true,
-                                   typeRegistry)
-                               && !IsCoveredByFrontSibling(
-                                   child,
-                                   index,
-                                   childNodes,
-                                   typeRegistry);
+                && LiveUiNodeQuery.ReadBoolean(
+                    child,
+                    "visible",
+                    fallback: true,
+                    typeRegistry)
+                && !IsCoveredByFrontSibling(
+                    child,
+                    index,
+                    childNodes,
+                    typeRegistry);
             NormalizeBranch(child, childVisible, typeRegistry);
         }
     }
@@ -138,6 +145,7 @@ internal static class VisualTreePresentationNormalizer
         }
 
         var targetZ = ReadNumber(target, "z") ?? 0;
+
         for (var candidateIndex = 0; candidateIndex < siblings.Count; candidateIndex++)
         {
             if (candidateIndex == targetIndex)
@@ -148,7 +156,8 @@ internal static class VisualTreePresentationNormalizer
             var candidate = siblings[candidateIndex];
             var candidateZ = ReadNumber(candidate, "z") ?? 0;
             var isInFront = candidateZ > targetZ
-                            || NearlyEqual(candidateZ, targetZ) && candidateIndex > targetIndex;
+                || NearlyEqual(candidateZ, targetZ) && candidateIndex > targetIndex;
+
             if (!isInFront
                 || !LiveUiNodeQuery.ReadBoolean(
                     candidate,
@@ -160,10 +169,10 @@ internal static class VisualTreePresentationNormalizer
             }
 
             if (ContainsOpaqueSurfaceCovering(
-                    candidate,
-                    targetBounds,
-                    cumulativeOpacity: 1,
-                    typeRegistry))
+                candidate,
+                targetBounds,
+                cumulativeOpacity: 1,
+                typeRegistry))
             {
                 return true;
             }
@@ -184,6 +193,7 @@ internal static class VisualTreePresentationNormalizer
         }
 
         var effectiveOpacity = cumulativeOpacity * ReadOpacity(node);
+
         if (effectiveOpacity < OpaqueThreshold)
         {
             return false;
@@ -197,7 +207,7 @@ internal static class VisualTreePresentationNormalizer
         }
 
         return node["children"] is JsonArray children
-               && children.OfType<JsonObject>().Any(child =>
+            && children.OfType<JsonObject>().Any(child =>
                    ContainsOpaqueSurfaceCovering(
                        child,
                        targetBounds,
@@ -217,16 +227,18 @@ internal static class VisualTreePresentationNormalizer
 
         var automationId = LiveUiNodeQuery.ReadAutomationId(node);
         var type = typeRegistry.Resolve(node);
+
         return automationId?.EndsWith("Page", StringComparison.OrdinalIgnoreCase) == true
-               || type?.EndsWith("Page", StringComparison.OrdinalIgnoreCase) == true
-               || type?.EndsWith("ViewController", StringComparison.OrdinalIgnoreCase) == true;
+            || type?.EndsWith("Page", StringComparison.OrdinalIgnoreCase) == true
+            || type?.EndsWith("ViewController", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static bool HasOpaqueBackground(JsonObject node)
     {
         var background = ReadNestedString(node, "visual", "background")
-                         ?? ReadNestedString(node, "visual", "backgroundColor")
-                         ?? ReadNestedString(node, "properties", "backgroundColor");
+            ?? ReadNestedString(node, "visual", "backgroundColor")
+            ?? ReadNestedString(node, "properties", "backgroundColor");
+
         if (background is null)
         {
             return false;
@@ -247,13 +259,14 @@ internal static class VisualTreePresentationNormalizer
             && background.EndsWith(')'))
         {
             var components = background[5..^1].Split(',');
+
             return components.Length == 4
-                   && double.TryParse(
-                       components[3],
-                       NumberStyles.Float,
-                       CultureInfo.InvariantCulture,
-                       out var rgbaAlpha)
-                   && rgbaAlpha >= OpaqueThreshold;
+                && double.TryParse(
+                    components[3],
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var rgbaAlpha)
+                && rgbaAlpha >= OpaqueThreshold;
         }
 
         return true;
@@ -262,6 +275,7 @@ internal static class VisualTreePresentationNormalizer
     private static bool TryReadHexAlpha(string color, out double alpha)
     {
         alpha = 0;
+
         if (!color.StartsWith('#'))
         {
             return false;
@@ -270,6 +284,7 @@ internal static class VisualTreePresentationNormalizer
         if (color.Length is 4 or 7)
         {
             alpha = 1;
+
             return true;
         }
 
@@ -281,6 +296,7 @@ internal static class VisualTreePresentationNormalizer
                 out var shortAlpha))
         {
             alpha = shortAlpha / 15d;
+
             return true;
         }
 
@@ -292,6 +308,7 @@ internal static class VisualTreePresentationNormalizer
                 out var fullAlpha))
         {
             alpha = fullAlpha / 255d;
+
             return true;
         }
 
@@ -300,8 +317,8 @@ internal static class VisualTreePresentationNormalizer
 
     private static double ReadOpacity(JsonObject node)
         => ReadNestedNumber(node, "visual", "opacity")
-           ?? ReadNumber(node, "opacity")
-           ?? 1;
+            ?? ReadNumber(node, "opacity")
+            ?? 1;
 
     private static string? ReadNestedString(
         JsonObject node,
@@ -341,9 +358,9 @@ internal static class VisualTreePresentationNormalizer
 
     private static bool Covers(LiveUiBounds candidate, LiveUiBounds target)
         => candidate.X <= target.X + CoverageTolerance
-           && candidate.Y <= target.Y + CoverageTolerance
-           && candidate.X + candidate.Width >= target.X + target.Width - CoverageTolerance
-           && candidate.Y + candidate.Height >= target.Y + target.Height - CoverageTolerance;
+            && candidate.Y <= target.Y + CoverageTolerance
+            && candidate.X + candidate.Width >= target.X + target.Width - CoverageTolerance
+            && candidate.Y + candidate.Height >= target.Y + target.Height - CoverageTolerance;
 
     private static bool NearlyEqual(double left, double right)
         => Math.Abs(left - right) <= double.Epsilon * Math.Max(1, Math.Max(Math.Abs(left), Math.Abs(right))) * 8;
@@ -351,17 +368,18 @@ internal static class VisualTreePresentationNormalizer
     private static bool ShouldNormalize(JsonObject payload)
     {
         if (!string.Equals(
-                LiveUiNodeQuery.ReadString(payload, "format"),
-                VisualTreeContract.NativeFormat,
-                StringComparison.Ordinal))
+            LiveUiNodeQuery.ReadString(payload, "format"),
+            VisualTreeContract.NativeFormat,
+            StringComparison.Ordinal))
         {
             return false;
         }
 
         var adapter = LiveUiNodeQuery.ReadString(payload, "adapter");
         var platform = LiveUiNodeQuery.ReadString(payload, "platform");
+
         return string.Equals(adapter, "apple.uikit", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(platform, "ios", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(platform, "maccatalyst", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(platform, "ios", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(platform, "maccatalyst", StringComparison.OrdinalIgnoreCase);
     }
 }

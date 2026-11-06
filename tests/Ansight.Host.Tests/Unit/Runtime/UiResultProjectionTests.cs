@@ -34,9 +34,11 @@ public sealed class UiResultProjectionTests
         Assert.Equal(3, result["attempts"]!.GetValue<int>());
         Assert.Equal("retained-evidence-hash", result["treeHash"]!.GetValue<string>());
         Assert.True(JsonNode.DeepEquals(source["selector"], result["selector"]));
+
         var ancestors = Assert.IsType<JsonArray>(result["ancestors"]);
         Assert.Equal(3, ancestors.Count);
         Assert.Equal("ancestor-5", ancestors[0]!["id"]!.GetValue<string>());
+
         foreach (var node in result["matches"]!.AsArray().OfType<JsonObject>())
         {
             Assert.False(node.ContainsKey("ancestorPath"));
@@ -46,6 +48,7 @@ public sealed class UiResultProjectionTests
             Assert.Null(node["debug"]);
             Assert.Equal("[10,20,30,40]", node["bounds"]!.ToJsonString());
         }
+
         Assert.True(result["projectionTruncated"]!.GetValue<bool>());
         Assert.Equal(original, source.ToJsonString());
     }
@@ -71,9 +74,7 @@ public sealed class UiResultProjectionTests
                         ["performed"] = true,
                         ["target"] = Node("tapped"),
                         ["afterObservation"] = new JsonObject
-                        {
-                            ["root"] = new JsonObject { ["id"] = "already-projected", ["children"] = new JsonArray() }
-                        }
+{                            ["root"] = new JsonObject {["id"] = "already-projected", ["children"] = new JsonArray() }}
                     },
                     new JsonObject
                     {
@@ -91,6 +92,7 @@ public sealed class UiResultProjectionTests
 
         Assert.True(result["isError"]!.GetValue<bool>());
         Assert.False(result["result"]!["performed"]!.GetValue<bool>());
+
         var actions = result["result"]!["actions"]!.AsArray();
         Assert.True(actions[0]!["performed"]!.GetValue<bool>());
         Assert.False(actions[1]!["passed"]!.GetValue<bool>());
@@ -114,9 +116,13 @@ public sealed class UiResultProjectionTests
             ["matches"] = new JsonArray(Node("one", path), Node("two", path))
         };
 
-        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with { MaximumAncestors = 1 });
+        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with
+        {
+            MaximumAncestors = 1
+        });
 
         Assert.Null(result["ancestors"]);
+
         foreach (var node in result["matches"]!.AsArray().OfType<JsonObject>())
         {
             Assert.Single(node["ancestorPath"]!.AsArray());
@@ -150,12 +156,14 @@ public sealed class UiResultProjectionTests
         Assert.True(result["textTruncated"]!.GetValue<bool>());
         Assert.True(result["valueTruncated"]!.GetValue<bool>());
         Assert.True(JsonNode.DeepEquals(source["tapHint"], result["tapHint"]));
+
         var exact = UiNodeProjection.FromResult(source, UiProjectionOptions.Interaction);
         Assert.Equal(text, exact["text"]!.GetValue<string>());
         Assert.Equal(text, exact["value"]!.GetValue<string>());
         Assert.Null(exact["textTruncated"]);
 
         source["tapHint"] = null;
+
         var refused = UiNodeProjection.FromResult(source, UiProjectionOptions.Model);
         Assert.True(refused.ContainsKey("tapHint"));
         Assert.Null(refused["tapHint"]);
@@ -186,13 +194,17 @@ public sealed class UiResultProjectionTests
             ["matches"] = new JsonArray(Enumerable.Range(0, 5).Select(index => (JsonNode?)Node("node-" + index, path)).ToArray())
         };
 
-        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with { MaximumCharacters = 700 });
+        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with
+        {
+            MaximumCharacters = 700
+        });
 
         Assert.True(result["satisfied"]!.GetValue<bool>());
         Assert.Equal(5, result["matchCount"]!.GetValue<int>());
         Assert.InRange(result["matches"]!.AsArray().Count, 1, 4);
         Assert.True(result["projectionTruncated"]!.GetValue<bool>());
         Assert.Equal(5, result["projectionSourceNodeCount"]!.GetValue<int>());
+
         var projectedNodes = new JsonObject
         {
             ["matches"] = result["matches"]!.DeepClone(),
@@ -205,7 +217,10 @@ public sealed class UiResultProjectionTests
     public void OversizedIdentity_OmitsMatchWithCountsButRetainsVerdictTargetAndFlagsOverrun()
     {
         var identity = new string('i', 1_000);
-        var options = UiProjectionOptions.Model with { MaximumCharacters = 100 };
+        var options = UiProjectionOptions.Model with
+        {
+            MaximumCharacters = 100
+        };
         var matches = UiResultProjection.Project(new JsonObject
         {
             ["matchCount"] = 1,
@@ -230,12 +245,21 @@ public sealed class UiResultProjectionTests
     {
         var root = new JsonObject
         {
-            ["id"] = "root", ["typeId"] = 0, ["enabled"] = false, ["visible"] = true,
+            ["id"] = "root",
+            ["typeId"] = 0,
+            ["enabled"] = false,
+            ["visible"] = true,
             ["children"] = new JsonArray(new JsonObject
             {
-                ["id"] = "field", ["typeId"] = 1, ["automationId"] = "field-id", ["text"] = "Label",
-                ["value"] = "Current value", ["enabled"] = true, ["visible"] = true,
-                ["bounds"] = new JsonArray(1, 2, 3, 4), ["debug"] = new string('x', 2_000)
+                ["id"] = "field",
+                ["typeId"] = 1,
+                ["automationId"] = "field-id",
+                ["text"] = "Label",
+                ["value"] = "Current value",
+                ["enabled"] = true,
+                ["visible"] = true,
+                ["bounds"] = new JsonArray(1, 2, 3, 4),
+                ["debug"] = new string('x', 2_000)
             })
         };
         var registry = VisualTreeTypeRegistry.FromPayload(new JsonObject { ["types"] = new JsonArray("Page", "Entry") });
@@ -262,16 +286,20 @@ public sealed class UiResultProjectionTests
                 new JsonObject { ["id"] = "two", ["parentId"] = "parent-two" }),
             ["ancestors"] = new JsonArray
             {
-                new JsonObject { ["id"] = "parent-one", ["parentId"] = "root", ["debug"] = new string('x', 20_000) },
-                new JsonObject { ["id"] = "parent-two", ["parentId"] = "root" },
-                new JsonObject { ["id"] = "root", ["automationId"] = "page" },
-                new JsonObject { ["id"] = "unreachable", ["debug"] = new string('x', 20_000) }
+                new JsonObject {["id"] = "parent-one", ["parentId"] = "root", ["debug"] = new string('x', 20_000) },
+                new JsonObject {["id"] = "parent-two", ["parentId"] = "root" },
+                new JsonObject {["id"] = "root", ["automationId"] = "page" },
+                new JsonObject {["id"] = "unreachable", ["debug"] = new string('x', 20_000) }
             }
         };
 
-        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with { MaximumMatches = 1 });
+        var result = UiResultProjection.Project(source, UiProjectionOptions.Model with
+        {
+            MaximumMatches = 1
+        });
 
         Assert.Single(result["matches"]!.AsArray());
+
         var ancestors = result["ancestors"]!.AsArray();
         Assert.Equal(2, ancestors.Count);
         Assert.Equal(["parent-one", "root"], ancestors.OfType<JsonObject>().Select(node => node["id"]!.GetValue<string>()));
@@ -290,7 +318,8 @@ public sealed class UiResultProjectionTests
             ["afterObservation"] = new JsonObject { ["root"] = new JsonObject { ["bounds"] = bounds.DeepClone() } },
             ["target"] = new JsonObject
             {
-                ["id"] = "secure-field", ["isPassword"] = true,
+                ["id"] = "secure-field",
+                ["isPassword"] = true,
                 ["visual"] = new JsonObject { ["value"] = "do-not-promote" }
             }
         };
@@ -341,12 +370,12 @@ public sealed class UiResultProjectionTests
     {
         var source = Node("target", new JsonArray
         {
-            new JsonObject { ["id"] = "page", ["automationId"] = "stable-page" },
-            new JsonObject { ["id"] = "container", ["automationId"] = "stable-container" },
-            new JsonObject { ["id"] = "wrapper-one", ["type"] = "Grid" },
-            new JsonObject { ["id"] = "wrapper-two", ["type"] = "Grid" },
-            new JsonObject { ["id"] = "wrapper-three", ["type"] = "Grid" },
-            new JsonObject { ["id"] = "wrapper-four", ["type"] = "Grid" }
+            new JsonObject {["id"] = "page", ["automationId"] = "stable-page" },
+            new JsonObject {["id"] = "container", ["automationId"] = "stable-container" },
+            new JsonObject {["id"] = "wrapper-one", ["type"] = "Grid" },
+            new JsonObject {["id"] = "wrapper-two", ["type"] = "Grid" },
+            new JsonObject {["id"] = "wrapper-three", ["type"] = "Grid" },
+            new JsonObject {["id"] = "wrapper-four", ["type"] = "Grid" }
         });
 
         var result = UiNodeProjection.FromResult(source, UiProjectionOptions.Model);
@@ -357,7 +386,10 @@ public sealed class UiResultProjectionTests
         source["ancestorPath"] = new JsonArray(
             new JsonObject { ["id"] = "unique-one", ["type"] = "Grid" },
             new JsonObject { ["id"] = "unique-two", ["type"] = "Grid" });
-        result = UiNodeProjection.FromResult(source, UiProjectionOptions.Model with { MaximumAncestors = 1 });
+        result = UiNodeProjection.FromResult(source, UiProjectionOptions.Model with
+        {
+            MaximumAncestors = 1
+        });
         Assert.Equal("unique-two", Assert.Single(result["ancestorPath"]!.AsArray())!["id"]!.GetValue<string>());
     }
 
@@ -372,6 +404,7 @@ public sealed class UiResultProjectionTests
             {
                 var node = Node("node-" + index, path);
                 node["text"] = text;
+
                 return (JsonNode?)node;
             }).ToArray())
         };
@@ -382,12 +415,14 @@ public sealed class UiResultProjectionTests
         Assert.Equal(40, result["projectionSourceNodeCount"]!.GetValue<int>());
         Assert.True(result["projectionTruncated"]!.GetValue<bool>());
         Assert.Null(result["ancestors"]);
+
         foreach (var node in result["matches"]!.AsArray().OfType<JsonObject>())
         {
             Assert.Equal(text, node["text"]!.GetValue<string>());
             Assert.Null(node["textTruncated"]);
             Assert.Equal("stable-parent", node["ancestorPath"]![0]!["automationId"]!.GetValue<string>());
         }
+
         Assert.True(new JsonObject { ["matches"] = result["matches"]!.DeepClone() }.ToJsonString().Length <= 16_000);
     }
 

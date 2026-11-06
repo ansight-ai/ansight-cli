@@ -10,16 +10,19 @@ public static class RunnerAiCredentialContext
     {
         var previous = current.Value;
         current.Value = credentials;
+
         return new Scope(() => current.Value = previous);
     }
 
-    private sealed class Scope(Action restore) : IDisposable
+    private sealed class Scope : IDisposable
     {
+        private readonly Action restore;
+
+        public Scope(Action restore)
+        {
+            this.restore = restore;
+        }
+
         public void Dispose() => restore();
     }
-}
-
-public sealed record RunnerAiCredentials(string ApiKey, string? TeamId)
-{
-    public override string ToString() => $"Runner AI credentials for team {TeamId ?? "unspecified"}";
 }

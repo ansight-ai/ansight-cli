@@ -27,7 +27,6 @@ public class MutableApplicationLogBuffer : IMutableApplicationLogBuffer
             }
         }
     }
-
     public IReadOnlyList<string> Logs => Volatile.Read(ref logsSnapshot);
 
     public event EventHandler<LogBufferChangedEventArgs>? OnLogsChanged;
@@ -40,6 +39,7 @@ public class MutableApplicationLogBuffer : IMutableApplicationLogBuffer
         }
 
         var lines = SplitContentIntoLines(content);
+
         if (lines.Count == 0)
         {
             return;
@@ -74,6 +74,7 @@ public class MutableApplicationLogBuffer : IMutableApplicationLogBuffer
         {
             var removed = logs.ToArray();
             logs.Clear();
+
             return removed;
         }
 

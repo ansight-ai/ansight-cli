@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 
 namespace Ansight.Infrastructure.Logging;
 
 public interface IMutableApplicationLogBuffer : IApplicationLogBuffer
 {
-	void Append(string content);
+    void Append(string content);
 
-	void Append(IReadOnlyList<string> lines);
+    void Append(IReadOnlyList<string> lines);
 
-	void Clear();
+    void Clear();
 
-	void SetCapacity(int capacity);
+    void SetCapacity(int capacity);
 }

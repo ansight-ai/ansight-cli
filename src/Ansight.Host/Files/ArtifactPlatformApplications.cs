@@ -7,13 +7,12 @@ using System.Text;
 
 namespace Ansight.Host.Files;
 
-internal sealed record ArtifactApplication(string Id, string Name);
-
 internal static class ArtifactPlatformApplications
 {
     public static Task<IReadOnlyList<ArtifactApplication>> ListAsync(string filePath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (OperatingSystem.IsWindows())
         {
             return ReadWindowsApplicationsAsync(filePath, null, cancellationToken);
@@ -43,26 +42,31 @@ internal static class ArtifactPlatformApplications
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         if (OperatingSystem.IsWindows())
         {
             await ReadWindowsApplicationsAsync(filePath, applicationId, cancellationToken);
+
             return;
         }
 
         if (OperatingSystem.IsLinux())
         {
             await Task.Run(() => ReadLinuxApplications(filePath, applicationId, cancellationToken), cancellationToken);
+
             return;
         }
 
         var applications = await ListAsync(filePath, cancellationToken);
         var application = applications.FirstOrDefault(candidate => string.Equals(candidate.Id, applicationId, StringComparison.Ordinal));
+
         if (application is null)
         {
             throw UnregisteredApplication();
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var startInfo = new ProcessStartInfo("/usr/bin/open")
         {
             UseShellExecute = false,
@@ -72,16 +76,20 @@ internal static class ArtifactPlatformApplications
         startInfo.ArgumentList.Add("-a");
         startInfo.ArgumentList.Add(application.Id);
         startInfo.ArgumentList.Add(Path.GetFullPath(filePath));
+
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The operating system could not start the selected application.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
+
         try
         {
             var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
             var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
             await Task.WhenAll(process.WaitForExitAsync(timeout.Token), errorTask, outputTask).ConfigureAwait(false);
+
             var error = await errorTask.ConfigureAwait(false);
+
             if (process.ExitCode != 0)
             {
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
@@ -92,10 +100,12 @@ internal static class ArtifactPlatformApplications
         catch (OperationCanceledException)
         {
             StopLauncher(process);
+
             if (!cancellationToken.IsCancellationRequested)
             {
                 throw new InvalidOperationException("The operating system did not respond when opening the artifact.");
             }
+
             throw;
         }
     }
@@ -124,11 +134,13 @@ internal static class ArtifactPlatformApplications
         => RunWindowsAsync(() =>
         {
             Marshal.ThrowExceptionForHR(WindowsNative.SHParseDisplayName(Path.GetFullPath(filePath), IntPtr.Zero, out var item, 0, out _));
+
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 // With no child array, the shell opens this item's parent and selects the item.
                 Marshal.ThrowExceptionForHR(WindowsNative.SHOpenFolderAndSelectItems(item, 0, IntPtr.Zero, 0));
+
                 return [];
             }
             finally
@@ -141,6 +153,7 @@ internal static class ArtifactPlatformApplications
     {
         var pathBytes = Encoding.UTF8.GetBytes(Path.GetFullPath(filePath));
         var fileUrl = MacNative.CFURLCreateFromFileSystemRepresentation(IntPtr.Zero, pathBytes, pathBytes.Length, false);
+
         if (fileUrl == IntPtr.Zero)
         {
             throw new InvalidOperationException("The operating system could not resolve the artifact file.");
@@ -150,6 +163,7 @@ internal static class ArtifactPlatformApplications
         {
             // Request document viewers and editors, excluding executable-only handlers.
             var urls = MacNative.LSCopyApplicationURLsForURL(fileUrl, 0x00000002 | 0x00000004);
+
             if (urls == IntPtr.Zero)
             {
                 return [];
@@ -159,11 +173,14 @@ internal static class ArtifactPlatformApplications
             {
                 var applications = new List<ArtifactApplication>();
                 var count = MacNative.CFArrayGetCount(urls);
+
                 for (nint index = 0; index < count; index++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     var url = MacNative.CFArrayGetValueAtIndex(urls, index);
                     var buffer = new byte[4096];
+
                     if (!MacNative.CFURLGetFileSystemRepresentation(url, true, buffer, buffer.Length))
                     {
                         continue;
@@ -171,6 +188,7 @@ internal static class ArtifactPlatformApplications
 
                     var terminator = Array.IndexOf(buffer, (byte)0);
                     var applicationPath = Encoding.UTF8.GetString(buffer, 0, terminator < 0 ? buffer.Length : terminator);
+
                     if (Directory.Exists(applicationPath))
                     {
                         applications.Add(new ArtifactApplication(applicationPath, Path.GetFileNameWithoutExtension(applicationPath)));
@@ -207,6 +225,7 @@ internal static class ArtifactPlatformApplications
         var thread = new Thread(() =>
         {
             var initialized = false;
+
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -229,9 +248,14 @@ internal static class ArtifactPlatformApplications
                     WindowsNative.CoUninitialize();
                 }
             }
-        }) { IsBackground = true, Name = "Artifact application handlers" };
+        })
+        {
+            IsBackground = true,
+            Name = "Artifact application handlers"
+        };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
+
         return completion.Task;
     }
 
@@ -242,6 +266,7 @@ internal static class ArtifactPlatformApplications
         CancellationToken cancellationToken)
     {
         var extension = Path.GetExtension(filePath);
+
         if (string.IsNullOrEmpty(extension))
         {
             if (applicationId is not null)
@@ -253,14 +278,18 @@ internal static class ArtifactPlatformApplications
         }
 
         Marshal.ThrowExceptionForHR(WindowsNative.SHAssocEnumHandlers(extension, 0, out var enumerator));
+
         try
         {
             var applications = new List<ArtifactApplication>();
+
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var result = enumerator.Next(1, out var handler, out var fetched);
                 Marshal.ThrowExceptionForHR(result);
+
                 if (fetched == 0)
                 {
                     break;
@@ -275,10 +304,12 @@ internal static class ArtifactPlatformApplications
 
                     handler.GetUIName(out var name);
                     applications.Add(new ArtifactApplication(id, string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(id) : name));
+
                     if (applicationId is not null && string.Equals(id, applicationId, StringComparison.Ordinal))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         InvokeWindowsHandler(filePath, handler);
+
                         return applications;
                     }
                 }
@@ -306,11 +337,13 @@ internal static class ArtifactPlatformApplications
     {
         var shellItemId = typeof(WindowsNative.IShellItem).GUID;
         Marshal.ThrowExceptionForHR(WindowsNative.SHCreateItemFromParsingName(Path.GetFullPath(filePath), IntPtr.Zero, ref shellItemId, out var item));
+
         try
         {
             var dataHandlerId = new Guid("b8c0bd9f-ed24-455c-83e6-d5390c4fe8c4");
             var dataObjectId = typeof(IDataObject).GUID;
             Marshal.ThrowExceptionForHR(item.BindToHandler(IntPtr.Zero, ref dataHandlerId, ref dataObjectId, out var data));
+
             try
             {
                 Marshal.ThrowExceptionForHR(handler.Invoke(data));
@@ -332,6 +365,7 @@ internal static class ArtifactPlatformApplications
         CancellationToken cancellationToken)
     {
         IntPtr file;
+
         try
         {
             file = LinuxNative.g_file_new_for_path(Path.GetFullPath(filePath));
@@ -344,12 +378,14 @@ internal static class ArtifactPlatformApplications
         try
         {
             var info = LinuxNative.g_file_query_info(file, "standard::content-type", 0, IntPtr.Zero, out var error);
+
             if (info == IntPtr.Zero)
             {
                 throw LinuxError(error, "The operating system could not determine the artifact's file type.");
             }
 
             IntPtr handlers;
+
             try
             {
                 var contentType = LinuxNative.g_file_info_get_content_type(info);
@@ -363,11 +399,14 @@ internal static class ArtifactPlatformApplications
             try
             {
                 var applications = new List<ArtifactApplication>();
+
                 for (var node = handlers; node != IntPtr.Zero; node = Marshal.ReadIntPtr(node, IntPtr.Size))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     var handler = Marshal.ReadIntPtr(node);
                     var id = Marshal.PtrToStringUTF8(LinuxNative.g_app_info_get_id(handler));
+
                     if (string.IsNullOrWhiteSpace(id))
                     {
                         continue;
@@ -375,10 +414,13 @@ internal static class ArtifactPlatformApplications
 
                     var name = Marshal.PtrToStringUTF8(LinuxNative.g_app_info_get_display_name(handler));
                     applications.Add(new ArtifactApplication(id, string.IsNullOrWhiteSpace(name) ? id : name));
+
                     if (applicationId is not null && string.Equals(id, applicationId, StringComparison.Ordinal))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
+
                         var files = LinuxNative.g_list_append(IntPtr.Zero, file);
+
                         try
                         {
                             if (!LinuxNative.g_app_info_launch(handler, files, IntPtr.Zero, out error))
@@ -429,6 +471,7 @@ internal static class ArtifactPlatformApplications
         {
             // GError contains a 32-bit domain, a 32-bit code, then a UTF-8 message pointer.
             var message = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(error, 8));
+
             return new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? fallback : message);
         }
         finally
@@ -494,14 +537,19 @@ internal static class ArtifactPlatformApplications
         {
             [PreserveSig]
             int GetName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+
             [PreserveSig]
             int GetUIName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+
             [PreserveSig]
             int GetIconLocation([MarshalAs(UnmanagedType.LPWStr)] out string path, out int index);
+
             [PreserveSig]
             int IsRecommended();
+
             [PreserveSig]
             int MakeDefault([MarshalAs(UnmanagedType.LPWStr)] string description);
+
             [PreserveSig]
             int Invoke([MarshalAs(UnmanagedType.Interface)] IDataObject data);
         }

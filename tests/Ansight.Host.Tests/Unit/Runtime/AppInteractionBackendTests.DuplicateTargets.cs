@@ -21,7 +21,10 @@ public sealed partial class AppInteractionBackendTests
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var sessionId = state.CreateDeviceSession(new WorkspaceTestTarget(
             "ios", "simulator-001", "Phone", "test.app", false, false, true)
-            { DeviceKind = DeviceKinds.Simulator, ExecutionMode = "device" });
+        {
+            DeviceKind = DeviceKinds.Simulator,
+            ExecutionMode = "device"
+        });
         var bridge = new ScreenshotBridge("unrelated-session", string.Empty);
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -31,6 +34,7 @@ public sealed partial class AppInteractionBackendTests
             composition.Get<NativeProfilingService>(), bridge, externalSessionScreenshotCaptureManager: new StaticScreenshots());
         var input = new InputDriver();
         var accessibility = new DuplicateResultAccessibility();
+
         if (typeText)
         {
             foreach (var index in new[] { 1, 3 })
@@ -41,30 +45,54 @@ public sealed partial class AppInteractionBackendTests
                 field["supportedActions"] = new JsonArray("focus", "typeText");
             }
         }
+
         dispatcher.ConfigureUiInputDriver(input);
         dispatcher.ConfigureUiAccessibilityDriver(accessibility);
+
         try
         {
             var found = await dispatcher.CallToolAsync("ansight_find_ui", new JsonObject
             {
-                ["sessionId"] = sessionId, ["text"] = "Eagle Rock", ["exact"] = true
+                ["sessionId"] = sessionId,
+                ["text"] = "Eagle Rock",
+                ["exact"] = true
             });
             Assert.False(found.Payload?["isError"]?.GetValue<bool>(), found.Payload?.ToJsonString());
+
             var matches = found.Payload!["structuredContent"]!["matches"]!.AsArray();
             Assert.Equal(3, matches.Count); // Search field plus two distinct rows.
+
             var selected = matches[2]!;
             Assert.Contains("New South Wales", selected["nearbyText"]!.ToJsonString());
+
             var arguments = selected["tapHint"]!["selector"]!.DeepClone().AsObject();
             Assert.Equal(typeText ? 2 : 1, arguments["index"]!.GetValue<int>());
             Assert.NotNull(arguments["targetFingerprint"]);
             arguments["sessionId"] = sessionId;
             arguments["includeScreenshot"] = false;
-            if (typeText) arguments["value"] = "New search";
+
+            if (typeText)
+            {
+                arguments["value"] = "New search";
+            }
 
             var children = accessibility.Tree["root"]!["children"]!.AsArray();
-            if (change == "moved") children[3]!["bounds"]![1] = 0.7;
-            if (change == "replaced") children[4]!["text"] = "Victoria · Crag";
-            if (change == "removed") children.RemoveAt(3);
+
+            if (change == "moved")
+            {
+                children[3]!["bounds"]![1] = 0.7;
+            }
+
+            if (change == "replaced")
+            {
+                children[4]!["text"] = "Victoria · Crag";
+            }
+
+            if (change == "removed")
+            {
+                children.RemoveAt(3);
+            }
+
             var capturesBeforeTap = accessibility.Captures;
             var tapped = await dispatcher.CallToolAsync(typeText ? "ansight_type_text" : "ansight_tap_ui", arguments);
 
@@ -72,7 +100,12 @@ public sealed partial class AppInteractionBackendTests
             Assert.False(accessibility.LastAllowCached);
             Assert.Equal(!shouldTap, tapped.Payload?["isError"]?.GetValue<bool>());
             Assert.Equal(shouldTap ? 1 : 0, input.Taps);
-            if (typeText) Assert.Equal(shouldTap ? "New search" : null, input.TypedText);
+
+            if (typeText)
+            {
+                Assert.Equal(shouldTap ? "New search" : null, input.TypedText);
+            }
+
             if (shouldTap)
             {
                 Assert.Equal(0.4, input.LastTap!.NormalizedX, 6);
@@ -81,8 +114,11 @@ public sealed partial class AppInteractionBackendTests
             else
             {
                 Assert.False(tapped.Payload?["structuredContent"]?["performed"]?.GetValue<bool>());
+
                 if (change != "removed")
+                {
                     Assert.Contains("fresh tapHint", tapped.Payload!["structuredContent"]!["message"]!.GetValue<string>());
+                }
             }
         }
         finally
@@ -100,7 +136,9 @@ public sealed partial class AppInteractionBackendTests
             ["coordinateSpace"] = new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 1, ["height"] = 1 },
             ["root"] = new JsonObject
             {
-                ["typeId"] = 0, ["flags"] = 3, ["bounds"] = new JsonArray(0, 0, 1, 1),
+                ["typeId"] = 0,
+                ["flags"] = 3,
+                ["bounds"] = new JsonArray(0, 0, 1, 1),
                 ["children"] = new JsonArray(
                     Label("Eagle Rock", 0.05, "textbox"),
                     Label("Eagle Rock", 0.25), Label("Tasmania · Crag", 0.31),
@@ -109,17 +147,23 @@ public sealed partial class AppInteractionBackendTests
         };
         public int Captures { get; private set; }
         public bool LastAllowCached { get; private set; }
+
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(UiAccessibilityRequest request,
             CancellationToken cancellationToken = default)
         {
             Captures++;
             LastAllowCached = request.AllowCached;
+
             return Task.FromResult(new UiAccessibilityResult(true, "test", "Captured.", Tree.DeepClone().AsObject()));
         }
+
         private static JsonObject Label(string text, double y, string role = "text") => new()
         {
-            ["typeId"] = role == "text" ? 2 : 1, ["role"] = role,
-            ["text"] = text, ["flags"] = 3, ["bounds"] = new JsonArray(0.1, y, 0.6, 0.05),
+            ["typeId"] = role == "text" ? 2 : 1,
+            ["role"] = role,
+            ["text"] = text,
+            ["flags"] = 3,
+            ["bounds"] = new JsonArray(0.1, y, 0.6, 0.05),
             ["supportedActions"] = new JsonArray()
         };
     }

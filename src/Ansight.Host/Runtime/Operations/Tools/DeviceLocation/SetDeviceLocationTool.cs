@@ -43,6 +43,7 @@ internal sealed class SetDeviceLocationTool : DeviceHostTargetOperation
         var payload = BuildResultPayload("set", target, result);
         payload["latitude"] = latitude;
         payload["longitude"] = longitude;
+
         return RequestResult.ToolResult(payload, isError: !result.IsSuccess);
     }
 
@@ -51,6 +52,7 @@ internal sealed class SetDeviceLocationTool : DeviceHostTargetOperation
         var properties = BuildTargetProperties();
         properties["latitude"] = ToolSchema.Number("Latitude from -90 through 90 degrees.");
         properties["longitude"] = ToolSchema.Number("Longitude from -180 through 180 degrees.");
+
         return properties;
     }
 
@@ -64,6 +66,7 @@ internal sealed class SetDeviceLocationTool : DeviceHostTargetOperation
     {
         value = 0;
         error = string.Empty;
+
         if (arguments?[propertyName] is not JsonValue jsonValue
             || (!jsonValue.TryGetValue<double>(out value)
                 && !double.TryParse(
@@ -73,12 +76,14 @@ internal sealed class SetDeviceLocationTool : DeviceHostTargetOperation
                     out value)))
         {
             error = $"{propertyName} must be a number.";
+
             return false;
         }
 
         if (!double.IsFinite(value) || value < minimum || value > maximum)
         {
             error = $"{propertyName} must be between {minimum} and {maximum}.";
+
             return false;
         }
 

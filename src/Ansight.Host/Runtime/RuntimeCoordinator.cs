@@ -46,8 +46,10 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     private Task? maintenanceTask;
     private bool disposed;
     private bool started;
+
     internal IDisposable? SuspendPeriodicScreenshots(string sessionId)
         => externalScreenshotCaptures?.SuspendPeriodicCapture(sessionId);
+
     private string[] startupWarnings = [];
 
     public RuntimeCoordinator()
@@ -108,8 +110,12 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         NetworkConditioning = new Ansight.Host.Devices.Network.NetworkConditioningService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         Audio = new AudioService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
         headlessDeviceDriver = new HeadlessHostDeviceDriver(Devices, hostRuntimeOptions);
+
         if (externalScreenshotCaptures is ExternalSessionScreenshotCaptureManager physicalScreenshots)
+        {
             physicalScreenshots.ConfigurePhysicalIosCapture(headlessDeviceDriver.CapturePhysicalIosScreenshotAsync);
+        }
+
         this.operationDispatcher.ConfigureUiAccessibilityDriver(headlessDeviceDriver);
         DeviceLocationPlayback = new DeviceLocationPlaybackService(Devices);
         CompanionDeviceTesting = new Ansight.Host.Devices.CompanionDeviceTestingService(
@@ -133,16 +139,17 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>()));
         operationDispatcher.ConfigureScreenshotEvaluator(new ScreenshotEvaluationRunner(WorkspaceTests.RunGateway!));
         Profiling = dotNetProfilingService
-                    ?? throw new ArgumentNullException(nameof(dotNetProfilingService));
+            ?? throw new ArgumentNullException(nameof(dotNetProfilingService));
         Profiling.ConfigureDeviceService(Devices);
         NativeProfiling = nativeProfilingService
-                          ?? throw new ArgumentNullException(nameof(nativeProfilingService));
+            ?? throw new ArgumentNullException(nameof(nativeProfilingService));
         NativeProfiling.ConfigureDeviceService(Devices);
         LocalAppGraphs = new LocalAppGraphService(ApplicationPaths);
         LiveFiles = new LiveSessionFileService(runtimeState, AppTools, id => this.deviceEvidence?.RequireFiles(id),
             async (tool, arguments, token) =>
             {
                 using var scope = ToolExecutionCancellation.Push(token);
+
                 return await this.operationDispatcher.CallToolAsync(tool, arguments).ConfigureAwait(false);
             });
         FileVisualizations = new FileVisualizationService(this);
@@ -220,6 +227,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             apps: new Ansight.Host.Devices.CompanionAppTestingService(Devices.ListAsync, options));
         operationDispatcher.ConfigureDeviceLocationPlayback(DeviceLocationPlayback, Devices);
         operationDispatcher.ConfigureDeviceMotionDriver(Devices);
+
         var hostIdentity = composition.Get<IIdentityStore>().Current;
         ExtensionStorage = encryptedStorage;
         ExtensionIdentity = hostIdentity;
@@ -233,8 +241,12 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         Sessions = new SessionQueryService(runtimeState);
         SessionEditing = new SessionEditingService(runtimeState, runtimeState, Trends, Activity);
         headlessDeviceDriver = new HeadlessHostDeviceDriver(Devices, options);
+
         if (externalScreenshotCaptures is ExternalSessionScreenshotCaptureManager physicalScreenshots)
+        {
             physicalScreenshots.ConfigurePhysicalIosCapture(headlessDeviceDriver.CapturePhysicalIosScreenshotAsync);
+        }
+
         operationDispatcher.ConfigureUiInputDriver(headlessDeviceDriver);
         operationDispatcher.ConfigureUiAccessibilityDriver(headlessDeviceDriver);
         operationDispatcher.ConfigureDeviceLifecycleDriver(headlessDeviceDriver);
@@ -253,6 +265,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             async (tool, arguments, token) =>
             {
                 using var scope = ToolExecutionCancellation.Push(token);
+
                 return await this.operationDispatcher.CallToolAsync(tool, arguments).ConfigureAwait(false);
             });
         FileVisualizations = new FileVisualizationService(this);
@@ -283,7 +296,6 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     internal string JavaScriptExecutablePath => javaScriptExecutablePath;
 
     public SimulatorAgentService SimulatorAgent { get; }
-
     public UiAutomationService Ui { get; }
 
     /// <summary>
@@ -293,13 +305,12 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public IAppInteractionContext CreateAppInteractionContext(string sessionId, string? repositoryRootPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return operationDispatcher.CreateAppInteractionContext(sessionId, repositoryRootPath);
     }
 
     public AudioService Audio { get; }
-
     public Ansight.Host.Devices.Network.NetworkConditioningService NetworkConditioning { get; }
-
     internal Ansight.RemoteSimulator.Core.Devices.IRemoteDeviceTestingSource CompanionDeviceTesting { get; }
 
     private async Task<RequestResult> ShakeForCompanionAsync(
@@ -307,16 +318,14 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         CancellationToken cancellationToken)
     {
         using var scope = ToolExecutionCancellation.Push(cancellationToken);
+
         return await operationDispatcher.CallToolAsync("ansight_shake_device", arguments, "companion-shake")
             .ConfigureAwait(false);
     }
 
     public DeviceService Devices { get; }
-
     public DeviceLocationPlaybackService DeviceLocationPlayback { get; }
-
     public IdentityInfo Identity { get; }
-
     internal Ansight.RemoteSimulator.Core.Server.RemoteControlServer? LocalSimulatorControl { get; set; }
     internal ICompanionService? ActiveCompanion => Extensions.TryGetLoadedService<ICompanionService>();
     public ICompanionService Companion => Extensions.GetService<ICompanionService>();
@@ -324,77 +333,60 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public IAccountService Account => Extensions.GetService<IAccountService>();
 
     public WorkspaceTestService WorkspaceTests { get; }
-
     public WorkspaceTrendsService Trends { get; }
 
     internal AppSessionSnapshot ResolveLiveUiSession(System.Text.Json.Nodes.JsonObject arguments)
     {
         if (!new Ansight.Host.Runtime.Operations.SessionResolver(runtimeState, appToolBridge)
-                .TryResolveLiveSession(arguments, out var session, out var error))
+            .TryResolveLiveSession(arguments, out var session, out var error))
+        {
             throw new InvalidOperationException(error);
+        }
+
         return session!;
     }
 
     public SessionActivityService Activity { get; }
-
     public SessionQueryService Sessions { get; }
-
     public SessionEditingService SessionEditing { get; }
-
     internal ISessionVideoEncoder? SessionVideoEncoder { get; }
     internal ISessionVideoTranscoder? SessionVideoTranscoder { get; }
     internal ISessionVideoFrameExtractor? SessionVideoFrameExtractor { get; }
-
     public AppService Apps { get; }
-
     public AppToolService AppTools { get; }
-
     public RepositoryAutomationService RepositoryAutomations { get; }
-
     public HostHealthService Health { get; }
-
     public SystemReportService SystemReports { get; }
-
     public RemoteRunnerStatusService RemoteRunner { get; }
-
     private IRemoteRunnerControl? ownedExtensionRunnerControl;
     public IRemoteRunnerControl? RemoteRunnerControl { get; set; }
+
     internal IRemoteRunnerControl? GetOrCreateRemoteRunnerControl()
     {
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
+
             return RemoteRunnerControl ??= ownedExtensionRunnerControl = RemoteRunnerControlFactory?.Invoke();
         }
     }
+
     public Func<IRemoteRunnerControl>? RemoteRunnerControlFactory { get; set; }
-
     public PairingService Pairing { get; }
-
     public DotNetProfilingService Profiling { get; }
-
     public NativeProfilingService NativeProfiling { get; }
-
     public ICloudService Cloud => Extensions.GetService<ICloudService>();
 
     public ISessionService CloudSessions => Extensions.GetService<ISessionService>();
 
     public LocalAppGraphService LocalAppGraphs { get; }
-
     internal LiveSessionFileService LiveFiles { get; }
-
     public FileVisualizationService FileVisualizations { get; }
-
     public ArtifactComparisonService ArtifactComparisons { get; }
-
     public SessionReplayService SessionReplays { get; }
-
     public SessionArchiveService SessionArchives { get; }
-
     public SessionEvidenceService SessionEvidence { get; }
-
     public SessionCacheService SessionCache { get; }
-
     public LiveVisualTreeCaptureService LiveVisualTrees { get; }
 
     private static IdentityInfo CreateIdentityInfo(RuntimeIdentity identity)
@@ -443,8 +435,10 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
+
         var normalizedRootPath = Path.GetFullPath(repositoryRootPath.Trim());
         var normalizedAppId = appId.Trim();
+
         return operationDispatcher.InspectRepositoryTasks(normalizedRootPath, normalizedAppId);
     }
 
@@ -470,7 +464,6 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             secretValues);
     }
 
-
     internal async Task<RepositoryTaskRunResult> RunWorkspaceTestTaskAsync(
         string workspacePath, string appId, string sessionId, string taskId, JsonObject? input,
         string? targetDeviceIdentifier, Operations.OperationExecutionContext? context,
@@ -478,6 +471,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         string? batchRunId)
     {
         using var scope = operationDispatcher.BeginSimulatorAgentRun(sessionId, targetDeviceIdentifier);
+
         return await operationDispatcher.RunRepositoryTaskAsync(workspacePath, appId, sessionId, taskId,
             input, cancellationToken, secretValues, context, runId, batchRunId).ConfigureAwait(false);
     }
@@ -535,13 +529,9 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public event EventHandler<string>? StatusChanged;
 
     public IApplicationPaths ApplicationPaths { get; }
-
     internal IUserPreferences UserPreferences { get; }
-
     public string BaseFolderPath { get; }
-
     internal ProductAnalytics Analytics { get; }
-
     public IReadOnlyList<string> StartupWarnings
     {
         get
@@ -552,7 +542,6 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             }
         }
     }
-
     public bool IsRunning
     {
         get
@@ -585,6 +574,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         lock (gate)
         {
             ThrowIfDisposed();
+
             if (started)
             {
                 return;
@@ -592,6 +582,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 
             WorkspaceTests.RecoverInterruptedSessionRuns();
             shutdownTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, FeatureLifetime);
+
             var lifetime = shutdownTokenSource.Token;
             pairingTask = Task.Run(() => RunPairingAndAnalyticsAsync(lifetime), CancellationToken.None);
             analyticsTask = Task.Run(() => new PostHogDispatcher(BaseFolderPath).RunAsync(lifetime, PrepareCaptureAttribution), CancellationToken.None);
@@ -605,7 +596,9 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         }
 
         await WaitForStartupStateAsync(currentPairingTask, cancellationToken);
+
         var startupFailure = GetTaskFailure(currentPairingTask);
+
         if (startupFailure is not null)
         {
             await ResetStartedStateAsync(currentShutdownTokenSource, currentPairingTask, currentAnalyticsTask);
@@ -615,6 +608,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         var automationStartResult = await RepositoryAutomations.StartAsync(currentShutdownTokenSource!.Token).ConfigureAwait(false);
         await BackfillIosInstrumentsMetricsAsync(currentShutdownTokenSource.Token).ConfigureAwait(false);
         AppWatches.Start(currentShutdownTokenSource.Token);
+
         lock (gate)
         {
             if (started && ReferenceEquals(shutdownTokenSource, currentShutdownTokenSource))
@@ -625,11 +619,13 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
                     CancellationToken.None);
             }
         }
+
         var currentStartupWarnings = CaptureStartupWarnings()
             .Concat(automationStartResult?.Warnings ?? Array.Empty<string>())
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         StoreStartupWarnings(currentStartupWarnings);
+
         var startupStatus = CreateStartupStatusMessage(currentStartupWarnings);
         log.Info($"host_runtime_started status={startupStatus} warningCount={currentStartupWarnings.Length}");
         RaiseRuntimeEvent(
@@ -643,6 +639,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     private async Task RunPairingAndAnalyticsAsync(CancellationToken cancellationToken)
     {
         var usageTimer = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             await pairingServer.RunAsync(cancellationToken).ConfigureAwait(false);
@@ -684,13 +681,25 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         await audioInjectionEngine.StopAsync().ConfigureAwait(false);
         await operationDispatcher.StopNetworkConditioningAsync().ConfigureAwait(false);
         await RepositoryAutomations.StopAsync().ConfigureAwait(false);
-        if (deviceEvidence is not null) await deviceEvidence.StopAllAsync().ConfigureAwait(false);
+
+        if (deviceEvidence is not null)
+        {
+            await deviceEvidence.StopAllAsync().ConfigureAwait(false);
+        }
 
         try
         {
             await WaitForTasksAsync(currentPairingTask, cancellationToken);
-            if (currentAnalyticsTask is not null) await currentAnalyticsTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-            if (currentMaintenanceTask is not null) await currentMaintenanceTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (currentAnalyticsTask is not null)
+            {
+                await currentAnalyticsTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (currentMaintenanceTask is not null)
+            {
+                await currentMaintenanceTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) when (currentShutdownTokenSource?.IsCancellationRequested == true)
         {
@@ -771,7 +780,6 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         protocolDefaultsOverride?.Dispose();
     }
 
-
     private static IApplicationPaths CreateApplicationPaths(RuntimeOptions options)
     {
         return string.IsNullOrWhiteSpace(options.BaseFolderPath)
@@ -785,6 +793,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             || options.WebSocketPort.HasValue
             || options.WebSocketSessionPortRangeStart.HasValue
             || options.WebSocketSessionPortRangeEnd.HasValue;
+
         if (!hasPortOverride)
         {
             return null;
@@ -806,6 +815,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         var webSocketPort = options.WebSocketPort ?? ProtocolDefaults.WebSocketPort;
         var sessionRangeStart = options.WebSocketSessionPortRangeStart ?? ProtocolDefaults.WebSocketSessionPortRangeStart;
         var sessionRangeEnd = options.WebSocketSessionPortRangeEnd ?? ProtocolDefaults.WebSocketSessionPortRangeEnd;
+
         if (sessionRangeStart > sessionRangeEnd)
         {
             throw new ArgumentException(
@@ -828,7 +838,6 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             webSocketSessionPortRangeEnd: sessionRangeEnd);
     }
 
-
     private static void ValidateOptionalPort(int? port, string parameterName)
     {
         if (port is <= 0 or > ushort.MaxValue)
@@ -841,5 +850,4 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     {
         return port >= rangeStart && port <= rangeEnd;
     }
-
 }

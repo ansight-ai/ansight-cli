@@ -8,6 +8,7 @@ public sealed class HostDeviceServiceOfflineApplicationTests
         var simulatorDataPath = Path.Combine(
             Path.GetTempPath(),
             $"ansight-offline-simulator-apps-{Guid.NewGuid():N}");
+
         try
         {
             var applicationPath = Path.Combine(

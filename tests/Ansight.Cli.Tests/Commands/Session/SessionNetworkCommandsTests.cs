@@ -35,6 +35,7 @@ public sealed class SessionNetworkCommandsTests
         Assert.Equal("ansight.session-network/v1", payload["schema"]!.GetValue<string>());
         Assert.Equal(2, payload["totalRequestCount"]!.GetValue<int>());
         Assert.Equal(1, payload["matchedRequestCount"]!.GetValue<int>());
+
         var request = Assert.Single(payload["requests"]!.AsArray())!.AsObject();
         Assert.Equal("request-success", request["id"]!.GetValue<string>());
         Assert.Equal(200, request["statusCode"]!.GetValue<int>());
@@ -46,6 +47,7 @@ public sealed class SessionNetworkCommandsTests
         var storagePath = Path.Combine(baseFolderPath, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,
@@ -68,6 +70,7 @@ public sealed class SessionNetworkCommandsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(exitCode, standardOutput.ToString(), standardError.ToString());
     }
 
@@ -118,27 +121,31 @@ public sealed class SessionNetworkCommandsTests
         };
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            var sessionEntry = archive.CreateEntry("session.json");
-            await using (var sessionStream = sessionEntry.Open())
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
-                await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
-                {
-                    SavedAtUtc = DateTimeOffset.UtcNow,
-                    Session = snapshot
-                }, protocolJson);
-            }
+                var sessionEntry = archive.CreateEntry("session.json");
 
-            foreach (var request in requests)
-            {
-                var requestEntry = archive.CreateEntry($"network/requests/{request.Id}.json");
-                await using var requestStream = requestEntry.Open();
-                await JsonSerializer.SerializeAsync(requestStream, request, protocolJson);
+                await using (var sessionStream = sessionEntry.Open())
+                {
+                    await JsonSerializer.SerializeAsync(sessionStream, new SessionCaptureDocument
+                    {
+                        SavedAtUtc = DateTimeOffset.UtcNow,
+                        Session = snapshot
+                    }, protocolJson);
+                }
+
+                foreach (var request in requests)
+                {
+                    var requestEntry = archive.CreateEntry($"network/requests/{request.Id}.json");
+                    await using var requestStream = requestEntry.Open();
+                    await JsonSerializer.SerializeAsync(requestStream, request, protocolJson);
+                }
             }
         }
 
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
+
         return Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
     }
 }

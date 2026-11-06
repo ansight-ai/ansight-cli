@@ -18,13 +18,15 @@ public sealed partial class RemoteControlServer
             await WriteJsonAsync(stream, HttpStatusCode.ServiceUnavailable,
                 new ErrorResponse("Device testing is unavailable on this host."), cancellationToken)
                 .ConfigureAwait(false);
+
             return;
         }
 
         RemoteDeviceTestingRequest? request;
+
         try
         {
-            request = JsonSerializer.Deserialize<RemoteDeviceTestingRequest>(body, JsonOptions);
+            request = JsonSerializer.Deserialize<RemoteDeviceTestingRequest>(body, jsonOptions);
         }
         catch (JsonException)
         {
@@ -32,36 +34,44 @@ public sealed partial class RemoteControlServer
         }
 
         var validRequest = request is not null
-                           && !string.IsNullOrWhiteSpace(request.DeviceUdid)
-                           && request.Action is "shake" or "network-capabilities" or "network-set" or "network-get" or "network-reset"
-                               or "network-follow" or "network-heartbeat"
-                               or "route-start" or "route-status" or "route-stop"
-                               or "app-capabilities" or "permission-grant" or "permission-deny" or "permission-reset"
-                               or "app-background" or "app-resume" or "app-restart" or "push" or "open-link"
-                               or "display-rotation" or "display-appearance" or "display-text-size"
-                               or "task-start" or "task-status" or "task-cancel";
+            && !string.IsNullOrWhiteSpace(request.DeviceUdid)
+            && request.Action is "shake" or "network-capabilities" or "network-set" or "network-get" or "network-reset"
+                or "network-follow" or "network-heartbeat"
+                or "route-start" or "route-status" or "route-stop"
+                or "app-capabilities" or "permission-grant" or "permission-deny" or "permission-reset"
+                or "app-background" or "app-resume" or "app-restart" or "push" or "open-link"
+                or "display-rotation" or "display-appearance" or "display-text-size"
+                or "task-start" or "task-status" or "task-cancel";
+
         if (!validRequest)
         {
             await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
                 new ErrorResponse("A device identifier and supported testing action are required."), cancellationToken)
                 .ConfigureAwait(false);
+
             return;
         }
 
         // A lease must remain resettable even after its target shuts down.
         var needsBootedDevice = request!.Action is not ("network-get" or "network-reset" or "route-stop" or "route-status"
             or "task-status" or "task-cancel");
+
         if (needsBootedDevice && !IsBootedDevice(request.DeviceUdid))
         {
             await WriteJsonAsync(stream, HttpStatusCode.NotFound,
                 new ErrorResponse("The selected simulator or emulator is not booted."), cancellationToken)
                 .ConfigureAwait(false);
+
             return;
         }
 
         var device = runtimeSource.Current.Devices.FirstOrDefault(device =>
             string.Equals(device.Identifier, request.DeviceUdid, StringComparison.OrdinalIgnoreCase));
-        request = request with { Platform = device?.Platform };
+        request = request with
+        {
+            Platform = device?.Platform
+        };
+
         var result = await deviceTestingSource.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
         await WriteJsonAsync(stream,
             result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict,

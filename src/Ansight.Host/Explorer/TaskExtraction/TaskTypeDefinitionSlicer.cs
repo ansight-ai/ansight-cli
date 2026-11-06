@@ -20,16 +20,23 @@ internal static class TaskTypeDefinitionSlicer
     internal static string Slice(string compactDeclarations, string description, string seedSource)
     {
         ArgumentNullException.ThrowIfNull(compactDeclarations);
+
         var evidence = description + "\n" + seedSource;
         var requestedHostFeatures = new HashSet<string>(coreHostFeatures, StringComparer.OrdinalIgnoreCase);
         var requestedAppFeatures = new HashSet<string>(coreAppFeatures, StringComparer.OrdinalIgnoreCase);
+
         foreach (Match match in memberUsePattern.Matches(evidence))
         {
             var feature = match.Groups["feature"].Value;
+
             if (match.Groups["owner"].Value.Equals("ansight", StringComparison.OrdinalIgnoreCase))
+            {
                 requestedHostFeatures.Add(feature);
+            }
             else
+            {
                 requestedAppFeatures.Add(feature);
+            }
         }
 
         AddWhenMentioned(evidence, @"\b(copy|copied|paste|clipboard|share)\b", requestedAppFeatures, "clipboard");
@@ -57,30 +64,43 @@ internal static class TaskTypeDefinitionSlicer
         var declarationsByName = declarations.ToLookup(declaration => declaration.Name, StringComparer.Ordinal);
         var included = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Queue<string>(["TaskDefinition", "TaskFunction", "TaskInvocation"]);
+
         if (requestedHostFeatures.Contains("permissions"))
         {
             pending.Enqueue("Permission");
             pending.Enqueue("IosPermission");
             pending.Enqueue("AndroidPermission");
-        }
-        while (pending.TryDequeue(out var name))
+        } while (pending.TryDequeue(out var name))
         {
-            if (!included.Add(name)) continue;
+            if (!included.Add(name))
+            {
+                continue;
+            }
+
             foreach (var declaration in declarationsByName[name])
             {
                 foreach (Match word in wordPattern.Matches(declaration.Source))
                 {
                     var dependency = word.Value;
-                    if (!included.Contains(dependency) && declarationsByName.Contains(dependency)) pending.Enqueue(dependency);
+
+                    if (!included.Contains(dependency) && declarationsByName.Contains(dependency))
+                    {
+                        pending.Enqueue(dependency);
+                    }
                 }
             }
         }
 
         var result = new StringBuilder(withoutUnusedMembers.Length);
+
         foreach (var declaration in declarations)
         {
-            if (included.Contains(declaration.Name)) result.Append(declaration.Source);
+            if (included.Contains(declaration.Name))
+            {
+                result.Append(declaration.Source);
+            }
         }
+
         return result.ToString();
     }
 
@@ -91,18 +111,26 @@ internal static class TaskTypeDefinitionSlicer
     {
         var contextPattern = new Regex($@"(?ms)^export interface {Regex.Escape(contextName)}\s*\{{.*?^\}}");
         var contextMatch = contextPattern.Match(declarations);
-        if (!contextMatch.Success) return declarations;
+
+        if (!contextMatch.Success)
+        {
+            return declarations;
+        }
+
         var filteredContext = Regex.Replace(
             contextMatch.Value,
             @"(?m)^  readonly (?<feature>[A-Za-z][A-Za-z0-9_]*): Task[A-Za-z0-9_]+Context;\n?",
             match => requestedFeatures.Contains(match.Groups["feature"].Value) ? match.Value : string.Empty);
+
         return declarations[..contextMatch.Index] + filteredContext + declarations[(contextMatch.Index + contextMatch.Length)..];
     }
 
     private static void AddWhenMentioned(string evidence, string pattern, ISet<string> features, string feature)
     {
         if (Regex.IsMatch(evidence, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
             features.Add(feature);
+        }
     }
 
     private sealed record Declaration(string Name, string Source);

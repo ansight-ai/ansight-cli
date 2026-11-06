@@ -2,7 +2,7 @@ namespace Ansight.Infrastructure.IOC;
 
 public static class Resolver
 {
-    private static readonly object Gate = new();
+    private static readonly object gate = new();
     private static IExportResolver? resolver;
 
     public static void Initialise(IExportResolver resolver)
@@ -12,7 +12,7 @@ public static class Resolver
             throw new ArgumentNullException(nameof(resolver));
         }
 
-        lock (Gate)
+        lock (gate)
         {
             if (Resolver.resolver is not null)
             {
@@ -27,7 +27,7 @@ public static class Resolver
 
     public static T Resolve<T>() where T : class
     {
-        lock (Gate)
+        lock (gate)
         {
             if (resolver is null)
             {
@@ -42,7 +42,7 @@ public static class Resolver
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        lock (Gate)
+        lock (gate)
         {
             if (resolver is null)
             {
@@ -55,7 +55,7 @@ public static class Resolver
 
     public static void ComposeParts(object instance)
     {
-        lock (Gate)
+        lock (gate)
         {
             if (resolver is null)
             {
@@ -68,7 +68,7 @@ public static class Resolver
 
     public static void ResetForTests()
     {
-        lock (Gate)
+        lock (gate)
         {
             resolver = null;
         }

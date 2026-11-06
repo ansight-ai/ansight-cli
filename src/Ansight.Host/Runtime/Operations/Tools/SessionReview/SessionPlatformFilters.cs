@@ -11,6 +11,7 @@ internal static class SessionPlatformFilters
         AddFilter(filters, arguments?["platformKey"]?.GetValue<string>());
         AddFilters(filters, arguments?["platforms"] as JsonArray);
         AddFilters(filters, arguments?["platformKeys"] as JsonArray);
+
         return filters;
     }
 
@@ -19,6 +20,7 @@ internal static class SessionPlatformFilters
         foreach (var candidate in EnumerateSessionPlatformCandidates(snapshot))
         {
             var platformKey = ResolvePlatformKey(candidate);
+
             if (!string.Equals(platformKey, "other", StringComparison.OrdinalIgnoreCase))
             {
                 return platformKey;
@@ -59,6 +61,7 @@ internal static class SessionPlatformFilters
         {
             filters.Add("ios");
             filters.Add("macos");
+
             return;
         }
 
@@ -88,6 +91,7 @@ internal static class SessionPlatformFilters
         }
 
         var normalized = value.Trim();
+
         if (string.Equals(normalized, "android", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("android", StringComparison.OrdinalIgnoreCase))
         {

@@ -56,6 +56,7 @@ internal static class NetworkInspectionArguments
     public static DateTimeOffset? ReadTimestamp(JsonObject? arguments, string name)
     {
         var text = ReadString(arguments, name);
+
         if (text is null)
         {
             return null;
@@ -83,6 +84,7 @@ internal static class NetworkInspectionArguments
         }
 
         var normalized = new SortedSet<string>(StringComparer.Ordinal);
+
         foreach (var node in values)
         {
             if (statuses && node is JsonValue number && number.TryGetValue<int>(out var status)
@@ -91,9 +93,10 @@ internal static class NetworkInspectionArguments
                 normalized.Add(status.ToString(CultureInfo.InvariantCulture));
             }
             else if (node is JsonValue value && value.TryGetValue<string>(out var text)
-                     && !string.IsNullOrWhiteSpace(text))
+                && !string.IsNullOrWhiteSpace(text))
             {
                 var trimmed = text.Trim();
+
                 if (statuses && trimmed is not ("1xx" or "2xx" or "3xx" or "4xx" or "5xx"))
                 {
                     throw new ArgumentException("statuses must contain integer codes from 100 to 599 or classes 1xx through 5xx.");

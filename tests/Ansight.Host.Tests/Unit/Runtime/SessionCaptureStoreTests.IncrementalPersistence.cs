@@ -98,6 +98,7 @@ public sealed partial class SessionCaptureStoreTests
         Assert.False(File.Exists(Path.Combine(sessionDirectoryPath, "logs.json")));
         Assert.True(File.Exists(logsAppendFilePath));
         Assert.False(Directory.Exists(logSegmentsDirectoryPath));
+
         var telemetryAppendFilePath = Path.Combine(telemetryDirectoryPath, "segments.jsonl");
         var touchesAppendFilePath = Path.Combine(sessionDirectoryPath, "touches.jsonl");
         Assert.True(File.Exists(telemetryAppendFilePath));
@@ -195,6 +196,7 @@ public sealed partial class SessionCaptureStoreTests
         var logsAppendFilePath = Path.Combine(sessionDirectoryPath, "logs.jsonl");
         Assert.False(File.Exists(Path.Combine(sessionDirectoryPath, "logs.json")));
         Assert.True(File.Exists(logsAppendFilePath));
+
         var appendLength = new FileInfo(logsAppendFilePath).Length;
 
         var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
@@ -254,23 +256,24 @@ public sealed partial class SessionCaptureStoreTests
         AppSessionSnapshot CreateSnapshot(
             string status,
             IReadOnlyList<SessionImageFrame> images) => new()
-        {
-            SessionId = "session-live-images",
-            AppId = "com.example.testapp",
-            ClientName = "Integration Client",
-            RemoteAddress = "127.0.0.1",
-            CreatedUtc = createdUtc,
-            ConfigId = "config-001",
-            Status = status,
-            LastUpdatedUtc = createdUtc.AddSeconds(2),
-            IsHistorical = false,
-            Images = images,
-            TotalImageCount = images.Count,
-            MetricChannels = Array.Empty<SessionMetricChannel>(),
-            Metrics = Array.Empty<SessionMetricSample>()
-        };
+            {
+                SessionId = "session-live-images",
+                AppId = "com.example.testapp",
+                ClientName = "Integration Client",
+                RemoteAddress = "127.0.0.1",
+                CreatedUtc = createdUtc,
+                ConfigId = "config-001",
+                Status = status,
+                LastUpdatedUtc = createdUtc.AddSeconds(2),
+                IsHistorical = false,
+                Images = images,
+                TotalImageCount = images.Count,
+                MetricChannels = Array.Empty<SessionMetricChannel>(),
+                Metrics = Array.Empty<SessionMetricSample>()
+            };
 
         store.Save(CreateSnapshot("Connected", [firstFrame!]));
+
         var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
         restartedStore.Save(CreateSnapshot("Connected", [firstFrame!, secondFrame!]));
 
@@ -322,31 +325,31 @@ public sealed partial class SessionCaptureStoreTests
             IReadOnlyList<SessionMetricSample> metrics,
             int totalMetricSampleCount,
             string status = "Connected") => new()
-        {
-            SessionId = "session-stale-live-payloads",
-            AppId = "com.example.testapp",
-            ClientName = "Integration Client",
-            RemoteAddress = "127.0.0.1",
-            CreatedUtc = createdUtc,
-            ConfigId = "config-001",
-            Status = status,
-            LastUpdatedUtc = createdUtc.AddSeconds(2),
-            IsHistorical = false,
-            Touches = touches,
-            MetricChannels =
+            {
+                SessionId = "session-stale-live-payloads",
+                AppId = "com.example.testapp",
+                ClientName = "Integration Client",
+                RemoteAddress = "127.0.0.1",
+                CreatedUtc = createdUtc,
+                ConfigId = "config-001",
+                Status = status,
+                LastUpdatedUtc = createdUtc.AddSeconds(2),
+                IsHistorical = false,
+                Touches = touches,
+                MetricChannels =
             [
                 new SessionMetricChannel
                 {
                     ChannelId = 1,
                     Name = "FPS",
                     ColorHex = "#00FF00"
-                }
-            ],
-            Metrics = metrics,
-            TotalMetricSampleCount = totalMetricSampleCount
-        };
+                }            ],
+                Metrics = metrics,
+                TotalMetricSampleCount = totalMetricSampleCount
+            };
 
         store.Save(CreateSnapshot([firstTouch, secondTouch], [firstMetric, secondMetric], 2));
+
         var sessionDirectoryPath = Path.Combine(
             environment.ApplicationPaths.ApplicationDataPath,
             "session-captures",
@@ -401,20 +404,20 @@ public sealed partial class SessionCaptureStoreTests
         AppSessionSnapshot CreateSnapshot(
             IReadOnlyList<SessionMetricSample> retainedMetrics,
             int totalMetricSampleCount) => new()
-        {
-            SessionId = "session-live-telemetry-tail",
-            AppId = "com.example.testapp",
-            ClientName = "Integration Client",
-            RemoteAddress = "127.0.0.1",
-            CreatedUtc = createdUtc,
-            ConfigId = "config-001",
-            Status = "Connected",
-            LastUpdatedUtc = createdUtc.AddSeconds(totalMetricSampleCount),
-            IsHistorical = false,
-            MetricChannels = Array.Empty<SessionMetricChannel>(),
-            Metrics = retainedMetrics,
-            TotalMetricSampleCount = totalMetricSampleCount
-        };
+            {
+                SessionId = "session-live-telemetry-tail",
+                AppId = "com.example.testapp",
+                ClientName = "Integration Client",
+                RemoteAddress = "127.0.0.1",
+                CreatedUtc = createdUtc,
+                ConfigId = "config-001",
+                Status = "Connected",
+                LastUpdatedUtc = createdUtc.AddSeconds(totalMetricSampleCount),
+                IsHistorical = false,
+                MetricChannels = Array.Empty<SessionMetricChannel>(),
+                Metrics = retainedMetrics,
+                TotalMetricSampleCount = totalMetricSampleCount
+            };
 
         store.Save(CreateSnapshot(metrics[..3], 3));
         store.Save(CreateSnapshot(metrics[2..], 4));
@@ -463,8 +466,7 @@ public sealed partial class SessionCaptureStoreTests
                     {
                         ["nodeCount"] = nodeCount
                     }
-                }
-            ],
+                }            ],
             MetricChannels = Array.Empty<SessionMetricChannel>(),
             Metrics = Array.Empty<SessionMetricSample>()
         };
@@ -473,6 +475,7 @@ public sealed partial class SessionCaptureStoreTests
         store.Save(CreateSnapshot(2));
 
         Assert.True(store.TryLoad("session-live-visual-tree-replacement", out var loadedSnapshot));
+
         var visualTree = Assert.Single(loadedSnapshot!.VisualTreeSnapshots);
         Assert.Equal(2, visualTree.NodeCount);
         Assert.Equal(2, visualTree.Payload["nodeCount"]?.GetValue<int>());
@@ -514,14 +517,17 @@ public sealed partial class SessionCaptureStoreTests
 
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         store.Save(CreateSnapshot([firstSnapshot]));
+
         var firstFilePath = Assert.Single(Directory.GetFiles(visualTreesDirectoryPath, "*.json"));
         File.SetLastWriteTimeUtc(firstFilePath, originalWriteTimeUtc);
 
         store.Save(CreateSnapshot([firstSnapshot, secondSnapshot]));
 
         Assert.Equal(originalWriteTimeUtc, File.GetLastWriteTimeUtc(firstFilePath));
+
         var firstTwoFilePaths = Directory.GetFiles(visualTreesDirectoryPath, "*.json");
         Assert.Equal(2, firstTwoFilePaths.Length);
+
         foreach (var filePath in firstTwoFilePaths)
         {
             File.SetLastWriteTimeUtc(filePath, restartedWriteTimeUtc);
@@ -529,7 +535,7 @@ public sealed partial class SessionCaptureStoreTests
 
         var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
         restartedStore.Save(CreateSnapshot(
-        [
+            [
             CreateVisualTreeSnapshot("visual-tree-001", createdUtc.AddSeconds(1), 1),
             CreateVisualTreeSnapshot("visual-tree-002", createdUtc.AddSeconds(2), 2),
             thirdSnapshot
@@ -607,6 +613,7 @@ public sealed partial class SessionCaptureStoreTests
         };
 
         store.Save(CreateSnapshot([firstSnapshot, retainedSnapshot]));
+
         var visualTreesDirectoryPath = Path.Combine(
             environment.ApplicationPaths.ApplicationDataPath,
             "session-captures",
@@ -652,6 +659,7 @@ public sealed partial class SessionCaptureStoreTests
 
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         store.Save(CreateSnapshot([firstArtifact]));
+
         var artifactsDirectoryPath = Path.Combine(
             environment.ApplicationPaths.ApplicationDataPath,
             "session-captures",
@@ -664,7 +672,7 @@ public sealed partial class SessionCaptureStoreTests
 
         var restartedStore = new SessionCaptureStore(environment.ApplicationPaths);
         restartedStore.Save(CreateSnapshot(
-        [
+            [
             CreateArtifactSnapshot("artifact-001", createdUtc.AddSeconds(1)),
             secondArtifact
         ]));
@@ -705,8 +713,7 @@ public sealed partial class SessionCaptureStoreTests
                     ChannelId = 1,
                     Value = value,
                     CapturedAtUtc = createdUtc.AddSeconds(1)
-                }
-            ]
+                }            ]
         };
 
         store.Save(CreateSnapshot(60));

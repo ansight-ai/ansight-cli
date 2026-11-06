@@ -8,6 +8,7 @@ public sealed class NativePermissionTests
 {
     private const string App = "com.example.app";
     private const string RecordAudio = "android.permission.RECORD_AUDIO";
+
     private static DeviceDescriptor Device(string platform = "android", string kind = "virtual")
         => new("test-device", "Test device", platform, "test-runtime", "Booted", true, true, kind);
 
@@ -19,11 +20,12 @@ public sealed class NativePermissionTests
     {
         var runner = new FakeCommands();
         runner.Shell = command => command switch
-        {
-            "am get-current-user" => "10",
-            "getprop ro.build.version.sdk" => api.ToString(),
-            _ => Dump(targetSdk, [expected], false)
-        };
+{
+    "am get-current-user" => "10",
+    "getprop ro.build.version.sdk" => api.ToString(),
+    _ => Dump(targetSdk, [expected], false)
+};
+
         var result = await Service(runner).ExecuteAsync("query", "photos", null, "test-device", App, default);
         Assert.Equal(expected, Assert.Single(result.NativePermissions).Permission);
         Assert.Equal("denied", result.Status);
@@ -37,11 +39,26 @@ public sealed class NativePermissionTests
         var runner = new FakeCommands();
         runner.Shell = command =>
         {
-            if (command == "am get-current-user") return "10";
-            if (command == "getprop ro.build.version.sdk") return "36";
-            if (command.StartsWith("pm grant")) { granted = true; return ""; }
+            if (command == "am get-current-user")
+            {
+                return "10";
+            }
+
+            if (command == "getprop ro.build.version.sdk")
+            {
+                return "36";
+            }
+
+            if (command.StartsWith("pm grant"))
+            {
+                granted = true;
+
+                return "";
+            }
+
             return Dump(36, [RecordAudio], granted);
         };
+
         var result = await Service(runner).ExecuteAsync("grant", "microphone", null, "test-device", App, default);
         Assert.True(result.IsSuccess);
         Assert.Equal("granted", result.Status);
@@ -67,16 +84,31 @@ public sealed class NativePermissionTests
         var runner = new FakeCommands();
         runner.Shell = command =>
         {
-            if (command == "am get-current-user") return "10";
-            if (command == "getprop ro.build.version.sdk") return "36";
+            if (command == "am get-current-user")
+            {
+                return "10";
+            }
+
+            if (command == "getprop ro.build.version.sdk")
+            {
+                return "36";
+            }
+
             if (command.StartsWith("pm grant"))
             {
-                if (command.Contains(write)) throw new IOException("Permission is fixed by policy.");
+                if (command.Contains(write))
+                {
+                    throw new IOException("Permission is fixed by policy.");
+                }
+
                 granted = true;
+
                 return "";
             }
+
             return Dump(36, [read, write], false).Replace(read + ": granted=false", read + ": granted=" + (granted ? "true" : "false"));
         };
+
         var result = await Service(runner).ExecuteAsync("grant", "calendar", null, "test-device", App, default);
         Assert.False(result.IsSuccess);
         Assert.Equal("limited", result.Status);
@@ -93,13 +125,32 @@ public sealed class NativePermissionTests
         var runner = new FakeCommands();
         runner.Shell = command =>
         {
-            if (command == "am get-current-user") return "10";
-            if (command == "getprop ro.build.version.sdk") return "36";
-            if (command.StartsWith("pm revoke")) { if (command.Contains(selected)) revoked = true; return ""; }
+            if (command == "am get-current-user")
+            {
+                return "10";
+            }
+
+            if (command == "getprop ro.build.version.sdk")
+            {
+                return "36";
+            }
+
+            if (command.StartsWith("pm revoke"))
+            {
+                if (command.Contains(selected))
+                {
+                    revoked = true;
+                }
+
+                return "";
+            }
+
             return Dump(36, [images, selected], false).Replace(selected + ": granted=false", selected + ": granted=" + (revoked ? "false" : "true"));
         };
+
         var service = Service(runner);
         Assert.Equal("limited", (await service.ExecuteAsync("query", "photos", null, "test-device", App, default)).Status);
+
         var result = await service.ExecuteAsync("revoke", "photos", null, "test-device", App, default);
         Assert.Equal("denied", result.Status);
         Assert.True(revoked);
@@ -110,6 +161,7 @@ public sealed class NativePermissionTests
     {
         var runner = new FakeCommands();
         await Assert.ThrowsAsync<ArgumentException>(() => Service(runner).ExecuteAsync("grant", RecordAudio, "ios", "test-device", App, default));
+
         var result = await Service(runner, Device("ios", "physical")).ExecuteAsync("query", "microphone", null, "test-device", App, default);
         Assert.Equal("unsupported", result.Status);
         Assert.Empty(runner.Calls);
@@ -122,13 +174,18 @@ public sealed class NativePermissionTests
         var root = environment.ApplicationPaths.ApplicationDataPath;
         Directory.CreateDirectory(Path.Combine(root, "Library", "TCC"));
         File.WriteAllText(Path.Combine(root, "Library", "TCC", "TCC.db"), "fake native database");
+
         var nativeState = 2;
         var runner = new FakeCommands();
         runner.Other = (exe, args) =>
         {
-            if (exe == "/usr/bin/sqlite3") return args[^1].StartsWith("PRAGMA")
-                ? """[{"name":"client"},{"name":"service"},{"name":"client_type"},{"name":"auth_value"}]"""
-                : nativeState < 0 ? "[]" : $"[{{\"value\":{nativeState}}}]";
+            if (exe == "/usr/bin/sqlite3")
+            {
+                return args[^1].StartsWith("PRAGMA")
+                    ? """[{"name":"client"},{"name":"service"},{"name":"client_type"},{"name":"auth_value"}]"""
+                    : nativeState < 0 ? "[]" : $"[{{\"value\":{nativeState}}}]";
+            }
+
             return args[0] switch
             {
                 "get_app_container" => root,
@@ -138,12 +195,20 @@ public sealed class NativePermissionTests
                 _ => throw new InvalidOperationException("Unexpected native command.")
             };
         };
-        string SetState(string action) { nativeState = action == "grant" ? 2 : action == "reset" ? -1 : 0; return ""; }
+
+        string SetState(string action)
+        {
+            nativeState = action == "grant" ? 2 : action == "reset" ? -1 : 0;
+
+            return "";
+        }
+
         var service = Service(runner, Device("ios"));
         Assert.Equal("granted", (await service.ExecuteAsync("query", "microphone", null, "test-device", App, default)).Status);
         Assert.Equal("denied", (await service.ExecuteAsync("revoke", "microphone", "ios", "test-device", App, default)).Status);
         Assert.Equal("granted", (await service.ExecuteAsync("grant", "microphone", "ios", "test-device", App, default)).Status);
         Assert.Equal("notDetermined", (await service.ExecuteAsync("reset", "microphone", "ios", "test-device", App, default)).Status);
+
         var unsupported = await service.ExecuteAsync("grant", "camera", null, "test-device", App, default);
         Assert.False(unsupported.Supported);
         Assert.DoesNotContain(runner.Calls, call => call.Contains("privacy test-device grant camera"));
@@ -194,6 +259,7 @@ public sealed class NativePermissionTests
         Assert.Equal("denied", NativePermissionService.ReadAndroidState(dump, 10, RecordAudio));
         Assert.Equal("granted", NativePermissionService.ReadAndroidState(dump, 0, RecordAudio));
         Assert.Equal("unknown", NativePermissionService.ReadAndroidState(dump, 12, RecordAudio));
+
         var missingForCurrentUser = dump.Replace("        " + RecordAudio + ": granted=false, flags=[]", "");
         Assert.Equal("unknown", NativePermissionService.ReadAndroidState(missingForCurrentUser, 10, RecordAudio));
         Assert.Equal("unknown", NativePermissionService.ReadAndroidState(missingForCurrentUser
@@ -229,11 +295,14 @@ public sealed class NativePermissionTests
         public List<string> Calls { get; } = [];
         public Func<string, string> Shell { get; set; } = _ => throw new InvalidOperationException("Unexpected shell command.");
         public Func<string, IReadOnlyList<string>, string> Other { get; set; } = (_, _) => throw new InvalidOperationException("Unexpected command.");
+
         public Task<DeviceCommandResult> RunAsync(string executable, IReadOnlyList<string> arguments, CancellationToken token, int maximumBytes = 1_048_576)
         {
             token.ThrowIfCancellationRequested();
             Calls.Add(executable + " " + string.Join(' ', arguments));
+
             var output = arguments.Count > 2 && arguments[2] == "shell" ? Shell(arguments[3]) : Other(executable, arguments);
+
             return Task.FromResult(arguments[0] == "help"
                 ? new DeviceCommandResult(0, [], output)
                 : new DeviceCommandResult(0, Encoding.UTF8.GetBytes(output), ""));

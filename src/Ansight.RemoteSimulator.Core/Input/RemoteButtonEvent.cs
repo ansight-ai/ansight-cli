@@ -19,6 +19,7 @@ public sealed record RemoteButtonEvent(
         }
 
         var normalizedButton = Button.Trim().ToLowerInvariant();
+
         if (normalizedButton is not ("home" or "back" or "lock" or "volume-up" or "volume-down"))
         {
             throw new ArgumentException("Button must be home, back, lock, volume-up, or volume-down.", nameof(Button));

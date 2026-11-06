@@ -8,15 +8,18 @@ internal static class ArtifactDesktopActions
     public static async Task RevealAsync(string filePath, CancellationToken cancellationToken)
     {
         filePath = Path.GetFullPath(filePath);
+
         if (OperatingSystem.IsMacOS())
         {
             await RunAsync("/usr/bin/open", ["-R", filePath], cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
         if (OperatingSystem.IsWindows())
         {
             await ArtifactPlatformApplications.RevealWindowsAsync(filePath, cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
@@ -25,11 +28,11 @@ internal static class ArtifactDesktopActions
             try
             {
                 await RunAsync(
-                        "dbus-send",
-                        ["--session", "--print-reply", "--dest=org.freedesktop.FileManager1",
+                    "dbus-send",
+                    ["--session", "--print-reply", "--dest=org.freedesktop.FileManager1",
                             "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
                             $"array:string:{new Uri(filePath).AbsoluteUri}", "string:"],
-                        cancellationToken)
+                    cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
@@ -37,6 +40,7 @@ internal static class ArtifactDesktopActions
                 await RunAsync("xdg-open", [Path.GetDirectoryName(filePath)!], cancellationToken)
                     .ConfigureAwait(false);
             }
+
             return;
         }
 
@@ -46,6 +50,7 @@ internal static class ArtifactDesktopActions
     public static Task<string> ExportToDesktopAsync(string filePath, CancellationToken cancellationToken)
     {
         var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
         if (string.IsNullOrWhiteSpace(desktopPath))
         {
             throw new InvalidOperationException("The operating system has not configured a Desktop folder.");
@@ -60,9 +65,11 @@ internal static class ArtifactDesktopActions
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         await using var source = new FileStream(
             filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, useAsync: true);
         Directory.CreateDirectory(directoryPath);
+
         var name = Path.GetFileName(filePath);
         var extension = Path.GetExtension(name);
         var stem = Path.GetFileNameWithoutExtension(name);
@@ -70,8 +77,10 @@ internal static class ArtifactDesktopActions
         for (var suffix = 0; ; suffix++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var destinationPath = Path.Combine(directoryPath, suffix == 0 ? name : $"{stem} ({suffix}){extension}");
             FileStream destination;
+
             try
             {
                 destination = new FileStream(
@@ -88,6 +97,7 @@ internal static class ArtifactDesktopActions
                 {
                     await source.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
                 }
+
                 return destinationPath;
             }
             catch
@@ -110,6 +120,7 @@ internal static class ArtifactDesktopActions
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -119,12 +130,15 @@ internal static class ArtifactDesktopActions
             ?? throw new InvalidOperationException("The operating system could not open its file manager.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
+
         try
         {
             var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var error = process.StandardError.ReadToEndAsync(timeout.Token);
             await Task.WhenAll(process.WaitForExitAsync(timeout.Token), output, error).ConfigureAwait(false);
+
             var errorText = await error.ConfigureAwait(false);
+
             if (process.ExitCode != 0)
             {
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorText)
@@ -135,10 +149,12 @@ internal static class ArtifactDesktopActions
         catch (OperationCanceledException)
         {
             ArtifactPlatformApplications.StopLauncher(process);
+
             if (!cancellationToken.IsCancellationRequested)
             {
                 throw new InvalidOperationException("The operating system did not respond when opening the folder.");
             }
+
             throw;
         }
     }

@@ -6,7 +6,6 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed partial class OpenAiResponsesClientTests
 {
-
     [Fact]
     public async Task CreateResponseAsync_ParsesResponseIdentityAndDetailedTokenUsage()
     {
@@ -69,8 +68,10 @@ public sealed partial class OpenAiResponsesClientTests
         Assert.Equal(800, response.Tokens.CachedInputTokens);
         Assert.Equal(200, response.Tokens.CacheWriteInputTokens);
         Assert.Equal(64, response.Tokens.ReasoningOutputTokens);
+
         var call = Assert.Single(response.FunctionCalls);
         Assert.Equal("ansight_tap_ui", call.Name);
+
         var requestPayload = Assert.IsType<JsonObject>(JsonNode.Parse(responseHandler.RequestBody));
         Assert.Equal("low", requestPayload["reasoning"]?["effort"]?.GetValue<string>());
         Assert.Equal("ansight-simulator-agent-v3", requestPayload["prompt_cache_key"]?.GetValue<string>());
@@ -98,9 +99,11 @@ public sealed partial class OpenAiResponsesClientTests
             request, request.Input, includeInstructions: true);
 
         Assert.False(initialPayload.ContainsKey("instructions"));
+
         var initialInput = Assert.IsType<JsonArray>(initialPayload["input"]);
         Assert.Equal(request.Input.Count + 1, initialInput.Count);
         Assert.Equal("developer", initialInput[0]?["role"]?.GetValue<string>());
+
         var prefixContent = Assert.Single(Assert.IsType<JsonArray>(initialInput[0]?["content"]));
         Assert.Equal("input_text", prefixContent?["type"]?.GetValue<string>());
         Assert.Equal(request.Instructions, prefixContent?["text"]?.GetValue<string>());
@@ -118,7 +121,10 @@ public sealed partial class OpenAiResponsesClientTests
     [Fact]
     public void BuildPayload_EnablesCompactionForHttpWhenRequested()
     {
-        var request = CreateRequest() with { CompactThresholdTokens = 160_000 };
+        var request = CreateRequest() with
+        {
+            CompactThresholdTokens = 160_000
+        };
 
         var payload = OpenAiResponsesClient.BuildPayload(request, request.Input);
 
@@ -227,7 +233,10 @@ public sealed partial class OpenAiResponsesClientTests
     [InlineData(-1)]
     public void ValidateRequest_RejectsNonpositiveCompactionThreshold(int compactThresholdTokens)
     {
-        var request = CreateRequest() with { CompactThresholdTokens = compactThresholdTokens };
+        var request = CreateRequest() with
+        {
+            CompactThresholdTokens = compactThresholdTokens
+        };
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             OpenAiResponsesClient.ValidateRequest(request));
@@ -290,20 +299,25 @@ public sealed partial class OpenAiResponsesClientTests
             "ansight-simulator-agent-test",
             1_200);
 
-    private sealed class StaticResponseHandler(
-        string responseJson,
-        HttpStatusCode statusCode = HttpStatusCode.OK) : HttpMessageHandler
+    private sealed class StaticResponseHandler : HttpMessageHandler
     {
+        private readonly string responseJson;
+        private readonly HttpStatusCode statusCode;
+
+        public StaticResponseHandler(
+            string responseJson,
+            HttpStatusCode statusCode = HttpStatusCode.OK)
+        {
+            this.responseJson = responseJson;
+            this.statusCode = statusCode;
+        }
+
         public string RequestBody { get; private set; } = string.Empty;
 
         public Uri? RequestUri { get; private set; }
-
         public string? AuthorizationScheme { get; private set; }
-
         public string? AuthorizationParameter { get; private set; }
-
         public string? ApiKeyHeader { get; private set; }
-
         public string? TestRunIdHeader { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(
@@ -322,11 +336,13 @@ public sealed partial class OpenAiResponsesClientTests
                 ? testRunIdValues.Single()
                 : null;
             RequestBody = request.Content?.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult()
-                          ?? string.Empty;
+                ?? string.Empty;
+
             var response = new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
             };
+
             return Task.FromResult(response);
         }
     }

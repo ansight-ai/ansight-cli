@@ -18,6 +18,7 @@ public sealed class ArtifactPublicationTests
         using var socket = new ScriptedWebSocket();
         var session = manager.RunConnectedSessionAsync(sessionId, socket, new PairingSessionAuthorization(2, "grant-1", "read"));
         var id = Guid.NewGuid();
+
         try
         {
             socket.SendControl("begin", ArtifactPublishTransferManager.BeginAction, Descriptor(id, 4));
@@ -25,19 +26,26 @@ public sealed class ArtifactPublicationTests
             socket.SendBinary(Frame(id, 1, 0, 0, [0x67, 0x6c, 0x54, 0x46]));
             socket.SendBinary(Frame(id, 2, 1, 4, []));
             socket.SendControl("commit", ArtifactPublishTransferManager.CommitAction, Identity(id));
+
             var receipt = await socket.ReadSentAsync();
             Assert.True(receipt["success"]!.GetValue<bool>(), receipt.ToJsonString());
             Assert.True(new SessionCaptureStore(paths).TryLoad(sessionId, out var retained));
+
             var artifact = Assert.Single(retained!.ArtifactSnapshots);
             Assert.Equal("model", artifact.Kind);
             Assert.Equal("Loaded model", artifact.Name);
             Assert.Equal("model/gltf-binary", Assert.Single(artifact.Entries).MimeType);
             Assert.Equal(artifact.SnapshotId, receipt["payload"]!["snapshotId"]!.GetValue<string>());
+
             var files = Directory.GetFiles(directory.Path, "model.glb", SearchOption.AllDirectories);
             Assert.NotEmpty(files);
             Assert.All(files, file => Assert.Equal(new byte[] { 0x67, 0x6c, 0x54, 0x46 }, File.ReadAllBytes(file)));
         }
-        finally { socket.End(); await session.WaitAsync(TimeSpan.FromSeconds(5)); }
+        finally
+        {
+            socket.End();
+            await session.WaitAsync(TimeSpan.FromSeconds(5));
+        }
     }
 
     [Theory]
@@ -72,25 +80,37 @@ public sealed class ArtifactPublicationTests
     }
 
     private static JsonObject Identity(Guid id) => new() { ["transferId"] = id.ToString("N") };
+
     private static JsonObject Descriptor(Guid id, long size) => new()
     {
-        ["schema"] = ArtifactPublishTransferManager.Schema, ["transferId"] = id.ToString("N"),
+        ["schema"] = ArtifactPublishTransferManager.Schema,
+        ["transferId"] = id.ToString("N"),
         ["wireProtocol"] = "ansight.file-transfer.v1",
         ["artifact"] = new JsonObject
         {
-            ["providerId"] = "scene", ["artifactId"] = "model", ["name"] = "Loaded model",
-            ["kind"] = "model", ["mimeType"] = "model/gltf-binary", ["fileName"] = "model.glb", ["sizeBytes"] = size
+            ["providerId"] = "scene",
+            ["artifactId"] = "model",
+            ["name"] = "Loaded model",
+            ["kind"] = "model",
+            ["mimeType"] = "model/gltf-binary",
+            ["fileName"] = "model.glb",
+            ["sizeBytes"] = size
         }
     };
+
     private static byte[] Frame(Guid id, byte type, int sequence, long offset, byte[] content)
     {
         var bytes = new byte[56 + content.Length];
-        "ASFT"u8.CopyTo(bytes); bytes[4] = 1; bytes[5] = type;
+        "ASFT"u8.CopyTo(bytes);
+        bytes[4] = 1;
+        bytes[5] = type;
         Encoding.ASCII.GetBytes(id.ToString("N")).CopyTo(bytes, 8);
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(40), sequence);
         BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(44), offset);
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(52), content.Length);
-        content.CopyTo(bytes, 56); return bytes;
+        content.CopyTo(bytes, 56);
+
+        return bytes;
     }
 
     private sealed class ScriptedWebSocket : WebSocket
@@ -114,9 +134,13 @@ public sealed class ArtifactPublicationTests
             });
 
         public void Receive(JsonObject message) => incoming.Writer.TryWrite(new Incoming(Encoding.UTF8.GetBytes(message.ToJsonString()), WebSocketMessageType.Text));
+
         private sealed record Incoming(byte[] Bytes, WebSocketMessageType Type);
+
         public void SendBinary(byte[] bytes) => incoming.Writer.TryWrite(new Incoming(bytes, WebSocketMessageType.Binary));
+
         public void End() => incoming.Writer.TryWrite(null);
+
         public Task<JsonObject> ReadSentAsync()
             => outgoing.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -124,6 +148,7 @@ public sealed class ArtifactPublicationTests
             bool endOfMessage, CancellationToken cancellationToken)
         {
             outgoing.Writer.TryWrite(JsonNode.Parse(buffer.AsSpan())!.AsObject());
+
             return Task.CompletedTask;
         }
 
@@ -131,13 +156,17 @@ public sealed class ArtifactPublicationTests
             CancellationToken cancellationToken)
         {
             var message = await incoming.Reader.ReadAsync(cancellationToken);
+
             if (message is null)
             {
                 state = WebSocketState.CloseReceived;
+
                 return new WebSocketReceiveResult(0, WebSocketMessageType.Close, true);
             }
+
             var bytes = message.Bytes;
             bytes.AsSpan().CopyTo(buffer.AsSpan());
+
             return new WebSocketReceiveResult(bytes.Length, message.Type, true);
         }
 
@@ -145,6 +174,7 @@ public sealed class ArtifactPublicationTests
             CancellationToken cancellationToken)
         {
             state = WebSocketState.Closed;
+
             return Task.CompletedTask;
         }
 
@@ -152,6 +182,7 @@ public sealed class ArtifactPublicationTests
             CancellationToken cancellationToken) => CloseAsync(closeStatus, statusDescription, cancellationToken);
 
         public override void Abort() => End();
+
         public override void Dispose()
         {
             state = WebSocketState.Closed;

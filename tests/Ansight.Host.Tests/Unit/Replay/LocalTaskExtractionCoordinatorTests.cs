@@ -23,6 +23,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
             .ToArray();
 
         Assert.Contains("submit_task_draft", tools);
+
         if (submissionOnly)
         {
             Assert.Single(tools);
@@ -209,13 +210,17 @@ public sealed class LocalTaskExtractionCoordinatorTests
             "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5), description);
 
         LocalTaskExtractionCoordinator.ValidateStartRequest(request);
+
         var title = LocalTaskExtractionCoordinator.ResolveTaskName(request);
 
         Assert.True(description.Length > 500);
         Assert.InRange(title.Length, 1, 60);
         Assert.Equal("In this section, the tester searched Eagle Rock for…", title);
         Assert.Equal(description, request.Description);
-        LocalTaskExtractionCoordinator.ValidateStartRequest(request with { TaskName = title });
+        LocalTaskExtractionCoordinator.ValidateStartRequest(request with
+        {
+            TaskName = title
+        });
     }
 
     [Theory]
@@ -230,6 +235,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
             "session-1", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(5), new string('a', length));
 
         LocalTaskExtractionCoordinator.ValidateStartRequest(request);
+
         var title = LocalTaskExtractionCoordinator.ResolveTaskName(request);
 
         Assert.Equal(length <= 60 ? request.Description : new string('a', 59) + "…", title);
@@ -415,8 +421,8 @@ public sealed class LocalTaskExtractionCoordinatorTests
         Assert.Contains(selectedProperty, selected, StringComparison.Ordinal);
         Assert.Contains("export interface TaskAppContext", selected, StringComparison.Ordinal);
         Assert.Contains("export interface UiSelector", selected, StringComparison.Ordinal);
-        foreach (var other in new[] { "TaskMauiContext", "TaskReactContext", "TaskFlutterContext", "TaskCapacitorContext" }
-                     .Where(name => name != selectedInterface))
+
+        foreach (var other in new[] { "TaskMauiContext", "TaskReactContext", "TaskFlutterContext", "TaskCapacitorContext" }.Where(name => name != selectedInterface))
         {
             Assert.DoesNotContain(other, selected, StringComparison.Ordinal);
         }
@@ -427,6 +433,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
     {
         var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
         var expected = LocalTaskExtractionCoordinator.CompactTypeDefinitions(full);
+
         SessionVisualTreeSnapshot Tree(string kind, string platform = "ios") => new()
         {
             SnapshotId = $"{kind}-{platform}",
@@ -444,6 +451,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
             full, [Tree("flutter", "ios"), Tree("react-component", "android")], null));
         Assert.DoesNotContain("TaskFlutterContext", LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
             full, [Tree("react-component")], null), StringComparison.Ordinal);
+
         var iosNative = LocalTaskExtractionCoordinator.SelectTypeDefinitionsForEvidence(
             full, [Tree("native")], null);
         Assert.DoesNotContain("AndroidPermissionNames", iosNative, StringComparison.Ordinal);
@@ -610,7 +618,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
         var second = LocalTaskExtractionCoordinator.BuildRawVisualTreeEvidence(
             [tree], new JsonObject { ["snapshotId"] = "tree-raw", ["characterOffset"] = nextOffset });
         var recoveredPayload = first["payloadChunk"]!.GetValue<string>()
-                               + second["payloadChunk"]!.GetValue<string>();
+            + second["payloadChunk"]!.GetValue<string>();
 
         Assert.Equal(tree.Payload.ToJsonString(), recoveredPayload);
         Assert.Contains("hidden-detail", recoveredPayload, StringComparison.Ordinal);
@@ -697,6 +705,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
         Assert.Contains("\"inputSchema\": {", normalized, StringComparison.Ordinal);
         Assert.Contains("\"additionalProperties\": false", normalized, StringComparison.Ordinal);
         Assert.Contains("function runTask({ expect }", normalized, StringComparison.Ordinal);
+
         var descriptor = RepositoryModuleDescriptorReader.ExtractObject(
             normalized,
             "draft.ts",
@@ -842,11 +851,13 @@ public sealed class LocalTaskExtractionCoordinatorTests
             "ansight-typescript-task-compiler-tests",
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(taskDirectory);
+
         try
         {
             File.WriteAllText(
                 Path.Combine(taskDirectory, "selectors.ts"),
                 "export function accountPageSelector() { return { automationId: \"AccountPage\" }; }");
+
             var sourcePath = Path.Combine(taskDirectory, "account-page.ts");
             File.WriteAllText(sourcePath, """
                                           import type { TaskDefinition, TaskInvocation } from "./ansight-task.d.ts";
@@ -936,6 +947,7 @@ public sealed class LocalTaskExtractionCoordinatorTests
         }
 
         var compilerPath = LocalTypeScriptTaskCompiler.ResolveCompilerPath();
+
         if (compilerPath is null)
         {
             return;

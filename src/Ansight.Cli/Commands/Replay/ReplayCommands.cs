@@ -76,6 +76,7 @@ internal static class ReplayCommands
         CancellationToken cancellationToken)
     {
         ValidateOptions(arguments);
+
         if (CliCommandHelp.IsRequested(arguments))
         {
             return CliCommandHelp.Write(output, BuildHelp());
@@ -84,8 +85,10 @@ internal static class ReplayCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight replay ansight|sentry|posthog <session-id|recording-id|export.json> [options]");
+
         var sourceKind = arguments.RequirePositional(1, "replay source").ToLowerInvariant();
         var source = arguments.RequirePositional(2, "replay source identifier or export file");
+
         if (sourceKind is not ("ansight" or "sentry" or "posthog" or "post-hog"))
         {
             throw new CliUsageException(
@@ -101,12 +104,13 @@ internal static class ReplayCommands
 
             using var loader = new ExternalReplaySourceLoader();
             var externalPlan = await loader.LoadAsync(
-                    sourceKind,
-                    source,
-                    arguments.GetOption("app-id"),
-                    arguments,
-                    cancellationToken)
+                sourceKind,
+                source,
+                arguments.GetOption("app-id"),
+                arguments,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (arguments.HasFlag("plan-only"))
             {
                 return WritePlanOnly(externalPlan, output);
@@ -119,34 +123,39 @@ internal static class ReplayCommands
         var options = CliRuntime.ResolveOptions(arguments);
         AppSessionSnapshot snapshot;
         ReplayPlan plan;
+
         await using (var sourceLease = await CliRuntimeLease.CreateAsync(
-                         options,
-                         start: false,
-                         cancellationToken).ConfigureAwait(false))
+            options,
+            start: false,
+            cancellationToken).ConfigureAwait(false))
         {
             var loadedSnapshot = await sourceLease.Runtime.Sessions.LoadSnapshotAsync(source, null, cancellationToken)
                 .ConfigureAwait(false);
+
             if (loadedSnapshot is null)
             {
                 output.WriteError(
                     "session_not_found",
                     $"Source session '{source}' was not found.",
                     CliExitCodes.Failure);
+
                 return CliExitCodes.Failure;
             }
 
             snapshot = loadedSnapshot;
+
             var replayRange = ResolveReplayTimelineRange(arguments, snapshot);
             plan = AnsightReplayPlanner.Build(snapshot, replayRange.StartUtc, replayRange.EndUtc);
+
             if (replayRange.AnnotationId is { } annotationId)
             {
                 plan = plan with
                 {
                     Diagnostics =
-                    [
-                        $"Replay range selected from annotation '{annotationId}'.",
+                                [
+                                    $"Replay range selected from annotation '{annotationId}'.",
                         .. plan.Diagnostics
-                    ]
+                                ]
                 };
             }
         }
@@ -157,11 +166,11 @@ internal static class ReplayCommands
         }
 
         return await ExecuteAsync(
-                plan,
-                snapshot,
-                arguments,
-                output,
-                cancellationToken)
+            plan,
+            snapshot,
+            arguments,
+            output,
+            cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -173,12 +182,14 @@ internal static class ReplayCommands
         CancellationToken cancellationToken)
     {
         output.WriteProgress(BetaFeatureNotice);
+
         if (plan.Steps.Count == 0)
         {
             output.WriteError(
                 "replay_plan_empty",
                 $"Replay source '{plan.SourceId}' contains no supported interaction steps.",
                 CliExitCodes.Configuration);
+
             return CliExitCodes.Configuration;
         }
 
@@ -188,8 +199,9 @@ internal static class ReplayCommands
             output.WriteError(
                 "replay_frame_support_insufficient",
                 cadence.Message + " Live replay was not started. Capture the flow again with more frequent "
-                + "screenshots, inspect it with --plan-only, or explicitly continue with --allow-sparse-frames.",
+                    + "screenshots, inspect it with --plan-only, or explicitly continue with --allow-sparse-frames.",
                 CliExitCodes.Configuration);
+
             return CliExitCodes.Configuration;
         }
 
@@ -204,48 +216,56 @@ internal static class ReplayCommands
                 : "source.cadence";
             output.WriteProgress(
                 $"[{progressStage}] "
-                + (isOverride ? "Sparse-frame override active. " : string.Empty)
-                + allowedCadence.Message);
+                    + (isOverride ? "Sparse-frame override active. " : string.Empty)
+                    + allowedCadence.Message);
         }
 
         await using (var lease = await CliRuntimeLease.CreateAsync(
-                         CliRuntime.ResolveOptions(arguments),
-                         start: true,
-                         cancellationToken).ConfigureAwait(false))
+            CliRuntime.ResolveOptions(arguments),
+            start: true,
+            cancellationToken).ConfigureAwait(false))
         {
             var targetResolution = await ResolveTargetSessionAsync(
-                    lease.Runtime,
-                    plan.AppId,
-                    sourceSnapshot,
-                    arguments,
-                    output,
-                    arguments.GetOption("target-session-id") ?? arguments.GetOption("session-id"),
-                    cancellationToken)
+                lease.Runtime,
+                plan.AppId,
+                sourceSnapshot,
+                arguments,
+                output,
+                arguments.GetOption("target-session-id") ?? arguments.GetOption("session-id"),
+                cancellationToken)
                 .ConfigureAwait(false);
             var target = targetResolution.Session;
-            plan = plan with { AppId = target.AppId };
+            plan = plan with
+            {
+                AppId = target.AppId
+            };
+
             if (arguments.GetOption("repository") is { } repositoryPath)
             {
                 var workspace = lease.Runtime.Apps.ConfigureRepositoryWorkspace(
                     target.AppId,
                     Path.GetFullPath(repositoryPath));
+
                 if (!workspace.IsSuccess)
                 {
                     output.WriteError("configuration", workspace.Message, CliExitCodes.Configuration);
+
                     return CliExitCodes.Configuration;
                 }
             }
 
             var sessionTagging = await UpdateReplaySessionTagsAsync(
-                    lease.Runtime,
-                    target.SessionId,
-                    plan.SourceKind,
-                    "running",
-                    cancellationToken)
+                lease.Runtime,
+                target.SessionId,
+                plan.SourceKind,
+                "running",
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!sessionTagging.IsSuccess)
             {
                 output.WriteError("session_tagging_failed", sessionTagging.Message, CliExitCodes.Configuration);
+
                 return CliExitCodes.Configuration;
             }
 
@@ -262,32 +282,35 @@ internal static class ReplayCommands
             var model = ReasoningOptions.ResolveModelOverride(arguments);
             var requestedMaximumRoundTrips = arguments.GetIntOption("max-round-trips", 64, 1, 500);
             var preparation = await PrepareReplayRunAsync(
-                    lease.Runtime.WorkspaceTests.RunGateway,
-                    plan,
-                    target.AppId,
-                    model,
-                    arguments.GetOption("repository") is { } preparationRepository
-                        ? Path.GetFullPath(preparationRepository)
-                        : Path.Combine(lease.Runtime.BaseFolderPath, "replays"),
-                    WorkspaceTestTeamOptions.Resolve(arguments),
-                    cancellationToken,
-                    reasoning)
+                lease.Runtime.WorkspaceTests.RunGateway,
+                plan,
+                target.AppId,
+                model,
+                arguments.GetOption("repository") is { } preparationRepository
+                    ? Path.GetFullPath(preparationRepository)
+                    : Path.Combine(lease.Runtime.BaseFolderPath, "replays"),
+                WorkspaceTestTeamOptions.Resolve(arguments),
+                cancellationToken,
+                reasoning)
                 .ConfigureAwait(false);
+
             if (preparation.HasResolvedTeam)
             {
                 output.WriteProgress(
                     $"[organisation.selected] Hosted replay execution resolved to '{preparation.TeamName}' ({preparation.TeamId:D}).");
             }
+
             if (!preparation.IsSuccess)
             {
                 await UpdateReplaySessionTagsAsync(
-                        lease.Runtime,
-                        target.SessionId,
-                        plan.SourceKind,
-                        "failed",
-                        CancellationToken.None)
+                    lease.Runtime,
+                    target.SessionId,
+                    plan.SourceKind,
+                    "failed",
+                    CancellationToken.None)
                     .ConfigureAwait(false);
                 output.WriteError("configuration", preparation.Message, CliExitCodes.Configuration);
+
                 return CliExitCodes.Configuration;
             }
 
@@ -302,6 +325,7 @@ internal static class ReplayCommands
             SimulatorAgentRunResult? result = null;
             var completionStatus = "failed";
             var runStopwatch = Stopwatch.StartNew();
+
             try
             {
                 result = await lease.Runtime.SimulatorAgent.RunAsync(request, progress, cancellationToken)
@@ -311,48 +335,51 @@ internal static class ReplayCommands
             catch (InvalidOperationException exception)
             {
                 await UpdateReplaySessionTagsAsync(
-                        lease.Runtime,
-                        target.SessionId,
-                        plan.SourceKind,
-                        "failed",
-                        CancellationToken.None)
+                    lease.Runtime,
+                    target.SessionId,
+                    plan.SourceKind,
+                    "failed",
+                    CancellationToken.None)
                     .ConfigureAwait(false);
                 output.WriteError("configuration", exception.Message, CliExitCodes.Configuration);
+
                 return CliExitCodes.Configuration;
             }
             catch (OperationCanceledException)
             {
                 completionStatus = "cancelled";
                 await UpdateReplaySessionTagsAsync(
-                        lease.Runtime,
-                        target.SessionId,
-                        plan.SourceKind,
-                        "cancelled",
-                        CancellationToken.None)
+                    lease.Runtime,
+                    target.SessionId,
+                    plan.SourceKind,
+                    "cancelled",
+                    CancellationToken.None)
                     .ConfigureAwait(false);
                 throw;
             }
             catch
             {
                 await UpdateReplaySessionTagsAsync(
-                        lease.Runtime,
-                        target.SessionId,
-                        plan.SourceKind,
-                        "failed",
-                        CancellationToken.None)
+                    lease.Runtime,
+                    target.SessionId,
+                    plan.SourceKind,
+                    "failed",
+                    CancellationToken.None)
                     .ConfigureAwait(false);
                 throw;
             }
             finally
             {
                 runStopwatch.Stop();
+
                 var meteringWarning = await CompleteReplayRunAsync(
-                        lease.Runtime.WorkspaceTests.RunGateway,
-                        preparation,
-                        result,
-                        completionStatus,
-                        runStopwatch.ElapsedMilliseconds)
+                    lease.Runtime.WorkspaceTests.RunGateway,
+                    preparation,
+                    result,
+                    completionStatus,
+                    runStopwatch.ElapsedMilliseconds)
                     .ConfigureAwait(false);
+
                 if (meteringWarning is not null)
                 {
                     output.WriteProgress($"[metering.warning] {meteringWarning}");
@@ -360,11 +387,11 @@ internal static class ReplayCommands
             }
 
             sessionTagging = await UpdateReplaySessionTagsAsync(
-                    lease.Runtime,
-                    target.SessionId,
-                    plan.SourceKind,
-                    result!.Status.ToString().ToLowerInvariant(),
-                    CancellationToken.None)
+                lease.Runtime,
+                target.SessionId,
+                plan.SourceKind,
+                result!.Status.ToString().ToLowerInvariant(),
+                CancellationToken.None)
                 .ConfigureAwait(false);
 
             var response = new ReplayRunOutput(
@@ -378,6 +405,7 @@ internal static class ReplayCommands
                 result,
                 sessionTagging);
             output.Write(response, () => RenderRun(response));
+
             return result.Status switch
             {
                 SimulatorAgentRunStatus.Succeeded => CliExitCodes.Success,
@@ -402,9 +430,10 @@ internal static class ReplayCommands
             arguments.GetIntOption("max-turns", 64, 1, 512),
             maximumRoundTrips);
         var reasoningConfiguration = preparation.ReasoningConfiguration
-                                     ?? AgentReasoningConfiguration.CreateDefault(
-                                         ReasoningOptions.Resolve(arguments),
-                                         ReasoningOptions.ResolveModelOverride(arguments));
+            ?? AgentReasoningConfiguration.CreateDefault(
+                ReasoningOptions.Resolve(arguments),
+                ReasoningOptions.ResolveModelOverride(arguments));
+
         return new SimulatorAgentRunRequest(
             target.SessionId,
             plan.Instructions,
@@ -423,8 +452,8 @@ internal static class ReplayCommands
             StartupSteps = preparation.StartupSteps,
             TrackingRunId = preparation.TrackingRunId,
             TargetDeviceIdentifier = arguments.GetOption("device-id")
-                                     ?? arguments.GetOption("device")
-                                     ?? launchedDeviceIdentifier,
+                ?? arguments.GetOption("device")
+                ?? launchedDeviceIdentifier,
             WorkspacePath = arguments.GetOption("repository"),
             WorkspaceTestId = $"replay-{plan.SourceKind}",
             WorkspaceTestName = $"Replay {plan.SourceId}",
@@ -484,22 +513,23 @@ internal static class ReplayCommands
         {
             var audit = result?.Audit;
             var completion = await gateway.CompleteAsync(
-                    new WorkspaceTestRunMeterCompletion(
-                        trackingRunId,
-                        status,
-                        audit?.DurationMilliseconds ?? durationMilliseconds,
-                        audit?.InstructionCount ?? 0,
-                        audit?.ModelPassCount ?? 0,
-                        audit?.AnsightToolCallCount ?? 0,
-                        audit?.SuccessfulAnsightToolCallCount ?? 0,
-                        preparation.ModelTransport is not null ? audit?.Tokens : null),
-                    CancellationToken.None)
+                new WorkspaceTestRunMeterCompletion(
+                    trackingRunId,
+                    status,
+                    audit?.DurationMilliseconds ?? durationMilliseconds,
+                    audit?.InstructionCount ?? 0,
+                    audit?.ModelPassCount ?? 0,
+                    audit?.AnsightToolCallCount ?? 0,
+                    audit?.SuccessfulAnsightToolCallCount ?? 0,
+                    preparation.ModelTransport is not null ? audit?.Tokens : null),
+                CancellationToken.None)
                 .ConfigureAwait(false);
+
             return completion.IsSuccess ? null : completion.Message;
         }
         catch (Exception exception) when (exception is HttpRequestException
-                                           or IOException
-                                           or InvalidOperationException)
+            or IOException
+            or InvalidOperationException)
         {
             return exception.Message;
         }
@@ -515,18 +545,21 @@ internal static class ReplayCommands
         CancellationToken cancellationToken)
     {
         var sourceSessionId = sourceSnapshot?.SessionId;
+
         if (!string.IsNullOrWhiteSpace(requestedTargetSessionId))
         {
             var targetSessionId = requestedTargetSessionId.Trim();
+
             if (string.Equals(targetSessionId, sourceSessionId, StringComparison.Ordinal))
             {
                 throw new CliUsageException(
                     "The source and target Ansight sessions must be different. "
-                    + "Connect a fresh app session and pass it with --target-session-id.");
+                        + "Connect a fresh app session and pass it with --target-session-id.");
             }
 
             var target = await runtime.Sessions.LoadSnapshotAsync(targetSessionId, null, cancellationToken)
                 .ConfigureAwait(false);
+
             if (target is null)
             {
                 throw new CliHostUnavailableException(
@@ -561,13 +594,15 @@ internal static class ReplayCommands
             .Where(candidate => runtime.AppTools.IsConnected(candidate.SessionId))
             .OrderByDescending(static candidate => candidate.LastUpdatedUtc)
             .FirstOrDefault();
+
         if (summary is not null)
         {
             var connectedTarget = await runtime.Sessions.LoadSnapshotAsync(
-                    summary.SessionId,
-                    null,
-                    cancellationToken)
+                summary.SessionId,
+                null,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (connectedTarget is not null)
             {
                 return new ReplayTargetResolution(connectedTarget, LaunchedTarget: null);
@@ -580,11 +615,12 @@ internal static class ReplayCommands
         var launcher = new WorkspaceTestTargetLauncher(runtime.Devices, runtime.Pairing);
         var launchStartedUtc = DateTimeOffset.UtcNow;
         var launch = await launcher.LaunchAsync(
-                appId,
-                targetRequest,
-                progress,
-                cancellationToken)
+            appId,
+            targetRequest,
+            progress,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!launch.IsSuccess || launch.Target is null)
         {
             throw new CliHostUnavailableException(
@@ -594,17 +630,19 @@ internal static class ReplayCommands
         var waitTimeout = arguments.GetSecondsOption("wait-seconds", TimeSpan.FromSeconds(45));
         output.WriteProgress(
             $"[session.wait] Waiting up to {waitTimeout.TotalSeconds:N0} seconds for the launched app to connect to Ansight.");
+
         AppSessionSnapshot? launchedSession;
+
         try
         {
             launchedSession = await WaitForLaunchedSessionAsync(
-                    runtime,
-                    appId,
-                    sourceSessionId,
-                    launch.Target,
-                    launchStartedUtc,
-                    waitTimeout,
-                    cancellationToken)
+                runtime,
+                appId,
+                sourceSessionId,
+                launch.Target,
+                launchStartedUtc,
+                waitTimeout,
+                cancellationToken)
                 .ConfigureAwait(false);
         }
         finally
@@ -616,12 +654,13 @@ internal static class ReplayCommands
         {
             throw new CliHostUnavailableException(
                 $"Ansight launched '{appId}' on '{launch.Target.DeviceName}', but the app did not connect within "
-                + $"{waitTimeout.TotalSeconds:N0} seconds. Confirm the installed build starts the Ansight SDK, "
-                + "or select another target with --device-id.");
+                    + $"{waitTimeout.TotalSeconds:N0} seconds. Confirm the installed build starts the Ansight SDK, "
+                    + "or select another target with --device-id.");
         }
 
         output.WriteProgress(
             $"[session.selected] Using newly connected session '{launchedSession.SessionId}' on '{launch.Target.DeviceName}'.");
+
         return new ReplayTargetResolution(launchedSession, launch.Target);
     }
 
@@ -630,21 +669,26 @@ internal static class ReplayCommands
         AppSessionSnapshot? sourceSnapshot)
     {
         var requested = WorkspaceTestTargetOptions.Resolve(arguments);
+
         if (requested?.ExecutionMode == WorkspaceExecutionModes.Device)
+        {
             throw new CliUsageException("Device execution v1 supports app execute and UI prompt tests; replay execution requires SDK mode.");
+        }
+
         var platform = requested?.Platform ?? ResolveSourcePlatform(sourceSnapshot);
         var deviceIdentifier = requested?.DeviceIdentifier
-                               ?? (sourceSnapshot is null
-                                   ? null
-                                   : DeviceLifecycleTool.ResolveNativeDeviceIdentifier(sourceSnapshot));
+            ?? (sourceSnapshot is null
+                ? null
+                : DeviceLifecycleTool.ResolveNativeDeviceIdentifier(sourceSnapshot));
         var applicationPath = requested?.ApplicationPath;
         var deviceKind = requested?.DeviceKind;
         var headless = requested?.Headless ?? false;
+
         return string.IsNullOrWhiteSpace(platform)
-               && string.IsNullOrWhiteSpace(deviceIdentifier)
-               && string.IsNullOrWhiteSpace(applicationPath)
-               && string.IsNullOrWhiteSpace(deviceKind)
-               && !headless
+            && string.IsNullOrWhiteSpace(deviceIdentifier)
+            && string.IsNullOrWhiteSpace(applicationPath)
+            && string.IsNullOrWhiteSpace(deviceKind)
+            && !headless
             ? null
             : new WorkspaceTestTargetRequest(platform, deviceIdentifier, applicationPath, deviceKind, headless);
     }
@@ -660,9 +704,11 @@ internal static class ReplayCommands
     {
         var boundedTimeout = timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout;
         var timeoutAtUtc = DateTimeOffset.UtcNow.Add(boundedTimeout);
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var summary = runtime.Sessions.GetSummaries()
                 .Where(candidate => !string.Equals(candidate.SessionId, sourceSessionId, StringComparison.Ordinal))
                 .Where(candidate => string.Equals(candidate.AppId, appId, StringComparison.OrdinalIgnoreCase))
@@ -670,6 +716,7 @@ internal static class ReplayCommands
                 .Where(candidate => MatchesLaunchedTarget(candidate, launchedTarget, launchStartedUtc))
                 .OrderByDescending(static candidate => candidate.LastUpdatedUtc)
                 .FirstOrDefault();
+
             if (summary is not null)
             {
                 return await runtime.Sessions.LoadSnapshotAsync(summary.SessionId, null, cancellationToken)
@@ -691,6 +738,7 @@ internal static class ReplayCommands
         DateTimeOffset launchStartedUtc)
     {
         var nativeDeviceIdentifier = DeviceLifecycleTool.ResolveNativeDeviceIdentifier(candidate);
+
         if (string.Equals(nativeDeviceIdentifier, target.DeviceIdentifier, StringComparison.OrdinalIgnoreCase))
         {
             return true;
@@ -718,7 +766,8 @@ internal static class ReplayCommands
     private static string? ResolveSourcePlatform(AppSessionSnapshot? sourceSnapshot)
     {
         var osName = sourceSnapshot?.DeviceProfile?.Device?.OsName
-                     ?? TryReadDeviceProfileString(sourceSnapshot?.DeviceProfileJson, "osName");
+            ?? TryReadDeviceProfileString(sourceSnapshot?.DeviceProfileJson, "osName");
+
         if (string.IsNullOrWhiteSpace(osName))
         {
             return null;
@@ -744,10 +793,11 @@ internal static class ReplayCommands
         try
         {
             using var document = JsonDocument.Parse(profileJson);
+
             return document.RootElement.TryGetProperty("device", out var device)
-                   && device.ValueKind == JsonValueKind.Object
-                   && device.TryGetProperty(propertyName, out var property)
-                   && property.ValueKind == JsonValueKind.String
+                && device.ValueKind == JsonValueKind.Object
+                && device.TryGetProperty(propertyName, out var property)
+                && property.ValueKind == JsonValueKind.String
                 ? property.GetString()
                 : null;
         }
@@ -770,6 +820,7 @@ internal static class ReplayCommands
             Result: null,
             SessionTagging: null);
         output.Write(response, () => RenderPlan(plan));
+
         return plan.Steps.Count > 0 ? CliExitCodes.Success : CliExitCodes.Configuration;
     }
 
@@ -777,14 +828,15 @@ internal static class ReplayCommands
     {
         var result = response.Result!;
         var tagging = response.SessionTagging!;
+
         return $"*** {BetaFeatureNotice} ***{Environment.NewLine}"
-               + $"{result.Status.ToString().ToUpperInvariant()}: replayed {response.Plan.Steps.Count:N0} step(s) "
-               + $"from {response.Plan.SourceKind} '{response.Plan.SourceId}' against session "
-               + $"'{response.TargetSessionId}'.{Environment.NewLine}"
-               + $"{result.Message}{Environment.NewLine}Run: {result.Audit.RunId}"
-               + $"{Environment.NewLine}Session tags: {string.Join(", ", tagging.Tags)}"
-               + (tagging.IsSuccess ? string.Empty : $"{Environment.NewLine}Tagging warning: {tagging.Message}")
-               + RenderDiagnostics(response.Plan.Diagnostics);
+            + $"{result.Status.ToString().ToUpperInvariant()}: replayed {response.Plan.Steps.Count:N0} step(s) "
+            + $"from {response.Plan.SourceKind} '{response.Plan.SourceId}' against session "
+            + $"'{response.TargetSessionId}'.{Environment.NewLine}"
+            + $"{result.Message}{Environment.NewLine}Run: {result.Audit.RunId}"
+            + $"{Environment.NewLine}Session tags: {string.Join(", ", tagging.Tags)}"
+            + (tagging.IsSuccess ? string.Empty : $"{Environment.NewLine}Tagging warning: {tagging.Message}")
+            + RenderDiagnostics(response.Plan.Diagnostics);
     }
 
     private static string RenderPlan(ReplayPlan plan)
@@ -794,12 +846,14 @@ internal static class ReplayCommands
             $"*** {BetaFeatureNotice} ***",
             $"Replay plan: {plan.SourceKind} '{plan.SourceId}' · {plan.Steps.Count:N0} step(s)"
         };
+
         if (plan.FrameCadence is { } cadence)
         {
             lines.Add($"Frame support: {cadence.Rating.ToUpperInvariant()} · {cadence.Message}");
         }
 
         lines.AddRange(plan.Steps.Select(step => $"{step.Sequence}. [{step.Kind}] {step.Instruction}"));
+
         if (plan.Diagnostics.Count > 0)
         {
             lines.AddRange(plan.Diagnostics.Select(static diagnostic => $"Review: {diagnostic}"));
@@ -812,7 +866,7 @@ internal static class ReplayCommands
         => diagnostics.Count == 0
             ? string.Empty
             : Environment.NewLine
-              + string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => $"Review: {diagnostic}"));
+                + string.Join(Environment.NewLine, diagnostics.Select(static diagnostic => $"Review: {diagnostic}"));
 
     internal static IReadOnlyList<string> BuildReplaySessionTags(
         IReadOnlyList<string> existingTags,
@@ -825,6 +879,7 @@ internal static class ReplayCommands
         tags.Add("replay-beta");
         tags.Add($"replay-source-{sourceKind.Trim().ToLowerInvariant()}");
         tags.Add($"replay-status-{status.Trim().ToLowerInvariant()}");
+
         return tags
             .OrderBy(static tag => tag, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static tag => tag, StringComparer.Ordinal)
@@ -840,6 +895,7 @@ internal static class ReplayCommands
     {
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return new ReplaySessionTaggingOutput(
@@ -855,6 +911,7 @@ internal static class ReplayCommands
             tags,
             snapshot.Notes,
             snapshot.Name);
+
         return new ReplaySessionTaggingOutput(result.IsSuccess, result.Message, tags);
     }
 
@@ -869,15 +926,16 @@ internal static class ReplayCommands
         }
 
         if (DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var timestamp))
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var timestamp))
         {
             return timestamp.ToUniversalTime();
         }
 
         var normalized = value.Trim();
+
         if (normalized.StartsWith('+'))
         {
             normalized = normalized[1..];
@@ -900,7 +958,9 @@ internal static class ReplayCommands
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(snapshot);
+
         var annotationId = arguments.GetOption("annotation");
+
         if (string.IsNullOrWhiteSpace(annotationId))
         {
             return new ReplayTimelineRange(
@@ -919,6 +979,7 @@ internal static class ReplayCommands
             candidate.AnnotationId,
             normalizedAnnotationId,
             StringComparison.Ordinal));
+
         if (annotation is null)
         {
             throw new CliUsageException(
@@ -927,9 +988,11 @@ internal static class ReplayCommands
 
         var startUtc = annotation.StartUtc.ToUniversalTime();
         var endUtc = (annotation.EndUtc ?? annotation.StartUtc).ToUniversalTime();
+
         foreach (var geometry in annotation.Geometry)
         {
             var capturedAtUtc = geometry.CapturedAtUtc.ToUniversalTime();
+
             if (capturedAtUtc < startUtc)
             {
                 startUtc = capturedAtUtc;
@@ -1028,8 +1091,3 @@ internal static class ReplayCommands
            app must be installed. Runs use the hosted service.
            """;
 }
-
-internal sealed record ReplayTimelineRange(
-    DateTimeOffset? StartUtc,
-    DateTimeOffset? EndUtc,
-    string? AnnotationId);

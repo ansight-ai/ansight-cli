@@ -8,12 +8,14 @@ internal static class ArgumentReader
     {
         errorMessage = null;
         value = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
         }
 
         var text = arguments[propertyName]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return true;
@@ -22,10 +24,12 @@ internal static class ArgumentReader
         if (DateTimeOffset.TryParse(text, out var parsed))
         {
             value = parsed;
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be a valid ISO-8601 timestamp.";
+
         return false;
     }
 
@@ -33,6 +37,7 @@ internal static class ArgumentReader
     {
         errorMessage = null;
         limit = defaultValue;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -44,14 +49,17 @@ internal static class ArgumentReader
             if (parsedLimit <= 0)
             {
                 errorMessage = $"'{propertyName}' must be greater than 0.";
+
                 return false;
             }
 
             limit = Math.Min(parsedLimit, maxValue);
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -59,8 +67,10 @@ internal static class ArgumentReader
     {
         errorMessage = null;
         minimumVerbosity = null;
+
         var rawValue = arguments?["minimumVerbosity"]?.GetValue<string>()
-                       ?? arguments?["minimumPriority"]?.GetValue<string>();
+            ?? arguments?["minimumPriority"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(rawValue))
         {
             return true;
@@ -70,10 +80,12 @@ internal static class ArgumentReader
             && parsed != LogPriority.Unknown)
         {
             minimumVerbosity = parsed;
+
             return true;
         }
 
         errorMessage = "minimumVerbosity must be one of: verbose, debug, information, warning, error, fatal.";
+
         return false;
     }
 
@@ -81,6 +93,7 @@ internal static class ArgumentReader
     {
         errorMessage = null;
         value = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -91,17 +104,20 @@ internal static class ArgumentReader
             if (jsonValue.TryGetValue<bool>(out var boolValue))
             {
                 value = boolValue;
+
                 return true;
             }
 
             if (bool.TryParse(jsonValue.ToString(), out boolValue))
             {
                 value = boolValue;
+
                 return true;
             }
         }
 
         errorMessage = $"'{propertyName}' must be true or false.";
+
         return false;
     }
 
@@ -109,6 +125,7 @@ internal static class ArgumentReader
     {
         value = null;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -119,16 +136,19 @@ internal static class ArgumentReader
                 || int.TryParse(jsonValue.ToString(), out parsedValue)))
         {
             value = parsedValue;
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
     public static HashSet<string> ReadStringSet(JsonObject? arguments, string propertyName)
     {
         var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         if (arguments?[propertyName] is not JsonArray array)
         {
             return values;
@@ -142,6 +162,7 @@ internal static class ArgumentReader
             }
 
             var value = item.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(value))
             {
                 values.Add(value.Trim());
@@ -154,6 +175,7 @@ internal static class ArgumentReader
     public static HashSet<byte> ReadByteSet(JsonObject? arguments, string propertyName)
     {
         var values = new HashSet<byte>();
+
         if (arguments?[propertyName] is not JsonArray array)
         {
             return values;

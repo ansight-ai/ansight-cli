@@ -62,6 +62,7 @@ public sealed class VisualTreePresentationNormalizerTests
         var raw = UIKitTree(includeOverlay: false);
         var mapPage = Find(raw, "MapPage");
         mapPage["bounds"] = Bounds(312, 0, 78, 844);
+
         var mapBranch = Assert.IsType<JsonObject>(mapPage.Parent?.Parent);
         mapBranch["bounds"] = Bounds(312, 0, 78, 844);
 
@@ -125,6 +126,7 @@ public sealed class VisualTreePresentationNormalizerTests
         bool includeOverlay = true)
     {
         var children = new JsonArray();
+
         if (includeFlyout)
         {
             children.Add(new JsonObject
@@ -226,6 +228,7 @@ public sealed class VisualTreePresentationNormalizerTests
     {
         var typeRegistry = VisualTreeTypeRegistry.FromPayload(payload);
         var root = Assert.IsType<JsonObject>(payload["root"]);
+
         return LiveUiNodeQuery.Enumerate(root, typeRegistry)
             .Single(match => string.Equals(
                 LiveUiNodeQuery.ReadAutomationId(match.Node),
@@ -243,6 +246,7 @@ public sealed class VisualTreePresentationNormalizerTests
                 LiveUiNodeQuery.ReadAutomationId(candidate.Node),
                 automationId,
                 StringComparison.Ordinal));
+
         return LiveUiNodeQuery.IsEffectivelyVisible(match);
     }
 

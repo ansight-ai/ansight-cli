@@ -16,6 +16,7 @@ public sealed class SessionSummaryVideoFramesTests
         using var fixture = new Fixture();
         var snapshot = Snapshot();
         fixture.WriteVideo(snapshot);
+
         var content = new JsonArray();
         var count = await ReplayExtractionEvidence.AppendScreenshotsAsync(fixture.Runtime, snapshot,
             start, start.AddSeconds(10), [start.AddSeconds(3)], content, default);
@@ -42,7 +43,7 @@ public sealed class SessionSummaryVideoFramesTests
     public void SelectsInitialFinalErrorAndNavigationFramesWithinTheModelBudget()
     {
         var snapshot = Snapshot(events:
-            [new("navigation", "Opened Map", "navigation", "", start.AddSeconds(10), 0)],
+                [new("navigation", "Opened Map", "navigation", "", start.AddSeconds(10), 0)],
             logs: [new(start.AddSeconds(20), "Load failed") { Priority = LogPriority.Error }]);
         var selected = SessionSummaryVideoFrames.Select(snapshot);
         Assert.InRange(selected.Count, 4, SessionSummaryVideoFrames.MaximumFrames);
@@ -59,6 +60,7 @@ public sealed class SessionSummaryVideoFramesTests
         var original = Snapshot();
         var section = LocalSessionSummaryRunner.SelectSection(original, start.AddSeconds(12), start.AddSeconds(18));
         Assert.Same(original.VideoRecordings[0], Assert.Single(section.VideoRecordings));
+
         var frames = SessionSummaryVideoFrames.Select(section);
         Assert.NotEmpty(frames);
         Assert.All(frames, frame => Assert.InRange(frame.PositionUs, 12_000_000, 17_999_999));
@@ -81,7 +83,9 @@ public sealed class SessionSummaryVideoFramesTests
         using var fixture = new Fixture();
         var snapshot = Snapshot(videos: [Video("video", 0, 1)]);
         fixture.WriteVideo(snapshot);
+
         string temporaryPath;
+
         using (var evidence = await SessionSummaryVisualEvidence.CreateAsync(fixture.Runtime, snapshot, null, default))
         {
             Assert.True(evidence.UsesVideo);
@@ -91,6 +95,7 @@ public sealed class SessionSummaryVideoFramesTests
             temporaryPath = evidence.Images[0].FilePath;
             Assert.True(File.Exists(temporaryPath));
         }
+
         Assert.False(Directory.Exists(Path.GetDirectoryName(temporaryPath)));
     }
 
@@ -120,9 +125,11 @@ public sealed class SessionSummaryVideoFramesTests
         var path = Path.Combine(environment.RootPath, "decoded.jpg");
         using var bitmap = new SKBitmap(10, 10);
         bitmap.Erase(SKColors.Red);
+
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, 78);
         File.WriteAllBytes(path, data.ToArray());
+
         var content = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = "Session evidence" });
         var frames = Enumerable.Range(0, 5).Select(i => new SessionSummaryImage(path, start.AddSeconds(i), "Replay video test")).ToArray();
         Assert.Equal(5, LocalSessionSummaryRunner.AppendFrameImages(frames, content, null, requireVideo: true));
@@ -136,30 +143,49 @@ public sealed class SessionSummaryVideoFramesTests
 
     private static AppSessionSnapshot Snapshot(IReadOnlyList<SessionVideoRecording>? videos = null,
         IReadOnlyList<SessionApplicationEvent>? events = null, IReadOnlyList<LogEntry>? logs = null) => new()
-    {
-        SessionId = "summary-video", AppId = "test.app", ClientName = "Test", RemoteAddress = "local",
-        ConfigId = null, CreatedUtc = start, LastUpdatedUtc = start.AddSeconds(30), Status = "Closed",
-        IsHistorical = true, MetricChannels = [], Metrics = [],
-        VideoRecordings = videos ?? [Video("video", 0, 30)], ApplicationEvents = events ?? [], Logs = logs ?? []
-    };
+        {
+            SessionId = "summary-video",
+            AppId = "test.app",
+            ClientName = "Test",
+            RemoteAddress = "local",
+            ConfigId = null,
+            CreatedUtc = start,
+            LastUpdatedUtc = start.AddSeconds(30),
+            Status = "Closed",
+            IsHistorical = true,
+            MetricChannels = [],
+            Metrics = [],
+            VideoRecordings = videos ?? [Video("video", 0, 30)],
+            ApplicationEvents = events ?? [],
+            Logs = logs ?? []
+        };
 
     private sealed class Fixture : IDisposable
     {
         private readonly TestEnvironment environment = new();
         public RuntimeCoordinator Runtime { get; }
         public Extractor Extractor { get; } = new();
+
         public Fixture() => Runtime = new RuntimeCoordinator(new RuntimeOptions
         {
-            BaseFolderPath = environment.RootPath, SecureStorageFilePath = environment.SecureStorageFilePath,
-            SecureStorageKeyFilePath = environment.SecureStorageKeyFilePath, SessionVideoFrameExtractor = Extractor
+            BaseFolderPath = environment.RootPath,
+            SecureStorageFilePath = environment.SecureStorageFilePath,
+            SecureStorageKeyFilePath = environment.SecureStorageKeyFilePath,
+            SessionVideoFrameExtractor = Extractor
         });
+
         public void WriteVideo(AppSessionSnapshot snapshot)
         {
             var path = Path.Combine(SessionFileLocator.ResolveSessionDirectoryPath(Runtime.ApplicationPaths, snapshot), snapshot.VideoRecordings[0].EntryPath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-recording.mp4"), path);
         }
-        public void Dispose() { Runtime.Dispose(); environment.Dispose(); }
+
+        public void Dispose()
+        {
+            Runtime.Dispose();
+            environment.Dispose();
+        }
     }
 
     private sealed class Extractor : ISessionVideoFrameExtractor
@@ -167,15 +193,22 @@ public sealed class SessionSummaryVideoFramesTests
         public List<string> Sources { get; } = [];
         public string? Output { get; private set; }
         public bool Fail { get; set; }
+
         public async Task ExtractAsync(string videoPath, TimeSpan position, string imagePath, CancellationToken token = default)
         {
             Sources.Add(videoPath);
             Output = imagePath;
+
             using var bitmap = new SKBitmap(10, 10);
             bitmap.Erase(SKColors.Red);
+
             using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 80);
             await File.WriteAllBytesAsync(imagePath, data.ToArray(), token);
-            if (Fail) throw new IOException("Decoder failed.");
+
+            if (Fail)
+            {
+                throw new IOException("Decoder failed.");
+            }
         }
     }
 }

@@ -21,6 +21,7 @@ public sealed partial class SessionCaptureStoreTests
         File.WriteAllText(
             Path.Combine(sessionDirectoryPath, "compressible-payload.txt"),
             new string('x', 256 * 1024));
+
         var expandedSizeBytes = Directory
             .EnumerateFiles(sessionDirectoryPath, "*", SearchOption.AllDirectories)
             .Sum(filePath => new FileInfo(filePath).Length);
@@ -28,10 +29,12 @@ public sealed partial class SessionCaptureStoreTests
         var compactedCount = store.CompactSessionsOlderThan(30, nowUtc);
 
         Assert.Equal(1, compactedCount);
+
         var archiveFilePath = $"{sessionDirectoryPath}.session-cache.zip";
         Assert.False(Directory.Exists(sessionDirectoryPath));
         Assert.True(File.Exists(archiveFilePath));
         Assert.True(new FileInfo(archiveFilePath).Length < expandedSizeBytes);
+
         using (var archive = ZipFile.OpenRead(archiveFilePath))
         {
             Assert.NotNull(archive.GetEntry("session.json"));

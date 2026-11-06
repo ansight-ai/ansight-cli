@@ -5,12 +5,15 @@ internal static class AuthCommands
     public static Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
     {
         if (CliCommandHelp.IsRequested(arguments) || arguments.Positionals.Count == 1)
+        {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp()));
+        }
 
         return Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("AuthCommands.RunAsync", [arguments, output, cancellationToken, null, null, null]);
     }
+
     private static string BuildHelp()
-        => """
+            => """
            Authenticate the headless CLI with an Ansight account
 
            Usage:

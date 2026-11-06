@@ -53,6 +53,7 @@ internal sealed class SummarizeTelemetryWindowTool : Operation
         properties["types"] = ToolSchema.Array(ToolSchema.String("Telemetry type, for example fps or memory."), nullable: true);
         properties["channelIds"] = ToolSchema.Array(ToolSchema.Integer("Channel id."), nullable: true);
         properties["channelNames"] = ToolSchema.Array(ToolSchema.String("Exact channel name, case-insensitive."), nullable: true);
+
         return properties;
     }
 

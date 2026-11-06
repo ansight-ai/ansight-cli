@@ -11,6 +11,7 @@ public static class FileNameUtil
 
         var invalid = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(value.Length);
+
         foreach (var ch in value.Trim())
         {
             builder.Append(invalid.Contains(ch) ? '_' : ch);

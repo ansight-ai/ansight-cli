@@ -56,6 +56,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
+
         if (triggerService is not null)
         {
             return ToPublicConnection(triggerService.InspectRepository(repositoryRootPath, appId));
@@ -68,6 +69,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
             defaultFunctionTimeout,
             defaultActionTimeout,
             normalizedAppId);
+
         return new RepositoryAutomationConnection(
             inspection.Warnings.Count == 0,
             false,
@@ -83,6 +85,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
+
         return triggerService is null
             ? Inspect(appId, repositoryRootPath)
             : ToPublicConnection(triggerService.ConnectRepository(repositoryRootPath, appId));
@@ -91,10 +94,13 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
     public bool Disconnect(string appId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
+
         lock (connectionGate)
         {
             linkedAppIds.Remove(normalizedAppId);
+
             return triggerService?.DisconnectRepository(normalizedAppId) == true;
         }
     }
@@ -102,13 +108,14 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
     public IReadOnlyList<AutomationRunCompletedEvent> GetRecentRuns(string appId, int limit = 100)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         if (limit is < 1 or > 500)
         {
             throw new ArgumentOutOfRangeException(nameof(limit), limit, "Run trace limit must be between 1 and 500.");
         }
 
         return triggerService?.GetRecentRuns(appId.Trim(), limit)
-               ?? Array.Empty<AutomationRunCompletedEvent>();
+            ?? Array.Empty<AutomationRunCompletedEvent>();
     }
 
     internal bool HasCandidates(string eventKind, string appId)
@@ -121,16 +128,19 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         started = true;
+
         var result = triggerService is null
             ? null
             : await triggerService.StartAsync(cancellationToken).ConfigureAwait(false);
         SynchronizeLinkedApps();
+
         return result;
     }
 
     internal async Task StopAsync()
     {
         started = false;
+
         if (triggerService is not null)
         {
             await triggerService.StopAsync().ConfigureAwait(false);
@@ -140,6 +150,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         appService.Changed -= HandleAppsChanged;
+
         if (triggerService is not null)
         {
             await triggerService.DisposeAsync().ConfigureAwait(false);
@@ -163,7 +174,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
 
         var linkedApps = appService.GetDefinitions()
             .Where(static app => app.RepositoryAutomationsEnabled
-                                 && !string.IsNullOrWhiteSpace(app.CodebasePath))
+                && !string.IsNullOrWhiteSpace(app.CodebasePath))
             .ToArray();
         var currentAppIds = linkedApps
             .Select(static app => app.AppId)
@@ -182,6 +193,7 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
                 try
                 {
                     var connection = triggerService.ConnectRepository(app.CodebasePath!, app.AppId);
+
                     if (connection.IsConnected)
                     {
                         linkedAppIds.Add(app.AppId);
@@ -193,9 +205,9 @@ public sealed class RepositoryAutomationService : IAsyncDisposable
                         $"repository_automation_link_restore_failed appId={app.AppId} codebasePath={app.CodebasePath} reason={string.Join("; ", connection.Warnings)}");
                 }
                 catch (Exception exception) when (exception is IOException
-                                                   or UnauthorizedAccessException
-                                                   or ArgumentException
-                                                   or NotSupportedException)
+                    or UnauthorizedAccessException
+                    or ArgumentException
+                    or NotSupportedException)
                 {
                     linkedAppIds.Remove(app.AppId);
                     log.Info(

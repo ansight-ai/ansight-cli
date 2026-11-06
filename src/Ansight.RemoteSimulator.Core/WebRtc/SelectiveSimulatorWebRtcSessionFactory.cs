@@ -31,6 +31,7 @@ public sealed class SelectiveSimulatorWebRtcSessionFactory : ISimulatorWebRtcSes
         ISimulatorWebRtcSessionFactory? macFactory)
     {
         this.runtimeSource = runtimeSource ?? throw new ArgumentNullException(nameof(runtimeSource));
+
         if (simulatorFactory is null && androidFactory is null && macFactory is null)
         {
             throw new ArgumentException("At least one WebRTC runtime factory is required.");
@@ -43,8 +44,7 @@ public sealed class SelectiveSimulatorWebRtcSessionFactory : ISimulatorWebRtcSes
 
     public string BackendName => string.Join(
         '+',
-        new[] { simulatorFactory?.BackendName, androidFactory?.BackendName, macFactory?.BackendName }
-            .Where(value => !string.IsNullOrWhiteSpace(value)));
+        new[] { simulatorFactory?.BackendName, androidFactory?.BackendName, macFactory?.BackendName }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
     public string Status => string.Join(
         ' ',
@@ -61,6 +61,7 @@ public sealed class SelectiveSimulatorWebRtcSessionFactory : ISimulatorWebRtcSes
     public ISimulatorWebRtcSession Create(string deviceUdid, int framesPerSecond)
     {
         var factory = ResolveFactory(deviceUdid);
+
         return factory?.SupportsDevice(deviceUdid) == true
             ? factory.Create(deviceUdid, framesPerSecond)
             : throw new NotSupportedException("WebRTC video is not available for this runtime.");
@@ -69,7 +70,8 @@ public sealed class SelectiveSimulatorWebRtcSessionFactory : ISimulatorWebRtcSes
     private ISimulatorWebRtcSessionFactory? ResolveFactory(string deviceUdid)
     {
         var device = runtimeSource.Current.Devices.FirstOrDefault(candidate =>
-            string.Equals(candidate.Identifier, deviceUdid, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.Identifier, deviceUdid, StringComparison.OrdinalIgnoreCase));
+
         return device?.Platform switch
         {
             "ios" => simulatorFactory,

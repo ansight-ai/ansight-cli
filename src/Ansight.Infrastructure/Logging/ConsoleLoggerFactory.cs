@@ -1,4 +1,4 @@
-﻿namespace Ansight.Infrastructure.Logging;
+namespace Ansight.Infrastructure.Logging;
 
 public sealed class ConsoleLoggerFactory : ILoggerFactory
 {

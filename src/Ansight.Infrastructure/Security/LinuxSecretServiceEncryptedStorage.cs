@@ -37,6 +37,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
     public static bool TryResolveExecutable(out string path)
     {
         path = string.Empty;
+
         if (!OperatingSystem.IsLinux()
             || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")))
         {
@@ -44,19 +45,22 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
         }
 
         var environmentPath = Environment.GetEnvironmentVariable("PATH");
+
         if (string.IsNullOrWhiteSpace(environmentPath))
         {
             return false;
         }
 
         foreach (var directory in environmentPath.Split(
-                     Path.PathSeparator,
-                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            Path.PathSeparator,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var candidate = Path.Combine(directory.Trim('"'), "secret-tool");
+
             if (File.Exists(candidate))
             {
                 path = Path.GetFullPath(candidate);
+
                 return true;
             }
         }
@@ -70,37 +74,49 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
         if (!TryResolveExecutable(out var path))
         {
             message = "Linux Secret Service requires secret-tool and a user D-Bus session. Configure an external key with 'ansight config credentials --key-file <path> --non-interactive' on headless hosts.";
+
             return false;
         }
 
         try
         {
             var storage = new LinuxSecretServiceEncryptedStorage(path);
+
             if (verifyWrite)
             {
                 var key = "ansight-setup-probe-" + Guid.NewGuid().ToString("N");
                 var value = Guid.NewGuid().ToString("N");
+
                 try
                 {
                     storage.SetValue(Service, key, value);
+
                     if (storage.GetValue(Service, key) != value)
+                    {
                         throw new InvalidOperationException("Secret Service did not return the setup probe.");
+                    }
                 }
-                finally { storage.RemoveValue(Service, key); }
+                finally
+                {
+                    storage.RemoveValue(Service, key);
+                }
             }
             else
             {
                 _ = storage.GetValue(Service, IndexKey);
             }
+
             message = verifyWrite
                 ? "Linux Secret Service passed a temporary store, read, and delete probe."
                 : "Linux Secret Service responded to a read probe. Run 'ansight config credentials' to verify write access.";
+
             return true;
         }
         catch (Exception exception) when (exception is InvalidOperationException or TimeoutException
-                                        or System.ComponentModel.Win32Exception or IOException)
+            or System.ComponentModel.Win32Exception or IOException)
         {
             message = "Linux Secret Service is unavailable or locked. Unlock the user vault or configure an external key file. " + exception.Message;
+
             return false;
         }
     }
@@ -133,6 +149,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
                 RemoveValue(LegacyService, key);
                 RemoveIndexedKey(Service, IndexKey, key);
                 RemoveIndexedKey(LegacyService, LegacyIndexKey, key);
+
                 return;
             }
 
@@ -185,12 +202,15 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
             foreach (var key in ReadIndexedKeys(LegacyService, LegacyIndexKey))
             {
                 var legacyValue = GetValue(LegacyService, key);
+
                 if (legacyValue is not null)
                 {
                     var currentValue = GetValue(Service, key);
+
                     if (currentValue is null)
                     {
                         SetValue(Service, key, legacyValue);
+
                         if (GetValue(Service, key) != legacyValue)
                         {
                             throw new InvalidOperationException("Linux Secret Service could not verify migrated credential.");
@@ -214,6 +234,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
             ["lookup", "service", service, "account", key],
             standardInput: null,
             allowMissing: true);
+
         if (result is null)
         {
             return null;
@@ -226,13 +247,13 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
     {
         _ = Run(
             [
-                "store",
+                    "store",
                 "--label=Ansight CLI credential",
                 "service",
                 service,
                 "account",
                 key
-            ],
+                ],
             value,
             allowMissing: false);
     }
@@ -264,22 +285,26 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
 
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException("Could not start Linux secret-tool.");
+            ?? throw new InvalidOperationException("Could not start Linux secret-tool.");
+
         if (standardInput is not null)
         {
             process.StandardInput.Write(standardInput);
         }
 
         process.StandardInput.Close();
+
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
         try
         {
             process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
@@ -299,6 +324,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
 
         var standardOutput = standardOutputTask.GetAwaiter().GetResult();
         var standardError = standardErrorTask.GetAwaiter().GetResult();
+
         if (process.ExitCode == 0)
         {
             return standardOutput;
@@ -311,12 +337,13 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
 
         throw new InvalidOperationException(
             $"Linux Secret Service operation failed with exit code {process.ExitCode}: "
-            + (string.IsNullOrWhiteSpace(standardError) ? "unknown error" : standardError.Trim()));
+                + (string.IsNullOrWhiteSpace(standardError) ? "unknown error" : standardError.Trim()));
     }
 
     private List<string> ReadIndexedKeys(string service, string indexKey)
     {
         var content = GetValue(service, indexKey);
+
         if (string.IsNullOrWhiteSpace(content))
         {
             return new List<string>();
@@ -325,7 +352,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
         try
         {
             return JsonSerializer.Deserialize<List<string>>(content)
-                   ?? throw new InvalidOperationException("Linux Secret Service credential index is invalid.");
+                ?? throw new InvalidOperationException("Linux Secret Service credential index is invalid.");
         }
         catch (JsonException exception)
         {
@@ -341,6 +368,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
         }
 
         var keys = ReadIndexedKeys(service, indexKey);
+
         if (!keys.Contains(key, StringComparer.Ordinal))
         {
             keys.Add(key);
@@ -356,6 +384,7 @@ public sealed class LinuxSecretServiceEncryptedStorage : IEncryptedStorage
         }
 
         var keys = ReadIndexedKeys(service, indexKey);
+
         if (keys.Remove(key))
         {
             WriteIndexedKeys(service, indexKey, keys);

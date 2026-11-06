@@ -32,6 +32,7 @@ internal sealed class ForceDisconnectSessionTool : Operation
         }
 
         var result = appToolBridge.ForceDisconnectSession(snapshot!.SessionId);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(RequestResult.ToolResult(

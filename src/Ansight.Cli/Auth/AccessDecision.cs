@@ -18,15 +18,16 @@ internal sealed record AccessDecision(
         "active" => $"Cloud access is authenticated until {AuthorizedUntil:O}.",
         "authentication_required" => "Sign in with 'ansight account login' to use Ansight Cloud. Local developer tools do not require an account.",
         "machine_registration_required" => "This machine registration was removed. Sign in again with "
-                                           + "'ansight account login' to register it.",
+            + "'ansight account login' to register it.",
         "product_access_required" => "This cloud operation requires an active cloud grant. "
-                                     + "Run 'ansight account open' to manage cloud access at https://app.ansight.ai/.",
+            + "Run 'ansight account open' to manage cloud access at https://app.ansight.ai/.",
         _ => "Unable to verify Ansight Cloud access. Check your connection and run 'ansight account access'."
     };
 
     public int WriteFailure(CliOutput output)
     {
         output.WriteError(Reason, Message, CliExitCodes.AccessDenied);
+
         return CliExitCodes.AccessDenied;
     }
 }

@@ -8,9 +8,11 @@ internal sealed partial class RuntimeState
         out SessionLiveUpdate? update)
     {
         ArgumentNullException.ThrowIfNull(cursor);
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             update = null;
+
             return false;
         }
 
@@ -19,10 +21,12 @@ internal sealed partial class RuntimeState
             if (!sessionsById.TryGetValue(sessionId.Trim(), out var session))
             {
                 update = null;
+
                 return false;
             }
 
             update = SessionLiveUpdateBuilder.Create(session, cursor);
+
             return true;
         }
     }

@@ -4,7 +4,7 @@ namespace Ansight.RemoteSimulator.Core.Server.WebRtc;
 
 internal sealed class InputDispatcher : IAsyncDisposable
 {
-    private static readonly TimeSpan BackloggedMoveDeliveryInterval = TimeSpan.FromMilliseconds(16);
+    private static readonly TimeSpan backloggedMoveDeliveryInterval = TimeSpan.FromMilliseconds(16);
 
     private readonly Func<string, Task> deliverAsync;
     private readonly Func<TimeSpan, CancellationToken, Task> delayAsync;
@@ -29,6 +29,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(message);
 
         var pendingInput = new PendingInput(message, ResolveMoveCoalescingKey(message));
+
         lock (gate)
         {
             if (disposed)
@@ -40,6 +41,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
             var replacesPendingMove = pendingInput.CoalescingKey is not null
                 && last?.Value.CoalescingKey is not null
                 && pendingInput.CoalescingKey == last.Value.CoalescingKey;
+
             if (replacesPendingMove)
             {
                 // A live drag should follow the current finger position. Replaying old
@@ -68,6 +70,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
         }
 
         await stopSource.CancelAsync().ConfigureAwait(false);
+
         try
         {
             await processingTask.ConfigureAwait(false);
@@ -87,6 +90,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
             await pendingSignal.WaitAsync(stopSource.Token).ConfigureAwait(false);
 
             PendingInput? pendingInput = null;
+
             lock (gate)
             {
                 if (pendingInputs.First is { } first)
@@ -99,12 +103,13 @@ internal sealed class InputDispatcher : IAsyncDisposable
             if (pendingInput is not null)
             {
                 await deliverAsync(pendingInput.Message).ConfigureAwait(false);
+
                 if (pendingInput.CoalescingKey is not null && HasPendingInputs())
                 {
                     // SimulatorKit consumes pointer changes on its UI run loop. When WebRTC
                     // delivers a burst, pacing the retained moves prevents the final move and
                     // up events from collapsing into one run-loop turn and losing the drag.
-                    await delayAsync(BackloggedMoveDeliveryInterval, stopSource.Token).ConfigureAwait(false);
+                    await delayAsync(backloggedMoveDeliveryInterval, stopSource.Token).ConfigureAwait(false);
                 }
             }
         }
@@ -124,6 +129,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
         {
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
+
             if (!root.TryGetProperty("phase", out var phase)
                 || !string.Equals(phase.GetString(), "move", StringComparison.OrdinalIgnoreCase)
                 || !root.TryGetProperty("udid", out var deviceUdid)
@@ -134,7 +140,8 @@ internal sealed class InputDispatcher : IAsyncDisposable
             }
 
             var hasSecondaryContact = root.TryGetProperty("secondary", out var secondaryContact)
-                                      && secondaryContact.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+                && secondaryContact.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+
             return new MoveCoalescingKey(
                 deviceUdid.GetString()!.Trim().ToUpperInvariant(),
                 pointerId.GetRawText(),

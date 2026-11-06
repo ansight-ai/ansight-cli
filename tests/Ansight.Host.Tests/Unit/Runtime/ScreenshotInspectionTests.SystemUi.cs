@@ -27,9 +27,14 @@ public sealed partial class ScreenshotInspectionTests
         {
             using var paint = new SKPaint { Color = SKColors.Black };
             canvas.DrawRect(0, 0, 100, 10, paint);
-            if (changedCube) canvas.DrawRect(50, 50, 10, 10, paint);
+
+            if (changedCube)
+            {
+                canvas.DrawRect(50, 50, 10, 10, paint);
+            }
         }));
         fixture.State.SetSessionImageGeometry(fixture.SessionId, actual.FrameId, SystemUiGeometry());
+
         var result = await fixture.Call(false, new JsonObject
         {
             ["image"] = new JsonObject { ["frameId"] = actual.FrameId },
@@ -80,10 +85,20 @@ public sealed partial class ScreenshotInspectionTests
         var join = new ScreenshotGeometryJoin((id, geometry) => updates[id] = geometry);
         var frame = new ParsedSessionImageFrame(DateTimeOffset.FromUnixTimeMilliseconds(1000), "jpeg", 100, 100, 60, new byte[] { 1, 2, 3 });
         var metadata = Metadata(frame);
-        if (metadataFirst) Assert.True(join.TryAcceptMetadata(metadata.ToJsonString()));
+
+        if (metadataFirst)
+        {
+            Assert.True(join.TryAcceptMetadata(metadata.ToJsonString()));
+        }
+
         Assert.Equal(metadataFirst, join.BeforeFrame(frame) is not null);
         join.AfterFrame(frame, "frame");
-        if (!metadataFirst) Assert.True(join.TryAcceptMetadata(metadata.ToJsonString()));
+
+        if (!metadataFirst)
+        {
+            Assert.True(join.TryAcceptMetadata(metadata.ToJsonString()));
+        }
+
         Assert.NotNull(updates["frame"]);
         join.TryAcceptMetadata(metadata.ToJsonString());
         Assert.NotNull(updates["frame"]); // Identical delivery retry.
@@ -101,34 +116,47 @@ public sealed partial class ScreenshotInspectionTests
         var frame = new ParsedSessionImageFrame(now, "jpeg", 100, 100, 60, new byte[] { 1, 2, 3 });
         var join = new ScreenshotGeometryJoin((id, geometry) => updates[id] = geometry, () => now);
         join.TryAcceptMetadata(Metadata(frame).ToJsonString());
-        Assert.Null(join.BeforeFrame(frame with { Bytes = new byte[] { 4, 5 } }));
-        Assert.Null(new ScreenshotGeometryJoin((_, _) => { }).BeforeFrame(frame));
+        Assert.Null(join.BeforeFrame(frame with
+        {
+            Bytes = new byte[] { 4, 5 }
+        }));
+        Assert.Null(new ScreenshotGeometryJoin((_, _) =>
+        {
+        }).BeforeFrame(frame));
         join.AfterFrame(frame, "one");
         join.AfterFrame(frame, "two");
         Assert.Null(updates["one"]);
         Assert.Null(updates["two"]);
-        var later = frame with { CapturedAtUtc = now.AddSeconds(1) };
+
+        var later = frame with
+        {
+            CapturedAtUtc = now.AddSeconds(1)
+        };
         join.TryAcceptMetadata(Metadata(later).ToJsonString());
         now = now.AddSeconds(31);
         Assert.Null(join.BeforeFrame(later));
-        for (var i = 0; i < 130; i++) join.TryAcceptMetadata(Metadata(frame with { Width = i + 1 }).ToJsonString());
-        Assert.Null(join.BeforeFrame(frame with { Width = 1 }));
+
+        for (var i = 0; i < 130; i++)
+        {
+            join.TryAcceptMetadata(Metadata(frame with
+            {
+                Width = i + 1
+            }).ToJsonString());
+        }
+
+        Assert.Null(join.BeforeFrame(frame with
+        {
+            Width = 1
+        }));
     }
 
     private static JsonObject Metadata(ParsedSessionImageFrame frame) => new()
     {
-        ["type"] = "CLIENT_SCREENSHOT_GEOMETRY", ["capturedAtEpochMs"] = frame.CapturedAtUtc.ToUnixTimeMilliseconds(),
-        ["width"] = frame.Width, ["height"] = frame.Height,
-        ["sha256"] = Convert.ToHexString(SHA256.HashData(frame.Bytes.Span)).ToLowerInvariant(), ["geometry"] = SystemUiGeometry()
+        ["type"] = "CLIENT_SCREENSHOT_GEOMETRY",
+        ["capturedAtEpochMs"] = frame.CapturedAtUtc.ToUnixTimeMilliseconds(),
+        ["width"] = frame.Width,
+        ["height"] = frame.Height,
+        ["sha256"] = Convert.ToHexString(SHA256.HashData(frame.Bytes.Span)).ToLowerInvariant(),
+        ["geometry"] = SystemUiGeometry()
     };
-}
-
-internal static class SystemUiGeometryTestExtensions
-{
-    internal static JsonObject WithStatusBar(this JsonObject geometry, string state)
-    {
-        geometry["systemUi"]!["statusBar"]!["state"] = state;
-        if (state != "present") geometry["systemUi"]!["statusBar"]!["regions"] = new JsonArray();
-        return geometry;
-    }
 }

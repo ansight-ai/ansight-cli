@@ -12,6 +12,7 @@ internal sealed class SessionHandle : SafeHandleZeroOrMinusOneIsInvalid
     protected override bool ReleaseHandle()
     {
         NativeMethods.SessionDestroy(handle);
+
         return true;
     }
 }

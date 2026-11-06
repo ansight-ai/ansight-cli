@@ -18,14 +18,54 @@ public sealed partial class FileVisualizationService
     private static readonly byte[] sqliteHeader = Encoding.ASCII.GetBytes("SQLite format 3\0");
     private static readonly HashSet<string> codeExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".c", ".cc", ".cpp", ".cs", ".css", ".dart", ".fs", ".go", ".gradle", ".h", ".hpp",
-        ".html", ".java", ".js", ".jsx", ".kt", ".kts", ".lua", ".m", ".mm", ".php", ".py",
-        ".rb", ".razor", ".rs", ".sh", ".sql", ".swift", ".toml", ".ts", ".tsx", ".vue",
-        ".yaml", ".yml"
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cs",
+        ".css",
+        ".dart",
+        ".fs",
+        ".go",
+        ".gradle",
+        ".h",
+        ".hpp",
+        ".html",
+        ".java",
+        ".js",
+        ".jsx",
+        ".kt",
+        ".kts",
+        ".lua",
+        ".m",
+        ".mm",
+        ".php",
+        ".py",
+        ".rb",
+        ".razor",
+        ".rs",
+        ".sh",
+        ".sql",
+        ".swift",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".vue",
+        ".yaml",
+        ".yml"
     };
     private static readonly HashSet<string> imageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".avif", ".bmp", ".gif", ".heic", ".heif", ".ico", ".jpeg", ".jpg", ".png", ".svg", ".webp"
+        ".avif",
+        ".bmp",
+        ".gif",
+        ".heic",
+        ".heif",
+        ".ico",
+        ".jpeg",
+        ".jpg",
+        ".png",
+        ".svg",
+        ".webp"
     };
     private static readonly IReadOnlyDictionary<string, string> mediaMimeTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,7 +98,10 @@ public sealed partial class FileVisualizationService
     };
     private static readonly HashSet<string> sqliteExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".db", ".db3", ".sqlite", ".sqlite3"
+        ".db",
+        ".db3",
+        ".sqlite",
+        ".sqlite3"
     };
     private static readonly JsonSerializerOptions prettyJsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -85,7 +128,9 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
         var normalizedPath = Path.GetFullPath(filePath);
+
         if (!File.Exists(normalizedPath))
         {
             return FileVisualization.Failure($"File '{normalizedPath}' was not found.");
@@ -122,13 +167,16 @@ public sealed partial class FileVisualizationService
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
 
         if (runtime?.LiveFiles.IsExternal(sessionId) == true)
+        {
             return await InspectExternalFileAsync(sessionId, sandboxRoot, sandboxPath, forceText, allowLargeFile, cancellationToken).ConfigureAwait(false);
+        }
 
         var normalizedPath = sandboxPath.Trim();
         var extension = Path.GetExtension(normalizedPath).ToLowerInvariant();
         var viewerKind = forceText
             ? FileViewerKinds.Text
             : Classify(extension, null);
+
         if (IsStreamingViewer(viewerKind))
         {
             return new FileVisualization(
@@ -146,6 +194,7 @@ public sealed partial class FileVisualizationService
                 null,
                 null);
         }
+
         if (viewerKind == FileViewerKinds.Sqlite)
         {
             return await InspectLiveDatabaseAsync(sessionId.Trim(), normalizedPath, cancellationToken)
@@ -153,30 +202,38 @@ public sealed partial class FileVisualizationService
         }
 
         var download = await DownloadLiveFilePreviewAsync(
-                sessionId.Trim(),
-                sandboxRoot,
-                normalizedPath,
-                allowLargeFile ? null : DefaultPreviewBytes,
-                cancellationToken)
+            sessionId.Trim(),
+            sandboxRoot,
+            normalizedPath,
+            allowLargeFile ? null : DefaultPreviewBytes,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!download.IsSuccess)
         {
             return FileVisualization.Failure(download.Message);
         }
+
         var result = download.Result;
 
         var fileName = ReadString(result, "fileName") ?? Path.GetFileName(normalizedPath);
         extension = NormalizeExtension(ReadString(result, "fileExtension"), fileName);
+
         var mimeType = ResolveMimeType(extension, ReadString(result, "mimeType") ?? ReadString(result, "contentType"));
         viewerKind = forceText
             ? FileViewerKinds.Text
             : Classify(extension, mimeType);
+
         if (viewerKind == FileViewerKinds.NetTrace)
+        {
             return await InspectDownloadedNetTraceAsync(result, fileName, cancellationToken).ConfigureAwait(false);
+        }
+
         var text = ReadString(result, "text");
         var base64 = ReadString(result, "base64");
         string? formatLabel = null;
         FileStructuredData? structuredData = null;
+
         if (!forceText && extension == ".plist" && (base64 is not null || text is not null))
         {
             try
@@ -200,6 +257,7 @@ public sealed partial class FileVisualizationService
         if (text is null && base64 is not null && IsTextViewer(viewerKind))
         {
             text = TryDecodeUtf8(base64);
+
             if (text is not null)
             {
                 base64 = null;
@@ -216,6 +274,7 @@ public sealed partial class FileVisualizationService
         }
 
         var rawText = text;
+
         if (text is not null)
         {
             text = FormatText(viewerKind, text);
@@ -264,11 +323,12 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken = default)
     {
         var resolution = await ResolveSessionArtifactAsync(
-                sessionId,
-                snapshotId,
-                artifactPath,
-                cancellationToken)
+            sessionId,
+            snapshotId,
+            artifactPath,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!resolution.IsSuccess || resolution.FilePath is null || resolution.Entry is null)
         {
             return FileVisualization.Failure(resolution.Message);
@@ -282,13 +342,15 @@ public sealed partial class FileVisualizationService
             ? FileViewerKinds.Text
             : Classify(extension, mimeType);
         var artifactDetails = await CalculateArtifactDetailsAsync(
-                resolution.FilePath,
-                resolution.Entry.LastModifiedUtc,
-                cancellationToken)
+            resolution.FilePath,
+            resolution.Entry.LastModifiedUtc,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (IsStreamingViewer(viewerKind))
         {
             var file = new FileInfo(resolution.FilePath);
+
             return new FileVisualization(
                 true,
                 "File stream ready.",
@@ -307,14 +369,18 @@ public sealed partial class FileVisualizationService
         }
 
         var preview = await InspectLocalFileCoreAsync(
-                resolution.FilePath,
-                resolution.Entry.Name,
-                resolution.Entry.MimeType,
-                forceText,
-                allowLargeFile,
-                cancellationToken)
+            resolution.FilePath,
+            resolution.Entry.Name,
+            resolution.Entry.MimeType,
+            forceText,
+            allowLargeFile,
+            cancellationToken)
             .ConfigureAwait(false);
-        return preview with { ArtifactDetails = artifactDetails };
+
+        return preview with
+        {
+            ArtifactDetails = artifactDetails
+        };
     }
 
     public async Task<FileContentSource> ResolveSessionArtifactContentAsync(
@@ -324,11 +390,12 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken = default)
     {
         var resolution = await ResolveSessionArtifactAsync(
-                sessionId,
-                snapshotId,
-                artifactPath,
-                cancellationToken)
+            sessionId,
+            snapshotId,
+            artifactPath,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!resolution.IsSuccess || resolution.FilePath is null || resolution.Entry is null)
         {
             return FileContentSource.Failure(resolution.Message);
@@ -337,6 +404,7 @@ public sealed partial class FileVisualizationService
         var file = new FileInfo(resolution.FilePath);
         var extension = NormalizeExtension(resolution.Entry.FileExtension, resolution.Entry.Name ?? file.Name);
         var mimeType = ResolveMimeType(extension, resolution.Entry.MimeType);
+
         return new FileContentSource(
             true,
             "Artifact content ready.",
@@ -353,6 +421,7 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
         if (!TryValidateReadOnlySql(sql, out var normalizedSql, out var validationMessage))
         {
             return FileDatabaseQueryResult.Failure(validationMessage);
@@ -361,16 +430,19 @@ public sealed partial class FileVisualizationService
         try
         {
             EnsureSqliteProviderInitialized();
+
             await using var connection = await OpenReadOnlyDatabaseAsync(Path.GetFullPath(filePath), cancellationToken)
                 .ConfigureAwait(false);
             await using var command = connection.CreateCommand();
             command.CommandText = normalizedSql;
+
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
             return await ReadLocalQueryResultAsync(
-                    reader,
-                    normalizedSql,
-                    Math.Clamp(maximumRows, 1, MaximumDatabaseRows),
-                    cancellationToken)
+                reader,
+                normalizedSql,
+                Math.Clamp(maximumRows, 1, MaximumDatabaseRows),
+                cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is SqliteException or IOException or UnauthorizedAccessException)
@@ -389,6 +461,7 @@ public sealed partial class FileVisualizationService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
+
         if (!TryValidateReadOnlySql(sql, out var normalizedSql, out var validationMessage))
         {
             return FileDatabaseQueryResult.Failure(validationMessage);
@@ -399,6 +472,7 @@ public sealed partial class FileVisualizationService
             try
             {
                 using var copy = await Runtime.LiveFiles.CopyAsync(sessionId, sandboxRoot, sandboxPath, true, cancellationToken).ConfigureAwait(false);
+
                 return await QueryLocalDatabaseAsync(copy.Path, normalizedSql, maximumRows, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
@@ -414,11 +488,12 @@ public sealed partial class FileVisualizationService
             ["maxRows"] = Math.Clamp(maximumRows, 1, MaximumDatabaseRows)
         };
         var response = await Runtime.AppTools.CallWithCatalogAsync(
-                sessionId.Trim(),
-                "data.query",
-                arguments,
-                cancellationToken)
+            sessionId.Trim(),
+            "data.query",
+            arguments,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!TryReadToolResult(response, out var result, out var errorMessage))
         {
             return FileDatabaseQueryResult.Failure(errorMessage);
@@ -436,21 +511,22 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken = default)
     {
         var resolution = await ResolveSessionArtifactAsync(
-                sessionId,
-                snapshotId,
-                artifactPath,
-                cancellationToken)
+            sessionId,
+            snapshotId,
+            artifactPath,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!resolution.IsSuccess || resolution.FilePath is null)
         {
             return FileDatabaseQueryResult.Failure(resolution.Message);
         }
 
         return await QueryLocalDatabaseAsync(
-                resolution.FilePath,
-                sql,
-                maximumRows,
-                cancellationToken)
+            resolution.FilePath,
+            sql,
+            maximumRows,
+            cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -461,18 +537,65 @@ public sealed partial class FileVisualizationService
             : extension.StartsWith('.') ? extension.ToLowerInvariant() : $".{extension.ToLowerInvariant()}";
         var normalizedMimeType = mimeType?.Split(';', 2)[0].Trim().ToLowerInvariant() ?? string.Empty;
 
-        if (normalizedExtension is ".glb" or ".gltf" or ".obj" or ".stl" || normalizedMimeType is "model/gltf+json" or "model/gltf-binary" or "model/obj" or "model/stl") return FileViewerKinds.Model3D;
-        if (normalizedExtension is ".zip" or ".tar" or ".gz" or ".gzip" or ".tgz" || normalizedMimeType is "application/zip" or "application/x-zip-compressed" or "application/x-tar" or "application/gzip" or "application/x-gzip") return FileViewerKinds.Archive;
-        if (normalizedExtension == ".nettrace") return FileViewerKinds.NetTrace;
-        if (normalizedExtension is ".pftrace" or ".perfetto-trace" || normalizedMimeType == "application/vnd.perfetto.trace") return FileViewerKinds.Perfetto;
-        if (normalizedExtension == ".cpuprofile" || normalizedMimeType == "application/vnd.speedscope+json") return FileViewerKinds.Profile;
-        if (normalizedExtension == ".har" || normalizedMimeType == "application/har+json") return FileViewerKinds.Har;
-        if (normalizedExtension is ".geojson" or ".gpx" or ".kml" || normalizedMimeType is "application/geo+json" or "application/gpx+xml" or "application/vnd.google-earth.kml+xml") return FileViewerKinds.Geo;
-        if (normalizedExtension is ".jsonl" or ".ndjson" || normalizedMimeType is "application/x-ndjson" or "application/ndjson" or "application/jsonl" or "application/jsonlines" or "application/json-seq") return FileViewerKinds.JsonLines;
-        if (normalizedExtension == ".tsv" || normalizedMimeType == "text/tab-separated-values") return FileViewerKinds.Tsv;
-        if (normalizedExtension is ".yaml" or ".yml" || normalizedMimeType is "application/yaml" or "application/x-yaml" or "text/yaml" or "text/x-yaml") return FileViewerKinds.Yaml;
-        if (normalizedExtension == ".toml" || normalizedMimeType is "application/toml" or "text/toml") return FileViewerKinds.Toml;
-        if (normalizedExtension is ".html" or ".htm" || normalizedMimeType == "text/html") return FileViewerKinds.Html;
+        if (normalizedExtension is ".glb" or ".gltf" or ".obj" or ".stl" || normalizedMimeType is "model/gltf+json" or "model/gltf-binary" or "model/obj" or "model/stl")
+        {
+            return FileViewerKinds.Model3D;
+        }
+
+        if (normalizedExtension is ".zip" or ".tar" or ".gz" or ".gzip" or ".tgz" || normalizedMimeType is "application/zip" or "application/x-zip-compressed" or "application/x-tar" or "application/gzip" or "application/x-gzip")
+        {
+            return FileViewerKinds.Archive;
+        }
+
+        if (normalizedExtension == ".nettrace")
+        {
+            return FileViewerKinds.NetTrace;
+        }
+
+        if (normalizedExtension is ".pftrace" or ".perfetto-trace" || normalizedMimeType == "application/vnd.perfetto.trace")
+        {
+            return FileViewerKinds.Perfetto;
+        }
+
+        if (normalizedExtension == ".cpuprofile" || normalizedMimeType == "application/vnd.speedscope+json")
+        {
+            return FileViewerKinds.Profile;
+        }
+
+        if (normalizedExtension == ".har" || normalizedMimeType == "application/har+json")
+        {
+            return FileViewerKinds.Har;
+        }
+
+        if (normalizedExtension is ".geojson" or ".gpx" or ".kml" || normalizedMimeType is "application/geo+json" or "application/gpx+xml" or "application/vnd.google-earth.kml+xml")
+        {
+            return FileViewerKinds.Geo;
+        }
+
+        if (normalizedExtension is ".jsonl" or ".ndjson" || normalizedMimeType is "application/x-ndjson" or "application/ndjson" or "application/jsonl" or "application/jsonlines" or "application/json-seq")
+        {
+            return FileViewerKinds.JsonLines;
+        }
+
+        if (normalizedExtension == ".tsv" || normalizedMimeType == "text/tab-separated-values")
+        {
+            return FileViewerKinds.Tsv;
+        }
+
+        if (normalizedExtension is ".yaml" or ".yml" || normalizedMimeType is "application/yaml" or "application/x-yaml" or "text/yaml" or "text/x-yaml")
+        {
+            return FileViewerKinds.Yaml;
+        }
+
+        if (normalizedExtension == ".toml" || normalizedMimeType is "application/toml" or "text/toml")
+        {
+            return FileViewerKinds.Toml;
+        }
+
+        if (normalizedExtension is ".html" or ".htm" || normalizedMimeType == "text/html")
+        {
+            return FileViewerKinds.Html;
+        }
 
         if (sqliteExtensions.Contains(normalizedExtension)
             || normalizedMimeType.Contains("sqlite", StringComparison.Ordinal))
@@ -540,7 +663,7 @@ public sealed partial class FileVisualizationService
         }
 
         return normalizedMimeType.StartsWith("text/", StringComparison.Ordinal)
-               || normalizedExtension is ".ini" or ".log" or ".txt"
+            || normalizedExtension is ".ini" or ".log" or ".txt"
             ? FileViewerKinds.Text
             : FileViewerKinds.Binary;
     }
@@ -564,6 +687,7 @@ public sealed partial class FileVisualizationService
             useAsync: true);
 
         int bytesRead;
+
         while ((bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
         {
             sha256.AppendData(buffer, 0, bytesRead);
@@ -574,6 +698,7 @@ public sealed partial class FileVisualizationService
         var resolvedDownloadedAtUtc = string.IsNullOrWhiteSpace(downloadedAtUtc)
             ? new FileInfo(filePath).LastWriteTimeUtc.ToString("O", CultureInfo.InvariantCulture)
             : downloadedAtUtc.Trim();
+
         return new FileArtifactDetails(
             resolvedDownloadedAtUtc,
             Convert.ToHexStringLower(sha256.GetHashAndReset()),
@@ -597,6 +722,7 @@ public sealed partial class FileVisualizationService
             var viewerKind = forceText
                 ? FileViewerKinds.Text
                 : Classify(extension, mimeType);
+
             if (viewerKind is FileViewerKinds.Audio or FileViewerKinds.Video or FileViewerKinds.Archive or FileViewerKinds.Perfetto)
             {
                 return new FileVisualization(
@@ -614,8 +740,12 @@ public sealed partial class FileVisualizationService
                     null,
                     null);
             }
+
             if (viewerKind == FileViewerKinds.NetTrace)
+            {
                 return await InspectNetTraceAsync(filePath, displayName ?? file.Name, cancellationToken).ConfigureAwait(false);
+            }
+
             if (!forceText
                 && viewerKind != FileViewerKinds.Sqlite
                 && file.Length >= sqliteHeader.Length
@@ -628,6 +758,7 @@ public sealed partial class FileVisualizationService
             if (viewerKind == FileViewerKinds.Sqlite)
             {
                 var schema = await LoadLocalDatabaseSchemaAsync(filePath, cancellationToken).ConfigureAwait(false);
+
                 return new FileVisualization(
                     true,
                     "SQLite schema ready.",
@@ -660,6 +791,7 @@ public sealed partial class FileVisualizationService
             string? rawText = null;
             string? formatLabel = null;
             FileStructuredData? structuredData = null;
+
             if (IsTextViewer(viewerKind))
             {
                 if (!forceText && extension == ".plist")
@@ -673,6 +805,7 @@ public sealed partial class FileVisualizationService
                 {
                     rawText = DecodeText(bytes);
                 }
+
                 text = FormatText(viewerKind, rawText);
             }
             else
@@ -699,11 +832,11 @@ public sealed partial class FileVisualizationService
                 structuredData);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or InvalidDataException
-                                           or SqliteException
-                                           or XmlException
-                                           or JsonException)
+            or UnauthorizedAccessException
+            or InvalidDataException
+            or SqliteException
+            or XmlException
+            or JsonException)
         {
             return FileVisualization.Failure(exception.Message);
         }
@@ -715,11 +848,12 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken)
     {
         var response = await Runtime.AppTools.CallWithCatalogAsync(
-                sessionId,
-                "data.describe_schema",
-                new JsonObject { ["path"] = sandboxPath },
-                cancellationToken)
+            sessionId,
+            "data.describe_schema",
+            new JsonObject { ["path"] = sandboxPath },
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!TryReadToolResult(response, out var result, out var errorMessage))
         {
             return FileVisualization.Failure(
@@ -727,6 +861,7 @@ public sealed partial class FileVisualizationService
         }
 
         var schema = CreateRemoteDatabaseSchema(result, sandboxPath);
+
         return new FileVisualization(
             true,
             "SQLite schema ready.",
@@ -756,6 +891,7 @@ public sealed partial class FileVisualizationService
 
         var session = await Runtime.Sessions.LoadSnapshotAsync(sessionId.Trim(), null, cancellationToken)
             .ConfigureAwait(false);
+
         if (session is null)
         {
             return ResolvedArtifactFile.Failure($"Session '{sessionId}' was not found.");
@@ -763,19 +899,21 @@ public sealed partial class FileVisualizationService
 
         var requestedPath = SessionFileLocator.NormalizeArtifactPath(artifactPath);
         var normalizedSnapshotId = string.IsNullOrWhiteSpace(snapshotId) ? null : snapshotId.Trim();
+
         foreach (var snapshot in session.ArtifactSnapshots.Where(candidate =>
                      normalizedSnapshotId is null
-                     || string.Equals(candidate.SnapshotId, normalizedSnapshotId, StringComparison.Ordinal)))
+                         || string.Equals(candidate.SnapshotId, normalizedSnapshotId, StringComparison.Ordinal)))
         {
             var entry = snapshot.Entries.FirstOrDefault(candidate =>
-                string.Equals(
-                    SessionFileLocator.NormalizeArtifactPath(candidate.SnapshotRelativePath),
-                    requestedPath,
-                    StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    SessionFileLocator.NormalizeArtifactPath(candidate.ArchiveRelativePath),
-                    requestedPath,
-                    StringComparison.OrdinalIgnoreCase));
+                        string.Equals(
+                            SessionFileLocator.NormalizeArtifactPath(candidate.SnapshotRelativePath),
+                            requestedPath,
+                            StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(
+                                SessionFileLocator.NormalizeArtifactPath(candidate.ArchiveRelativePath),
+                                requestedPath,
+                                StringComparison.OrdinalIgnoreCase));
+
             if (entry is null)
             {
                 continue;
@@ -787,11 +925,11 @@ public sealed partial class FileVisualizationService
             }
 
             if (!SessionFileLocator.TryResolveArtifactEntryPath(
-                    Runtime.ApplicationPaths,
-                    session,
-                    snapshot,
-                    entry,
-                    out var filePath)
+                Runtime.ApplicationPaths,
+                session,
+                snapshot,
+                entry,
+                out var filePath)
                 || !File.Exists(filePath))
             {
                 return ResolvedArtifactFile.Failure(
@@ -809,6 +947,7 @@ public sealed partial class FileVisualizationService
         CancellationToken cancellationToken)
     {
         EnsureSqliteProviderInitialized();
+
         await using var connection = await OpenReadOnlyDatabaseAsync(filePath, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -818,9 +957,11 @@ public sealed partial class FileVisualizationService
               AND name NOT LIKE 'sqlite_%'
             ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name COLLATE NOCASE
             """;
+
         var objects = new List<FileDatabaseObject>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var definitions = new List<DatabaseObjectDefinition>();
+
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             definitions.Add(new DatabaseObjectDefinition(
@@ -839,8 +980,10 @@ public sealed partial class FileVisualizationService
                 ORDER BY cid
                 """;
             columnsCommand.Parameters.AddWithValue("$objectName", definition.Name);
+
             var columns = new List<FileDatabaseColumn>();
             await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+
             while (await columnsReader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 var name = columnsReader.GetString(0);
@@ -866,12 +1009,14 @@ public sealed partial class FileVisualizationService
     private static FileDatabaseSchema CreateRemoteDatabaseSchema(JsonObject result, string fallbackPath)
     {
         var objects = new List<FileDatabaseObject>();
+
         if (result["tables"] is JsonArray tables)
         {
             foreach (var table in tables.OfType<JsonObject>())
             {
                 var name = ReadString(table, "name") ?? string.Empty;
                 var columns = new List<FileDatabaseColumn>();
+
                 if (table["columns"] is JsonArray columnNodes)
                 {
                     foreach (var column in columnNodes.OfType<JsonObject>())
@@ -916,17 +1061,21 @@ public sealed partial class FileVisualizationService
                 string.Empty))
             .ToArray();
         var rows = new List<IReadOnlyList<string>>();
+
         while (rows.Count <= maximumRows && await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var cells = new string[reader.FieldCount];
+
             for (var index = 0; index < reader.FieldCount; index++)
             {
                 cells[index] = FormatDatabaseValue(reader.GetValue(index));
             }
+
             rows.Add(cells);
         }
 
         var isTruncated = rows.Count > maximumRows;
+
         if (isTruncated)
         {
             rows.RemoveAt(rows.Count - 1);
@@ -944,6 +1093,7 @@ public sealed partial class FileVisualizationService
     private static FileDatabaseQueryResult CreateRemoteQueryResult(JsonObject result, string sql)
     {
         var columns = new List<FileDatabaseColumn>();
+
         if (result["columnMetadata"] is JsonArray columnMetadata)
         {
             foreach (var column in columnMetadata.OfType<JsonObject>())
@@ -963,11 +1113,13 @@ public sealed partial class FileVisualizationService
             columns.AddRange(columnNames.Select((column, index) =>
             {
                 var name = column?.GetValue<string>() ?? string.Empty;
+
                 return new FileDatabaseColumn(name, CreateColumnKey(name, index), string.Empty, true, false, string.Empty);
             }));
         }
 
         var rows = new List<IReadOnlyList<string>>();
+
         if (result["rowValues"] is JsonArray rowValues)
         {
             foreach (var row in rowValues.OfType<JsonArray>())
@@ -988,6 +1140,7 @@ public sealed partial class FileVisualizationService
         }
 
         var isTruncated = ReadBoolean(result, "truncated");
+
         return new FileDatabaseQueryResult(
             true,
             isTruncated ? $"Showing the first {rows.Count:N0} rows." : $"Returned {rows.Count:N0} rows.",
@@ -1004,6 +1157,7 @@ public sealed partial class FileVisualizationService
     {
         result = new JsonObject();
         errorMessage = response.Message;
+
         if (!response.Success || response.Envelope?.Payload is not JsonObject payload)
         {
             return false;
@@ -1014,16 +1168,19 @@ public sealed partial class FileVisualizationService
             && !success)
         {
             errorMessage = ReadString(payload, "message") ?? response.Message;
+
             return false;
         }
 
         if (payload["result"] is not JsonObject resultObject)
         {
             errorMessage = ReadString(payload, "message") ?? "The app returned no file result.";
+
             return false;
         }
 
         result = resultObject;
+
         return true;
     }
 
@@ -1038,12 +1195,15 @@ public sealed partial class FileVisualizationService
         JsonObject? firstResult = null;
         string? expectedVersion = null;
         var hasMore = false;
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var remainingBytes = maximumBytes.HasValue
                 ? maximumBytes.Value - content.Length
                 : LiveFileDownloadChunkBytes;
+
             if (remainingBytes <= 0)
             {
                 hasMore = true;
@@ -1057,33 +1217,39 @@ public sealed partial class FileVisualizationService
                 ["maxBytes"] = (int)Math.Min(LiveFileDownloadChunkBytes, remainingBytes),
                 ["encoding"] = "base64"
             };
+
             if (!string.IsNullOrWhiteSpace(sandboxRoot))
             {
                 arguments["root"] = sandboxRoot.Trim();
             }
+
             if (!string.IsNullOrWhiteSpace(expectedVersion))
             {
                 arguments["expectedVersion"] = expectedVersion;
             }
 
             var response = await Runtime.LiveFiles.CallAsync(
-                    sessionId,
-                    "files.download_file",
-                    arguments,
-                    cancellationToken)
+                sessionId,
+                "files.download_file",
+                arguments,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!TryReadToolResult(response, out var result, out var errorMessage))
             {
                 return LiveFilePreviewDownload.Failure(errorMessage);
             }
 
             firstResult ??= result.DeepClone().AsObject();
+
             if (!maximumBytes.HasValue && ReadInt64(result, "sizeBytes") > int.MaxValue)
             {
                 return LiveFilePreviewDownload.Failure(
                     $"The {ReadInt64(result, "sizeBytes"):N0}-byte file is too large to preview in memory.");
             }
+
             var base64 = ReadString(result, "base64");
+
             if (base64 is null)
             {
                 return LiveFilePreviewDownload.Failure(
@@ -1091,6 +1257,7 @@ public sealed partial class FileVisualizationService
             }
 
             byte[] bytes;
+
             try
             {
                 bytes = Convert.FromBase64String(base64);
@@ -1103,10 +1270,12 @@ public sealed partial class FileVisualizationService
 
             await content.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             hasMore = ReadBoolean(result, "hasMore");
+
             if (!hasMore)
             {
                 break;
             }
+
             if (bytes.Length == 0)
             {
                 return LiveFilePreviewDownload.Failure(
@@ -1126,6 +1295,7 @@ public sealed partial class FileVisualizationService
         firstResult["encoding"] = "base64";
         firstResult["text"] = null;
         firstResult["base64"] = Convert.ToBase64String(content.GetBuffer(), 0, checked((int)content.Length));
+
         return LiveFilePreviewDownload.Success(firstResult);
     }
 
@@ -1135,22 +1305,27 @@ public sealed partial class FileVisualizationService
         out string message)
     {
         normalizedSql = sql?.Trim() ?? string.Empty;
+
         if (string.IsNullOrWhiteSpace(normalizedSql))
         {
             message = "A read-only SQL query is required.";
+
             return false;
         }
 
         var firstToken = normalizedSql
             .Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault()?.ToLowerInvariant();
+
         if (firstToken is not ("select" or "with" or "pragma" or "explain"))
         {
             message = "The local player only permits read-only SELECT, WITH, PRAGMA, or EXPLAIN queries.";
+
             return false;
         }
 
         message = string.Empty;
+
         return true;
     }
 
@@ -1165,12 +1340,14 @@ public sealed partial class FileVisualizationService
             Pooling = false
         }.ToString());
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
         return connection;
     }
 
     private static async Task<bool> IsSqliteFileAsync(string filePath, CancellationToken cancellationToken)
     {
         var bytes = await ReadLimitedBytesAsync(filePath, sqliteHeader.Length, cancellationToken).ConfigureAwait(false);
+
         return bytes.AsSpan().SequenceEqual(sqliteHeader);
     }
 
@@ -1179,6 +1356,7 @@ public sealed partial class FileVisualizationService
         try
         {
             var bytes = Convert.FromBase64String(base64);
+
             return bytes.AsSpan().StartsWith(sqliteHeader);
         }
         catch (FormatException)
@@ -1202,13 +1380,16 @@ public sealed partial class FileVisualizationService
         var byteCount = checked((int)Math.Min(stream.Length, maximumBytes));
         var bytes = new byte[byteCount];
         var offset = 0;
+
         while (offset < bytes.Length)
         {
             var count = await stream.ReadAsync(bytes.AsMemory(offset), cancellationToken).ConfigureAwait(false);
+
             if (count == 0)
             {
                 break;
             }
+
             offset += count;
         }
 
@@ -1224,6 +1405,7 @@ public sealed partial class FileVisualizationService
             detectEncodingFromByteOrderMarks: true,
             bufferSize: 4096,
             leaveOpen: false);
+
         return reader.ReadToEnd();
     }
 
@@ -1256,6 +1438,7 @@ public sealed partial class FileVisualizationService
                     DtdProcessing = DtdProcessing.Prohibit,
                     XmlResolver = null
                 });
+
                 return XDocument.Load(xmlReader).ToString();
             }
         }
@@ -1343,6 +1526,7 @@ public sealed partial class FileVisualizationService
     internal static string ResolveMimeType(string extension, string? suppliedMimeType = null)
     {
         var normalizedMimeType = suppliedMimeType?.Split(';', 2)[0].Trim().ToLowerInvariant();
+
         if (!string.IsNullOrWhiteSpace(normalizedMimeType)
             && normalizedMimeType != "application/octet-stream"
             && !(normalizedMimeType == "text/plain" && mediaMimeTypes.ContainsKey(extension)))
@@ -1396,10 +1580,12 @@ public sealed partial class FileVisualizationService
     private static string NormalizeExtension(string? extension, string fileName)
     {
         var normalized = string.IsNullOrWhiteSpace(extension) ? Path.GetExtension(fileName) : extension;
+
         if (string.IsNullOrWhiteSpace(normalized))
         {
             return string.Empty;
         }
+
         return normalized.StartsWith('.') ? normalized.ToLowerInvariant() : $".{normalized.ToLowerInvariant()}";
     }
 
@@ -1421,15 +1607,18 @@ public sealed partial class FileVisualizationService
         {
             return "NULL";
         }
+
         if (node is JsonValue value && value.TryGetValue<string>(out var text))
         {
             return text;
         }
+
         if (node is JsonObject blob
             && string.Equals(ReadString(blob, "type"), "blob", StringComparison.OrdinalIgnoreCase))
         {
             return $"<BLOB {ReadInt64(blob, "byteLength"):N0} bytes>";
         }
+
         return node.ToJsonString();
     }
 
@@ -1442,10 +1631,12 @@ public sealed partial class FileVisualizationService
         {
             return 0;
         }
+
         if (node.TryGetValue<long>(out var result))
         {
             return result;
         }
+
         return node.TryGetValue<int>(out var integer) ? integer : 0;
     }
 
@@ -1469,6 +1660,7 @@ public sealed partial class FileVisualizationService
             SQLitePCL.raw.SetProvider(provider);
             SQLitePCL.raw.FreezeProvider();
         }
+
         return true;
     }
 
@@ -1477,7 +1669,7 @@ public sealed partial class FileVisualizationService
     private sealed record LiveFilePreviewDownload(bool IsSuccess, string Message, JsonObject Result)
     {
         public static LiveFilePreviewDownload Success(JsonObject result)
-            => new(true, "File preview downloaded.", result);
+                => new(true, "File preview downloaded.", result);
 
         public static LiveFilePreviewDownload Failure(string message)
             => new(false, message, new JsonObject());
@@ -1490,7 +1682,7 @@ public sealed partial class FileVisualizationService
         SessionArtifactEntry? Entry)
     {
         public static ResolvedArtifactFile Success(string filePath, SessionArtifactEntry entry)
-            => new(true, "Artifact file resolved.", filePath, entry);
+                => new(true, "Artifact file resolved.", filePath, entry);
 
         public static ResolvedArtifactFile Failure(string message)
             => new(false, message, null, null);

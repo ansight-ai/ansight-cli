@@ -12,6 +12,7 @@ internal static class AnalyticsCommands
         var command = arguments.RequirePositional(1, "analytics command").ToLowerInvariant();
         var settings = new AnalyticsSettingsStore(
             CliRuntime.ResolveDataDirectory(arguments.GetOption("data-dir")));
+
         return command switch
         {
             "status" => WriteStatus(arguments, output, settings, "status"),
@@ -26,6 +27,7 @@ internal static class AnalyticsCommands
     {
         var action = arguments.RequirePositional(2, "lifecycle action").ToLowerInvariant();
         arguments.EnsurePositionalCount(3, "ansight analytics lifecycle install|update");
+
         if (action is not ("install" or "update"))
         {
             throw new CliUsageException(
@@ -35,6 +37,7 @@ internal static class AnalyticsCommands
         output.Write(
             new AnalyticsLifecycleOutput("ansight.cli.analytics-lifecycle/v1", action),
             () => $"Recorded CLI {action} lifecycle event.");
+
         return CliExitCodes.Success;
     }
 
@@ -45,6 +48,7 @@ internal static class AnalyticsCommands
     {
         var action = arguments.RequirePositional(2, "detailed analytics action").ToLowerInvariant();
         arguments.EnsurePositionalCount(3, "ansight analytics detailed enable|disable");
+
         var enabled = action switch
         {
             "enable" => true,
@@ -54,9 +58,12 @@ internal static class AnalyticsCommands
         };
 
         if (enabled && !settings.HasSignedInAccount)
+        {
             throw new CliUsageException("Sign in before opting in to detailed analytics.");
+        }
 
         settings.SetDetailedTrackingEnabled(enabled);
+
         if (!enabled)
         {
             new EventOutbox(settings.AnalyticsDirectoryPath).RemoveDetailedEvents();
@@ -76,6 +83,7 @@ internal static class AnalyticsCommands
             action == "status"
                 ? "ansight analytics status"
                 : "ansight analytics detailed enable|disable");
+
         var result = new AnalyticsStatusOutput(
             "ansight.cli.analytics-status/v1",
             DailyUseTrackingEnabled: true,
@@ -85,14 +93,15 @@ internal static class AnalyticsCommands
         output.Write(
             result,
             () => $"Local engagement tracking: enabled (mandatory)\n"
-                  + $"Detailed usage consent: {(result.DetailedTrackingEnabled ? "enabled" : "disabled")}\n"
-                  + $"Detailed usage active: {(settings.IsDetailedTrackingActive ? "yes" : "no; requires sign-in and consent")}\n"
-                  + "Engagement records daily active use, any CLI use at most once per 24 hours, and an hourly engaged event after two local actions. Command names are excluded.\n"
-                  + "Detailed tracking adds normalized operations, outcomes, timings, local feature/recording counters, and acquisition milestones.\n"
-                  + "Disabling detailed tracking leaves baseline engagement and install/update events enabled, including without sign-in.\n"
-                  + "Provider: PostHog. Privacy: https://www.ansight.ai/privacy\n"
-                  + "Events are queued locally; authentication and install commands attempt a bounded delivery, and the host retries while running.\n"
-                  + $"Settings: {result.SettingsPath}");
+                + $"Detailed usage consent: {(result.DetailedTrackingEnabled ? "enabled" : "disabled")}\n"
+                + $"Detailed usage active: {(settings.IsDetailedTrackingActive ? "yes" : "no; requires sign-in and consent")}\n"
+                + "Engagement records daily active use, any CLI use at most once per 24 hours, and an hourly engaged event after two local actions. Command names are excluded.\n"
+                + "Detailed tracking adds normalized operations, outcomes, timings, local feature/recording counters, and acquisition milestones.\n"
+                + "Disabling detailed tracking leaves baseline engagement and install/update events enabled, including without sign-in.\n"
+                + "Provider: PostHog. Privacy: https://www.ansight.ai/privacy\n"
+                + "Events are queued locally; authentication and install commands attempt a bounded delivery, and the host retries while running.\n"
+                + $"Settings: {result.SettingsPath}");
+
         return CliExitCodes.Success;
     }
 

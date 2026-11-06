@@ -21,6 +21,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
 
         var connectResponse = await SendConnectRequestAsync(pairingConfig);
         Assert.True(connectResponse.Accepted);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(
             new Uri($"ws://127.0.0.1:{connectResponse.WebSocketPort}{connectResponse.WebSocketPath}?token={connectResponse.WebSocketToken}"),
@@ -31,13 +32,16 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
                 return sessionId is not null;
             },
             because: "The paired app should appear as a connected tool session.");
 
         await OpenClientSessionAsync(socket);
+
         var catalogRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, catalogRequest["type"]?.GetValue<string>());
+
         var catalogRequestId = Assert.IsAssignableFrom<JsonValue>(catalogRequest["id"]).GetValue<string>();
         await SendJsonAsync(socket, new JsonObject
         {
@@ -68,6 +72,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var artifactRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.CallType, artifactRequest["type"]?.GetValue<string>());
         Assert.Equal("artifacts.query", artifactRequest["payload"]?["toolId"]?.GetValue<string>());
+
         var artifactRequestId = Assert.IsAssignableFrom<JsonValue>(artifactRequest["id"]).GetValue<string>();
         await SendJsonAsync(socket, new JsonObject
         {
@@ -98,7 +103,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         AppSessionSnapshot? snapshot = null;
         await TestWait.UntilAsync(
             () => runtime.Sessions.TryGetSnapshot(sessionId!, out snapshot)
-                  && snapshot?.AppToolCatalog?.ArtifactCatalog is not null,
+                && snapshot?.AppToolCatalog?.ArtifactCatalog is not null,
             because: "The session-open catalog and artifact providers should be retained on the session.");
         Assert.Contains(
             snapshot!.AppToolCatalog!.ToolCatalog["tools"]!.AsArray(),
@@ -135,12 +140,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 var connectedSessions = runtime.AppTools.GetConnectedSessionIds();
+
                 if (connectedSessions.Count != 1)
                 {
                     return false;
                 }
 
                 sessionId = connectedSessions[0];
+
                 return true;
             },
             because: "The paired app should appear as a connected tool session.");
@@ -174,6 +181,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         var queryResponse = await queryTask;
         Assert.True(queryResponse.Success);
 
@@ -222,8 +230,9 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         AppSessionSnapshot? snapshot = null;
         await TestWait.UntilAsync(
             () => runtime.Sessions.TryGetSnapshot(sessionId!, out snapshot)
-                  && snapshot?.ArtifactSnapshots.Count == 1,
+                && snapshot?.ArtifactSnapshots.Count == 1,
             because: "The descriptor result should be promoted to a durable session artifact.");
+
         var artifact = Assert.Single(snapshot!.ArtifactSnapshots);
         Assert.Equal("file-descriptor-snapshot", artifact.Kind);
         Assert.Equal("ansight.app-tool.diagnostic", artifact.Source);
@@ -257,12 +266,14 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             () =>
             {
                 var connectedSessions = runtime.AppTools.GetConnectedSessionIds();
+
                 if (connectedSessions.Count != 1)
                 {
                     return false;
                 }
 
                 sessionId = connectedSessions[0];
+
                 return true;
             },
             because: "The paired app should appear as a connected tool session.");
@@ -270,6 +281,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var queryTask = runtime.AppTools.QueryAsync(sessionId!);
         var queryRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.QueryType, queryRequest["type"]?.GetValue<string>());
+
         var queryRequestId = queryRequest["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(queryRequestId));
         await SendJsonAsync(
@@ -309,15 +321,19 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                     }
                 }
             });
+
         var queryResponse = await queryTask;
         Assert.True(queryResponse.Success);
+
         var catalogTools = queryResponse.Envelope!.Payload!["tools"]!.AsArray();
         var echoTool = catalogTools.Single(node => node!["id"]!.GetValue<string>() == "demo.echo")!.AsObject();
         Assert.True(echoTool["executable"]!.GetValue<bool>());
         Assert.Null(echoTool["denial"]);
+
         var criticalTool = catalogTools.Single(node => node!["id"]!.GetValue<string>() == "demo.critical")!.AsObject();
         Assert.False(criticalTool["executable"]!.GetValue<bool>());
         Assert.Equal("tool_policy_not_granted", criticalTool["denial"]!["code"]!.GetValue<string>());
+
         var unavailableTool = catalogTools.Single(node => node!["id"]!.GetValue<string>() == "mapwork.open")!.AsObject();
         Assert.False(unavailableTool["executable"]!.GetValue<bool>());
         Assert.Equal("screen_not_registered", unavailableTool["denial"]!["code"]!.GetValue<string>());
@@ -346,8 +362,10 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var toolRequest = await ReceiveJsonAsync(socket);
         Assert.Equal(ToolProtocolMessageTypes.CallType, toolRequest["type"]?.GetValue<string>());
         Assert.Equal(sessionId, toolRequest["sessionId"]?.GetValue<string>());
+
         var requestId = toolRequest["id"]?.GetValue<string>();
         Assert.False(string.IsNullOrWhiteSpace(requestId));
+
         var requestPayload = toolRequest["payload"]!.AsObject();
         Assert.Equal("demo.echo", requestPayload["toolId"]?.GetValue<string>());
 

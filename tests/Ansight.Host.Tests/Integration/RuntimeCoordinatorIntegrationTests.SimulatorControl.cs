@@ -24,18 +24,23 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var pairing = environment.SeedPairingConfig("org.nitri.opentopo", "OpenTopoMapViewer");
         await using var runtime = environment.CreateRuntime();
         await runtime.StartAsync();
+
         var connected = await SendConnectRequestAsync(pairing);
         Assert.True(connected.Accepted, connected.Reason);
+
         using var socket = new ClientWebSocket();
         await socket.ConnectAsync(new Uri(
             $"ws://127.0.0.1:{connected.WebSocketPort}{connected.WebSocketPath}?token={connected.WebSocketToken}"),
             CancellationToken.None);
+
         string? sessionId = null;
         await TestWait.UntilAsync(() =>
         {
             sessionId = runtime.AppTools.GetConnectedSessionIds().SingleOrDefault();
+
             return sessionId is not null;
         });
+
         var profile = JsonSerializer.SerializeToNode(new DeviceAppProfile
         {
             Device = new DeviceProfile { OsName = "android", IsVirtual = true, IsEmulator = true },
@@ -51,10 +56,15 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             new("emulator-5554", "Ansight AnxReader API36", "device", true, "Android 16", "android",
                 BootIdentifier: "Ansight_AnxReader_API36")
         };
+
         if (duplicateAvd)
         {
-            devices.Add(devices[0] with { Identifier = "emulator-5556" });
+            devices.Add(devices[0] with
+            {
+                Identifier = "emulator-5556"
+            });
         }
+
         var source = new SimulatorProxyRuntimeSource(devices);
         var frames = new SimulatorProxyFrameSource();
         await using var input = new SimulatorProxyInputSink();
@@ -63,12 +73,20 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             requestedPort: 0, webRtcSessionFactory: hasVideoBackend ? video : null);
         await remote.StartAsync();
         runtime.LocalSimulatorControl = remote;
+
         var explorer = await runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest());
         using var client = new HttpClient { BaseAddress = Assert.IsType<Uri>(explorer.ExplorerUrl) };
         var prefix = $"api/sessions/{sessionId}/simulator";
-        using var offer = await client.PostAsJsonAsync($"{prefix}/offer", new { type = "offer", sdp = "test-offer" });
+        using var offer = await client.PostAsJsonAsync($"{prefix}/offer", new
+        {
+            type = "offer",
+            sdp = "test-offer"
+        });
         using var frame = await client.GetAsync($"{prefix}/frame");
-        using var button = await client.PostAsJsonAsync($"{prefix}/button", new { button = "back" });
+        using var button = await client.PostAsJsonAsync($"{prefix}/button", new
+        {
+            button = "back"
+        });
 
         if (duplicateAvd && reportedIdentifier != "emulator-5554")
         {
@@ -77,9 +95,11 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                 Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
                 Assert.Contains("Multiple booted Android emulators", await response.Content.ReadAsStringAsync());
             }
+
             Assert.Null(video.LastDeviceIdentifier);
             Assert.Null(frames.LastDeviceIdentifier);
             Assert.Null(input.LastDeviceIdentifier);
+
             return;
         }
 
@@ -103,6 +123,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
             });
             Assert.Equal(HttpStatusCode.OK, pointer.StatusCode);
         }
+
         Assert.Equal(new[] { "down", "up" }, input.PointerPhases);
 
         var summaries = await client.GetFromJsonAsync<SessionExplorerSummary[]>("api/sessions");
@@ -147,18 +168,25 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         Assert.False(server.TryResolveBootedDeviceIdentifier("Topo AVD", out _, out _));
     }
 
-    private sealed class SimulatorProxyRuntimeSource(IReadOnlyList<RemoteRuntimeDevice> devices) : IRemoteRuntimeSource
+    private sealed class SimulatorProxyRuntimeSource : IRemoteRuntimeSource
     {
-        public RemoteRuntimeSnapshot Current { get; } = new(DateTimeOffset.UtcNow, devices, null);
+        public SimulatorProxyRuntimeSource(IReadOnlyList<RemoteRuntimeDevice> devices)
+        {
+            this.Current = new(DateTimeOffset.UtcNow, devices, null);
+        }
+
+        public RemoteRuntimeSnapshot Current { get; }
     }
 
     private sealed class SimulatorProxyFrameSource : ISimulatorFrameSource
     {
         public static byte[] FrameBytes { get; } = [1, 2, 3, 4];
         public string? LastDeviceIdentifier { get; private set; }
+
         public Task<RemoteFrame> CaptureAsync(string deviceUdid, CancellationToken cancellationToken = default)
         {
             LastDeviceIdentifier = deviceUdid;
+
             return Task.FromResult(RemoteFrame.Png(FrameBytes));
         }
     }
@@ -169,21 +197,28 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         public string Status => "ready";
         public string? LastDeviceIdentifier { get; private set; }
         public List<string> PointerPhases { get; } = [];
+
         public Task<InputDeliveryResult> SendButtonAsync(RemoteButtonEvent buttonEvent, CancellationToken cancellationToken = default)
         {
             LastDeviceIdentifier = buttonEvent.DeviceUdid;
+
             return Task.FromResult(InputDeliveryResult.Success(BackendName));
         }
+
         public Task<InputDeliveryResult> SendAsync(RemotePointerEvent pointerEvent, CancellationToken cancellationToken = default)
         {
             LastDeviceIdentifier = pointerEvent.DeviceUdid;
             PointerPhases.Add(pointerEvent.Phase);
+
             return Task.FromResult(InputDeliveryResult.Success(BackendName));
         }
+
         public Task<InputDeliveryResult> SendKeyAsync(RemoteKeyEvent keyEvent, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+                    => throw new NotSupportedException();
+
         public Task<InputDeliveryResult> SendTextAsync(RemoteTextEvent textEvent, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
@@ -192,21 +227,40 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         public string BackendName => "test";
         public string Status => "ready";
         public string? LastDeviceIdentifier { get; private set; }
+
         public bool SupportsDevice(string deviceUdid) => deviceUdid == "emulator-5554";
+
         public ISimulatorWebRtcSession Create(string deviceUdid, int framesPerSecond)
         {
             LastDeviceIdentifier = deviceUdid;
+
             return new SimulatorProxyVideoSession(deviceUdid);
         }
     }
 
-    private sealed class SimulatorProxyVideoSession(string deviceUdid) : ISimulatorWebRtcSession
+    private sealed class SimulatorProxyVideoSession : ISimulatorWebRtcSession
     {
-        public string DeviceUdid { get; } = deviceUdid;
-        public event EventHandler<WebRtcInputMessageEventArgs>? InputReceived { add { } remove { } }
+        public SimulatorProxyVideoSession(string deviceUdid)
+        {
+            this.DeviceUdid = deviceUdid;
+        }
+
+        public string DeviceUdid { get; }
+        public event EventHandler<WebRtcInputMessageEventArgs>? InputReceived
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public Task<WebRtcSessionDescription> CreateAnswerAsync(WebRtcSessionDescription offer, CancellationToken cancellationToken = default)
-            => Task.FromResult(new WebRtcSessionDescription("answer", "test-answer"));
+                    => Task.FromResult(new WebRtcSessionDescription("answer", "test-answer"));
+
         public bool TrySendMessage(string message) => true;
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

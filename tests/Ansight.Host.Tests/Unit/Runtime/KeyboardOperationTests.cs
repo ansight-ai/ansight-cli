@@ -15,16 +15,19 @@ public sealed class KeyboardOperationTests
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateSession("test.app", "Keyboard", IPAddress.Loopback, null, null);
         state.SetSessionDeviceProfile(id, null, """{"device":{"nativeDeviceId":"simulator-001"}}""");
+
         var driver = new KeyboardDriver { IsOpen = true };
         var bridge = new ConnectedAppToolBridge(id, driver, true, false, false, supportsSubmit);
         var router = new UiInputRouter();
         router.Configure(driver);
         router.ConfigureAccessibility(driver);
+
         var catalog = CreateToolCatalog(state, environment, bridge, router);
         var entered = await CallAsync(catalog, "ansight_press_keyboard", id,
             new JsonObject { ["key"] = "Enter", ["includeScreenshot"] = false });
         Assert.True(entered["performed"]!.GetValue<bool>());
         Assert.Equal(1, driver.EnterCount);
+
         var submitted = await CallAsync(catalog, "ansight_submit_keyboard", id,
             new JsonObject { ["includeScreenshot"] = false }, expectedError: !supportsSubmit);
         Assert.Equal(supportsSubmit, submitted["performed"]!.GetValue<bool>());
@@ -33,24 +36,29 @@ public sealed class KeyboardOperationTests
         Assert.Equal(0, driver.BackCount);
         Assert.True(state.TryGetSessionSnapshot(id, out var snapshot));
         Assert.Contains(snapshot!.Logs, log => log.Tag == "keyboard.press");
+
         var actions = snapshot!.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>().ToArray();
         Assert.Equal(new[] { "keyboard.press", "keyboard.submit" }, actions.Select(action => action.Kind));
         Assert.All(actions, action => Assert.NotNull(action.EvidenceActionId));
         Assert.Equal(supportsSubmit ? "succeeded" : "failed", actions[1].Status);
+
         // Exercise the ordinary session persistence path, then extract from a newly loaded recording.
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         store.Save(snapshot);
         Assert.True(new SessionCaptureStore(environment.ApplicationPaths).TryLoad(id, out var retained));
+
         var extracted = TimelineTaskExtractor.Extract(retained!, snapshot.CreatedUtc,
             DateTimeOffset.UtcNow.AddSeconds(1), "Recorded keyboard actions");
         Assert.Contains("ansight.keyboard.press", extracted.Source);
         Assert.Equal(supportsSubmit, extracted.Source.Contains("ansight.keyboard.submit", StringComparison.Ordinal));
         Assert.Equal(supportsSubmit ? 2 : 1, extracted.GeneratedActionCount);
+
         if (supportsSubmit)
         {
             var tasks = Path.Combine(environment.RootPath, "ansight", "tasks");
             Directory.CreateDirectory(tasks);
             File.WriteAllText(Path.Combine(tasks, "recorded.ts"), extracted.Source);
+
             var composition = new MefHostComposition(environment.ApplicationPaths,
                 new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
             using var dispatcher = new OperationDispatcher(state, environment.ApplicationPaths,
@@ -60,6 +68,7 @@ public sealed class KeyboardOperationTests
             dispatcher.ConfigureRepositoryTaskRuntime("node");
             dispatcher.ConfigureUiInputDriver(driver);
             dispatcher.ConfigureUiAccessibilityDriver(driver);
+
             var replayed = await dispatcher.RunRepositoryTaskAsync(environment.RootPath, "test.app", id,
                 "recorded", null, CancellationToken.None);
             Assert.True(replayed.Status == RepositoryTaskRunStatus.Passed, replayed.Message + "\n" + replayed.StandardError);
@@ -89,11 +98,13 @@ public sealed class KeyboardOperationTests
             sessionId,
             profile: null,
             profileJson: """{"device":{"nativeDeviceId":"simulator-001"}}""");
+
         var driver = new KeyboardDriver();
         var bridge = new ConnectedAppToolBridge(sessionId, driver, supportsDismiss, closesBeforeRequest, toolFails);
         var inputRouter = new UiInputRouter();
         inputRouter.Configure(driver);
         inputRouter.ConfigureAccessibility(driver);
+
         var catalog = CreateToolCatalog(runtimeState, environment, bridge, inputRouter);
 
         var initialState = await CallAsync(catalog, "ansight_is_keyboard_open", sessionId);
@@ -125,10 +136,12 @@ public sealed class KeyboardOperationTests
             expectedError: !supportsDismiss || toolFails);
 
         Assert.Equal(0, driver.BackCount);
+
         if (!supportsDismiss || toolFails)
         {
             Assert.True(driver.IsOpen);
             Assert.False(dismissed["performed"]!.GetValue<bool>());
+
             return;
         }
 
@@ -174,6 +187,7 @@ public sealed class KeyboardOperationTests
     {
         var arguments = additionalArguments?.DeepClone().AsObject() ?? new JsonObject();
         arguments["sessionId"] = sessionId;
+
         var response = await catalog.HandleToolsCallAsync(new JsonObject
         {
             ["name"] = toolName,
@@ -183,16 +197,15 @@ public sealed class KeyboardOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.Equal(expectedError, response.Payload!["isError"]!.GetValue<bool>());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
     private sealed class KeyboardDriver : IUiInputDriver, IUiAccessibilityDriver, IUiInputPreflightDriver
     {
         public int TapCount { get; private set; }
-
         public int BackCount { get; private set; }
         public int EnterCount { get; private set; }
-
         public bool IsOpen { get; set; }
 
         public UiInputAvailability GetAvailability(string deviceIdentifier)
@@ -209,6 +222,7 @@ public sealed class KeyboardOperationTests
         {
             TapCount++;
             IsOpen = true;
+
             return Task.FromResult(Success("Tapped text input."));
         }
 
@@ -234,11 +248,14 @@ public sealed class KeyboardOperationTests
             if (request.Button == "enter")
             {
                 EnterCount++;
+
                 return Task.FromResult(Success("Enter delivered."));
             }
+
             Assert.Equal("back", request.Button);
             BackCount++;
             IsOpen = false;
+
             return Task.FromResult(Success("Dismissed keyboard."));
         }
 
@@ -303,16 +320,37 @@ public sealed class KeyboardOperationTests
             };
     }
 
-    private sealed class ConnectedAppToolBridge(
-        string sessionId, KeyboardDriver driver, bool supportsDismiss, bool closesBeforeRequest, bool toolFails,
-        bool supportsSubmit = false) : IAppToolBridge
+    private sealed class ConnectedAppToolBridge : IAppToolBridge
     {
+        private readonly string sessionId;
+        private readonly KeyboardDriver driver;
+        private readonly bool supportsDismiss;
+        private readonly bool closesBeforeRequest;
+        private readonly bool toolFails;
+        private readonly bool supportsSubmit;
+
+        public ConnectedAppToolBridge(
+            string sessionId, KeyboardDriver driver, bool supportsDismiss, bool closesBeforeRequest, bool toolFails,
+            bool supportsSubmit = false)
+        {
+            this.sessionId = sessionId;
+            this.driver = driver;
+            this.supportsDismiss = supportsDismiss;
+            this.closesBeforeRequest = closesBeforeRequest;
+            this.toolFails = toolFails;
+            this.supportsSubmit = supportsSubmit;
+        }
+
         public int DismissCount { get; private set; }
         public int SubmitCount { get; private set; }
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
@@ -347,22 +385,42 @@ public sealed class KeyboardOperationTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             if (toolId == "ui.get_screenshot")
+            {
                 return Task.FromResult(AppToolBridgeResponse.FromFailure("This test bridge has no screenshot provider."));
+            }
+
             if (toolId == "ui.submit_keyboard")
             {
-                if (!supportsSubmit) return Task.FromResult(AppToolBridgeResponse.FromFailure("Submit is unavailable."));
+                if (!supportsSubmit)
+                {
+                    return Task.FromResult(AppToolBridgeResponse.FromFailure("Submit is unavailable."));
+                }
+
                 SubmitCount++;
+
                 return Task.FromResult(AppToolBridgeResponse.FromSuccess("Submitted.", new ToolProtocolEnvelope
                 {
-                    Type = ToolProtocolMessageTypes.ResultType, Id = "submit",
+                    Type = ToolProtocolMessageTypes.ResultType,
+                    Id = "submit",
                     Payload = new JsonObject { ["success"] = true, ["result"] = new JsonObject { ["performed"] = true } }
                 }));
             }
+
             Assert.Equal("ui.dismiss_keyboard", toolId);
             Assert.True(supportsDismiss);
-            if (closesBeforeRequest) driver.IsOpen = false;
+
+            if (closesBeforeRequest)
+            {
+                driver.IsOpen = false;
+            }
+
             DismissCount++;
-            if (!toolFails) driver.IsOpen = false;
+
+            if (!toolFails)
+            {
+                driver.IsOpen = false;
+            }
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess("Dismiss result.", new ToolProtocolEnvelope
             {
                 Type = ToolProtocolMessageTypes.ResultType,
@@ -380,7 +438,7 @@ public sealed class KeyboardOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache

@@ -52,12 +52,14 @@ public sealed class WorkspaceTrendsService
             limit,
             spanGroup,
             limitPerSeries);
+
         if (string.IsNullOrWhiteSpace(appId))
         {
             return history;
         }
 
         var app = runtime.Apps.Get(appId);
+
         if (string.IsNullOrWhiteSpace(app?.CodebasePath) || !Directory.Exists(app.CodebasePath))
         {
             return history;
@@ -75,6 +77,7 @@ public sealed class WorkspaceTrendsService
                 DefinitionHash = definition.DefinitionHash
             })
             .ToArray();
+
         return history with
         {
             Charts = charts,
@@ -91,6 +94,7 @@ public sealed class WorkspaceTrendsService
         string? spanGroup = null)
     {
         ArgumentNullException.ThrowIfNull(applicationPaths);
+
         return CreateHistoryResult(
             new WorkspaceTrendsHistoryStore(applicationPaths),
             appId,
@@ -106,14 +110,17 @@ public sealed class WorkspaceTrendsService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var appId = NormalizeOptional(request.AppId);
         var appVersion = NormalizeOptional(request.AppVersion);
         var metricKey = NormalizeOptional(request.MetricKey);
         var workspaceOverride = NormalizeOptional(request.WorkspacePath);
+
         if (appVersion is not null && appId is null)
         {
             throw new ArgumentException("An app ID is required when rebuilding one app version.", nameof(request));
         }
+
         if (workspaceOverride is not null && appId is null)
         {
             throw new ArgumentException("A workspace override can only be used when rebuilding one app.", nameof(request));
@@ -128,10 +135,13 @@ public sealed class WorkspaceTrendsService
             var rows = new List<WorkspaceTrendsHistoryRebuildRow>();
             var apps = new List<WorkspaceTrendsHistoryRebuildAppResult>();
             var skippedApps = new List<WorkspaceTrendsHistoryRebuildSkippedApp>();
+
             foreach (var candidateAppId in appIds)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var workspacePath = ResolveHistoryRebuildWorkspace(candidateAppId, workspaceOverride);
+
                 if (workspacePath is null)
                 {
                     skippedApps.Add(new WorkspaceTrendsHistoryRebuildSkippedApp(
@@ -141,13 +151,14 @@ public sealed class WorkspaceTrendsService
                 }
 
                 WorkspaceTrendsCatalogResult catalog;
+
                 try
                 {
                     catalog = WorkspaceTrendsCatalog.Load(workspacePath, cancellationToken);
                 }
                 catch (Exception exception) when (exception is IOException
-                                                   or UnauthorizedAccessException
-                                                   or InvalidDataException)
+                    or UnauthorizedAccessException
+                    or InvalidDataException)
                 {
                     skippedApps.Add(new WorkspaceTrendsHistoryRebuildSkippedApp(
                         candidateAppId,
@@ -171,6 +182,7 @@ public sealed class WorkspaceTrendsService
                         metricKey,
                         StringComparison.OrdinalIgnoreCase))
                     .ToArray();
+
                 if (definitions.Length == 0)
                 {
                     if (metricKey is not null)
@@ -210,6 +222,7 @@ public sealed class WorkspaceTrendsService
             var removedCount = request.DryRun
                 ? historyStore.CountHistory(scopes)
                 : historyStore.ReplaceHistory(scopes, rows);
+
             return new WorkspaceTrendsHistoryRebuildResult(
                 historyStore.DatabasePath,
                 request.DryRun,
@@ -226,11 +239,14 @@ public sealed class WorkspaceTrendsService
     private string? ResolveHistoryRebuildWorkspace(string appId, string? workspaceOverride)
     {
         var candidate = workspaceOverride ?? runtime.Apps.Get(appId)?.CodebasePath;
+
         if (string.IsNullOrWhiteSpace(candidate))
         {
             return null;
         }
+
         var fullPath = Path.GetFullPath(candidate);
+
         return Directory.Exists(fullPath) ? fullPath : null;
     }
 
@@ -246,9 +262,11 @@ public sealed class WorkspaceTrendsService
             .GroupBy(static metric => metric.EvaluationId, StringComparer.Ordinal)
             .OrderBy(static group => group.Min(static metric => metric.EvaluatedAtUtc))
             .ThenBy(static group => group.Key, StringComparer.Ordinal);
+
         foreach (var evaluation in evaluations)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var evaluationMetrics = evaluation.ToArray();
             var first = evaluationMetrics[0];
             var context = CreateHistoricalRunContext(first);
@@ -256,29 +274,33 @@ public sealed class WorkspaceTrendsService
                 context.AppVersion,
                 appVersion,
                 StringComparison.Ordinal);
+
             if (isSelectedVersion)
             {
                 var currentMetrics = evaluationMetrics
                     .GroupBy(static metric => metric.MetricKey, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(
-                        static group => group.Key,
-                        static group => group
-                            .GroupBy(static metric => metric.SpanGroup ?? string.Empty, StringComparer.Ordinal)
-                            .Select(static spanGroup => spanGroup
-                                .OrderByDescending(static metric => metric.InstanceIndex)
-                                .First())
-                            .ToArray(),
-                        StringComparer.OrdinalIgnoreCase);
+                    static group => group.Key,
+                    static group => group
+                        .GroupBy(static metric => metric.SpanGroup ?? string.Empty, StringComparer.Ordinal)
+                        .Select(static spanGroup => spanGroup
+                            .OrderByDescending(static metric => metric.InstanceIndex)
+                            .First())
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
+
                 foreach (var definition in definitions)
                 {
                     if (!HistoryDefinitionAppliesToPlatform(definition, context.Platform))
                     {
                         continue;
                     }
+
                     if (!currentMetrics.TryGetValue(definition.MetricKey, out var current))
                     {
                         continue;
                     }
+
                     foreach (var metric in current)
                     {
                         var comparison = string.IsNullOrWhiteSpace(context.AppVersion)
@@ -288,6 +310,7 @@ public sealed class WorkspaceTrendsService
                         var missingSeriesDimension = FindMissingSeriesDimension(context, definition.Cohort);
                         WorkspaceTrendsHistoryDecision result;
                         var isBreach = false;
+
                         if (missingSeriesDimension is not null)
                         {
                             result = new WorkspaceTrendsHistoryDecision(
@@ -339,8 +362,10 @@ public sealed class WorkspaceTrendsService
                     }
                 }
             }
+
             priorMetrics.AddRange(evaluationMetrics);
         }
+
         return rebuiltRows;
     }
 
@@ -348,10 +373,10 @@ public sealed class WorkspaceTrendsService
         WorkspaceTrendsHistoryDefinition definition,
         string? platform)
         => string.IsNullOrWhiteSpace(definition.Platform)
-           || string.Equals(
-               definition.Platform,
-               NormalizeHistoricalPlatform(platform),
-               StringComparison.OrdinalIgnoreCase);
+            || string.Equals(
+                definition.Platform,
+                NormalizeHistoricalPlatform(platform),
+                StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeHistoricalPlatform(string? platform)
     {
@@ -359,27 +384,33 @@ public sealed class WorkspaceTrendsService
         {
             return "other";
         }
+
         var normalized = platform.Trim();
+
         if (normalized.Contains("android", StringComparison.OrdinalIgnoreCase))
         {
             return "android";
         }
+
         if (normalized.Contains("ios", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("iphone", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("ipad", StringComparison.OrdinalIgnoreCase))
         {
             return "ios";
         }
+
         if (normalized.Contains("windows", StringComparison.OrdinalIgnoreCase))
         {
             return "windows";
         }
+
         if (normalized.Contains("mac", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("catalyst", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("os x", StringComparison.OrdinalIgnoreCase))
         {
             return "macos";
         }
+
         return "other";
     }
 
@@ -396,16 +427,16 @@ public sealed class WorkspaceTrendsService
             WorkspaceTrendsHistoryComparison.UnversionedReference => context.AppVersion,
             WorkspaceTrendsHistoryComparison.PreviousVersion when context.AppVersion is not null
                 => FindHistoricalPinnedBaselineVersion(context, metric, history, priorResults)
-                   ?? FindHistoricalBaselineVersion(context, metric, history, priorMetrics),
+                    ?? FindHistoricalBaselineVersion(context, metric, history, priorMetrics),
             _ => null
         };
         var comparableMetrics = priorMetrics
             .Where(candidate => string.Equals(candidate.AppId, context.AppId, StringComparison.Ordinal)
-                                && string.Equals(candidate.MetricKey, metric.MetricKey, StringComparison.Ordinal)
-                                && string.Equals(candidate.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
-                                && SpanGroupsEqual(candidate.SpanGroup, metric.SpanGroup)
-                                && CohortMatches(candidate, context, history.Cohort)
-                                && VersionMatches(candidate.AppVersion, baselineAppVersion, comparison))
+                && string.Equals(candidate.MetricKey, metric.MetricKey, StringComparison.Ordinal)
+                && string.Equals(candidate.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
+                && SpanGroupsEqual(candidate.SpanGroup, metric.SpanGroup)
+                && CohortMatches(candidate, context, history.Cohort)
+                && VersionMatches(candidate.AppVersion, baselineAppVersion, comparison))
             .GroupBy(static candidate => candidate.EvaluationId, StringComparer.Ordinal)
             .Select(static group => group.OrderByDescending(static candidate => candidate.InstanceIndex).First());
         comparableMetrics = comparison == WorkspaceTrendsHistoryComparison.UnversionedReference
@@ -413,6 +444,7 @@ public sealed class WorkspaceTrendsService
                 .ThenBy(static candidate => candidate.EvaluationId, StringComparer.Ordinal)
             : comparableMetrics.OrderByDescending(static candidate => candidate.EvaluatedAtUtc)
                 .ThenByDescending(static candidate => candidate.EvaluationId, StringComparer.Ordinal);
+
         var values = comparableMetrics
             .Take(history.Baseline.Runs)
             .Select(static candidate => candidate.Value)
@@ -425,6 +457,7 @@ public sealed class WorkspaceTrendsService
                 history,
                 comparison,
                 baselineAppVersion));
+
         return new WorkspaceTrendsHistoryBaselineData(
             values,
             previous?.Result.Status,
@@ -439,13 +472,13 @@ public sealed class WorkspaceTrendsService
         IReadOnlyList<WorkspaceTrendsHistoryRebuildRow> priorResults)
         => priorResults
             .FirstOrDefault(candidate => candidate.Result.BaselineAppVersion is not null
-                                         && HistoricalSeriesMatches(
-                                             candidate,
-                                             context,
-                                             metric,
-                                             history,
-                                             WorkspaceTrendsHistoryComparison.PreviousVersion,
-                                             candidate.Result.BaselineAppVersion))
+                && HistoricalSeriesMatches(
+                    candidate,
+                    context,
+                    metric,
+                    history,
+                    WorkspaceTrendsHistoryComparison.PreviousVersion,
+                    candidate.Result.BaselineAppVersion))
             ?.Result.BaselineAppVersion;
 
     private static string? FindHistoricalBaselineVersion(
@@ -455,12 +488,12 @@ public sealed class WorkspaceTrendsService
         IReadOnlyList<WorkspaceTrendsMetricHistoryEntry> priorMetrics)
         => priorMetrics
             .Where(candidate => candidate.AppVersion is not null
-                                && !string.Equals(candidate.AppVersion, context.AppVersion, StringComparison.Ordinal)
-                                && string.Equals(candidate.AppId, context.AppId, StringComparison.Ordinal)
-                                && string.Equals(candidate.MetricKey, metric.MetricKey, StringComparison.Ordinal)
-                                && string.Equals(candidate.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
-                                && SpanGroupsEqual(candidate.SpanGroup, metric.SpanGroup)
-                                && CohortMatches(candidate, context, history.Cohort))
+                && !string.Equals(candidate.AppVersion, context.AppVersion, StringComparison.Ordinal)
+                && string.Equals(candidate.AppId, context.AppId, StringComparison.Ordinal)
+                && string.Equals(candidate.MetricKey, metric.MetricKey, StringComparison.Ordinal)
+                && string.Equals(candidate.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
+                && SpanGroupsEqual(candidate.SpanGroup, metric.SpanGroup)
+                && CohortMatches(candidate, context, history.Cohort))
             .OrderByDescending(static candidate => candidate.EvaluatedAtUtc)
             .ThenByDescending(static candidate => candidate.EvaluationId, StringComparer.Ordinal)
             .Select(static candidate => candidate.AppVersion)
@@ -474,14 +507,14 @@ public sealed class WorkspaceTrendsService
         WorkspaceTrendsHistoryComparison comparison,
         string? baselineAppVersion)
         => string.Equals(candidate.Context.AppId, context.AppId, StringComparison.Ordinal)
-           && string.Equals(candidate.Context.AppVersion, context.AppVersion, StringComparison.Ordinal)
-           && string.Equals(candidate.Result.DecisionId, history.DecisionId, StringComparison.Ordinal)
-           && string.Equals(candidate.Result.DefinitionHash, history.DefinitionHash, StringComparison.Ordinal)
-           && string.Equals(candidate.Result.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
-           && candidate.Result.Comparison == comparison
-           && SpanGroupsEqual(candidate.Result.SpanGroup, metric.SpanGroup)
-           && string.Equals(candidate.Result.BaselineAppVersion, baselineAppVersion, StringComparison.Ordinal)
-           && CohortMatches(candidate.Context, context, history.Cohort);
+            && string.Equals(candidate.Context.AppVersion, context.AppVersion, StringComparison.Ordinal)
+            && string.Equals(candidate.Result.DecisionId, history.DecisionId, StringComparison.Ordinal)
+            && string.Equals(candidate.Result.DefinitionHash, history.DefinitionHash, StringComparison.Ordinal)
+            && string.Equals(candidate.Result.MetricDefinitionHash, metric.MetricDefinitionHash, StringComparison.Ordinal)
+            && candidate.Result.Comparison == comparison
+            && SpanGroupsEqual(candidate.Result.SpanGroup, metric.SpanGroup)
+            && string.Equals(candidate.Result.BaselineAppVersion, baselineAppVersion, StringComparison.Ordinal)
+            && CohortMatches(candidate.Context, context, history.Cohort);
 
     private static bool VersionMatches(
         string? candidateAppVersion,
@@ -490,7 +523,7 @@ public sealed class WorkspaceTrendsService
         => comparison switch
         {
             WorkspaceTrendsHistoryComparison.UnversionedReference when baselineAppVersion is null
-                => candidateAppVersion is null,
+                        => candidateAppVersion is null,
             WorkspaceTrendsHistoryComparison.UnversionedReference
                 => string.Equals(candidateAppVersion, baselineAppVersion, StringComparison.Ordinal),
             WorkspaceTrendsHistoryComparison.PreviousVersion when baselineAppVersion is not null
@@ -540,7 +573,9 @@ public sealed class WorkspaceTrendsService
     internal int DeleteSessionHistory(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
+
         lock (automaticEvaluationGate)
         {
             deletedSessionIds.Add(normalizedSessionId);
@@ -565,7 +600,9 @@ public sealed class WorkspaceTrendsService
         {
             throw new ArgumentOutOfRangeException(nameof(limit), "History limit must be between 1 and 10,000.");
         }
+
         var history = store.LoadHistory(appId, decisionId, limit, spanGroup, limitPerSeries);
+
         return new WorkspaceTrendsHistoryResult(
             store.DatabasePath,
             store.LoadMetricHistory(appId, metricKey, limit, spanGroup),
@@ -596,7 +633,8 @@ public sealed class WorkspaceTrendsService
                 var latest = points[^1];
                 var chart = charts.FirstOrDefault(candidate =>
                     string.Equals(candidate.DecisionId, group.Key.DecisionId, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(candidate.DefinitionHash, group.Key.DefinitionHash, StringComparison.Ordinal));
+                        && string.Equals(candidate.DefinitionHash, group.Key.DefinitionHash, StringComparison.Ordinal));
+
                 return new WorkspaceTrendsSeries(
                     CreateSeriesId(group.Key),
                     group.Key.AppId,
@@ -639,6 +677,7 @@ public sealed class WorkspaceTrendsService
             key.SeriesKey,
             key.DefinitionHash,
             key.MetricDefinitionHash);
+
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..24]
             .ToLowerInvariant();
     }
@@ -652,6 +691,7 @@ public sealed class WorkspaceTrendsService
             .Distinct(StringComparer.Ordinal)
             .Take(2)
             .ToArray();
+
         return values.Length == 1 ? values[0] : null;
     }
 
@@ -664,12 +704,14 @@ public sealed class WorkspaceTrendsService
 
         var normalizedSessionId = sessionId.Trim();
         Task<WorkspaceTrendsReport?> evaluationTask;
+
         lock (automaticEvaluationGate)
         {
             if (automaticEvaluationTasks.ContainsKey(normalizedSessionId))
             {
                 return;
             }
+
             evaluationTask = Task.Run(() => EvaluateRegisteredSessionAsync(normalizedSessionId));
             automaticEvaluationTasks.Add(normalizedSessionId, evaluationTask);
         }
@@ -682,12 +724,15 @@ public sealed class WorkspaceTrendsService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         Task<WorkspaceTrendsReport?>? evaluationTask;
+
         lock (automaticEvaluationGate)
         {
             automaticEvaluationTasks.TryGetValue(normalizedSessionId, out evaluationTask);
         }
+
         evaluationTask ??= EvaluateRegisteredSessionAsync(normalizedSessionId, cancellationToken);
         await evaluationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -697,18 +742,21 @@ public sealed class WorkspaceTrendsService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         var snapshot = runtime.Sessions.TryGetSnapshot(normalizedSessionId, out var currentSnapshot)
             ? currentSnapshot
             : await runtime.Sessions.LoadSnapshotAsync(
                 normalizedSessionId,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return null;
         }
 
         var registeredApp = runtime.Apps.Get(snapshot.AppId);
+
         if (string.IsNullOrWhiteSpace(registeredApp?.CodebasePath)
             || !Directory.Exists(registeredApp.CodebasePath))
         {
@@ -721,11 +769,13 @@ public sealed class WorkspaceTrendsService
         }
 
         var catalog = WorkspaceTrendsCatalog.Load(registeredApp.CodebasePath, cancellationToken);
+
         foreach (var warning in catalog.Warnings)
         {
             log.Warning(
                 $"automatic_trends_configuration_warning sessionId={normalizedSessionId} appId={snapshot.AppId} reason=\"{warning}\"");
         }
+
         var trendsIds = catalog.Definitions
             .Where(static definition => definition.Enabled)
             .Where(definition => string.Equals(
@@ -735,6 +785,7 @@ public sealed class WorkspaceTrendsService
             .Select(static definition => definition.TrendsId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         if (trendsIds.Length == 0)
         {
             return null;
@@ -755,6 +806,7 @@ public sealed class WorkspaceTrendsService
         try
         {
             var report = await evaluationTask.ConfigureAwait(false);
+
             if (report is not null)
             {
                 log.Info(
@@ -788,6 +840,7 @@ public sealed class WorkspaceTrendsService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentNullException.ThrowIfNull(trendsIds);
+
         if (trendsIds.Count == 0)
         {
             return null;
@@ -801,9 +854,11 @@ public sealed class WorkspaceTrendsService
                     candidate.TrendsId,
                     trendsId,
                     StringComparison.OrdinalIgnoreCase));
+
                 return matches != 1 || catalog.FindDefinition(trendsId)?.Enabled != false;
             })
             .ToArray();
+
         if (evaluatableTrendsIds.Length == 0)
         {
             return null;
@@ -813,10 +868,11 @@ public sealed class WorkspaceTrendsService
         // the complete retained streams, including entries older than the live tail.
         var needsLogs = catalog.Definitions.Any(definition =>
             evaluatableTrendsIds.Contains(definition.TrendsId, StringComparer.OrdinalIgnoreCase)
-            && (definition.Span.Start.Log is not null || definition.Span.End.Log is not null));
+                && (definition.Span.Start.Log is not null || definition.Span.End.Log is not null));
         var snapshot = !needsLogs && runtime.Sessions.TryGetLiveContentSnapshot(sessionId, out var liveSnapshot)
             ? liveSnapshot
             : await runtime.Sessions.LoadSnapshotAsync(sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return CreateUnavailableReport(
@@ -826,13 +882,16 @@ public sealed class WorkspaceTrendsService
         }
 
         var checks = new List<WorkspaceTrendsCheckResult>();
+
         foreach (var trendsId in evaluatableTrendsIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var trendsMatches = catalog.Definitions.Where(candidate => string.Equals(
                 candidate.TrendsId,
                 trendsId,
                 StringComparison.OrdinalIgnoreCase)).ToArray();
+
             if (trendsMatches.Length != 1)
             {
                 checks.Add(new WorkspaceTrendsCheckResult(
@@ -847,7 +906,9 @@ public sealed class WorkspaceTrendsService
                     string.Empty));
                 continue;
             }
+
             var trendsCheck = trendsMatches[0];
+
             if (!trendsCheck.Enabled)
             {
                 continue;
@@ -856,6 +917,7 @@ public sealed class WorkspaceTrendsService
             var spanResolution = WorkspaceTrendsSpanResolver.Resolve(
                 snapshot,
                 trendsCheck.Span);
+
             if (spanResolution.Status != WorkspaceTrendsStatus.Passed)
             {
                 checks.Add(new WorkspaceTrendsCheckResult(
@@ -868,12 +930,14 @@ public sealed class WorkspaceTrendsService
                     DefinitionHash: trendsCheck.DefinitionHash));
                 continue;
             }
+
             checks.Add(evaluator.Evaluate(snapshot, trendsCheck));
         }
 
         var context = CreateRunContext(snapshot);
         IReadOnlyList<WorkspaceTrendsHistoryDecision> history;
         string? persistenceError = null;
+
         try
         {
             lock (historyEvaluationGate)
@@ -883,6 +947,7 @@ public sealed class WorkspaceTrendsService
                     if (deletedSessionIds.Contains(context.SessionId))
                     {
                         history = [];
+
                         return null;
                     }
                 }
@@ -892,9 +957,9 @@ public sealed class WorkspaceTrendsService
             }
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or Microsoft.Data.Sqlite.SqliteException
-                                           or InvalidDataException)
+            or UnauthorizedAccessException
+            or Microsoft.Data.Sqlite.SqliteException
+            or InvalidDataException)
         {
             persistenceError = exception.Message;
             history = [];
@@ -914,8 +979,12 @@ public sealed class WorkspaceTrendsService
             null,
             persistenceError is null ? historyStore.DatabasePath : null);
         var sidecarPath = SaveSidecar(snapshot, report);
-        report = report with { SidecarFilePath = sidecarPath };
+        report = report with
+        {
+            SidecarFilePath = sidecarPath
+        };
         PublishEvents(report);
+
         return report;
     }
 
@@ -929,21 +998,23 @@ public sealed class WorkspaceTrendsService
             .Where(static result => result.Value.HasValue)
             .GroupBy(static result => result.MetricKey, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
-                static group => group.Key,
-                static group => group
-                    .GroupBy(static result => result.SpanGroup ?? string.Empty, StringComparer.Ordinal)
-                    .Select(static spanGroup => spanGroup
-                        .OrderByDescending(static result => result.InstanceIndex)
-                        .First())
-                    .ToArray(),
-                StringComparer.OrdinalIgnoreCase);
+            static group => group.Key,
+            static group => group
+                .GroupBy(static result => result.SpanGroup ?? string.Empty, StringComparer.Ordinal)
+                .Select(static spanGroup => spanGroup
+                    .OrderByDescending(static result => result.InstanceIndex)
+                    .First())
+                .ToArray(),
+            StringComparer.OrdinalIgnoreCase);
         var results = new List<WorkspaceTrendsHistoryDecision>();
+
         foreach (var definition in definitions)
         {
             if (!currentMetrics.TryGetValue(definition.MetricKey, out var metrics))
             {
                 continue;
             }
+
             foreach (var metric in metrics)
             {
                 var comparison = string.IsNullOrWhiteSpace(context.AppVersion)
@@ -951,6 +1022,7 @@ public sealed class WorkspaceTrendsService
                     : WorkspaceTrendsHistoryComparison.PreviousVersion;
                 var seriesKey = CreateSeriesKey(context, definition.Cohort);
                 var missingSeriesDimension = FindMissingSeriesDimension(context, definition.Cohort);
+
                 if (missingSeriesDimension is not null)
                 {
                     var error = new WorkspaceTrendsHistoryDecision(
@@ -978,6 +1050,7 @@ public sealed class WorkspaceTrendsService
                     results.Add(error);
                     continue;
                 }
+
                 var baselineData = historyStore.LoadBaseline(
                     context,
                     metric,
@@ -1004,6 +1077,7 @@ public sealed class WorkspaceTrendsService
                 results.Add(result);
             }
         }
+
         return results;
     }
 
@@ -1014,11 +1088,13 @@ public sealed class WorkspaceTrendsService
         foreach (var dimension in seriesBy)
         {
             var value = ResolveSeriesDimension(context, dimension);
+
             if (string.IsNullOrWhiteSpace(value))
             {
                 return dimension;
             }
         }
+
         return null;
     }
 
@@ -1031,6 +1107,7 @@ public sealed class WorkspaceTrendsService
             seriesBy
                 .OrderBy(static dimension => dimension, StringComparer.OrdinalIgnoreCase)
                 .Select(dimension => $"{dimension.ToLowerInvariant()}={ResolveSeriesDimension(context, dimension)?.Trim()}"));
+
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..24]
             .ToLowerInvariant();
     }
@@ -1094,9 +1171,9 @@ public sealed class WorkspaceTrendsService
             ? WorkspaceTrendsHistoryStatus.Regressed
             : isBreach
                 ? WorkspaceTrendsHistoryStatus.Suspect
-            : !isBreach && baselineData.PreviousStatus == WorkspaceTrendsHistoryStatus.Regressed
-                ? WorkspaceTrendsHistoryStatus.Recovered
-                : WorkspaceTrendsHistoryStatus.Healthy;
+                : !isBreach && baselineData.PreviousStatus == WorkspaceTrendsHistoryStatus.Regressed
+                    ? WorkspaceTrendsHistoryStatus.Recovered
+                    : WorkspaceTrendsHistoryStatus.Healthy;
         var message = status switch
         {
             WorkspaceTrendsHistoryStatus.Regressed => $"{DescribeComparison(comparison, baselineData.BaselineAppVersion)} regression detected after {consecutive:N0} consecutive comparable run(s).",
@@ -1104,6 +1181,7 @@ public sealed class WorkspaceTrendsService
             WorkspaceTrendsHistoryStatus.Suspect => $"{DescribeComparison(comparison, baselineData.BaselineAppVersion)} regression threshold crossed for {consecutive:N0} of {definition.Regression.ConsecutiveRuns:N0} required comparable run(s).",
             _ => $"The metric is within its configured {DescribeComparison(comparison, baselineData.BaselineAppVersion).ToLowerInvariant()} regression bounds."
         };
+
         return new WorkspaceTrendsHistoryDecision(
             definition.DecisionId,
             definition.MetricKey,
@@ -1133,7 +1211,7 @@ public sealed class WorkspaceTrendsService
         => comparison switch
         {
             WorkspaceTrendsHistoryComparison.UnversionedReference =>
-                $"Establishing the {currentAppVersion ?? "unversioned"} baseline: {baselineRunCount:N0} of {minimumBaselineRunCount:N0} comparable run(s) are available.",
+                        $"Establishing the {currentAppVersion ?? "unversioned"} baseline: {baselineRunCount:N0} of {minimumBaselineRunCount:N0} comparable run(s) are available.",
             WorkspaceTrendsHistoryComparison.PreviousVersion when baselineAppVersion is null =>
                 $"No earlier app version has comparable data yet; {currentAppVersion ?? "this version"} is becoming the baseline for the next version.",
             _ =>
@@ -1158,33 +1236,40 @@ public sealed class WorkspaceTrendsService
         {
             return false;
         }
+
         var configuredThresholds = new List<bool>();
+
         if (regression.AbsoluteIncrease.HasValue)
         {
             configuredThresholds.Add(absoluteDelta.Value >= regression.AbsoluteIncrease.Value);
         }
+
         if (regression.AbsoluteDecrease.HasValue)
         {
             configuredThresholds.Add(-absoluteDelta.Value >= regression.AbsoluteDecrease.Value);
         }
+
         if (regression.RelativeIncreasePercent.HasValue)
         {
             configuredThresholds.Add(relativeDelta >= regression.RelativeIncreasePercent.Value);
         }
+
         if (regression.RelativeDecreasePercent.HasValue)
         {
             configuredThresholds.Add(-relativeDelta >= regression.RelativeDecreasePercent.Value);
         }
+
         return configuredThresholds.Count > 0
-               && (regression.RequireAllThresholds
-                   ? configuredThresholds.All(static threshold => threshold)
-                   : configuredThresholds.Any(static threshold => threshold));
+            && (regression.RequireAllThresholds
+                ? configuredThresholds.All(static threshold => threshold)
+                : configuredThresholds.Any(static threshold => threshold));
     }
 
     private static double Median(IReadOnlyList<double> values)
     {
         var ordered = values.OrderBy(static value => value).ToArray();
         var middle = ordered.Length / 2;
+
         return ordered.Length % 2 == 0
             ? (ordered[middle - 1] + ordered[middle]) / 2d
             : ordered[middle];
@@ -1198,6 +1283,7 @@ public sealed class WorkspaceTrendsService
             ? null
             : osVersion.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
         var appVersion = NormalizeVersion(snapshot.DeviceProfile?.App?.VersionName);
+
         return new WorkspaceTrendsRunContext(
             Guid.CreateVersion7().ToString("N"),
             $"session:{snapshot.SessionId}",
@@ -1221,6 +1307,7 @@ public sealed class WorkspaceTrendsService
         {
             return null;
         }
+
         foreach (var propertyName in new[] { "buildConfiguration", "build.configuration", "configuration" })
         {
             if (snapshot.CustomProperties[propertyName] is System.Text.Json.Nodes.JsonValue value
@@ -1230,6 +1317,7 @@ public sealed class WorkspaceTrendsService
                 return result.Trim();
             }
         }
+
         return null;
     }
 
@@ -1250,6 +1338,7 @@ public sealed class WorkspaceTrendsService
             null,
             null,
             DateTimeOffset.UtcNow);
+
         return new WorkspaceTrendsReport(
             ReportSchemaVersion,
             context,
@@ -1266,26 +1355,32 @@ public sealed class WorkspaceTrendsService
         IReadOnlyList<WorkspaceTrendsHistoryDecision> history)
     {
         var required = checks.Where(static check => check.Required).ToArray();
+
         if (required.Any(static check => check.Status == WorkspaceTrendsStatus.Error))
         {
             return WorkspaceTrendsStatus.Error;
         }
+
         if (required.Any(static check => check.Status == WorkspaceTrendsStatus.Failed))
         {
             return WorkspaceTrendsStatus.Failed;
         }
+
         if (required.Any(static check => check.Status == WorkspaceTrendsStatus.Inconclusive))
         {
             return WorkspaceTrendsStatus.Inconclusive;
         }
+
         if (history.Any(static history => history.Blocking && history.Status == WorkspaceTrendsHistoryStatus.Error))
         {
             return WorkspaceTrendsStatus.Error;
         }
+
         if (history.Any(static history => history.Blocking && history.Status == WorkspaceTrendsHistoryStatus.Regressed))
         {
             return WorkspaceTrendsStatus.Failed;
         }
+
         return WorkspaceTrendsStatus.Passed;
     }
 
@@ -1305,12 +1400,13 @@ public sealed class WorkspaceTrendsService
         var message = blockingErrors > 0
             ? $"{blockingErrors:N0} blocking history signal(s) could not be evaluated."
             : blockingRegressions > 0
-            ? $"{blockingRegressions:N0} blocking history regression(s) detected."
-            : status == WorkspaceTrendsStatus.Passed && skipped == 0
-            ? $"All {checks.Count:N0} trends check(s) passed."
-            : status == WorkspaceTrendsStatus.Passed
-                ? $"{passed:N0} trends check(s) passed; {skipped:N0} unobserved span(s) were skipped."
-            : $"{passed:N0} of {checks.Count:N0} trends check(s) passed; trends status is {status}.";
+                ? $"{blockingRegressions:N0} blocking history regression(s) detected."
+                : status == WorkspaceTrendsStatus.Passed && skipped == 0
+                    ? $"All {checks.Count:N0} trends check(s) passed."
+                    : status == WorkspaceTrendsStatus.Passed
+                        ? $"{passed:N0} trends check(s) passed; {skipped:N0} unobserved span(s) were skipped."
+                        : $"{passed:N0} of {checks.Count:N0} trends check(s) passed; trends status is {status}.";
+
         return persistenceError is null
             ? message
             : message + $" Trends history could not be persisted: {persistenceError}";
@@ -1323,11 +1419,16 @@ public sealed class WorkspaceTrendsService
             var filePath = ResolveSidecarPath(snapshot);
             var directoryPath = Path.GetDirectoryName(filePath)!;
             Directory.CreateDirectory(directoryPath);
+
             var temporaryPath = filePath + ".tmp";
             File.WriteAllText(
                 temporaryPath,
-                JsonSerializer.Serialize(report with { SidecarFilePath = filePath }, reportJson));
+                JsonSerializer.Serialize(report with
+                {
+                    SidecarFilePath = filePath
+                }, reportJson));
             File.Move(temporaryPath, filePath, overwrite: true);
+
             return filePath;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -1347,7 +1448,8 @@ public sealed class WorkspaceTrendsService
     private void PublishEvents(WorkspaceTrendsReport report)
     {
         var failedChecks = report.Checks.Where(static check =>
-            check.Required && check.Status is WorkspaceTrendsStatus.Failed or WorkspaceTrendsStatus.Error).ToArray();
+                check.Required && check.Status is WorkspaceTrendsStatus.Failed or WorkspaceTrendsStatus.Error).ToArray();
+
         foreach (var check in failedChecks)
         {
             runtime.PublishTrendsEvent(new RuntimeTrendsEvent(
@@ -1359,6 +1461,7 @@ public sealed class WorkspaceTrendsService
                 check.Message,
                 check.Status));
         }
+
         if (report.Status == WorkspaceTrendsStatus.Error && failedChecks.Length == 0)
         {
             runtime.PublishTrendsEvent(new RuntimeTrendsEvent(
@@ -1370,8 +1473,9 @@ public sealed class WorkspaceTrendsService
                 report.Message,
                 WorkspaceTrendsStatus.Error));
         }
+
         foreach (var history in report.History.Where(static history =>
-                     history.Status is WorkspaceTrendsHistoryStatus.Regressed or WorkspaceTrendsHistoryStatus.Recovered))
+                             history.Status is WorkspaceTrendsHistoryStatus.Regressed or WorkspaceTrendsHistoryStatus.Recovered))
         {
             runtime.PublishTrendsEvent(new RuntimeTrendsEvent(
                 DateTimeOffset.UtcNow,

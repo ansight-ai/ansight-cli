@@ -1,4 +1,4 @@
-﻿
+
 
 namespace Ansight.Infrastructure.Logging;
 

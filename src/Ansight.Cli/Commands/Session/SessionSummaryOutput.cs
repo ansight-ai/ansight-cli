@@ -14,14 +14,9 @@ internal sealed record SessionSummaryOutput(
     IReadOnlyList<string> Tags)
 {
     public string? Platform { get; init; }
-
     public string? DeviceFormFactor { get; init; }
-
     public string? OsName { get; init; }
-
     public string? OsVersion { get; init; }
-
     public bool? IsVirtual { get; init; }
-
     public bool? IsEmulator { get; init; }
 }

@@ -4,21 +4,37 @@ internal static class AppInteractionCommand
 {
     public static bool IsMatch(CliArguments arguments)
         => arguments.Positionals.Count >= 2
-           && arguments.Positionals[0].Equals("app", StringComparison.OrdinalIgnoreCase)
-           && arguments.Positionals[1].Equals("interact", StringComparison.OrdinalIgnoreCase);
+            && arguments.Positionals[0].Equals("app", StringComparison.OrdinalIgnoreCase)
+            && arguments.Positionals[1].Equals("interact", StringComparison.OrdinalIgnoreCase);
 
     internal static string ValidateArguments(CliArguments arguments)
     {
         arguments.EnsurePositionalCount(2, "ansight app interact --session <id> [--repository <root>] [--jsonl]");
         arguments.EnsureOptionContract("ansight app interact", ["jsonl", "json", "verbose", "diagnostic"],
             ["session", "repository", "timeout-ms", "task-timeout-ms", "data-dir"]);
+
         var sessionId = arguments.GetOption("session");
+
         if (string.IsNullOrWhiteSpace(sessionId))
+        {
             throw new CliUsageException("app interact requires --session <id>. Use 'ansight session list --connected --json' to choose one.");
-        if (arguments.HasFlag("timeout-ms")) arguments.GetRequiredIntOption("timeout-ms", 100, 60000);
-        if (arguments.HasFlag("task-timeout-ms")) arguments.GetRequiredIntOption("task-timeout-ms", 100, 300000);
+        }
+
+        if (arguments.HasFlag("timeout-ms"))
+        {
+            arguments.GetRequiredIntOption("timeout-ms", 100, 60000);
+        }
+
+        if (arguments.HasFlag("task-timeout-ms"))
+        {
+            arguments.GetRequiredIntOption("task-timeout-ms", 100, 300000);
+        }
+
         if (arguments.HasFlag("repository") && string.IsNullOrWhiteSpace(arguments.GetOption("repository")))
+        {
             throw new CliUsageException("--repository requires a repository root path.");
+        }
+
         return sessionId;
     }
 
@@ -26,9 +42,13 @@ internal static class AppInteractionCommand
         CliArguments arguments, CliOutput output, TextReader standardInput, CancellationToken cancellationToken)
     {
         if (CliCommandHelp.IsRequested(arguments))
+        {
             return CliCommandHelp.Write(output, Help);
+        }
+
         await using var connection = await InteractiveConnection.OpenInteractiveConnectionAsync(
             arguments, cancellationToken).ConfigureAwait(false);
+
         return await connection.RunAsync(standardInput, output, cancellationToken).ConfigureAwait(false);
     }
 

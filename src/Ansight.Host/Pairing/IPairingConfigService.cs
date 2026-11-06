@@ -10,6 +10,7 @@ internal interface IPairingConfigService
         PairingConfigDuration duration)
     {
         var result = Issue(appName, appId, duration);
+
         return new PairingTransientIssueResult(result.ConfigId, result.ExpiresAt);
     }
 }

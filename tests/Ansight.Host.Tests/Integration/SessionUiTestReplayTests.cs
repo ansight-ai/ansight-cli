@@ -13,9 +13,13 @@ public sealed class SessionUiTestReplayTests
         await using var runtime = composition.Get<RuntimeCoordinator>();
         var state = composition.Get<IRuntimeState>();
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("android", "phone", "Phone", "test.app", false, false, false)
-        { ExecutionMode = "device", DeviceKind = DeviceKinds.Physical });
+        {
+            ExecutionMode = "device",
+            DeviceKind = DeviceKinds.Physical
+        });
         var explorer = await runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest());
         Assert.True(explorer.IsSuccess, explorer.Message);
+
         using var client = new HttpClient();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var events = await client.GetAsync(new Uri(explorer.ExplorerUrl!, "api/session-events"),
@@ -26,11 +30,17 @@ public sealed class SessionUiTestReplayTests
         var run = new SessionUiTestRun("checkout", "Checkout", "run-1", "running", "task", DateTimeOffset.UtcNow);
         state.SetSessionUiTestRun(id, run);
         await ReadEventAsync("sessions-changed");
+
         var running = await GetSessionAsync();
         Assert.Equal("running", running["customProperties"]!["ui-test"]!["status"]!.GetValue<string>());
 
-        state.SetSessionUiTestRun(id, run with { Status = "succeeded", CompletedUtc = DateTimeOffset.UtcNow });
+        state.SetSessionUiTestRun(id, run with
+        {
+            Status = "succeeded",
+            CompletedUtc = DateTimeOffset.UtcNow
+        });
         await ReadEventAsync("sessions-changed");
+
         var completed = await GetSessionAsync();
         Assert.True(completed["isConnected"]!.GetValue<bool>());
         Assert.Equal("Checkout", completed["customProperties"]!["ui-test"]!["testName"]!.GetValue<string>());
@@ -43,11 +53,17 @@ public sealed class SessionUiTestReplayTests
         async Task ReadEventAsync(string eventName)
         {
             var found = false;
+
             while (await reader.ReadLineAsync(timeout.Token) is { } line)
             {
                 found |= line == $"event: {eventName}";
-                if (found && line.Length == 0) return;
+
+                if (found && line.Length == 0)
+                {
+                    return;
+                }
             }
+
             Assert.Fail($"Expected server event '{eventName}'.");
         }
     }

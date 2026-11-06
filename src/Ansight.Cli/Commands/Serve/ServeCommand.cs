@@ -15,7 +15,8 @@ internal static class ServeCommand
         }
 
         var isStop = arguments.Positionals.Count > 1
-                     && string.Equals(arguments.Positionals[1], "stop", StringComparison.OrdinalIgnoreCase);
+            && string.Equals(arguments.Positionals[1], "stop", StringComparison.OrdinalIgnoreCase);
+
         if (isStop)
         {
             throw new CliUsageException(
@@ -25,6 +26,7 @@ internal static class ServeCommand
         arguments.EnsurePositionalCount(
             1,
             "ansight serve [--port <port>] [--path <path>] [--open] [--session <session-id>]");
+
         var options = CliRuntime.ResolveOptions(arguments);
         var urlPath = LocalSettingsStore.ResolveExplorerPath(
             arguments,
@@ -41,20 +43,27 @@ internal static class ServeCommand
         var runtime = lease.Runtime;
 
         var result = await runtime.SessionReplays.StartExplorerAsync(
-                new SessionExplorerStartRequest(
-                    port,
-                    arguments.GetOption("session"),
-                    urlPath),
-                cancellationToken)
+            new SessionExplorerStartRequest(
+                port,
+                arguments.GetOption("session"),
+                urlPath),
+            cancellationToken)
             .ConfigureAwait(false);
         var isResidentHost = CliCommandContext.Current is not null;
+
         if (isResidentHost && result.IsSuccess
             && CliRuntime.ReadMetadata(options.DataDirectory)?.ExplorerUrl is { } publicUrl)
         {
             var address = new Uri(publicUrl);
-            result = result with { ExplorerUrl = address, Port = address.Port };
+            result = result with
+            {
+                ExplorerUrl = address,
+                Port = address.Port
+            };
         }
+
         string? openWarning = null;
+
         if (result.IsSuccess && result.ExplorerUrl is not null && arguments.HasFlag("open"))
         {
             openWarning = CliBrowserLauncher.TryOpen(result.ExplorerUrl);
@@ -70,6 +79,7 @@ internal static class ServeCommand
                 result.WasAlreadyRunning,
                 isResidentHost),
             () => BuildMessage(result, isResidentHost, openWarning));
+
         if (!result.IsSuccess)
         {
             return CliExitCodes.Failure;
@@ -108,6 +118,7 @@ internal static class ServeCommand
         var warning = string.IsNullOrWhiteSpace(openWarning)
             ? string.Empty
             : $"\nBrowser warning: {openWarning}";
+
         return $"{result.Message}\nExplorer: {result.ExplorerUrl}\n{lifetime}{warning}";
     }
 

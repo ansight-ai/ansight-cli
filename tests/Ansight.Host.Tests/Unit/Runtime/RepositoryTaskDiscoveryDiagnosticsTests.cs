@@ -15,12 +15,15 @@ public sealed class RepositoryTaskDiscoveryDiagnosticsTests
 
         Assert.Null(regular["diagnostics"]);
         Assert.True(JsonNode.DeepEquals(regular["tasks"], traced["tasks"]));
+
         var diagnostics = Assert.IsType<JsonObject>(traced["diagnostics"]);
         Assert.Equal(3, diagnostics["availableTaskCount"]?.GetValue<int>());
         Assert.Equal(3, Assert.IsType<JsonArray>(diagnostics["availableTaskIds"]).Count);
+
         var candidates = Assert.IsType<JsonArray>(diagnostics["candidates"]).OfType<JsonObject>().ToArray();
         Assert.Single(candidates, item => item["reason"]?.GetValue<string>() == "returned");
         Assert.Single(candidates, item => item["reason"]?.GetValue<string>() == "discovery-result-limit");
+
         var excluded = Assert.Single(candidates, item => item["taskId"]?.GetValue<string>() == "delete-account");
         Assert.NotEqual("returned", excluded["reason"]?.GetValue<string>());
         Assert.NotNull(excluded["score"]);

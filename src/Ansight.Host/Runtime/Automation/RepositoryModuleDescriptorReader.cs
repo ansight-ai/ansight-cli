@@ -14,6 +14,7 @@ internal static class RepositoryModuleDescriptorReader
         ArgumentException.ThrowIfNullOrWhiteSpace(moduleKind);
 
         var descriptorEndIndex = FindExportedConstDescriptor(source, exportName);
+
         if (descriptorEndIndex < 0)
         {
             throw new InvalidDataException(
@@ -21,6 +22,7 @@ internal static class RepositoryModuleDescriptorReader
         }
 
         var equalsIndex = source.IndexOf('=', descriptorEndIndex);
+
         if (equalsIndex < 0)
         {
             throw new InvalidDataException(
@@ -28,6 +30,7 @@ internal static class RepositoryModuleDescriptorReader
         }
 
         var objectStart = equalsIndex + 1;
+
         while (objectStart < source.Length && char.IsWhiteSpace(source[objectStart]))
         {
             objectStart++;
@@ -42,9 +45,11 @@ internal static class RepositoryModuleDescriptorReader
         var depth = 0;
         var isInString = false;
         var isEscaped = false;
+
         for (var index = objectStart; index < source.Length; index++)
         {
             var character = source[index];
+
             if (isInString)
             {
                 if (isEscaped)
@@ -87,6 +92,7 @@ internal static class RepositoryModuleDescriptorReader
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(exportName);
+
         return FindExportedConstDescriptor(source, exportName) >= 0;
     }
 
@@ -94,9 +100,11 @@ internal static class RepositoryModuleDescriptorReader
     {
         var index = 0;
         var state = 0;
+
         while (index < source.Length)
         {
             SkipTrivia(source, ref index);
+
             if (index >= source.Length)
             {
                 break;
@@ -117,12 +125,14 @@ internal static class RepositoryModuleDescriptorReader
             }
 
             var identifierStart = index++;
+
             while (index < source.Length && IsIdentifierCharacter(source[index]))
             {
                 index++;
             }
 
             var identifier = source.AsSpan(identifierStart, index - identifierStart);
+
             if (state == 0)
             {
                 state = identifier.SequenceEqual("export") ? 1 : 0;
@@ -162,10 +172,12 @@ internal static class RepositoryModuleDescriptorReader
             if (source[index + 1] == '/')
             {
                 index += 2;
+
                 while (index < source.Length && source[index] is not '\r' and not '\n')
                 {
                     index++;
                 }
+
                 continue;
             }
 
@@ -175,11 +187,13 @@ internal static class RepositoryModuleDescriptorReader
             }
 
             index += 2;
+
             while (index + 1 < source.Length
-                   && (source[index] != '*' || source[index + 1] != '/'))
+                && (source[index] != '*' || source[index + 1] != '/'))
             {
                 index++;
             }
+
             index = Math.Min(source.Length, index + 2);
         }
     }
@@ -187,10 +201,13 @@ internal static class RepositoryModuleDescriptorReader
     private static void SkipQuotedValue(string source, ref int index, char delimiter)
     {
         index++;
+
         var isEscaped = false;
+
         while (index < source.Length)
         {
             var character = source[index++];
+
             if (isEscaped)
             {
                 isEscaped = false;

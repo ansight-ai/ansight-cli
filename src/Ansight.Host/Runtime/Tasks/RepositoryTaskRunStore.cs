@@ -14,10 +14,12 @@ internal sealed class RepositoryTaskRunStore
     public RepositoryTaskRunStore(string applicationDataPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationDataPath);
+
         var directoryPath = Path.Combine(applicationDataPath, "automation");
         PrivateStorageDirectory.Ensure(directoryPath);
         filePath = Path.Combine(directoryPath, "task-runs.jsonl");
         BoundedRunHistory.RestrictFile(filePath);
+
         if (File.Exists(filePath) && new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
         {
             Compact();
@@ -27,15 +29,19 @@ internal sealed class RepositoryTaskRunStore
     public void Append(RepositoryTaskRunResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
+
         var line = SerializeBounded(result);
+
         if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
         {
             throw new IOException("Repository task history record exceeds the local size limit.");
         }
+
         lock (gate)
         {
             File.AppendAllText(filePath, line + Environment.NewLine);
             BoundedRunHistory.RestrictFile(filePath);
+
             if (new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
             {
                 Compact();
@@ -56,12 +62,14 @@ internal sealed class RepositoryTaskRunStore
     private string SerializeBounded(RepositoryTaskRunResult result)
     {
         var input = result.Input;
+
         if (JsonSerializer.SerializeToUtf8Bytes(input, json).Length > 32 * 1_024)
         {
             input = new JsonObject { ["truncated"] = true };
         }
 
         var output = result.Output;
+
         if (output is not null && JsonSerializer.SerializeToUtf8Bytes(output, json).Length > 32 * 1_024)
         {
             output = new JsonObject { ["truncated"] = true };
@@ -75,6 +83,7 @@ internal sealed class RepositoryTaskRunStore
             StandardError = BoundedRunHistory.LimitText(result.StandardError, 8 * 1_024)
         };
         var line = JsonSerializer.Serialize(bounded, json);
+
         if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
         {
             bounded = bounded with
@@ -98,6 +107,7 @@ internal sealed class RepositoryTaskRunStore
         }
 
         var results = new List<RepositoryTaskRunResult>();
+
         foreach (var line in File.ReadLines(filePath))
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -108,6 +118,7 @@ internal sealed class RepositoryTaskRunStore
             try
             {
                 var result = JsonSerializer.Deserialize<RepositoryTaskRunResult>(line, json);
+
                 if (result is not null)
                 {
                     results.Add(result);

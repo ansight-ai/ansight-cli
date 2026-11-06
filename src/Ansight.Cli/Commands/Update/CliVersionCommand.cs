@@ -8,6 +8,7 @@ internal static class CliVersionCommand
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (CliCommandHelp.IsRequested(arguments))
         {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp()));
@@ -36,6 +37,7 @@ internal static class CliVersionCommand
             installationState.IsInstallerManaged ? installationState.ReceiptPath : null,
             receipt?.ReleaseUrl);
         output.Write(result, () => Render(result));
+
         return Task.FromResult(CliExitCodes.Success);
     }
 
@@ -50,6 +52,7 @@ internal static class CliVersionCommand
             $"Data: {result.DataDirectory}",
             $"Executable: {result.ExecutablePath}"
         };
+
         if (!result.IsInstallerManaged)
         {
             lines.Add("Installation: unmanaged development build");

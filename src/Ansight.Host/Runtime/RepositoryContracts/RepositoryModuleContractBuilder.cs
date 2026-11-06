@@ -9,6 +9,7 @@ internal static class RepositoryModuleContractBuilder
     public static JsonObject BuildTask(RepositoryTaskDefinition task, bool includeDefinitions)
     {
         ArgumentNullException.ThrowIfNull(task);
+
         var descriptor = ReadDescriptor(task.ModulePath, "task", "Task");
         var result = new JsonObject
         {
@@ -25,6 +26,7 @@ internal static class RepositoryModuleContractBuilder
             },
             ["declaredHostTools"] = ToStringArray(task.DeclaredHostTools.Keys)
         };
+
         if (includeDefinitions)
         {
             result["definitionSchema"] = RepositoryModuleContractArtifacts.GetTaskDefinitionSchema();
@@ -42,9 +44,10 @@ internal static class RepositoryModuleContractBuilder
     public static JsonObject BuildTrigger(RepositoryAutomationTriggerDefinition trigger, bool includeDefinitions)
     {
         ArgumentNullException.ThrowIfNull(trigger);
+
         var modulePath = trigger.Automation.EntrypointPath
-                         ?? throw new InvalidDataException(
-                             $"Trigger '{trigger.TriggerId}' does not have a TypeScript module path.");
+            ?? throw new InvalidDataException(
+                $"Trigger '{trigger.TriggerId}' does not have a TypeScript module path.");
         var descriptor = ReadDescriptor(modulePath, "trigger", "Trigger");
         var result = new JsonObject
         {
@@ -59,6 +62,7 @@ internal static class RepositoryModuleContractBuilder
                 ["eventPayload"] = trigger.EventSchema?.DeepClone()
             }
         };
+
         if (includeDefinitions)
         {
             result["definitionSchema"] = RepositoryModuleContractArtifacts.GetTriggerDefinitionSchema();
@@ -76,9 +80,10 @@ internal static class RepositoryModuleContractBuilder
             modulePath,
             exportName,
             moduleKind);
+
         return JsonNode.Parse(descriptorJson) as JsonObject
-               ?? throw new InvalidDataException(
-                   $"{moduleKind} module '{modulePath}' descriptor is not a JSON object.");
+            ?? throw new InvalidDataException(
+                $"{moduleKind} module '{modulePath}' descriptor is not a JSON object.");
     }
 
     private static JsonArray ToStringArray(IEnumerable<string> values)

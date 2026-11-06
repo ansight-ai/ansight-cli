@@ -6,7 +6,7 @@ namespace Ansight.Host.Devices.Motion;
 /// <summary>Plays one bounded sensor sequence and restores the emulator's previous value.</summary>
 internal sealed class AndroidEmulatorMotionPlayer
 {
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> DeviceLocks = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> deviceLocks = new(StringComparer.Ordinal);
     private readonly AdbClient adb;
 
     public AndroidEmulatorMotionPlayer(AdbClient adb)
@@ -28,12 +28,14 @@ internal sealed class AndroidEmulatorMotionPlayer
                 "Provide 1–100 samples, each held for 10–1000 ms, with a total duration of at most 10 seconds.");
         }
 
-        var gate = DeviceLocks.GetOrAdd(deviceSerial, static _ => new SemaphoreSlim(1, 1));
+        var gate = deviceLocks.GetOrAdd(deviceSerial, static _ => new SemaphoreSlim(1, 1));
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var original = await adb.GetEmulatorAccelerationAsync(deviceSerial, cancellationToken)
                 .ConfigureAwait(false);
+
             try
             {
                 foreach (var sample in samples)
@@ -60,6 +62,7 @@ internal sealed class AndroidEmulatorMotionPlayer
     public static void ValidateDeviceSerial(string deviceSerial)
     {
         const string prefix = "emulator-";
+
         if (!deviceSerial.StartsWith(prefix, StringComparison.Ordinal)
             || deviceSerial.Length == prefix.Length
             || !deviceSerial.AsSpan(prefix.Length).ToArray().All(static digit => digit is >= '0' and <= '9')

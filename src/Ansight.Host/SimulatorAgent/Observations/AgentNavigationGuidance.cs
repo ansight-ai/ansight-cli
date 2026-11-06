@@ -17,6 +17,7 @@ internal sealed class AgentNavigationGuidance
         }
 
         var observedFrameworks = new SortedSet<string>(StringComparer.Ordinal);
+
         try
         {
             using var document = JsonDocument.Parse(observationOutput);
@@ -33,6 +34,7 @@ internal sealed class AgentNavigationGuidance
     private string TakeFrameworkGuidance(IEnumerable<string> frameworks)
     {
         var sections = new List<string>();
+
         foreach (var framework in frameworks)
         {
             if (retainedFrameworks.Add(framework))
@@ -40,6 +42,7 @@ internal sealed class AgentNavigationGuidance
                 sections.Add($"Navigation guidance for {framework}:\n{NavigationGuidance.Read(framework)}");
             }
         }
+
         return string.Join("\n\n", sections);
     }
 
@@ -56,6 +59,7 @@ internal sealed class AgentNavigationGuidance
         AddFramework(ReadString(result, "selectedNavigationController"), controllers);
         CollectControllers(result, "graphStructureControllers", controllers);
         CollectControllers(result, "availableNavigationControllers", controllers);
+
         if (controllers.Count > 0)
         {
             // Explicit controller identities are more precise than a fallback framework label.
@@ -64,6 +68,7 @@ internal sealed class AgentNavigationGuidance
         else if (ReadString(result, "capability") is "ui.observe" or "navigation.structure.observe")
         {
             AddFramework(ReadString(result, "framework"), frameworks);
+
             if (result.TryGetProperty("frameworks", out var frameworkValues)
                 && frameworkValues.ValueKind == JsonValueKind.Array)
             {
@@ -85,6 +90,7 @@ internal sealed class AgentNavigationGuidance
                 CollectObservationFrameworks(observation, frameworks);
             }
         }
+
         foreach (var propertyName in new[] { "actions", "steps", "results" })
         {
             if (result.TryGetProperty(propertyName, out var observations)
@@ -125,8 +131,8 @@ internal sealed class AgentNavigationGuidance
 
     private static string? ReadString(JsonElement value, string propertyName)
         => value.ValueKind == JsonValueKind.Object
-           && value.TryGetProperty(propertyName, out var property)
-           && property.ValueKind == JsonValueKind.String
+            && value.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
 }

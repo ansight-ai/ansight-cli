@@ -23,7 +23,7 @@ public sealed class AppService
         this.runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
         this.appToolBridge = appToolBridge ?? throw new ArgumentNullException(nameof(appToolBridge));
         this.pairingConfigCache = pairingConfigCache
-                                  ?? throw new ArgumentNullException(nameof(pairingConfigCache));
+            ?? throw new ArgumentNullException(nameof(pairingConfigCache));
         this.knownAppStore.Changed += KnownAppStoreOnChanged;
     }
 
@@ -84,11 +84,12 @@ public sealed class AppService
             .Concat(sessions.Select(static session => session.AppId))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
         return appIds.Select(appId => BuildDescriptor(
-                appId,
-                knownById.GetValueOrDefault(appId),
-                sessions.Where(session => string.Equals(session.AppId, appId, StringComparison.Ordinal)).ToArray(),
-                inviteCountsByAppId.GetValueOrDefault(appId)))
+            appId,
+            knownById.GetValueOrDefault(appId),
+            sessions.Where(session => string.Equals(session.AppId, appId, StringComparison.Ordinal)).ToArray(),
+            inviteCountsByAppId.GetValueOrDefault(appId)))
             .OrderBy(static app => app.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(static app => app.AppId, StringComparer.Ordinal)
             .ToArray();
@@ -97,7 +98,9 @@ public sealed class AppService
     public AppDescriptor? Get(string appId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
+
         return List().FirstOrDefault(app =>
             string.Equals(app.AppId, normalizedAppId, StringComparison.Ordinal));
     }
@@ -105,6 +108,7 @@ public sealed class AppService
     public AppOperationResult Register(AppRegistrationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.AppId))
         {
             return new AppOperationResult(false, "App ID is required.");
@@ -115,9 +119,11 @@ public sealed class AppService
 
         var linksRepositoryWorkspace = !string.IsNullOrWhiteSpace(request.CodebasePath);
         var codebasePath = existing?.CodebasePath;
+
         if (linksRepositoryWorkspace)
         {
             codebasePath = Path.GetFullPath(request.CodebasePath!.Trim());
+
             if (!Directory.Exists(codebasePath))
             {
                 return new AppOperationResult(false, $"Codebase folder '{codebasePath}' was not found.");
@@ -135,14 +141,16 @@ public sealed class AppService
             IconImagePath = existing?.IconImagePath,
             CodebasePath = codebasePath,
             RepositoryAutomationsEnabled = linksRepositoryWorkspace
-                                           || existing?.RepositoryAutomationsEnabled == true,
+                || existing?.RepositoryAutomationsEnabled == true,
             SourceKind = existing?.SourceKind,
             SourceTeamId = existing?.SourceTeamId,
             SourceTeamName = existing?.SourceTeamName,
             FirstSeenUtc = existing?.FirstSeenUtc ?? now,
             LastSeenUtc = now
         });
+
         var app = Get(appId);
+
         return new AppOperationResult(
             true,
             existing is null ? $"Registered app '{appId}'." : $"Updated registered app '{appId}'.",
@@ -153,6 +161,7 @@ public sealed class AppService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(previousAppId);
         ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.AppId))
         {
             return new AppOperationResult(false, "App ID is required.");
@@ -160,6 +169,7 @@ public sealed class AppService
 
         var normalizedPreviousAppId = previousAppId.Trim();
         var normalizedAppId = request.AppId.Trim();
+
         if (string.Equals(normalizedPreviousAppId, normalizedAppId, StringComparison.Ordinal))
         {
             return Register(request);
@@ -176,9 +186,11 @@ public sealed class AppService
         }
 
         var codebasePath = existing.CodebasePath;
+
         if (!string.IsNullOrWhiteSpace(request.CodebasePath))
         {
             codebasePath = Path.GetFullPath(request.CodebasePath.Trim());
+
             if (!Directory.Exists(codebasePath))
             {
                 return new AppOperationResult(false, $"Codebase folder '{codebasePath}' was not found.", Get(normalizedPreviousAppId));
@@ -201,9 +213,11 @@ public sealed class AppService
             FirstSeenUtc = existing.FirstSeenUtc,
             LastSeenUtc = now
         });
+
         if (!knownAppStore.Remove(normalizedPreviousAppId))
         {
             knownAppStore.Remove(normalizedAppId);
+
             return new AppOperationResult(false, $"App '{normalizedPreviousAppId}' could not be updated.");
         }
 
@@ -216,9 +230,11 @@ public sealed class AppService
     public AppOperationResult Remove(string appId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
         var existing = Get(normalizedAppId);
         var removed = knownAppStore.Remove(normalizedAppId);
+
         return removed
             ? new AppOperationResult(true, $"Removed app '{normalizedAppId}'.", existing)
             : new AppOperationResult(false, $"App '{normalizedAppId}' is not registered.", existing);
@@ -228,8 +244,10 @@ public sealed class AppService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(codebasePath);
+
         var normalizedAppId = appId.Trim();
         var normalizedCodebasePath = Path.GetFullPath(codebasePath.Trim());
+
         if (!Directory.Exists(normalizedCodebasePath))
         {
             return new AppOperationResult(
@@ -254,6 +272,7 @@ public sealed class AppService
             FirstSeenUtc = existing?.FirstSeenUtc ?? now,
             LastSeenUtc = now
         });
+
         return new AppOperationResult(
             true,
             $"Connected app '{normalizedAppId}' to trusted workspace '{normalizedCodebasePath}'.",
@@ -263,7 +282,9 @@ public sealed class AppService
     public AppOperationResult ClearRepositoryWorkspace(string appId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
+
         if (!knownAppStore.TryGet(normalizedAppId, out var existing) || existing is null)
         {
             return new AppOperationResult(false, $"App '{normalizedAppId}' is not registered.");
@@ -273,6 +294,7 @@ public sealed class AppService
             existing,
             codebasePath: null,
             repositoryAutomationsEnabled: false));
+
         return new AppOperationResult(
             true,
             $"Disconnected app '{normalizedAppId}' from its repository workspace.",
@@ -282,7 +304,9 @@ public sealed class AppService
     public AppOperationResult SetRepositoryAutomationsEnabled(string appId, bool enabled)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
+
         if (!knownAppStore.TryGet(normalizedAppId, out var existing) || existing is null)
         {
             return new AppOperationResult(false, $"App '{normalizedAppId}' is not registered.");
@@ -300,6 +324,7 @@ public sealed class AppService
             existing,
             existing.CodebasePath,
             enabled));
+
         return new AppOperationResult(
             true,
             enabled
@@ -335,31 +360,31 @@ public sealed class AppService
         int enrollmentInviteCount)
     {
         var firstSeenUtc = knownApp?.FirstSeenUtc
-                           ?? sessions.Select(static session => session.CreatedUtc).DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
+            ?? sessions.Select(static session => session.CreatedUtc).DefaultIfEmpty(DateTimeOffset.UtcNow).Min();
         var lastSeenUtc = new[]
-            {
-                knownApp?.LastSeenUtc,
-                sessions.Count == 0 ? null : sessions.Max(static session => session.LastUpdatedUtc)
-            }
-            .Where(static value => value is not null)
+        {
+            knownApp?.LastSeenUtc,
+            sessions.Count == 0 ? null : sessions.Max(static session => session.LastUpdatedUtc)
+        }.Where(static value => value is not null)
             .Select(static value => value!.Value)
             .DefaultIfEmpty(firstSeenUtc)
             .Max();
         var registeredName = string.IsNullOrWhiteSpace(knownApp?.Name)
-                             || string.Equals(knownApp.Name, appId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(knownApp.Name, appId, StringComparison.OrdinalIgnoreCase)
             ? null
             : knownApp.Name;
+
         return new AppDescriptor(
             appId,
             registeredName
-            ?? sessions.Select(static session => session.DeviceProfile?.App?.AppName)
-                .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name))
-            ?? sessions.Select(static session => session.ClientName)
-                .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name))
-            ?? appId,
+                ?? sessions.Select(static session => session.DeviceProfile?.App?.AppName)
+                    .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name))
+                ?? sessions.Select(static session => session.ClientName)
+                    .FirstOrDefault(static name => !string.IsNullOrWhiteSpace(name))
+                ?? appId,
             knownApp?.CodebasePath,
             !string.IsNullOrWhiteSpace(knownApp?.CodebasePath)
-            && Directory.Exists(knownApp.CodebasePath),
+                && Directory.Exists(knownApp.CodebasePath),
             knownApp?.IconImagePath,
             knownApp?.RepositoryAutomationsEnabled == true,
             knownApp?.SourceKind,

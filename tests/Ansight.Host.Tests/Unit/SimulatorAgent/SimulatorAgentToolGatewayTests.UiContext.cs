@@ -36,8 +36,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
         var original = payload.ToJsonString();
         var dispatcher = new RecordingOperationDispatcher();
         dispatcher.Responses[toolName] = RequestResult.ToolResult(payload, isError: true);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("session", SecretAccess.Empty);
+
         try
         {
             var response = await gateway.ExecuteAsync(toolName, new JsonObject(), "session", "project", default);
@@ -61,7 +63,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
             Assert.Contains("debug", response.Output);
             Assert.Equal(original, payload.ToJsonString());
         }
-        finally { gateway.EndRun(); }
+        finally
+        {
+            gateway.EndRun();
+        }
     }
 
     [Theory]
@@ -74,32 +79,42 @@ public sealed partial class SimulatorAgentToolGatewayTests
         {
             ["matches"] = new JsonArray(new JsonObject
             {
-                ["id"] = runtimeId, ["role"] = "button", ["supportedActions"] = new JsonArray("tap")
+                ["id"] = runtimeId,
+                ["role"] = "button",
+                ["supportedActions"] = new JsonArray("tap")
             })
         }, isError: false);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("session", SecretAccess.Empty);
+
         try
         {
             var observation = await gateway.ExecuteAsync("ansight_find_ui", new JsonObject(), "session", "find", default);
             var alias = JsonNode.Parse(observation.ModelOutput!)!["result"]!["matches"]![0]!["id"]!.GetValue<string>();
             Assert.Contains(runtimeId, observation.Output);
             Assert.DoesNotContain(runtimeId, observation.ModelOutput!);
+
             var arguments = new JsonObject { ["nodeId"] = alias };
             var tracking = gateway.ResolveUiSelectorForTracking(arguments);
             Assert.Equal(runtimeId, tracking["nodeId"]!.GetValue<string>());
             Assert.Equal(alias, arguments["nodeId"]!.GetValue<string>());
+
             var action = await gateway.ExecuteAsync("ansight_tap_ui", arguments, "session", "tap", default);
             Assert.False(action.IsError);
             Assert.Equal(runtimeId, dispatcher.LastArguments!["nodeId"]!.GetValue<string>());
             Assert.Equal(alias, arguments["nodeId"]!.GetValue<string>());
+
             var count = dispatcher.Calls.Count;
             var stale = await gateway.ExecuteAsync("ansight_tap_ui", arguments, "session", "stale", default);
             Assert.True(stale.IsError);
             Assert.Contains("expired", stale.Message);
             Assert.Equal(count, dispatcher.Calls.Count);
         }
-        finally { gateway.EndRun(); }
+        finally
+        {
+            gateway.EndRun();
+        }
     }
 
     [Theory]

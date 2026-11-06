@@ -37,6 +37,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         lock (gate)
         {
             var values = ReadValues();
+
             return values.TryGetValue(key.Trim(), out var value)
                 ? value
                 : null;
@@ -54,6 +55,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         {
             var normalizedKey = key.Trim();
             var values = ReadValues();
+
             if (value is null)
             {
                 if (values.Remove(normalizedKey))
@@ -79,6 +81,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         lock (gate)
         {
             var values = ReadValues();
+
             if (values.Remove(key.Trim()))
             {
                 WriteValues(values);
@@ -112,6 +115,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
     private Dictionary<string, string> ReadValues()
     {
         var content = GetValue(service, VaultAccount);
+
         if (string.IsNullOrWhiteSpace(content))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal);
@@ -120,6 +124,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         try
         {
             var values = JsonSerializer.Deserialize<Dictionary<string, string>>(content);
+
             return values is null
                 ? new Dictionary<string, string>(StringComparer.Ordinal)
                 : new Dictionary<string, string>(values, StringComparer.Ordinal);
@@ -135,10 +140,12 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         if (values.Count == 0)
         {
             RemoveValue(VaultAccount);
+
             return;
         }
 
         var normalized = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var entry in values)
         {
             normalized[entry.Key] = entry.Value;
@@ -151,6 +158,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
     {
         var query = CreateQuery(service, account);
         nint data = 0;
+
         try
         {
             MacOsKeychainNative.SetValue(
@@ -161,13 +169,16 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
                 query,
                 MacOsKeychainNative.SecMatchLimit,
                 MacOsKeychainNative.SecMatchLimitOne);
+
             var status = MacOsKeychainNative.CopyMatching(query, out data);
+
             if (status == MacOsKeychainNative.ItemNotFound)
             {
                 return null;
             }
 
             EnsureSuccess("read", status);
+
             return Encoding.UTF8.GetString(MacOsKeychainNative.ReadData(data));
         }
         finally
@@ -182,10 +193,13 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
         var query = CreateQuery(service, account);
         var update = MacOsKeychainNative.CreateDictionary();
         var bytes = Encoding.UTF8.GetBytes(value);
+
         try
         {
             MacOsKeychainNative.SetData(update, MacOsKeychainNative.SecValueData, bytes);
+
             var status = MacOsKeychainNative.Update(query, update);
+
             if (status == MacOsKeychainNative.ItemNotFound)
             {
                 MacOsKeychainNative.SetData(query, MacOsKeychainNative.SecValueData, bytes);
@@ -209,9 +223,11 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
     private void RemoveValue(string account)
     {
         var query = CreateQuery(service, account);
+
         try
         {
             var status = MacOsKeychainNative.Delete(query);
+
             if (status != MacOsKeychainNative.ItemNotFound)
             {
                 EnsureSuccess("remove", status);
@@ -232,6 +248,7 @@ public sealed class MacOsKeychainEncryptedStorage : IEncryptedStorage
             MacOsKeychainNative.SecClassGenericPassword);
         MacOsKeychainNative.SetString(query, MacOsKeychainNative.SecAttrService, service);
         MacOsKeychainNative.SetString(query, MacOsKeychainNative.SecAttrAccount, account);
+
         return query;
     }
 

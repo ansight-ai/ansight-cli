@@ -28,6 +28,7 @@ internal sealed class NativeProfileCaptureStore
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "derived"));
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "symbols"));
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "diagnostics"));
+
         return capturePath;
     }
 
@@ -46,21 +47,24 @@ internal sealed class NativeProfileCaptureStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+
         var manifestPath = Path.Combine(CreateCaptureDirectory(manifest.CaptureId), ManifestFileName);
         var temporaryPath = manifestPath + ".tmp";
+
         await using (var stream = new FileStream(
-                         temporaryPath,
-                         FileMode.Create,
-                         FileAccess.Write,
-                         FileShare.None,
-                         16 * 1024,
-                         FileOptions.Asynchronous))
+            temporaryPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            16 * 1024,
+            FileOptions.Asynchronous))
         {
             await JsonSerializer.SerializeAsync(stream, manifest, jsonOptions, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         File.Move(temporaryPath, manifestPath, overwrite: true);
+
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(manifestPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -70,7 +74,9 @@ internal sealed class NativeProfileCaptureStore
     public bool TryLoadManifest(string captureId, out NativeProfileCaptureManifest? manifest)
     {
         manifest = null;
+
         string manifestPath;
+
         try
         {
             manifestPath = Path.Combine(GetCapturePath(captureId), ManifestFileName);
@@ -90,6 +96,7 @@ internal sealed class NativeProfileCaptureStore
             manifest = JsonSerializer.Deserialize<NativeProfileCaptureManifest>(
                 File.ReadAllText(manifestPath),
                 jsonOptions);
+
             return manifest is not null;
         }
         catch (JsonException)
@@ -101,16 +108,18 @@ internal sealed class NativeProfileCaptureStore
     public IReadOnlyList<NativeProfileCaptureManifest> ListManifests()
     {
         var manifests = new List<NativeProfileCaptureManifest>();
+
         foreach (var manifestPath in Directory.EnumerateFiles(
-                     capturesPath,
-                     ManifestFileName,
-                     SearchOption.AllDirectories))
+            capturesPath,
+            ManifestFileName,
+            SearchOption.AllDirectories))
         {
             try
             {
                 var manifest = JsonSerializer.Deserialize<NativeProfileCaptureManifest>(
                     File.ReadAllText(manifestPath),
                     jsonOptions);
+
                 if (manifest is not null)
                 {
                     manifests.Add(manifest);
@@ -133,9 +142,11 @@ internal sealed class NativeProfileCaptureStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(producedArtifact);
+
         var capturePath = GetCapturePath(captureId);
         var normalizedCapturePath = Path.GetFullPath(capturePath) + Path.DirectorySeparatorChar;
         var normalizedArtifactPath = Path.GetFullPath(producedArtifact.Path);
+
         if (!normalizedArtifactPath.StartsWith(normalizedCapturePath, PathComparison))
         {
             throw new InvalidOperationException("Profile artifacts must be stored inside their capture directory.");
@@ -144,6 +155,7 @@ internal sealed class NativeProfileCaptureStore
         var description = producedArtifact.IsDirectory
             ? await DescribeDirectoryAsync(normalizedArtifactPath, cancellationToken).ConfigureAwait(false)
             : await DescribeFileAsync(normalizedArtifactPath, cancellationToken).ConfigureAwait(false);
+
         return new NativeProfileArtifact(
             producedArtifact.Kind,
             Path.GetRelativePath(capturePath, normalizedArtifactPath)
@@ -160,10 +172,12 @@ internal sealed class NativeProfileCaptureStore
         out string? artifactPath)
     {
         artifactPath = null;
+
         var artifact = manifest.Artifacts.FirstOrDefault(candidate => string.Equals(
             candidate.Kind,
             kind,
             StringComparison.Ordinal));
+
         if (artifact is null)
         {
             return false;
@@ -173,12 +187,14 @@ internal sealed class NativeProfileCaptureStore
         var candidatePath = Path.GetFullPath(Path.Combine(capturePath, artifact.RelativePath));
         var normalizedCapturePath = Path.GetFullPath(capturePath) + Path.DirectorySeparatorChar;
         var exists = artifact.IsDirectory ? Directory.Exists(candidatePath) : File.Exists(candidatePath);
+
         if (!candidatePath.StartsWith(normalizedCapturePath, PathComparison) || !exists)
         {
             return false;
         }
 
         artifactPath = candidatePath;
+
         return true;
     }
 
@@ -193,6 +209,7 @@ internal sealed class NativeProfileCaptureStore
 
         await using var stream = File.OpenRead(filePath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+
         return new ArtifactDescription(stream.Length, Convert.ToHexStringLower(hash));
     }
 
@@ -208,10 +225,12 @@ internal sealed class NativeProfileCaptureStore
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         long totalLength = 0;
         var buffer = new byte[128 * 1024];
+
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories)
-                     .Order(StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var relativePath = Path.GetRelativePath(directoryPath, filePath)
                 .Replace(Path.DirectorySeparatorChar, '/');
             hash.AppendData(Encoding.UTF8.GetBytes(relativePath));
@@ -219,7 +238,9 @@ internal sealed class NativeProfileCaptureStore
 
             await using var stream = File.OpenRead(filePath);
             totalLength = checked(totalLength + stream.Length);
+
             int bytesRead;
+
             while ((bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
             {
                 hash.AppendData(buffer.AsSpan(0, bytesRead));

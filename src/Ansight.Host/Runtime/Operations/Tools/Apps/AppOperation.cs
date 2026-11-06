@@ -25,12 +25,14 @@ internal abstract class AppOperation : Operation
     protected RequestResult BuildGetAppResult(JsonObject? arguments)
     {
         var appId = NormalizeRequiredAppId(arguments);
+
         if (string.IsNullOrWhiteSpace(appId))
         {
             return ToolError("appId is required.");
         }
 
         var app = hostAppService.Get(appId);
+
         if (app is null)
         {
             return RequestResult.ToolResult(
@@ -54,6 +56,7 @@ internal abstract class AppOperation : Operation
     protected RequestResult BuildRegisterAppResult(JsonObject? arguments)
     {
         var appId = NormalizeRequiredAppId(arguments);
+
         if (string.IsNullOrWhiteSpace(appId))
         {
             return ToolError("appId is required.");
@@ -65,6 +68,7 @@ internal abstract class AppOperation : Operation
             appId,
             appName,
             codebasePath));
+
         return RequestResult.ToolResult(
             new JsonObject
             {

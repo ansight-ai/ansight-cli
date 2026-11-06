@@ -7,10 +7,19 @@ internal static class ScreenTextObservation
     public static string BuildModelOutput(JsonObject content, bool isError, int maximumCharacters)
     {
         var result = new JsonObject();
+
         foreach (var name in new[]
         {
-            "capability", "evidenceSource", "provider", "capturedAtUtc", "screenshotFrameId",
-            "screenWidth", "screenHeight", "totalCount", "warning", "message"
+            "capability",
+            "evidenceSource",
+            "provider",
+            "capturedAtUtc",
+            "screenshotFrameId",
+            "screenWidth",
+            "screenHeight",
+            "totalCount",
+            "warning",
+            "message"
         })
         {
             if (content[name] is { } value)
@@ -26,7 +35,9 @@ internal static class ScreenTextObservation
         result["projectionOmittedCount"] = result["projectionSourceCount"]!.DeepClone();
         result["truncated"] = true;
         result["projectionGuidance"] = "Omitted text is not absent. Use a focused text lookup to inspect an omitted target. OCR tap hints expire after a layout change and are not stable automation IDs.";
+
         var envelope = new JsonObject { ["isError"] = isError, ["result"] = result };
+
         if (envelope.ToJsonString().Length > maximumCharacters)
         {
             return new JsonObject
@@ -40,6 +51,7 @@ internal static class ScreenTextObservation
         foreach (var entry in (content["content"] as JsonArray)?.OfType<JsonObject>() ?? [])
         {
             var projected = new JsonObject();
+
             foreach (var name in new[] { "text", "confidence", "bounds", "tapHint" })
             {
                 if (entry[name] is { } value)
@@ -57,6 +69,7 @@ internal static class ScreenTextObservation
             UiNodeProjection.CompactBoundsInPlace(projected);
             entries.Add(projected);
             result["count"] = entries.Count;
+
             if (envelope.ToJsonString().Length > maximumCharacters - 32)
             {
                 entries.RemoveAt(entries.Count - 1);
@@ -68,6 +81,7 @@ internal static class ScreenTextObservation
         var omitted = sourceCount - entries.Count;
         result["projectionOmittedCount"] = omitted;
         result["truncated"] = omitted > 0 || content["truncated"]?.GetValue<bool>() == true;
+
         return envelope.ToJsonString();
     }
 }

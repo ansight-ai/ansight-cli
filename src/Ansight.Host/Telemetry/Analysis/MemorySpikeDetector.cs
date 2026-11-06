@@ -5,12 +5,12 @@ internal static class MemorySpikeDetector
     private const double MemorySpikeRiseStartRatio = 0.1d;
     private const double MemorySpikeRetentionRatio = 0.5d;
     private const double MemorySpikePeakPlateauRatio = 0.02d;
-    private static readonly TimeSpan MemorySpikeRiseWindow = TimeSpan.FromSeconds(12);
-    private static readonly TimeSpan MemorySpikePeakSearchWindow = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan MemorySpikePeakHoldWindow = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan MaximumMemorySpikeAnnotationDuration = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan MemorySpikeCooldown = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan TelemetryAnalysisEventDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan memorySpikeRiseWindow = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan memorySpikePeakSearchWindow = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan memorySpikePeakHoldWindow = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan maximumMemorySpikeAnnotationDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan memorySpikeCooldown = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan telemetryAnalysisEventDuration = TimeSpan.FromSeconds(2);
 
     public static IReadOnlyList<MemorySpikeAnalysisWindow> AnalyzeMemorySpikes(
         MetricChartState chart,
@@ -19,15 +19,18 @@ internal static class MemorySpikeDetector
         ArgumentNullException.ThrowIfNull(chart);
 
         options ??= MemorySpikeTelemetryAnalysisOptions.Default;
+
         var candidates = new List<MemorySpikeAnalysisWindow>();
+
         foreach (var channelGroup in chart.Metrics
-                     .Where(sample => MetricChannelClassification.IsMemoryChannel(chart.Channels, sample.ChannelId))
-                     .GroupBy(sample => sample.ChannelId)
-                     .OrderBy(group => group.Key))
+            .Where(sample => MetricChannelClassification.IsMemoryChannel(chart.Channels, sample.ChannelId))
+            .GroupBy(sample => sample.ChannelId)
+            .OrderBy(group => group.Key))
         {
             var samples = channelGroup
                 .OrderBy(sample => sample.CapturedAtUtc)
                 .ToArray();
+
             if (samples.Length < 2)
             {
                 continue;
@@ -56,6 +59,7 @@ internal static class MemorySpikeDetector
 
         var peakIndex = ResolveMemorySpikePeakIndex(samples, currentIndex);
         var floorBaselineIndex = ResolveMemorySpikeFloorBaselineIndex(samples, peakIndex);
+
         if (floorBaselineIndex >= peakIndex)
         {
             return false;
@@ -64,6 +68,7 @@ internal static class MemorySpikeDetector
         var floorBaseline = samples[floorBaselineIndex];
         var peak = samples[peakIndex];
         var floorDeltaBytes = peak.Value - floorBaseline.Value;
+
         if (floorDeltaBytes <= 0)
         {
             return false;
@@ -76,6 +81,7 @@ internal static class MemorySpikeDetector
         var minimumDeltaBytes = Math.Max(
             options.MinimumMemorySpikeBytes,
             (long)Math.Ceiling(Math.Max(1, baseline.Value) * options.MinimumMemorySpikeRatio));
+
         if (deltaBytes < minimumDeltaBytes)
         {
             return false;
@@ -93,16 +99,19 @@ internal static class MemorySpikeDetector
             endUtc,
             deltaBytes,
             retainedUntilUtc);
+
         return true;
     }
 
     private static int ResolveMemorySpikePeakIndex(IReadOnlyList<SessionMetricSample> samples, int currentIndex)
     {
         var peakIndex = currentIndex;
-        var searchEndUtc = samples[currentIndex].CapturedAtUtc + MemorySpikePeakSearchWindow;
+        var searchEndUtc = samples[currentIndex].CapturedAtUtc + memorySpikePeakSearchWindow;
+
         for (var index = currentIndex + 1; index < samples.Count; index++)
         {
             var candidate = samples[index];
+
             if (candidate.CapturedAtUtc > searchEndUtc)
             {
                 break;
@@ -116,6 +125,7 @@ internal static class MemorySpikeDetector
 
         var peakValue = samples[peakIndex].Value;
         var nearPeakThreshold = peakValue - Math.Max(1L, (long)Math.Ceiling(peakValue * MemorySpikePeakPlateauRatio));
+
         for (var index = currentIndex; index < peakIndex; index++)
         {
             if (samples[index].Value >= nearPeakThreshold)
@@ -130,11 +140,13 @@ internal static class MemorySpikeDetector
     private static int ResolveMemorySpikeFloorBaselineIndex(IReadOnlyList<SessionMetricSample> samples, int peakIndex)
     {
         var peak = samples[peakIndex];
-        var windowStartUtc = peak.CapturedAtUtc - MemorySpikeRiseWindow;
+        var windowStartUtc = peak.CapturedAtUtc - memorySpikeRiseWindow;
         var baselineIndex = peakIndex - 1;
+
         for (var index = peakIndex - 1; index >= 0; index--)
         {
             var candidate = samples[index];
+
             if (candidate.CapturedAtUtc < windowStartUtc)
             {
                 break;
@@ -157,6 +169,7 @@ internal static class MemorySpikeDetector
         double deltaBytes)
     {
         var riseStartThreshold = floorBaseline.Value + Math.Max(1, (long)Math.Ceiling(deltaBytes * MemorySpikeRiseStartRatio));
+
         for (var index = floorBaselineIndex + 1; index <= peakIndex; index++)
         {
             if (samples[index].Value <= riseStartThreshold)
@@ -192,11 +205,12 @@ internal static class MemorySpikeDetector
 
     private static DateTimeOffset ResolveMemorySpikeEndUtc(SessionMetricSample peak, DateTimeOffset startUtc)
     {
-        var latestEndUtc = startUtc + MaximumMemorySpikeAnnotationDuration;
-        var endUtc = peak.CapturedAtUtc + MemorySpikePeakHoldWindow;
+        var latestEndUtc = startUtc + maximumMemorySpikeAnnotationDuration;
+        var endUtc = peak.CapturedAtUtc + memorySpikePeakHoldWindow;
+
         if (endUtc <= startUtc)
         {
-            endUtc = startUtc + TelemetryAnalysisEventDuration;
+            endUtc = startUtc + telemetryAnalysisEventDuration;
         }
 
         return endUtc > latestEndUtc ? latestEndUtc : endUtc;
@@ -211,9 +225,11 @@ internal static class MemorySpikeDetector
     {
         var retainedThreshold = baseline.Value + Math.Max(1, (long)Math.Ceiling(deltaBytes * MemorySpikeRetentionRatio));
         DateTimeOffset? retainedUntilUtc = null;
+
         for (var index = peakIndex + 1; index < samples.Count; index++)
         {
             var candidate = samples[index];
+
             if (candidate.Value < retainedThreshold)
             {
                 break;
@@ -236,10 +252,11 @@ internal static class MemorySpikeDetector
         }
 
         var selected = new List<MemorySpikeAnalysisWindow>();
+
         foreach (var candidate in candidates
-                     .OrderByDescending(candidate => candidate.DeltaBytes)
-                     .ThenBy(candidate => candidate.EndUtc - candidate.StartUtc)
-                     .ThenBy(candidate => candidate.StartUtc))
+            .OrderByDescending(candidate => candidate.DeltaBytes)
+            .ThenBy(candidate => candidate.EndUtc - candidate.StartUtc)
+            .ThenBy(candidate => candidate.StartUtc))
         {
             if (selected.Any(existing => ShouldSuppressCandidate(candidate, existing)))
             {
@@ -266,7 +283,7 @@ internal static class MemorySpikeDetector
         }
 
         return WindowsOverlap(candidate, existing)
-               || (candidate.Peak.CapturedAtUtc - existing.Peak.CapturedAtUtc).Duration() < MemorySpikeCooldown;
+            || (candidate.Peak.CapturedAtUtc - existing.Peak.CapturedAtUtc).Duration() < memorySpikeCooldown;
     }
 
     private static bool WindowsOverlap(
@@ -275,5 +292,4 @@ internal static class MemorySpikeDetector
     {
         return left.StartUtc <= right.EndUtc && right.StartUtc <= left.EndUtc;
     }
-
 }

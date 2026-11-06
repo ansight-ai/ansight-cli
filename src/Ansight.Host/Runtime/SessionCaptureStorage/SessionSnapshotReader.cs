@@ -34,7 +34,7 @@ internal static partial class SessionSnapshotReader
     private const string ImagesDirectoryName = "images";
     private const string VisualTreesDirectoryName = "visual-trees";
     private const string ArtifactsDirectoryName = "artifacts";
-    private static readonly SessionLoadStage[] FullSnapshotLoadStages =
+    private static readonly SessionLoadStage[] fullSnapshotLoadStages =
     [
         SessionLoadStage.Header,
         SessionLoadStage.DeviceProfile,
@@ -74,10 +74,13 @@ internal static partial class SessionSnapshotReader
         {
             cancellationToken.ThrowIfCancellationRequested();
             ReportLoadProgress(progress, SessionLoadStage.Header, 0, "Reading session header...");
+
             var summary = knownSummary;
+
             if (summary is null)
             {
                 var summaryDocument = TryLoadDocument<SessionCaptureSummaryDocument>(summaryFilePath, cancellationToken);
+
                 if (summaryDocument?.Session is null)
                 {
                     return null;
@@ -90,20 +93,26 @@ internal static partial class SessionSnapshotReader
             ReportLoadProgress(progress, SessionLoadStage.Header, 1, "Session header loaded.");
 
             ReportLoadProgress(progress, SessionLoadStage.DeviceProfile, 0, "Reading device profile...");
+
             var deviceProfileResult = LoadDeviceProfile(layout.DeviceProfileFilePath, cancellationToken);
             ReportLoadProgress(progress, SessionLoadStage.DeviceProfile, 1, BuildDeviceProfileLoadStatus(deviceProfileResult));
+
             var appToolCatalog = LoadAppToolCatalog(layout.AppToolCatalogFilePath, cancellationToken);
 
             ReportLoadProgress(progress, SessionLoadStage.Analyses, 0, "Reading saved analyses...");
+
             var analyses = LoadAnalyses(layout.AnalysesFilePath, cancellationToken);
             ReportLoadProgress(progress, SessionLoadStage.Analyses, 1, FormatLoadCount(analyses.Count, "saved analysis", "saved analyses"));
 
             ReportLoadProgress(progress, SessionLoadStage.Annotations, 0, "Reading annotations...");
+
             var annotations = LoadAnnotations(layout.AnnotationsFilePath, cancellationToken);
             ReportLoadProgress(progress, SessionLoadStage.Annotations, 1, FormatLoadCount(annotations.Count, "annotation", "annotations"));
+
             var agentTaskLinks = LoadAgentTaskLinks(layout.AgentTaskLinksFilePath, cancellationToken);
 
             ReportLoadProgress(progress, SessionLoadStage.Images, 0, "Resolving screenshot frames...");
+
             var images = LoadImages(layout.ImagesFilePath, layout.CapturedImagesDirectoryPath, progress, cancellationToken);
             ReportLoadProgress(progress, SessionLoadStage.Images, 1, FormatLoadCount(images.Count, "screenshot frame", "screenshot frames"));
 
@@ -125,12 +134,13 @@ internal static partial class SessionSnapshotReader
             var appIcon = LoadAppIcon(layout.SessionDirectoryPath, summary.AppIcon);
             var cacheSizeBytes = summary.CacheSizeBytes > 0
                 ? summary.CacheSizeBytes
-                : GetDirectorySize(layout.SessionDirectoryPath);
+                : SessionCaptureFileSystem.GetDirectorySize(layout.SessionDirectoryPath);
             var logs = includeHeavyBlobs ? LoadLogs(layout.LogsFilePath, layout.LogSegmentsDirectoryPath, progress, cancellationToken) : Array.Empty<LogEntry>();
             var logStreams = LoadLogStreams(layout.LogStreamsFilePath, logs, cancellationToken);
 
             IReadOnlyList<SessionMetricChannel> channels = Array.Empty<SessionMetricChannel>();
             IReadOnlyList<SessionMetricSample> metrics = Array.Empty<SessionMetricSample>();
+
             if (includeHeavyBlobs)
             {
                 ReportLoadProgress(progress, SessionLoadStage.MetricChannels, 0, "Reading telemetry channels...");
@@ -207,6 +217,7 @@ internal static partial class SessionSnapshotReader
     {
         var document = TryLoadDocument<SessionDeviceProfileBlobDocument>(filePath, cancellationToken);
         var profileJson = NormalizeJson(document?.ProfileJson);
+
         if (string.IsNullOrWhiteSpace(profileJson))
         {
             return new DeviceProfileLoadResult(null, null);
@@ -246,10 +257,11 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         var appEvents = TryLoadDocument<SessionApplicationEventsBlobDocument>(filePath, cancellationToken)?.Events
-                        ?? Array.Empty<SessionApplicationEvent>();
+            ?? Array.Empty<SessionApplicationEvent>();
         var motionEvents = TryLoadDocument<SessionApplicationEventsBlobDocument>(
             SessionMotionEvents.GetFilePath(sessionDirectoryPath), cancellationToken)?.Events
-                           ?? Array.Empty<SessionApplicationEvent>();
+            ?? Array.Empty<SessionApplicationEvent>();
+
         return appEvents.Concat(motionEvents).Concat(Ansight.Host.Connectivity.SessionConnectivityArchive.ReadDirectory(sessionDirectoryPath))
             .DistinctBy(appEvent => appEvent.EventId)
             .OrderBy(appEvent => appEvent.CapturedAtUtc)
@@ -262,21 +274,26 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.NetworkRequests, 0, "Reading network requests...");
+
         if (!Directory.Exists(directoryPath))
         {
             ReportLoadProgress(progress, SessionLoadStage.NetworkRequests, 1, "No network requests found.");
+
             return Array.Empty<SessionNetworkRequest>();
         }
 
         var requests = new List<SessionNetworkRequest>();
+
         foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
-                     .OrderBy(static path => path, StringComparer.Ordinal))
+            .OrderBy(static path => path, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 var request = TryLoadDocument<SessionNetworkRequest>(filePath, cancellationToken);
                 var normalized = SessionNetworkRequestSanitizer.Normalize(request);
+
                 if (normalized is not null)
                 {
                     requests.Add(normalized);
@@ -295,6 +312,7 @@ internal static partial class SessionSnapshotReader
             .ThenBy(static request => request.Id, StringComparer.Ordinal)
             .ToArray();
         ReportLoadProgress(progress, SessionLoadStage.NetworkRequests, 1, FormatLoadCount(result.Length, "network request", "network requests"));
+
         return result;
     }
 
@@ -303,7 +321,7 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         return TryLoadDocument<SessionAgentTaskLinksBlobDocument>(filePath, cancellationToken)?.Tasks
-               ?? Array.Empty<SessionAgentTaskLink>();
+            ?? Array.Empty<SessionAgentTaskLink>();
     }
 
     internal static IReadOnlyList<SessionImageFrame> LoadImages(
@@ -316,9 +334,11 @@ internal static partial class SessionSnapshotReader
         var baseImages = baseDocument?.Images ?? Array.Empty<SessionImageFrame>();
         var images = new List<SessionImageFrame>(baseImages.Count);
         images.AddRange(baseImages);
+
         var appendFilePath = Path.Combine(
             Path.GetDirectoryName(filePath) ?? string.Empty,
             ImagesAppendFileName);
+
         if (File.Exists(appendFilePath))
         {
             try
@@ -326,6 +346,7 @@ internal static partial class SessionSnapshotReader
                 foreach (var line in File.ReadLines(appendFilePath))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (string.IsNullOrWhiteSpace(line))
                     {
                         continue;
@@ -334,6 +355,7 @@ internal static partial class SessionSnapshotReader
                     try
                     {
                         var document = JsonSerializer.Deserialize<SessionImagesAppendDocument>(line, JsonUtil.Compact);
+
                         if (document?.Images is { Count: > 0 })
                         {
                             images.AddRange(document.Images);
@@ -358,15 +380,18 @@ internal static partial class SessionSnapshotReader
             .OrderBy(frame => frame.CapturedAtUtc)
             .ThenBy(frame => frame.FrameId, StringComparer.Ordinal)
             .ToArray();
+
         if (distinctImages.Length == 0)
         {
             return distinctImages;
         }
 
         var existingImages = new List<SessionImageFrame>(distinctImages.Length);
+
         for (var index = 0; index < distinctImages.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var frame = distinctImages[index];
             ReportFileLoadProgress(
                 progress,
@@ -374,6 +399,7 @@ internal static partial class SessionSnapshotReader
                 index + 1,
                 distinctImages.Length,
                 $"Resolving screenshot frame {index + 1:N0} of {distinctImages.Length:N0}...");
+
             if (File.Exists(SessionImageArtifactPath.ResolveCapturedImagePath(capturedImagesDirectoryPath, frame)))
             {
                 existingImages.Add(frame);
@@ -389,9 +415,11 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.Touches, 0, "Reading touch input...");
+
         var batches = TryLoadDocument<SessionTouchesBlobDocument>(layout.TouchesFilePath, cancellationToken)?.Batches
-                      ?? [];
+            ?? [];
         var appendFilePath = GetTouchesAppendFilePath(layout);
+
         if (File.Exists(appendFilePath))
         {
             try
@@ -399,6 +427,7 @@ internal static partial class SessionSnapshotReader
                 foreach (var line in File.ReadLines(appendFilePath))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (string.IsNullOrWhiteSpace(line))
                     {
                         continue;
@@ -407,6 +436,7 @@ internal static partial class SessionSnapshotReader
                     try
                     {
                         var document = JsonSerializer.Deserialize<SessionTouchesAppendDocument>(line, JsonUtil.Compact);
+
                         if (document?.Batches is { Count: > 0 })
                         {
                             batches.AddRange(document.Batches);
@@ -432,6 +462,7 @@ internal static partial class SessionSnapshotReader
             .ThenBy(touch => touch.Id, StringComparer.Ordinal)
             .ToArray();
         ReportLoadProgress(progress, SessionLoadStage.Touches, 1, FormatLoadCount(touches.Length, "touch input record", "touch input records"));
+
         return touches;
     }
 
@@ -441,6 +472,7 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.VisualTreeSnapshots, 0, "Reading visual tree snapshots...");
+
         var snapshots = new List<SessionVisualTreeSnapshot>();
         var filePaths = Directory.Exists(directoryPath)
             ? Directory.EnumerateFiles(directoryPath, "*.json", SearchOption.TopDirectoryOnly)
@@ -449,6 +481,7 @@ internal static partial class SessionSnapshotReader
             : Array.Empty<string>();
         var totalFileCount = filePaths.Length;
         var processedFileCount = 0;
+
         if (Directory.Exists(directoryPath))
         {
             foreach (var filePath in filePaths)
@@ -460,7 +493,9 @@ internal static partial class SessionSnapshotReader
                     processedFileCount,
                     totalFileCount,
                     $"Reading visual tree snapshot {processedFileCount + 1:N0} of {totalFileCount:N0}...");
+
                 var document = TryLoadDocument<SessionVisualTreeSnapshotDocument>(filePath, cancellationToken);
+
                 if (document?.Snapshot is not null
                     && string.Equals(document.Schema, SessionVisualTreeSnapshotDocument.SchemaName, StringComparison.Ordinal))
                 {
@@ -493,6 +528,7 @@ internal static partial class SessionSnapshotReader
             .ThenBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal)
             .ToArray();
         ReportLoadProgress(progress, SessionLoadStage.VisualTreeSnapshots, 1, FormatLoadCount(loadedSnapshots.Length, "visual tree snapshot", "visual tree snapshots"));
+
         return loadedSnapshots;
     }
 
@@ -502,9 +538,11 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.ArtifactSnapshots, 0, "Reading artifact snapshots...");
+
         if (!Directory.Exists(directoryPath))
         {
             ReportLoadProgress(progress, SessionLoadStage.ArtifactSnapshots, 1, "No artifact snapshots found.");
+
             return Array.Empty<SessionArtifactSnapshot>();
         }
 
@@ -512,6 +550,7 @@ internal static partial class SessionSnapshotReader
             .OrderBy(filePath => filePath, StringComparer.Ordinal)
             .ToArray();
         var snapshots = new List<SessionArtifactSnapshot>(filePaths.Length);
+
         for (var index = 0; index < filePaths.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -521,8 +560,10 @@ internal static partial class SessionSnapshotReader
                 index,
                 filePaths.Length,
                 $"Reading artifact snapshot {index + 1:N0} of {filePaths.Length:N0}...");
+
             var snapshot = TryLoadDocument<SessionArtifactSnapshotDocument>(filePaths[index], cancellationToken)?.Snapshot
-                           ?? TryLoadDocument<SessionArtifactSnapshot>(filePaths[index], cancellationToken);
+                ?? TryLoadDocument<SessionArtifactSnapshot>(filePaths[index], cancellationToken);
+
             if (snapshot is not null)
             {
                 snapshots.Add(snapshot);
@@ -538,14 +579,15 @@ internal static partial class SessionSnapshotReader
 
         var loadedSnapshots = snapshots
             .Where(snapshot => snapshot is not null
-                               && !string.IsNullOrWhiteSpace(snapshot.SnapshotId)
-                               && !string.IsNullOrWhiteSpace(snapshot.ArtifactDirectoryName))
+                && !string.IsNullOrWhiteSpace(snapshot.SnapshotId)
+                && !string.IsNullOrWhiteSpace(snapshot.ArtifactDirectoryName))
             .GroupBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal)
             .Select(group => group.OrderByDescending(snapshot => snapshot.CapturedAtUtc).First())
             .OrderBy(snapshot => snapshot.CapturedAtUtc)
             .ThenBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal)
             .ToArray();
         ReportLoadProgress(progress, SessionLoadStage.ArtifactSnapshots, 1, FormatLoadCount(loadedSnapshots.Length, "artifact snapshot", "artifact snapshots"));
+
         return loadedSnapshots;
     }
 
@@ -557,7 +599,7 @@ internal static partial class SessionSnapshotReader
         }
 
         var appIconPath = SessionAppIconArtifactPath.ResolveSessionIconPath(sessionDirectoryPath, appIcon);
+
         return File.Exists(appIconPath) ? appIcon : null;
     }
-
 }

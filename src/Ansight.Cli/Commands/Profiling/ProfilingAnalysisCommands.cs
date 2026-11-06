@@ -14,10 +14,12 @@ internal static class ProfilingAnalysisCommands
         arguments.EnsurePositionalCount(
             4,
             $"ansight profile dotnet {analysisKind} <capture-id> [options]");
+
         var request = CreateRequest(analysisKind, arguments, out var resultLimit);
         var analysisResult = runtime.Profiling.AnalyzeCapture(request);
         var result = CreateOutput(analysisKind, analysisResult, resultLimit);
         output.Write(result, () => Render(result));
+
         return CliExitCodes.Success;
     }
 
@@ -32,6 +34,7 @@ internal static class ProfilingAnalysisCommands
             ReadOptionalOffset(arguments, "end-ms"),
             ReadOptionalIdentifier(arguments, "process-id"),
             ReadOptionalIdentifier(arguments, "thread-id"));
+
         if (selection.StartMilliseconds is { } start
             && selection.EndMilliseconds is { } end
             && end < start)
@@ -45,6 +48,7 @@ internal static class ProfilingAnalysisCommands
             "gc" or "jit" or "exceptions" => arguments.GetIntOption("limit", 100, 1, 1_000),
             _ => 0
         };
+
         var hotspotLimit = analysisKind == "cpu" ? resultLimit : 100;
         var callTreeDepth = analysisKind == "call-tree"
             ? arguments.GetIntOption("max-depth", 32, 1, 128)
@@ -52,6 +56,7 @@ internal static class ProfilingAnalysisCommands
         var callTreeChildLimit = analysisKind == "call-tree"
             ? arguments.GetIntOption("max-children", 50, 1, 200)
             : 100;
+
         return new DotNetTraceAnalysisRequest(
             arguments.RequirePositional(3, "capture identifier"),
             selection,
@@ -76,6 +81,7 @@ internal static class ProfilingAnalysisCommands
             Evidence = analysisResult.Evidence,
             Warnings = analysisResult.Analysis.Warnings
         };
+
         return analysisKind switch
         {
             "overview" => output with { Overview = CreateOverview(analysisResult.Analysis) },
@@ -110,6 +116,7 @@ internal static class ProfilingAnalysisCommands
                 result.AnalysisKind,
                 "Unknown analysis kind.")
         };
+
         if (result.Warnings.Count == 0)
         {
             return rendered;
@@ -143,6 +150,7 @@ internal static class ProfilingAnalysisCommands
         }
 
         var value = arguments.GetDoubleOption(optionName);
+
         if (value < 0)
         {
             throw new CliUsageException($"--{optionName} cannot be negative.");
@@ -159,6 +167,7 @@ internal static class ProfilingAnalysisCommands
     private static ProfilingOverviewOutput CreateOverview(DotNetTraceAnalysis analysis)
     {
         var overview = analysis.Overview;
+
         return new ProfilingOverviewOutput(
             overview.StartMilliseconds,
             overview.EndMilliseconds,
@@ -185,6 +194,7 @@ internal static class ProfilingAnalysisCommands
                 analysis.Overview.StartMilliseconds,
                 "First captured EventPipe event in the selected range")
         };
+
         if (analysis.JittedMethods.Count > 0)
         {
             milestones.Add(new ProfilingStartupMilestoneOutput(
@@ -218,8 +228,10 @@ internal static class ProfilingAnalysisCommands
             "trace-last-event",
             analysis.Overview.EndMilliseconds,
             "Last captured EventPipe event in the selected range"));
+
         var applicationReadyObserved = analysis.StartupMilestones.Any(static milestone =>
             milestone.Kind == "application-ready");
+
         return new ProfilingStartupTimelineOutput(
             analysis.Overview.DurationMilliseconds,
             milestones.OrderBy(static milestone => milestone.TimestampMilliseconds).ToArray(),
@@ -251,6 +263,7 @@ internal static class ProfilingAnalysisCommands
             .OrderByDescending(static pause => pause.DurationMilliseconds)
             .Take(limit)
             .ToArray();
+
         return new ProfilingGcAnalysisOutput(
             analysis.GcPauses.Count,
             analysis.GcPauses.Sum(static pause => pause.DurationMilliseconds),
@@ -273,6 +286,7 @@ internal static class ProfilingAnalysisCommands
             .ThenBy(static method => method.TimestampMilliseconds)
             .Take(limit)
             .ToArray();
+
         return new ProfilingJitAnalysisOutput(
             analysis.JittedMethods.Count,
             analysis.JittedMethods.Sum(static method => (long)method.IlSize),
@@ -284,6 +298,7 @@ internal static class ProfilingAnalysisCommands
         int limit)
     {
         var groups = analysis.Exceptions.Take(limit).ToArray();
+
         return new ProfilingExceptionAnalysisOutput(
             analysis.Exceptions.Sum(static group => group.Count),
             analysis.Exceptions.Count,
@@ -327,6 +342,7 @@ internal static class ProfilingAnalysisCommands
     {
         var lines = new List<string>();
         AppendCallTree(lines, callTree, 0);
+
         return lines.Count == 0 ? "No sampled call tree was captured." : string.Join(Environment.NewLine, lines);
     }
 
@@ -337,6 +353,7 @@ internal static class ProfilingAnalysisCommands
     {
         var module = string.IsNullOrWhiteSpace(node.Module) ? string.Empty : $"\t{node.Module}";
         lines.Add($"{new string(' ', depth * 2)}{node.SampleCount}\t{node.Name}{module}");
+
         foreach (var child in node.Children)
         {
             AppendCallTree(lines, child, depth + 1);
@@ -355,6 +372,7 @@ internal static class ProfilingAnalysisCommands
     {
         var summary = FormattableString.Invariant(
             $"{gc.CollectionCount} collections\t{gc.TotalIntervalMilliseconds:0.###} ms total\t{gc.LongestIntervalMilliseconds:0.###} ms longest");
+
         return gc.Intervals.Count == 0
             ? summary
             : string.Join(
@@ -366,6 +384,7 @@ internal static class ProfilingAnalysisCommands
     private static string RenderJit(ProfilingJitAnalysisOutput jit)
     {
         var summary = $"{jit.MethodCount} methods\t{jit.TotalIlBytes} IL bytes";
+
         return jit.Methods.Count == 0
             ? summary
             : string.Join(
@@ -377,6 +396,7 @@ internal static class ProfilingAnalysisCommands
     private static string RenderExceptions(ProfilingExceptionAnalysisOutput exceptions)
     {
         var summary = $"{exceptions.ThrowCount} throws\t{exceptions.GroupCount} groups";
+
         return exceptions.Groups.Count == 0
             ? summary
             : string.Join(

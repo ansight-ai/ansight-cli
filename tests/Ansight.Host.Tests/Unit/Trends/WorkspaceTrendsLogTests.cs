@@ -18,24 +18,28 @@ public sealed class WorkspaceTrendsLogTests
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "native.json"), Definition(streamId));
         Assert.True(runtime.Apps.Register(new AppRegistrationRequest("test.notes", "Notes", environment.RootPath)).IsSuccess);
+
         var id = state.CreateDeviceSession(new WorkspaceTestTarget(platform, "sim", "Phone", "test.notes", false, false, false)
-        { DeviceKind = kind, ExecutionMode = "device" });
+        {
+            DeviceKind = kind,
+            ExecutionMode = "device"
+        });
         var start = DateTimeOffset.UtcNow;
         state.AddSessionLogEntries(id, streamId, [
-            new LogEntry(start, "Loading notes") { Tag = "Notes", ProcessId = 42, EventId = "begin" },
-            new LogEntry(start.AddSeconds(2), "Loaded notes: 52") { Tag = "Notes", ProcessId = 42, EventId = "end" }
-        ]);
+            new LogEntry(start, "Loading notes") {Tag = "Notes", ProcessId = 42, EventId = "begin" },
+            new LogEntry(start.AddSeconds(2), "Loaded notes: 52") {Tag = "Notes", ProcessId = 42, EventId = "end" }        ]);
         state.UpdateSessionMetricChannels(id, [new SessionMetricChannel
-        { ChannelId = 10, Name = "Process CPU", ColorHex = "#00ff00", Type = "cpu", Unit = "millicores" }]);
+{ChannelId = 10, Name = "Process CPU", ColorHex = "#00ff00", Type = "cpu", Unit = "millicores" }]);
         state.AddSessionMetrics(id, [
-            new SessionMetricSample { ChannelId = 10, Value = 100, CapturedAtUtc = start },
-            new SessionMetricSample { ChannelId = 10, Value = 300, CapturedAtUtc = start.AddSeconds(1) },
-            new SessionMetricSample { ChannelId = 10, Value = 200, CapturedAtUtc = start.AddSeconds(2) }
-        ], telemetrySegmentId: 0);
+            new SessionMetricSample {ChannelId = 10, Value = 100, CapturedAtUtc = start },
+            new SessionMetricSample {ChannelId = 10, Value = 300, CapturedAtUtc = start.AddSeconds(1) },
+            new SessionMetricSample {ChannelId = 10, Value = 200, CapturedAtUtc = start.AddSeconds(2) }        ], telemetrySegmentId: 0);
         state.EndDeviceSession(id);
+
         var report = await runtime.Trends.EvaluateRegisteredSessionAsync(id);
         Assert.NotNull(report);
         Assert.Equal(WorkspaceTrendsStatus.Passed, report.Status);
+
         var check = Assert.Single(report.Checks);
         Assert.Equal(200d, Assert.Single(check.Metrics).Value);
         Assert.Equal($"log:{streamId}:begin", Assert.Single(check.SpanInstances).StartEventId);
@@ -69,13 +73,19 @@ public sealed class WorkspaceTrendsLogTests
         Assert.Equal(start.AddSeconds(4), result.Instances[0].StartUtc);
         Assert.Equal(start.AddSeconds(7), result.Instances[1].EndUtc);
         Assert.All(result.Instances, value => Assert.Null(value.Group));
+
         var wrongStream = Snapshot(start, [], entries);
         Assert.Equal(WorkspaceTrendsStatus.Inconclusive, WorkspaceTrendsSpanResolver.Resolve(wrongStream, definition.Span).Status);
+
         var legacyOnly = Snapshot(start, [], snapshot.Logs);
         Assert.Equal(result.Instances, WorkspaceTrendsSpanResolver.Resolve(legacyOnly, definition.Span).Instances);
 
         LogEntry Entry(string message, int second, string tag, int pid) => new(start.AddSeconds(second), message)
-        { Tag = tag, ProcessId = pid, EventId = second.ToString() };
+        {
+            Tag = tag,
+            ProcessId = pid,
+            EventId = second.ToString()
+        };
     }
 
     [Theory]
@@ -121,8 +131,19 @@ public sealed class WorkspaceTrendsLogTests
 
     private static AppSessionSnapshot Snapshot(DateTimeOffset start, IReadOnlyList<SessionLogStream> streams, IReadOnlyList<LogEntry> logs) => new()
     {
-        SessionId = "session", AppId = "test.notes", ClientName = "Notes", RemoteAddress = "local",
-        ConfigId = null, CreatedUtc = start, LastUpdatedUtc = start.AddSeconds(8), IsHistorical = false,
-        Status = "Completed", CaptureSource = "device", MetricChannels = [], Metrics = [], LogStreams = streams, Logs = logs
+        SessionId = "session",
+        AppId = "test.notes",
+        ClientName = "Notes",
+        RemoteAddress = "local",
+        ConfigId = null,
+        CreatedUtc = start,
+        LastUpdatedUtc = start.AddSeconds(8),
+        IsHistorical = false,
+        Status = "Completed",
+        CaptureSource = "device",
+        MetricChannels = [],
+        Metrics = [],
+        LogStreams = streams,
+        Logs = logs
     };
 }

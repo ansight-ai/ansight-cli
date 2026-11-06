@@ -14,12 +14,14 @@ public sealed class ExternalH264PreviewSession : IDisposable
         nativeHandle = NativeMethods.ExternalH264PreviewViewCreate(
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (nativeHandle == IntPtr.Zero)
         {
             throw new InvalidOperationException(ReadBuffer(errorBuffer, "The native Android H.264 preview could not be created."));
         }
 
         NativeLayerHandle = NativeMethods.ExternalH264PreviewViewGetLayer(nativeHandle);
+
         if (NativeLayerHandle == IntPtr.Zero)
         {
             Dispose();
@@ -36,20 +38,22 @@ public sealed class ExternalH264PreviewSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(accessUnit);
+
         if (accessUnit.Length == 0)
         {
             throw new ArgumentException("An H.264 access unit is required.", nameof(accessUnit));
         }
 
         var errorBuffer = new byte[ErrorBufferCapacity];
+
         if (!NativeMethods.ExternalH264PreviewViewEnqueueAccessUnit(
-                nativeHandle,
-                accessUnit,
-                accessUnit.Length,
-                presentationTimestampMicroseconds,
-                isKeyFrame,
-                errorBuffer,
-                (nuint)errorBuffer.Length))
+            nativeHandle,
+            accessUnit,
+            accessUnit.Length,
+            presentationTimestampMicroseconds,
+            isKeyFrame,
+            errorBuffer,
+            (nuint)errorBuffer.Length))
         {
             throw new InvalidOperationException(ReadBuffer(errorBuffer, "The native Android decoder rejected an H.264 frame."));
         }
@@ -61,7 +65,9 @@ public sealed class ExternalH264PreviewSession : IDisposable
         {
             return;
         }
+
         disposed = true;
+
         if (nativeHandle != IntPtr.Zero)
         {
             NativeMethods.ExternalH264PreviewViewDestroy(nativeHandle);
@@ -74,6 +80,7 @@ public sealed class ExternalH264PreviewSession : IDisposable
         var terminator = Array.IndexOf(buffer, (byte)0);
         var length = terminator < 0 ? buffer.Length : terminator;
         var value = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 }

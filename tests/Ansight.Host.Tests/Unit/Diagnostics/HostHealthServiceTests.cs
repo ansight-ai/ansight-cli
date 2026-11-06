@@ -48,6 +48,7 @@ public sealed class HostHealthServiceTests
         var assembly = AssemblyBuilder.DefineDynamicAssembly(
             new AssemblyName(assemblyName ?? $"Ansight.HostHealth.Tests.{Guid.NewGuid():N}"),
             AssemblyBuilderAccess.Run);
+
         foreach (var attribute in attributes)
         {
             var attributeType = attribute.GetType();

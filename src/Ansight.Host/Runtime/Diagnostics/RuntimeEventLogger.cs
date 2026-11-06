@@ -37,7 +37,6 @@ internal static class RuntimeEventLogger
                         ("configId", pairingEvent.ConfigId),
                         ("reasonCode", pairingEvent.ReasonCode));
                 }
-
                 break;
             case RuntimeClientAppStateChangedEvent clientAppStateChangedEvent:
                 LogDebug(
@@ -71,6 +70,7 @@ internal static class RuntimeEventLogger
                         new LogParameter("clientName", sessionCaptureEvent.ClientName),
                         new LogParameter("status", sessionCaptureEvent.Status),
                         new LogParameter("message", sessionCaptureEvent.Message));
+
                     if (sessionCaptureEvent.Kind is RuntimeSessionCaptureEventKind.Started or RuntimeSessionCaptureEventKind.Stopped)
                     {
                         log.Event(
@@ -144,6 +144,7 @@ internal static class RuntimeEventLogger
     private static string BuildMessage(string eventName, IReadOnlyList<LogParameter> parameters)
     {
         var builder = new StringBuilder(eventName.Trim());
+
         foreach (var parameter in parameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Name))

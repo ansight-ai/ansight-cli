@@ -10,6 +10,7 @@ public sealed class DeviceAppIconCaptureTests
     {
         using var bitmap = new SKBitmap(512, 512);
         bitmap.Erase(SKColors.CornflowerBlue);
+
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         var icon = DeviceAppIconCapture.Decode("runtime diagnostic\nansight-icon:" + Convert.ToBase64String(data.ToArray()) + "\n");
         Assert.NotNull(icon);
@@ -17,8 +18,10 @@ public sealed class DeviceAppIconCaptureTests
         Assert.Equal(256, icon.Height);
         Assert.Equal("png", icon.Format);
         Assert.Equal("image/png", icon.MimeType);
+
         var bytes = Convert.FromBase64String(icon.DataBase64!);
         Assert.Equal(bytes.Length, icon.ByteCount);
+
         using var decoded = SKBitmap.Decode(bytes);
         Assert.Equal(SKColors.CornflowerBlue, decoded.GetPixel(128, 128));
     }

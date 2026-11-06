@@ -2,7 +2,6 @@ namespace Ansight.Cli.Tests.Application;
 
 public sealed class CliOutputTests
 {
-
     [Fact]
     public void SilentOutputSuppressesEveryOutputChannel()
     {
@@ -14,7 +13,10 @@ public sealed class CliOutputTests
             standardError,
             silent: true);
 
-        output.Write(new { value = 1 });
+        output.Write(new
+        {
+            value = 1
+        });
         output.WriteText("text");
         output.WriteError("error", "message", 1);
         output.WriteProgress("progress");
@@ -37,7 +39,10 @@ public sealed class CliOutputTests
 
         output.WriteProgress("[update] Checking for updates...");
         output.WriteProgressRaw("Downloading: 50%\r");
-        output.Write(new { schema = "ansight.test/v1" });
+        output.Write(new
+        {
+            schema = "ansight.test/v1"
+        });
 
         Assert.Equal(
             $"[update] Checking for updates...{Environment.NewLine}Downloading: 50%\r",
@@ -52,12 +57,14 @@ public sealed class CliOutputTests
         var output = new CliOutput(json: true, standardOutput: standardOutput);
         var root = new System.Text.Json.Nodes.JsonObject();
         var current = root;
+
         for (var index = 0; index < 80; index++)
         {
             var child = new System.Text.Json.Nodes.JsonObject();
             current["child"] = child;
             current = child;
         }
+
         current["value"] = "complete";
 
         output.Write(root);
@@ -66,10 +73,12 @@ public sealed class CliOutputTests
             standardOutput.ToString(),
             new System.Text.Json.JsonDocumentOptions { MaxDepth = 256 });
         var value = document.RootElement;
+
         for (var index = 0; index < 80; index++)
         {
             value = value.GetProperty("child");
         }
+
         Assert.Equal("complete", value.GetProperty("value").GetString());
     }
 }

@@ -10,6 +10,7 @@ internal static class LocalAppGraphNavigationDiscovery
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(appTools);
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return new(false, "Choose a connected live session.", []);
@@ -17,9 +18,10 @@ internal static class LocalAppGraphNavigationDiscovery
 
         var normalizedSessionId = sessionId.Trim();
         var catalogResponse = await appTools.QueryForLocalExplorerAsync(
-                normalizedSessionId,
-                cancellationToken)
+            normalizedSessionId,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (!catalogResponse.Success || catalogResponse.Envelope is null)
         {
             return new(false, catalogResponse.Message, []);
@@ -30,17 +32,19 @@ internal static class LocalAppGraphNavigationDiscovery
             preferredFramework: null);
         var controllers = new List<LocalAppGraphNavigationController>();
         var failures = new List<string>();
+
         foreach (var value in available.OfType<JsonObject>())
         {
             var framework = ReadString(value, "framework") ?? string.Empty;
             var toolId = ReadString(value, "navigationToolId") ?? string.Empty;
             var guidance = ReadString(value, "guidance") ?? string.Empty;
             var response = await appTools.CallForLocalExplorerAsync(
-                    normalizedSessionId,
-                    toolId,
-                    new JsonObject(),
-                    cancellationToken)
+                normalizedSessionId,
+                toolId,
+                new JsonObject(),
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!response.Success || response.Envelope is null)
             {
                 failures.Add($"{framework}: {response.Message}");
@@ -58,6 +62,7 @@ internal static class LocalAppGraphNavigationDiscovery
             var fingerprint = observation is null
                 ? string.Empty
                 : ReadString(observation, "structureFingerprint") ?? string.Empty;
+
             if (fingerprint.Length == 0)
             {
                 failures.Add($"{framework}: the navigation-state response could not be fingerprinted.");
@@ -78,22 +83,24 @@ internal static class LocalAppGraphNavigationDiscovery
         foreach (var controller in NavigationControllerCatalog.All)
         {
             if (controllers.Any(candidate => string.Equals(
-                    candidate.Framework,
-                    controller.Framework,
-                    StringComparison.Ordinal))
+                candidate.Framework,
+                controller.Framework,
+                StringComparison.Ordinal))
                 || !controller.VisualTreeToolIds.Any(toolId =>
-                    !string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal)
-                    && RemoteAppToolCatalog.HasTool(catalogResponse.Envelope.Payload, toolId)))
+                            !string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal)
+                                && RemoteAppToolCatalog.HasTool(catalogResponse.Envelope.Payload, toolId)))
             {
                 continue;
             }
 
             var frameworkDefinition = AppGraphNavigationTechnologyCatalog.Frameworks.FirstOrDefault(candidate =>
                 string.Equals(candidate.Framework, controller.Framework, StringComparison.Ordinal));
+
             if (frameworkDefinition is null)
             {
                 continue;
             }
+
             controllers.Add(new LocalAppGraphNavigationController(
                 controller.Framework,
                 frameworkDefinition.Label,
@@ -108,6 +115,7 @@ internal static class LocalAppGraphNavigationDiscovery
             var suffix = failures.Count == 0
                 ? string.Empty
                 : $" {failures.Count} additional controller(s) could not be observed.";
+
             return new(
                 true,
                 $"Resolved {controllers.Count} framework-specific navigation topology source(s).{suffix}",
@@ -117,6 +125,7 @@ internal static class LocalAppGraphNavigationDiscovery
         var message = failures.Count > 0
             ? string.Join(" ", failures)
             : "The connected app does not expose a supported framework navigation-state controller.";
+
         return new(false, message, []);
     }
 

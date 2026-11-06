@@ -1,3 +1,4 @@
+using static Ansight.Host.Runtime.State.SessionLogStreamFactory;
 namespace Ansight.Host.Runtime.State;
 
 using AppLifecycleState = global::Ansight.AppLifecycleState;
@@ -20,8 +21,8 @@ internal sealed partial class RuntimeState : IRuntimeState
     private const string DefaultSessionAppHint = "app";
     private const string AppStateApplicationEventIdPrefix = "ansight-app-state:";
     internal const string DefaultSessionAnnotationSource = "ansight";
-    private static readonly TimeSpan SessionUpdateBroadcastInterval = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan SessionPersistenceInterval = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan sessionUpdateBroadcastInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan sessionPersistenceInterval = TimeSpan.FromMilliseconds(750);
     private static readonly ILogger log = Logger.Create();
     private readonly object gate = new();
     private readonly object broadcastGate = new();
@@ -57,7 +58,6 @@ internal sealed partial class RuntimeState : IRuntimeState
     public event EventHandler<string>? ServerStatusChanged;
 
     public bool IsServerRunning { get; private set; }
-
     public string ServerStatusText { get; private set; } = "UDP pairing listener not started.";
 
     public IReadOnlyList<AppSessionSnapshot> GetSessionSummaries()
@@ -80,6 +80,7 @@ internal sealed partial class RuntimeState : IRuntimeState
     public bool TryGetSessionContext(string sessionId, out RuntimeSessionContext? context)
     {
         context = null;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
@@ -93,6 +94,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             }
 
             context = new RuntimeSessionContext(session.AppId, session.ClientName, session.Status, session.CaptureSource);
+
             return true;
         }
     }
@@ -102,10 +104,12 @@ internal sealed partial class RuntimeState : IRuntimeState
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             snapshot = null;
+
             return false;
         }
 
         AppSessionSnapshot? loadedStateSnapshot = null;
+
         lock (gate)
         {
             if (sessionsById.TryGetValue(sessionId, out var session))
@@ -121,12 +125,14 @@ internal sealed partial class RuntimeState : IRuntimeState
             snapshot = IsSessionStatusLive(loadedStateSnapshot.Status)
                 ? loadedStateSnapshot
                 : sessionCaptureStore.ExpandRetainedLogs(loadedStateSnapshot);
+
             return true;
         }
 
         if (!sessionCaptureStore.TryLoad(sessionId, out var persistedSnapshot) || persistedSnapshot is null)
         {
             snapshot = null;
+
             return false;
         }
 
@@ -141,6 +147,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             TouchRetainedLoadedSession(session);
             EnforceRetainedLoadedSessionLimit();
             snapshot = SessionStateMapper.CreateSnapshot(session);
+
             return true;
         }
     }
@@ -150,6 +157,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             snapshot = null;
+
             return false;
         }
 
@@ -158,12 +166,14 @@ internal sealed partial class RuntimeState : IRuntimeState
             if (!sessionsById.TryGetValue(sessionId.Trim(), out var session))
             {
                 snapshot = null;
+
                 return false;
             }
 
             TouchRetainedLoadedSession(session);
             EnforceRetainedLoadedSessionLimit();
             snapshot = SessionStateMapper.CreateSnapshot(session, SessionSnapshotContent.LiveContent);
+
             return true;
         }
     }
@@ -173,6 +183,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             snapshot = null;
+
             return false;
         }
 
@@ -181,12 +192,14 @@ internal sealed partial class RuntimeState : IRuntimeState
             if (!sessionsById.TryGetValue(sessionId.Trim(), out var session))
             {
                 snapshot = null;
+
                 return false;
             }
 
             TouchRetainedLoadedSession(session);
             EnforceRetainedLoadedSessionLimit();
             snapshot = SessionStateMapper.CreateSnapshot(session, SessionSnapshotContent.Replay);
+
             return true;
         }
     }
@@ -199,6 +212,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         }
 
         snapshot = sessionCaptureStore.ExpandRetainedLogs(snapshot);
+
         return true;
     }
 
@@ -214,6 +228,7 @@ internal sealed partial class RuntimeState : IRuntimeState
 
         var trimmedSessionId = sessionId.Trim();
         AppSessionSnapshot? loadedStateSnapshot = null;
+
         lock (gate)
         {
             if (sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -227,18 +242,21 @@ internal sealed partial class RuntimeState : IRuntimeState
         if (loadedStateSnapshot is not null)
         {
             progress?.Report(SessionLoadProgress.Complete("Session content is already in memory."));
+
             return IsSessionStatusLive(loadedStateSnapshot.Status)
                 ? loadedStateSnapshot
                 : sessionCaptureStore.ExpandRetainedLogs(loadedStateSnapshot);
         }
 
         var loadedSnapshot = await sessionCaptureStore.LoadAsync(trimmedSessionId, progress, cancellationToken).ConfigureAwait(false);
+
         if (loadedSnapshot is null)
         {
             return null;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(trimmedSessionId, out var session))
@@ -250,6 +268,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             TouchRetainedLoadedSession(session);
             EnforceRetainedLoadedSessionLimit();
             progress?.Report(SessionLoadProgress.Complete("Session content loaded."));
+
             return SessionStateMapper.CreateSnapshot(session);
         }
     }
@@ -257,12 +276,14 @@ internal sealed partial class RuntimeState : IRuntimeState
     public bool TryGetSessionCacheSizeBytes(string sessionId, out long cacheSizeBytes)
     {
         cacheSizeBytes = 0;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
         }
 
         var trimmedSessionId = sessionId.Trim();
+
         if (sessionCaptureStore.TryGetSessionCacheSizeBytes(trimmedSessionId, out cacheSizeBytes))
         {
             lock (gate)
@@ -284,6 +305,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             }
 
             cacheSizeBytes = loadedSession.CacheSizeBytes;
+
             return cacheSizeBytes >= 0;
         }
     }
@@ -297,7 +319,8 @@ internal sealed partial class RuntimeState : IRuntimeState
         ISet<string>? protectedSessionIds = null)
     {
         var effectiveProtectedSessionIds = protectedSessionIds?.ToHashSet(StringComparer.Ordinal)
-                                           ?? new HashSet<string>(StringComparer.Ordinal);
+            ?? new HashSet<string>(StringComparer.Ordinal);
+
         lock (gate)
         {
             foreach (var session in sessionsById.Values.Where(session => IsSessionStatusLive(session.Status)))
@@ -341,6 +364,7 @@ internal sealed partial class RuntimeState : IRuntimeState
 
         var safeAppId = string.IsNullOrWhiteSpace(appId) ? "unknown" : appId.Trim();
         var safeProcessSessionId = NormalizeProcessSessionId(processSessionId);
+
         if (!string.IsNullOrWhiteSpace(safeProcessSessionId)
             && TryResolveExistingSessionId(safeAppId, safeProcessSessionId, out var existingSessionId))
         {
@@ -400,6 +424,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             {
                 PersistAndBroadcast(sessionId);
                 log.Info($"session_resumed sessionId={sessionId} appId={safeAppId} clientName={safeClientName} remoteAddress={safeRemoteAddress} configId={safeConfigId} processSessionId={safeProcessSessionId}");
+
                 return sessionId;
             }
         }
@@ -432,12 +457,14 @@ internal sealed partial class RuntimeState : IRuntimeState
         PersistAndBroadcast(sessionId);
         CollectHostMetadata(sessionId);
         log.Info($"session_created sessionId={sessionId} appId={safeAppId} clientName={safeClientName} remoteAddress={safeRemoteAddress} configId={safeConfigId} processSessionId={safeProcessSessionId}");
+
         return sessionId;
     }
 
     private void RegisterCaptureUsage(SessionState session)
     {
         string? appBusiness = null;
+
         if (captureKnownApps?.TryGet(session.AppId, out var app) == true)
         {
             appBusiness = app?.SourceTeamId;
@@ -464,6 +491,7 @@ internal sealed partial class RuntimeState : IRuntimeState
 
             var nextSegmentId = Math.Max(1, session.NextTelemetrySegmentId);
             session.NextTelemetrySegmentId = nextSegmentId + 1;
+
             return nextSegmentId;
         }
     }
@@ -473,6 +501,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         UpdateSession(sessionId, session =>
         {
             session.Status = status;
+
             if (IsTerminalSessionStatus(status))
             {
                 session.IsHistorical = true;
@@ -502,19 +531,22 @@ internal sealed partial class RuntimeState : IRuntimeState
             var effectiveChangedAtUtc = changedAtUtc?.ToUniversalTime() ?? DateTimeOffset.UtcNow;
             session.AppState = state;
             session.AppStateChangedUtc = effectiveChangedAtUtc;
+
             var lifecycleLabel = state switch
             {
                 AppLifecycleState.Foreground => "lifecycle.foreground",
                 AppLifecycleState.Background => "lifecycle.background",
                 _ => null
             };
+
             if (lifecycleLabel is not null)
             {
                 var eventId = $"{AppStateApplicationEventIdPrefix}{effectiveChangedAtUtc.UtcTicks}:{lifecycleLabel}";
                 var seenEventIds = session.GetSeenEventIds("application-events");
                 var alreadyCaptured = session.ApplicationEvents.Any(appEvent =>
                     appEvent.CapturedAtUtc.ToUniversalTime().UtcTicks == effectiveChangedAtUtc.UtcTicks
-                    && string.Equals(appEvent.Label, lifecycleLabel, StringComparison.OrdinalIgnoreCase));
+                        && string.Equals(appEvent.Label, lifecycleLabel, StringComparison.OrdinalIgnoreCase));
+
                 if (!alreadyCaptured && seenEventIds.Add(eventId))
                 {
                     session.ApplicationEvents.Add(new SessionApplicationEvent(
@@ -569,6 +601,7 @@ internal sealed partial class RuntimeState : IRuntimeState
     public void EnsureSessionLogStream(string sessionId, SessionLogStream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
+
         var streamId = NormalizeLogStreamId(stream.StreamId);
         UpdateSession(sessionId, session =>
         {
@@ -629,11 +662,12 @@ internal sealed partial class RuntimeState : IRuntimeState
         var normalizedStreamId = NormalizeLogStreamId(streamId);
         var acceptedEntries = entries
             .Where(entry => entry is not null
-                            && !string.IsNullOrWhiteSpace(entry.Message)
-                            && (!string.Equals(normalizedStreamId, SessionLogStreamIds.AnsightSdk, StringComparison.Ordinal)
-                                || !string.Equals(entry.Source, "Host", StringComparison.OrdinalIgnoreCase)))
+                && !string.IsNullOrWhiteSpace(entry.Message)
+                && (!string.Equals(normalizedStreamId, SessionLogStreamIds.AnsightSdk, StringComparison.Ordinal)
+                    || !string.Equals(entry.Source, "Host", StringComparison.OrdinalIgnoreCase)))
             .Select(entry => SessionLogStreams.WithStreamId(entry, normalizedStreamId))
             .ToArray();
+
         if (acceptedEntries.Length == 0)
         {
             return;
@@ -654,8 +688,10 @@ internal sealed partial class RuntimeState : IRuntimeState
             stream.StatusMessage = null;
             stream.EndedUtc = null;
             stream.StartedUtc ??= acceptedEntries.Min(entry => entry.TimestampUtc.ToUniversalTime());
+
             var seenEventIds = session.GetSeenEventIds(normalizedStreamId);
             var addedLogCount = 0;
+
             foreach (var entry in acceptedEntries)
             {
                 if (!string.IsNullOrWhiteSpace(entry.EventId)
@@ -700,36 +736,6 @@ internal sealed partial class RuntimeState : IRuntimeState
         SessionLogsAdded?.Invoke(this, batch);
     }
 
-    private static SessionLogStreamState GetOrCreateLogStream(SessionState session, string streamId)
-    {
-        if (session.LogStreams.TryGetValue(streamId, out var stream))
-        {
-            return stream;
-        }
-
-        stream = new SessionLogStreamState
-        {
-            StreamId = streamId,
-            Kind = streamId switch
-            {
-                SessionLogStreamIds.AnsightSdk => SessionLogStreamKinds.AnsightSdk,
-                SessionLogStreamIds.AndroidLogcat => SessionLogStreamKinds.AndroidLogcat,
-                SessionLogStreamIds.AppleUnifiedLog => SessionLogStreamKinds.AppleUnifiedLog,
-                _ => SessionLogStreamKinds.Imported
-            },
-            DisplayName = streamId switch
-            {
-                SessionLogStreamIds.AnsightSdk => "Ansight SDK",
-                SessionLogStreamIds.AndroidLogcat => "Android Logcat",
-                SessionLogStreamIds.AppleUnifiedLog => "Apple Unified Log",
-                _ => streamId
-            },
-            Status = SessionLogStreamStatuses.Pending
-        };
-        session.LogStreams[streamId] = stream;
-        return stream;
-    }
-
     private static string NormalizeLogStreamId(string? streamId)
         => string.IsNullOrWhiteSpace(streamId) ? SessionLogStreamIds.AnsightSdk : streamId.Trim();
 
@@ -770,9 +776,11 @@ internal sealed partial class RuntimeState : IRuntimeState
         {
             var normalizedSegmentId = Math.Max(1, telemetrySegmentId);
             var addedMetrics = new List<SessionMetricSample>(metrics.Count);
+
             foreach (var metric in metrics)
             {
                 var key = new MetricDeduplicationKey(metric.ChannelId, metric.Value, metric.CapturedAtUtc);
+
                 if (!session.SeenMetricKeys.Add(key))
                 {
                     continue;
@@ -808,6 +816,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         }
 
         var normalizedTouches = NormalizeTouches(touches);
+
         if (normalizedTouches.Length == 0)
         {
             return;
@@ -821,6 +830,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         UpdateSession(sessionId, session =>
         {
             var addedTouches = new List<SessionTouchInputRecord>(normalizedTouches.Length);
+
             foreach (var touch in normalizedTouches)
             {
                 if (!session.SeenTouchIds.Add(touch.Id))
@@ -855,6 +865,7 @@ internal sealed partial class RuntimeState : IRuntimeState
             .OrderBy(static request => request.StartedAtUtc)
             .ThenBy(static request => request.Id, StringComparer.Ordinal)
             .ToArray();
+
         if (normalized.Length == 0)
         {
             return;
@@ -863,6 +874,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         UpdateSession(sessionId, session =>
         {
             var added = false;
+
             foreach (var request in normalized)
             {
                 if (!session.SeenNetworkRequestIds.Add(request.Id))
@@ -895,6 +907,7 @@ internal sealed partial class RuntimeState : IRuntimeState
         {
             var seenEventIds = session.GetSeenEventIds("application-events");
             var added = false;
+
             foreach (var appEvent in events)
             {
                 if (!seenEventIds.Add(appEvent.EventId))
@@ -904,8 +917,9 @@ internal sealed partial class RuntimeState : IRuntimeState
 
                 var matchingSyntheticEventIndex = session.ApplicationEvents.FindIndex(existingEvent =>
                     existingEvent.EventId.StartsWith(AppStateApplicationEventIdPrefix, StringComparison.Ordinal)
-                    && existingEvent.CapturedAtUtc.ToUniversalTime().UtcTicks == appEvent.CapturedAtUtc.ToUniversalTime().UtcTicks
-                    && string.Equals(existingEvent.Label, appEvent.Label, StringComparison.OrdinalIgnoreCase));
+                        && existingEvent.CapturedAtUtc.ToUniversalTime().UtcTicks == appEvent.CapturedAtUtc.ToUniversalTime().UtcTicks
+                        && string.Equals(existingEvent.Label, appEvent.Label, StringComparison.OrdinalIgnoreCase));
+
                 if (matchingSyntheticEventIndex >= 0)
                 {
                     session.ApplicationEvents[matchingSyntheticEventIndex] = appEvent;
@@ -924,5 +938,4 @@ internal sealed partial class RuntimeState : IRuntimeState
             }
         }, latestCapturedAtUtc);
     }
-
 }

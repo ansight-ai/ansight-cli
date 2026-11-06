@@ -15,9 +15,11 @@ internal sealed class OperationRegistry
         var indexedTools = new Dictionary<string, IOperation>(StringComparer.Ordinal);
         var repositoryTaskTools = new Dictionary<string, RepositoryTaskHostToolDescriptor>(StringComparer.Ordinal);
         var repositoryTaskMethods = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var registration in registrationArray)
         {
             var tool = registration.Tool;
+
             if (string.IsNullOrWhiteSpace(tool.Name))
             {
                 throw new InvalidOperationException("Operation names must be non-empty.");
@@ -29,6 +31,7 @@ internal sealed class OperationRegistry
             }
 
             indexedTools.Add(tool.Name, tool);
+
             if (registration.TaskApplicability is not { } taskApplicability)
             {
                 continue;
@@ -36,6 +39,7 @@ internal sealed class OperationRegistry
 
             var apiMethod = RepositoryJavaScriptApiMethods.ResolveHostApiMethod(tool.Name);
             var apiPath = $"{apiMethod.FeatureName}.{apiMethod.MethodName}";
+
             if (!repositoryTaskMethods.Add(apiPath))
             {
                 throw new InvalidOperationException(
@@ -67,10 +71,12 @@ internal sealed class OperationRegistry
         if (registrationsByName.TryGetValue(toolName, out var registration))
         {
             tool = registration.Tool;
+
             return true;
         }
 
         tool = null;
+
         return false;
     }
 
@@ -84,25 +90,13 @@ internal sealed class OperationRegistry
         => repositoryTaskToolsByName.Values
             .GroupBy(descriptor => descriptor.ApiFeatureName, StringComparer.Ordinal)
             .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyDictionary<string, string>)group.ToDictionary(
-                    descriptor => descriptor.ApiMethodName,
-                    descriptor => descriptor.ToolName,
-                    StringComparer.Ordinal),
-                StringComparer.Ordinal);
+            group => group.Key,
+            group => (IReadOnlyDictionary<string, string>)group.ToDictionary(
+                descriptor => descriptor.ApiMethodName,
+                descriptor => descriptor.ToolName,
+                StringComparer.Ordinal),
+            StringComparer.Ordinal);
 
     public bool Contains(string toolName)
         => registrationsByName.ContainsKey(toolName);
-
-}
-
-internal sealed record OperationRegistration(
-    IOperation Tool,
-    RepositoryTaskHostToolApplicability? TaskApplicability)
-{
-    public static OperationRegistration HostOnly(IOperation tool)
-        => new(tool, TaskApplicability: null);
-
-    public static OperationRegistration TaskSessionBound(IOperation tool)
-        => new(tool, RepositoryTaskHostToolApplicability.SessionBound);
 }

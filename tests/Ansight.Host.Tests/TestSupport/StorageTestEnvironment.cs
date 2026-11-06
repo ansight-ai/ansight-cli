@@ -17,9 +17,7 @@ internal sealed class StorageTestEnvironment : IDisposable
     public string RootPath => directory.Path;
 
     public string SecureStorageFilePath { get; }
-
     public string SecureStorageKeyFilePath { get; }
-
     public DataToolApplicationPaths ApplicationPaths { get; }
 
     public void Dispose()

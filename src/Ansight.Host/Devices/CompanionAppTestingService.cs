@@ -56,6 +56,7 @@ internal sealed class CompanionAppTestingService
         CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var devices = await inventory(cancellationToken).ConfigureAwait(false);
@@ -66,6 +67,7 @@ internal sealed class CompanionAppTestingService
                 && target.IsBooted
                 && target.IsAvailable
                 && target.Platform == DevicePlatforms.Ios;
+
             if (!supportedTarget)
             {
                 return new RemoteDeviceTestingResult(request.Action == "app-capabilities",
@@ -76,6 +78,7 @@ internal sealed class CompanionAppTestingService
             var resolution = simctlPathOverride is null
                 ? await SimCtlToolLocator.ResolveAsync(options.XcodePath, cancellationToken).ConfigureAwait(false)
                 : SimCtlToolResolution.Found("", "", simctlPathOverride, "test");
+
             if (!resolution.IsFound)
             {
                 return new RemoteDeviceTestingResult(false, resolution.Message);
@@ -110,9 +113,11 @@ internal sealed class CompanionAppTestingService
         {
             var result = await commands.RunAsync(tool.SimCtlPath, ["help", "privacy"], token).ConfigureAwait(false);
             result.RequireText();
+
             var help = result.Text + "\n" + result.Error;
             var supported = privacyServices.Where(service =>
                 Regex.IsMatch(help, @"(?m)^\s*" + Regex.Escape(service) + @"\s+-"));
+
             return new RemoteDeviceTestingResult(true, "Testing controls are ready.", new JsonObject
             {
                 ["available"] = true,
@@ -129,12 +134,14 @@ internal sealed class CompanionAppTestingService
         {
             ValidateLink(request.Value);
             await Run("openurl", request.DeviceUdid, request.Value!).ConfigureAwait(false);
+
             return new RemoteDeviceTestingResult(true, "Link opened. The simulator chooses the app registered for this link.");
         }
 
         var validApp = request.AppId is not null
             && request.AppId.Length <= 255
             && Regex.IsMatch(request.AppId, @"^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_-]+)+$");
+
         if (!validApp)
         {
             return new RemoteDeviceTestingResult(false, "Choose an installed app first.");
@@ -142,6 +149,7 @@ internal sealed class CompanionAppTestingService
 
         // Never seed permission records or target notifications at an uninstalled identifier.
         await Run("get_app_container", request.DeviceUdid, request.AppId!, "app").ConfigureAwait(false);
+
         if (request.Action.StartsWith("permission-", StringComparison.Ordinal))
         {
             if (!privacyServices.Contains(request.Permission, StringComparer.Ordinal))
@@ -157,6 +165,7 @@ internal sealed class CompanionAppTestingService
             };
             var result = await permissions.ExecuteAsync(action, request.Permission!, DevicePlatforms.Ios,
                 request.DeviceUdid, request.AppId!, token).ConfigureAwait(false);
+
             return new RemoteDeviceTestingResult(result.IsSuccess,
                 result.Message ?? $"Permission: {result.Status}.", new JsonObject { ["status"] = result.Status });
         }
@@ -210,13 +219,16 @@ internal sealed class CompanionAppTestingService
                 _ => throw new ArgumentException("Choose portrait or landscape orientation.")
             };
             token.ThrowIfCancellationRequested();
+
             using var hid = new MacSimulatorHidSession(tool.DeveloperDirectory);
             hid.SendOrientation(request.DeviceUdid, orientation);
+
             return new RemoteDeviceTestingResult(true, "Rotation sent. The app must support this orientation.");
         }
 
         var validAppearance = request.Action == "display-appearance" && request.Value is "light" or "dark";
         var validTextSize = request.Action == "display-text-size" && textSizes.Contains(request.Value, StringComparer.Ordinal);
+
         if (!validAppearance && !validTextSize)
         {
             return new RemoteDeviceTestingResult(false, "Choose a supported display setting.");
@@ -226,6 +238,7 @@ internal sealed class CompanionAppTestingService
         var result = await commands.RunAsync(tool.SimCtlPath,
             ["ui", request.DeviceUdid, setting, request.Value!], token).ConfigureAwait(false);
         result.RequireText();
+
         return new RemoteDeviceTestingResult(true, "Display updated.");
     }
 
@@ -234,6 +247,7 @@ internal sealed class CompanionAppTestingService
         var invalidText = string.IsNullOrWhiteSpace(value)
             || value.Length > 4096
             || value.Any(char.IsControl);
+
         if (invalidText || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
         {
             throw new ArgumentException("Enter a complete app link or https URL.");
@@ -253,6 +267,7 @@ internal sealed class CompanionAppTestingService
         }
 
         var json = JsonNode.Parse(payload) as JsonObject;
+
         if (json?["aps"] is not JsonObject)
         {
             throw new ArgumentException("Push JSON needs an aps object.");

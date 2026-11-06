@@ -38,6 +38,7 @@ public sealed class AppToolService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return QueryCoreAsync(
             sessionId.Trim(),
             cancellationToken,
@@ -49,6 +50,7 @@ public sealed class AppToolService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return QueryCoreAsync(
             sessionId.Trim(),
             cancellationToken,
@@ -60,6 +62,7 @@ public sealed class AppToolService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return QueryCoreAsync(
             sessionId.Trim(),
             cancellationToken,
@@ -72,6 +75,7 @@ public sealed class AppToolService
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         return QuerySinceCoreAsync(
             sessionId.Trim(),
             ifRevision,
@@ -86,6 +90,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(filters);
+
         return QueryFilteredCoreAsync(
             sessionId.Trim(),
             filters,
@@ -100,6 +105,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
+
         return QueryCoreAsync(
             sessionId.Trim(),
             cancellationToken,
@@ -117,6 +123,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
+
         return CallCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -133,6 +140,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
+
         return CallCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -149,6 +157,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
+
         return CallCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -167,6 +176,7 @@ public sealed class AppToolService
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
         ArgumentNullException.ThrowIfNull(after);
+
         return CallWithEvidenceCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -184,6 +194,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(calls);
+
         return CallBatchCoreAsync(
             sessionId.Trim(),
             calls,
@@ -200,6 +211,7 @@ public sealed class AppToolService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
+
         return CallWithCatalogCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -218,6 +230,7 @@ public sealed class AppToolService
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolId);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
+
         return CallCoreAsync(
             sessionId.Trim(),
             toolId.Trim(),
@@ -259,12 +272,16 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.QueryToolsAsync(
             sessionId,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -274,13 +291,17 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.QueryToolsSinceAsync(
             sessionId,
             ifRevision,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -290,13 +311,17 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.QueryToolsFilteredAsync(
             sessionId,
             filters,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -307,7 +332,10 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.CallToolAsync(
             sessionId,
@@ -315,6 +343,7 @@ public sealed class AppToolService
             arguments,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -326,7 +355,10 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.CallToolWithEvidenceAsync(
             sessionId,
@@ -335,6 +367,7 @@ public sealed class AppToolService
             after,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -345,7 +378,10 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var bridgeCalls = calls.Select(static call => new AppToolBatchCall(
             call.ToolId,
@@ -358,6 +394,7 @@ public sealed class AppToolService
             continueOnError,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -368,7 +405,10 @@ public sealed class AppToolService
         CancellationToken cancellationToken,
         AppToolBridgeRequestContext requestContext)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
             sessionId,
@@ -377,6 +417,7 @@ public sealed class AppToolService
             after: null,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -385,9 +426,13 @@ public sealed class AppToolService
         AppFilePushRequest request,
         CancellationToken cancellationToken)
     {
-        if (isExternalSession?.Invoke(sessionId) == true) return SdkRequired(sessionId);
+        if (isExternalSession?.Invoke(sessionId) == true)
+        {
+            return SdkRequired(sessionId);
+        }
 
         JsonObject arguments;
+
         try
         {
             arguments = await AppFilePush.CreateRemoteArgumentsAsync(request, cancellationToken).ConfigureAwait(false);
@@ -403,6 +448,7 @@ public sealed class AppToolService
             arguments,
             cancellationToken,
             new AppToolBridgeRequestContext("ansight", "push_file_to_app")).ConfigureAwait(false);
+
         return CreateResponse(response);
     }
 
@@ -493,9 +539,13 @@ public sealed class AppToolService
     {
         var detail = ExecutionCapabilities.Unavailable("app.tools",
             new JsonObject { ["executionMode"] = "device" }, "This capture uses external monitors.");
+
         return new RuntimeAppToolResponse(false, detail["message"]!.GetValue<string>(), new Ansight.Tools.ToolProtocolEnvelope
         {
-            Type = Ansight.Tools.ToolProtocolMessageTypes.ErrorType, Id = Guid.NewGuid().ToString("N"), SessionId = sessionId, Payload = detail
+            Type = Ansight.Tools.ToolProtocolMessageTypes.ErrorType,
+            Id = Guid.NewGuid().ToString("N"),
+            SessionId = sessionId,
+            Payload = detail
         });
     }
 

@@ -23,6 +23,7 @@ internal sealed class CompanionRoutePlaybackService
         CancellationToken cancellationToken = default)
     {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (request.Action == "route-start")
@@ -31,8 +32,9 @@ internal sealed class CompanionRoutePlaybackService
             }
 
             var matches = active is not null
-                          && active.RunId == request.RunId
-                          && active.DeviceId == request.DeviceUdid;
+                && active.RunId == request.RunId
+                && active.DeviceId == request.DeviceUdid;
+
             if (!matches)
             {
                 return new RemoteDeviceTestingResult(false, "No matching companion route is active.");
@@ -41,10 +43,15 @@ internal sealed class CompanionRoutePlaybackService
             if (request.Action == "route-stop")
             {
                 await StopActiveAsync(cancellationToken).ConfigureAwait(false);
+
                 return new RemoteDeviceTestingResult(true, "Route playback stopped. The device remains at its last simulated location.");
             }
 
-            active = active! with { LastHeartbeat = clock.GetUtcNow() };
+            active = active! with
+            {
+                LastHeartbeat = clock.GetUtcNow()
+            };
+
             return Describe();
         }
         finally
@@ -58,8 +65,9 @@ internal sealed class CompanionRoutePlaybackService
         CancellationToken cancellationToken)
     {
         var valid = request.Platform is "ios" or "android"
-                    && !string.IsNullOrWhiteSpace(request.RouteContent)
-                    && Encoding.UTF8.GetByteCount(request.RouteContent) <= 40_000;
+            && !string.IsNullOrWhiteSpace(request.RouteContent)
+            && Encoding.UTF8.GetByteCount(request.RouteContent) <= 40_000;
+
         if (!valid)
         {
             return new RemoteDeviceTestingResult(false, "Choose a simulator or emulator and a GPX route smaller than 40 KB.");
@@ -69,6 +77,7 @@ internal sealed class CompanionRoutePlaybackService
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(request.RouteContent!));
             var route = DeviceLocationRouteParser.Parse("companion-route.gpx", stream);
+
             if (route.Points.Count > 500)
             {
                 return new RemoteDeviceTestingResult(false, "Companion routes support up to 500 points.");
@@ -78,6 +87,7 @@ internal sealed class CompanionRoutePlaybackService
                 request.Platform!, request.DeviceUdid, "companion-route.gpx", request.RouteContent!,
                 request.RecordedTiming ? DeviceLocationPlaybackMode.RecordedTiming : DeviceLocationPlaybackMode.FixedSpeed,
                 FixedSpeedKph: request.SpeedKph), cancellationToken, replaceActive: false).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 return new RemoteDeviceTestingResult(false, result.Message);
@@ -86,9 +96,11 @@ internal sealed class CompanionRoutePlaybackService
             monitorCancellation?.Cancel();
             active = new RouteLease(playback.GetSnapshot().RunId!, request.DeviceUdid,
                 clock.GetUtcNow(), clock.GetUtcNow().AddMinutes(15));
+
             var cancellation = new CancellationTokenSource();
             monitorCancellation = cancellation;
             _ = MonitorAsync(cancellation, active.RunId);
+
             return Describe();
         }
         catch (Exception error) when (error is ArgumentException or InvalidDataException or XmlException)
@@ -100,6 +112,7 @@ internal sealed class CompanionRoutePlaybackService
     private RemoteDeviceTestingResult Describe()
     {
         var snapshot = playback.GetSnapshot();
+
         if (active is not null && snapshot.RunId != active.RunId)
         {
             return new RemoteDeviceTestingResult(true, "This companion route has ended.", new JsonObject
@@ -109,6 +122,7 @@ internal sealed class CompanionRoutePlaybackService
                 ["status"] = "stopped"
             });
         }
+
         return new RemoteDeviceTestingResult(true, snapshot.Message,
             JsonSerializer.SerializeToNode(snapshot, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject());
     }
@@ -116,6 +130,7 @@ internal sealed class CompanionRoutePlaybackService
     internal async Task CheckTimeoutAsync(CancellationToken cancellationToken = default)
     {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (active is null || monitorCancellation is null)
@@ -125,8 +140,9 @@ internal sealed class CompanionRoutePlaybackService
 
             var now = clock.GetUtcNow();
             var shouldStop = now >= active.ExpiresAt
-                             || now - active.LastHeartbeat >= TimeSpan.FromSeconds(15)
-                             || !playback.GetSnapshot().IsPlaying;
+                || now - active.LastHeartbeat >= TimeSpan.FromSeconds(15)
+                || !playback.GetSnapshot().IsPlaying;
+
             if (shouldStop)
             {
                 await StopActiveAsync(cancellationToken).ConfigureAwait(false);
@@ -165,6 +181,7 @@ internal sealed class CompanionRoutePlaybackService
         catch (Exception error)
         {
             System.Diagnostics.Trace.TraceWarning($"Companion route monitor stopped: {error.Message}");
+
             try
             {
                 await playback.StopAsync(expectedRunId: runId).ConfigureAwait(false);
@@ -177,6 +194,7 @@ internal sealed class CompanionRoutePlaybackService
         finally
         {
             await gate.WaitAsync().ConfigureAwait(false);
+
             try
             {
                 if (ReferenceEquals(monitorCancellation, cancellation))

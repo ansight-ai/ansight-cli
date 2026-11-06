@@ -30,6 +30,7 @@ internal sealed class GetLogFacetsTool : Operation
     {
         var properties = SessionInspectionToolSchemas.LogReviewFilterProperties(includeRequiredQuery: false);
         properties["topCount"] = ToolSchema.Integer("Maximum number of tag/source/session facet values to return. Defaults to 10, max 50.", nullable: true);
+
         return properties;
     }
 }

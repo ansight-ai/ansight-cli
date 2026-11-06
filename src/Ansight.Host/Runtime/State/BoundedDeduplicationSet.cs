@@ -27,6 +27,7 @@ internal sealed class BoundedDeduplicationSet<T> where T : notnull
         }
 
         values.Enqueue(value);
+
         while (values.Count > capacity)
         {
             lookup.Remove(values.Dequeue());

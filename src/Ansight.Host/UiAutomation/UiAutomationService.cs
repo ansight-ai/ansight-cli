@@ -4,32 +4,6 @@ using Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
 namespace Ansight.Host.UiAutomation;
 
-public enum UiAutomationOperation
-{
-    Snapshot,
-    Find,
-    Tap,
-    Type,
-    Swipe,
-    Pinch,
-    Back,
-    Wait,
-    Assert,
-    KeyboardOpen,
-    KeyboardIsOpen,
-    KeyboardDismiss,
-    KeyboardPress,
-    KeyboardSubmit,
-    PlayPen,
-    LongPress
-}
-
-public sealed record UiAutomationResult(
-    UiAutomationOperation Operation,
-    bool IsSuccess,
-    string Message,
-    JsonObject Payload);
-
 /// <summary>
 /// Transport-neutral semantic UI operations shared by the CLI and the bounded host agent.
 /// </summary>
@@ -41,7 +15,7 @@ public sealed class UiAutomationService
         Func<string, JsonObject?, string?, Task<RequestResult>> executeOperation)
     {
         this.executeOperation = executeOperation
-                                ?? throw new ArgumentNullException(nameof(executeOperation));
+            ?? throw new ArgumentNullException(nameof(executeOperation));
     }
 
     public async Task<UiAutomationResult> ExecuteAsync(
@@ -50,21 +24,25 @@ public sealed class UiAutomationService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var operationArguments = arguments?.DeepClone().AsObject();
         var detail = operationArguments?["detail"]?.GetValue<string>()?.Trim().ToLowerInvariant();
+
         if (detail is not (null or "compact" or "full"))
         {
             throw new ArgumentException("detail must be compact or full.", nameof(arguments));
         }
+
         operationArguments?.Remove("detail");
+
         var fullDetail = detail == "full"
-                         || detail is null && operationArguments?["includeProperties"]?.GetValue<bool>() == true;
+            || detail is null && operationArguments?["includeProperties"]?.GetValue<bool>() == true;
         var projectionOptions = UiProjectionOptions.Cli with
         {
             MaximumNodes = Math.Clamp(operationArguments?["maxNodes"]?.GetValue<int>()
-                                     ?? UiProjectionOptions.Cli.MaximumNodes, 1, 2_000),
+                ?? UiProjectionOptions.Cli.MaximumNodes, 1, 2_000),
             MaximumMatches = Math.Clamp(operationArguments?["limit"]?.GetValue<int>()
-                                       ?? UiProjectionOptions.Cli.MaximumMatches, 1, 1_000)
+                ?? UiProjectionOptions.Cli.MaximumMatches, 1, 1_000)
         };
         using var cancellationScope = ToolExecutionCancellation.Push(cancellationToken);
         var operationTask = executeOperation(
@@ -72,6 +50,7 @@ public sealed class UiAutomationService
             operationArguments,
             $"cli-ui-{Guid.NewGuid():N}");
         var result = await operationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         if (result.IsError)
         {
             return new UiAutomationResult(
@@ -82,18 +61,20 @@ public sealed class UiAutomationService
         }
 
         var toolFailed = result.Payload?["isError"] is JsonValue errorValue
-                         && errorValue.TryGetValue<bool>(out var isError)
-                         && isError;
+            && errorValue.TryGetValue<bool>(out var isError)
+            && isError;
         var structuredContent = result.Payload?["structuredContent"] as JsonObject;
         var payload = structuredContent?.DeepClone().AsObject() ?? new JsonObject();
         var message = ReadMessage(payload, toolFailed);
+
         if (!fullDetail && operation != UiAutomationOperation.PlayPen)
         {
             payload = operation == UiAutomationOperation.Snapshot
                 ? VisualTreeObservation.Build(payload, projectionOptions)
-                  ?? UiResultProjection.Project(payload, projectionOptions)
+                    ?? UiResultProjection.Project(payload, projectionOptions)
                 : UiResultProjection.Project(payload, projectionOptions);
         }
+
         return new UiAutomationResult(
             operation,
             !toolFailed,

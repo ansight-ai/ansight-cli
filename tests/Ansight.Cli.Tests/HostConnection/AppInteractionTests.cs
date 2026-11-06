@@ -20,16 +20,20 @@ public sealed class AppInteractionTests
         var running = InteractionServer.RunAsync(Arguments(), input, output, (_, _) =>
         {
             creations++;
+
             return session;
         }, TestAccessAuthorizer.Allow, CancellationToken.None);
         Assert.Equal("ready", (await output.NextAsync()).GetProperty("command").GetString());
+
         for (var index = 0; index < 5; index++)
         {
             input.Send($$"""{"id":"{{index}}","command":"tap","x":0.5,"y":0.5}""");
+
             var result = await output.NextAsync();
             Assert.Equal(index.ToString(), result.GetProperty("id").GetString());
             Assert.True(result.GetProperty("succeeded").GetBoolean());
         }
+
         input.Send("{bad json}");
         Assert.Equal("invalid_request", (await output.NextAsync()).GetProperty("error").GetString());
         input.Send("""{"id":"bad","command":"tap","x":0.5,"y":0.5,"sessionId":"other"}""");
@@ -86,8 +90,16 @@ public sealed class AppInteractionTests
             OnAction = async token =>
             {
                 started.SetResult();
-                try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
-                catch (OperationCanceledException) { cancelled.SetResult(); throw; }
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    cancelled.SetResult();
+                    throw;
+                }
             }
         };
         var running = InteractionServer.RunAsync(Arguments(), input, output,
@@ -179,21 +191,37 @@ public sealed class AppInteractionTests
     private sealed class FillBlockingReader : TextReader
     {
         private readonly Channel<char> characters = Channel.CreateUnbounded<char>();
+
         public void Send(string value)
         {
-            foreach (var character in value) characters.Writer.TryWrite(character);
+            foreach (var character in value)
+            {
+                characters.Writer.TryWrite(character);
+            }
         }
+
         public override async ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
         {
             var count = 0;
+
             while (count < buffer.Length && await characters.Reader.WaitToReadAsync(cancellationToken))
+            {
                 while (count < buffer.Length && characters.Reader.TryRead(out var character))
+                {
                     buffer.Span[count++] = character;
+                }
+            }
+
             return count;
         }
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing) characters.Writer.TryComplete();
+            if (disposing)
+            {
+                characters.Writer.TryComplete();
+            }
+
             base.Dispose(disposing);
         }
     }
@@ -225,10 +253,12 @@ public sealed class AppInteractionTests
             {
                 Assert.Equal("session-1", sessionId);
                 Assert.Equal(repository, root);
+
                 return context;
             }, TestAccessAuthorizer.Allow, CancellationToken.None);
         await output.NextAsync();
         input.Send("""{"id":"group","command":"batch","commands":[{"id":"tap","command":"tap","x":0.4,"y":0.6},{"id":"run","command":"task","taskId":"search.find","input":{"query":"test"}},{"id":"last","command":"snapshot"}]}""");
+
         var result = await output.NextAsync();
         Assert.Equal("group", result.GetProperty("id").GetString());
         Assert.Equal(!fail, result.GetProperty("succeeded").GetBoolean());
@@ -286,6 +316,7 @@ public sealed class AppInteractionTests
             input, output, (_, _) => context, TestAccessAuthorizer.Allow, CancellationToken.None);
         await output.NextAsync();
         input.Send("""{"id":"batch","command":"batch","commands":[{"id":"slow","command":"back"},{"id":"skip","command":"back"}]}""");
+
         var result = await output.NextAsync();
         Assert.Equal("timeout", result.GetProperty("results")[0].GetProperty("error").GetString());
         Assert.Equal("skip", result.GetProperty("skippedIds")[0].GetString());
@@ -301,7 +332,12 @@ public sealed class AppInteractionTests
     public void RelativeRepositoryIsResolvedByClientBeforeOpeningConnection(string option, string? value)
     {
         var values = new List<string> { "app", "interact", "--session", "session-1", option };
-        if (value is not null) values.Add(value);
+
+        if (value is not null)
+        {
+            values.Add(value);
+        }
+
         var workingDirectory = Path.Combine(Path.GetTempPath(), "interactive-client");
         var forwarded = CliArguments.Parse(ControlClient.CreateForwardedArguments(CliArguments.Parse(values), workingDirectory));
         Assert.Equal(workingDirectory, forwarded.GetOption("repository"));
@@ -317,7 +353,12 @@ public sealed class AppInteractionTests
         public async Task<AppInteractionResult> ExecuteAsync(AppInteractionRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
-            if (request.Command != "snapshot" && OnAction is not null) await OnAction(cancellationToken);
+
+            if (request.Command != "snapshot" && OnAction is not null)
+            {
+                await OnAction(cancellationToken);
+            }
+
             return new(InteractionProtocol.Schema, request.Id, request.Command, SessionId, request.Id != FailingId, null,
                 request.Id == FailingId ? "task_failed" : null,
                 "Completed.", null, new($"frame-{request.Id}", $"/tmp/frame-{request.Id}.png", DateTimeOffset.UtcNow, 390, 844),
@@ -328,53 +369,87 @@ public sealed class AppInteractionTests
     private sealed class InteractiveReader : TextReader
     {
         private readonly Channel<char> characters = Channel.CreateUnbounded<char>();
+
         public void Send(string line)
         {
-            foreach (var character in line + "\n") characters.Writer.TryWrite(character);
+            foreach (var character in line + "\n")
+            {
+                characters.Writer.TryWrite(character);
+            }
         }
+
         public void End() => characters.Writer.TryComplete();
+
         public override async ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken = default)
         {
-            if (!await characters.Reader.WaitToReadAsync(cancellationToken)) return 0;
+            if (!await characters.Reader.WaitToReadAsync(cancellationToken))
+            {
+                return 0;
+            }
+
             var count = 0;
-            while (count < buffer.Length && characters.Reader.TryRead(out var character)) buffer.Span[count++] = character;
+
+            while (count < buffer.Length && characters.Reader.TryRead(out var character))
+            {
+                buffer.Span[count++] = character;
+            }
+
             return count;
         }
+
         public override async ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
         {
             var line = new StringBuilder();
+
             while (await characters.Reader.WaitToReadAsync(cancellationToken))
             {
                 while (characters.Reader.TryRead(out var character))
                 {
-                    if (character == '\n') return line.ToString();
+                    if (character == '\n')
+                    {
+                        return line.ToString();
+                    }
+
                     line.Append(character);
                 }
             }
+
             return line.Length == 0 ? null : line.ToString();
         }
     }
 
-    private sealed class InteractiveWriter(Action<string>? onLine = null) : TextWriter
+    private sealed class InteractiveWriter : TextWriter
     {
+        private readonly Action<string>? onLine;
         private readonly Channel<string> lines = Channel.CreateUnbounded<string>();
+
+        public InteractiveWriter(Action<string>? onLine = null)
+        {
+            this.onLine = onLine;
+        }
+
         public override Encoding Encoding => Encoding.UTF8;
         public List<string> Lines { get; } = [];
+
         public override void WriteLine(string? value)
         {
             Lines.Add(value!);
             lines.Writer.TryWrite(value!);
             onLine?.Invoke(value!);
         }
+
         public override Task WriteLineAsync(ReadOnlyMemory<char> buffer, CancellationToken cancellationToken = default)
         {
             WriteLine(buffer.ToString());
+
             return Task.CompletedTask;
         }
+
         public async Task<JsonElement> NextAsync()
         {
             var line = await lines.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             using var document = JsonDocument.Parse(line);
+
             return document.RootElement.Clone();
         }
     }

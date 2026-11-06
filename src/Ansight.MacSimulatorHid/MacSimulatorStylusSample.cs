@@ -1,10 +1,5 @@
 namespace Ansight.MacSimulatorHid;
 
-public enum MacSimulatorStylusPhase
-{
-    Down, Move, Up, Cancel, HoverEnter, HoverMove, HoverExit
-}
-
 /// <summary>UIKit angles in radians; position, pressure and hover distance in [0,1].</summary>
 public sealed record MacSimulatorStylusSample(
     MacSimulatorStylusPhase Phase,
@@ -26,7 +21,9 @@ public sealed record MacSimulatorStylusSample(
             || !Unit(NormalizedX) || !Unit(NormalizedY) || !Unit(Pressure) || !Unit(Distance)
             || !double.IsFinite(AltitudeRadians) || AltitudeRadians < 0 || AltitudeRadians > Math.PI / 2
             || !double.IsFinite(AzimuthRadians) || !double.IsFinite(RollRadians))
+        {
             throw new ArgumentException("Stylus samples require finite normalized coordinates, pressure, distance and UIKit angles.");
+        }
     }
 
     private static bool Unit(double value) => double.IsFinite(value) && value >= 0 && value <= 1;

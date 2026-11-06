@@ -18,6 +18,7 @@ public sealed class AppToolCatalogDiscoveryTests
             if (context?.Source == "session-capture")
             {
                 captureStarted.SetResult();
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, cancellation);
@@ -34,6 +35,7 @@ public sealed class AppToolCatalogDiscoveryTests
         var capture = service.QueryAsync("session-1", null, null, timeout.Token,
             new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"));
         await captureStarted.Task.WaitAsync(timeout.Token);
+
         var discovery = service.QueryAsync("session-1", null, null, timeout.Token,
             requestContext: null, includeDefinitions: false);
 
@@ -54,20 +56,32 @@ public sealed class AppToolCatalogDiscoveryTests
         var service = new AppToolCatalogService(CreateConnections(socket), async (sessionId, request, cancellation, context) =>
         {
             var detail = request.Payload!["detail"]!.GetValue<string>();
+
             if (detail == "definitions" && context?.Source == "session-capture")
             {
                 definitionsStarted.SetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellation);
             }
-            if (context is null) foregroundDetails.Add(detail);
+
+            if (context is null)
+            {
+                foregroundDetails.Add(detail);
+            }
+
             var tool = new JsonObject { ["id"] = "app.inspect", ["definitionRevision"] = "definition-1" };
-            if (detail == "definitions") tool["argsSchema"] = new JsonObject { ["type"] = "object" };
+
+            if (detail == "definitions")
+            {
+                tool["argsSchema"] = new JsonObject { ["type"] = "object" };
+            }
+
             return CatalogResponse(request, detail, tool);
         });
 
         var capture = service.QueryAsync("session-1", null, null, timeout.Token,
             new AppToolBridgeRequestContext("session-capture", "capture_app_tool_catalog"));
         await definitionsStarted.Task.WaitAsync(timeout.Token);
+
         var query = service.QueryAsync("session-1", null, null, timeout.Token, requestContext: null);
 
         var response = await query.WaitAsync(TimeSpan.FromSeconds(5));
@@ -88,6 +102,7 @@ public sealed class AppToolCatalogDiscoveryTests
         var service = new AppToolCatalogService(CreateConnections(socket), (sessionId, request, cancellation, context) =>
         {
             requests.Add(request.Payload!["detail"]!.GetValue<string>());
+
             return Task.FromResult(CatalogResponse(request, "index", tools));
         });
 
@@ -96,6 +111,7 @@ public sealed class AppToolCatalogDiscoveryTests
 
         Assert.True(response.Success, response.Message);
         Assert.Equal(new[] { "index" }, requests);
+
         var catalog = Assert.IsType<JsonArray>(response.Envelope?.Payload?["tools"]);
         Assert.Equal(100, catalog.Count);
         Assert.Equal("app.tool-99", catalog[99]?["id"]?.GetValue<string>());
@@ -115,6 +131,7 @@ public sealed class AppToolCatalogDiscoveryTests
                 captureStarted.SetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
             }
+
             return CatalogResponse(request, "index");
         });
         var capture = service.QueryAsync("session-1", null, null, cancellation.Token,
@@ -124,6 +141,7 @@ public sealed class AppToolCatalogDiscoveryTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => capture);
+
         var response = await service.QueryAsync("session-1", null, null, CancellationToken.None,
             requestContext: null).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(response.Success, response.Message);
@@ -134,6 +152,7 @@ public sealed class AppToolCatalogDiscoveryTests
         var connections = new SessionConnectionRegistry();
         connections.Register("session-1", new LiveSessionConnection("session-1", socket,
             new PairingSessionAuthorization(2, "grant-1", "read")));
+
         return connections;
     }
 

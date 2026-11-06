@@ -55,6 +55,7 @@ public sealed class SessionServeCommandsTests
         await using var runtime = CreateRuntime(directory.Path);
         var archivePath = Path.Combine(directory.Path, "serve-session.zip");
         await WriteArchiveAsync(archivePath);
+
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
         var session = Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
 
@@ -66,6 +67,7 @@ public sealed class SessionServeCommandsTests
         Assert.Equal("ansight.session-local-replay/v1", servePayload["schema"]!.GetValue<string>());
         Assert.True(servePayload["isSuccess"]!.GetValue<bool>());
         Assert.True(servePayload["isResidentHost"]!.GetValue<bool>());
+
         var replayUrl = new Uri(servePayload["replayUrl"]!.GetValue<string>());
         using var httpClient = new HttpClient();
         Assert.Contains("Ansight Local Replay", await httpClient.GetStringAsync(replayUrl), StringComparison.Ordinal);
@@ -85,6 +87,7 @@ public sealed class SessionServeCommandsTests
         await using var runtime = CreateRuntime(directory.Path);
         var archivePath = Path.Combine(directory.Path, "show-session.zip");
         await WriteArchiveAsync(archivePath);
+
         var imported = await runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
         var session = Assert.IsType<AppSessionSnapshot>(imported.ImportedSession);
 
@@ -103,6 +106,7 @@ public sealed class SessionServeCommandsTests
         var storagePath = Path.Combine(baseFolderPath, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,
@@ -128,6 +132,7 @@ public sealed class SessionServeCommandsTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(string.Empty, standardError.ToString());
+
         return standardOutput.ToString();
     }
 

@@ -24,22 +24,27 @@ internal sealed class AuditStore : IAuditStore
     public AuditSaveResult Save(SimulatorAgentRunAudit audit)
     {
         ArgumentNullException.ThrowIfNull(audit);
+
         string? traceDirectoryPath = null;
+
         try
         {
             PrivateStorageDirectory.Ensure(auditDirectoryPath);
+
             var timestamp = audit.StartedUtc.UtcDateTime.ToString("yyyyMMdd-HHmmss-fff");
             var filePath = Path.Combine(auditDirectoryPath, $"{timestamp}-{audit.RunId}.json");
             var temporaryPath = filePath + ".tmp";
             var persistedAudit = PersistOcrTraceEvidence(audit, filePath, out traceDirectoryPath);
             // Billing recovery metadata is kept outside the recorded/exported trace.
             var metering = new JsonArray();
+
             foreach (var usage in audit.CreateModelPassUsages())
             {
                 var response = JsonSerializer.SerializeToNode(usage, jsonOptions)!.AsObject();
                 response["model"] = usage.Model;
                 metering.Add(response);
             }
+
             var meteringPath = filePath + ".metering";
             File.WriteAllText(meteringPath + ".tmp", metering.ToJsonString(jsonOptions));
             File.Move(meteringPath + ".tmp", meteringPath, overwrite: true);
@@ -48,11 +53,13 @@ internal sealed class AuditStore : IAuditStore
             RestrictFile(meteringPath);
             RestrictFile(filePath);
             BoundedAuditHistory.Prune(auditDirectoryPath, filePath, includeTraceDirectories: true);
+
             return new AuditSaveResult(filePath, null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             TryDeleteTraceDirectory(traceDirectoryPath);
+
             return new AuditSaveResult(null, exception.Message);
         }
     }
@@ -63,6 +70,7 @@ internal sealed class AuditStore : IAuditStore
         out string? traceDirectoryPath)
     {
         traceDirectoryPath = null;
+
         if (audit.TraceEnabled != true
             || !audit.ToolCalls.Any(static call => call.OcrEvidence is not null))
         {
@@ -76,9 +84,11 @@ internal sealed class AuditStore : IAuditStore
         PrivateStorageDirectory.Ensure(traceDirectoryPath);
 
         var toolCalls = new List<SimulatorAgentToolCallAudit>(audit.ToolCalls.Count);
+
         foreach (var call in audit.ToolCalls)
         {
             var evidence = call.OcrEvidence;
+
             if (evidence is null)
             {
                 toolCalls.Add(call);
@@ -87,6 +97,7 @@ internal sealed class AuditStore : IAuditStore
 
             var fileStem = $"ocr-{call.Sequence:D4}";
             string? screenshotRelativePath = null;
+
             if (!string.IsNullOrWhiteSpace(evidence.SourceScreenshotPath)
                 && File.Exists(evidence.SourceScreenshotPath))
             {
@@ -105,27 +116,35 @@ internal sealed class AuditStore : IAuditStore
                 Path.Combine(traceDirectoryPath, resultsFileName),
                 evidence.Results.Content);
             RestrictFile(Path.Combine(traceDirectoryPath, resultsFileName));
+
             var persistedEvidence = evidence with
             {
                 ScreenshotPath = screenshotRelativePath,
                 ResultsPath = $"{traceDirectoryName}/{resultsFileName}"
             };
-            toolCalls.Add(call with { OcrEvidence = persistedEvidence });
+            toolCalls.Add(call with
+            {
+                OcrEvidence = persistedEvidence
+            });
         }
 
-        return audit with { ToolCalls = toolCalls };
+        return audit with
+        {
+            ToolCalls = toolCalls
+        };
     }
 
     private static string ResolveScreenshotExtension(string sourcePath, string? format)
     {
         var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
+
         if (extension is ".png" or ".jpg" or ".jpeg" or ".webp")
         {
             return extension;
         }
 
         return string.Equals(format, "jpg", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(format, "jpeg", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(format, "jpeg", StringComparison.OrdinalIgnoreCase)
             ? ".jpg"
             : ".png";
     }
@@ -165,6 +184,7 @@ internal sealed class AuditStore : IAuditStore
             }
 
             var entries = new List<SimulatorAgentRunHistoryEntry>();
+
             foreach (var filePath in Directory.EnumerateFiles(auditDirectoryPath, "*.json", SearchOption.TopDirectoryOnly))
             {
                 try
@@ -172,9 +192,11 @@ internal sealed class AuditStore : IAuditStore
                     var audit = JsonSerializer.Deserialize<SimulatorAgentRunAudit>(
                         File.ReadAllText(filePath),
                         jsonOptions);
+
                     if (audit is not null)
                     {
                         var meteringPath = filePath + ".metering";
+
                         if (File.Exists(meteringPath))
                         {
                             try
@@ -190,13 +212,14 @@ internal sealed class AuditStore : IAuditStore
                                 // Billing metadata must not hide a readable trace.
                             }
                         }
+
                         entries.Add(new SimulatorAgentRunHistoryEntry(audit, filePath));
                     }
                 }
                 catch (Exception exception) when (exception is IOException
-                                                   or UnauthorizedAccessException
-                                                   or JsonException
-                                                   or NotSupportedException)
+                    or UnauthorizedAccessException
+                    or JsonException
+                    or NotSupportedException)
                 {
                     // A partial or incompatible audit must not hide the rest of the run history.
                 }

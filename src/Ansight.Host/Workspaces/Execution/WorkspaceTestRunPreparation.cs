@@ -9,9 +9,14 @@ public sealed record WorkspaceTestRunPreparation(
     public AgentReasoningConfiguration? ReasoningConfiguration { get; init; }
     public bool UsesExternalTransport => ModelTransport is not null && TrackingRunId.HasValue;
     public bool HasResolvedTeam => TeamId.HasValue && !string.IsNullOrWhiteSpace(TeamName);
+
     public static WorkspaceTestRunPreparation WithTransport(IModelExecutionTransport transport,
         Guid trackingRunId, int? maximumRoundTrips, Guid teamId, string teamName)
-        => new(true, string.Empty, trackingRunId, maximumRoundTrips, teamId, teamName) { ModelTransport = transport };
+        => new(true, string.Empty, trackingRunId, maximumRoundTrips, teamId, teamName)
+        {
+            ModelTransport = transport
+        };
+
     public static WorkspaceTestRunPreparation Failure(string message, Guid? teamId = null, string? teamName = null)
         => new(false, string.IsNullOrWhiteSpace(message) ? "The workspace test could not be prepared." : message.Trim(),
             null, null, teamId, string.IsNullOrWhiteSpace(teamName) ? null : teamName.Trim());

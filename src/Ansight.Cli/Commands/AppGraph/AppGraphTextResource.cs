@@ -17,6 +17,7 @@ internal static partial class AppGraphTextResource
     private static string Read(string fileName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+
         return resources.GetOrAdd(
             fileName,
             static name => new Lazy<string>(() => ReadCore(name))).Value;
@@ -26,13 +27,14 @@ internal static partial class AppGraphTextResource
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
+
         return resourceSections
             .GetOrAdd(
-                fileName,
-                static _ => new ConcurrentDictionary<string, string>(StringComparer.Ordinal))
+            fileName,
+            static _ => new ConcurrentDictionary<string, string>(StringComparer.Ordinal))
             .GetOrAdd(
-                sectionName,
-                name => ReadSectionCore(fileName, name));
+            sectionName,
+            name => ReadSectionCore(fileName, name));
     }
 
     public static string RenderSection(
@@ -41,6 +43,7 @@ internal static partial class AppGraphTextResource
         IReadOnlyDictionary<string, string> values)
     {
         ArgumentNullException.ThrowIfNull(values);
+
         return RenderCore(
             $"{fileName}#{sectionName}",
             ReadSection(fileName, sectionName),
@@ -52,6 +55,7 @@ internal static partial class AppGraphTextResource
         var content = Read(fileName);
         var startMarker = $"<!-- template:{sectionName} -->";
         var startIndex = content.IndexOf(startMarker, StringComparison.Ordinal);
+
         if (startIndex < 0)
         {
             throw new InvalidOperationException(
@@ -59,6 +63,7 @@ internal static partial class AppGraphTextResource
         }
 
         startIndex += startMarker.Length;
+
         if (content.AsSpan(startIndex).StartsWith("\r\n", StringComparison.Ordinal))
         {
             startIndex += 2;
@@ -69,6 +74,7 @@ internal static partial class AppGraphTextResource
         }
 
         var endIndex = content.IndexOf(TemplateEndMarker, startIndex, StringComparison.Ordinal);
+
         if (endIndex < 0)
         {
             throw new InvalidOperationException(
@@ -85,6 +91,7 @@ internal static partial class AppGraphTextResource
         => PlaceholderPattern().Replace(template, match =>
         {
             var name = match.Groups[1].Value;
+
             return values.TryGetValue(name, out var value)
                 ? value
                 : throw new InvalidOperationException(
@@ -97,6 +104,7 @@ internal static partial class AppGraphTextResource
         var resourceNames = assembly.GetManifestResourceNames()
             .Where(name => name.EndsWith(suffix, StringComparison.Ordinal))
             .ToArray();
+
         if (resourceNames.Length == 0)
         {
             throw new InvalidOperationException(
@@ -110,9 +118,10 @@ internal static partial class AppGraphTextResource
         }
 
         using var stream = assembly.GetManifestResourceStream(resourceNames[0])
-                           ?? throw new InvalidOperationException(
-                               $"The embedded App Graph text resource '{fileName}' could not be opened.");
+            ?? throw new InvalidOperationException(
+                $"The embedded App Graph text resource '{fileName}' could not be opened.");
         using var reader = new StreamReader(stream);
+
         return reader.ReadToEnd();
     }
 

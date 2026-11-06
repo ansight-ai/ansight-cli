@@ -33,9 +33,11 @@ public sealed class SystemReportTests
     {
         var root = Path.Combine(Path.GetTempPath(), "ansight-secret-report-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+
         var file = Path.Combine(root, "legacy.json");
         const string original = "{\"example\":\"private-value\"}";
         File.WriteAllText(file, original);
+
         try
         {
             var storage = FileBackedEncryptedStorage.OpenReadOnly(file, new byte[32]);
@@ -46,7 +48,10 @@ public sealed class SystemReportTests
             Assert.Throws<InvalidOperationException>(() => storage.Remove("example"));
             Assert.Throws<InvalidOperationException>(() => storage.Clear());
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]
@@ -81,24 +86,33 @@ public sealed class SystemReportTests
         var installed = Path.Combine(root, "installed", "ansight-test");
         Directory.CreateDirectory(Path.Combine(source, "references"));
         Directory.CreateDirectory(Path.Combine(installed, "references"));
+
         try
         {
             File.WriteAllText(Path.Combine(source, "SKILL.md"), "---\nname: ansight-test\nmetadata:\n  version: 1.0.0\n---\ninstructions");
             File.WriteAllText(Path.Combine(source, "references", "usage.md"), "reference");
+
             foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+            {
                 File.Copy(file, Path.Combine(installed, Path.GetRelativePath(source, file)));
+            }
+
             var initial = SkillInventory.Inspect(installed, "test", source);
             Assert.Equal("matches-bundled", initial["comparison"]!.ToString());
             Assert.Equal("1.0.0", initial["version"]!.ToString());
             File.WriteAllText(Path.Combine(installed, "SKILL.md"), "changed");
             File.Delete(Path.Combine(installed, "references", "usage.md"));
             File.WriteAllText(Path.Combine(installed, "extra.txt"), "unexpected");
+
             var report = SkillInventory.Inspect(installed, "test", source);
             Assert.Equal("differs-from-bundled", report["comparison"]!.ToString());
             Assert.Equal(3, report["differences"]!.AsArray().Count);
             Assert.NotEqual(report["bundledSha256"]!.ToString(), report["sha256"]!.ToString());
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]

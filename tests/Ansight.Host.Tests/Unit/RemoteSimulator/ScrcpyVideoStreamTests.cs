@@ -50,6 +50,7 @@ public sealed class ScrcpyVideoStreamTests
         BinaryPrimitives.WriteUInt64BigEndian(data.AsSpan(0, 8), timestampAndFlags);
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(8, 4), checked((uint)payload.Length));
         payload.CopyTo(data, 12);
+
         return new MemoryStream(data);
     }
 
@@ -62,26 +63,33 @@ public sealed class ScrcpyVideoStreamTests
         BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(0, 4), 0x68323634); // h264
         BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(4, 4), 464);
         BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(8, 4), 1024);
+
         using var stream = new MemoryStream();
+
         foreach (var packet in new[]
-                 {
-                     CreatePacketStream(configurationFlag, [103, 104]),
-                     CreatePacketStream(keyFrameFlag | 100, [101]),
-                     CreatePacketStream(200, [1]),
-                     CreatePacketStream(keyFrameFlag | 300, [102]),
-                     CreatePacketStream(configurationFlag, [110, 111]),
-                     CreatePacketStream(keyFrameFlag | 400, [112]),
-                 })
+        {
+            CreatePacketStream(configurationFlag, [103, 104]),
+            CreatePacketStream(keyFrameFlag | 100, [101]),
+            CreatePacketStream(200, [1]),
+            CreatePacketStream(keyFrameFlag | 300, [102]),
+            CreatePacketStream(configurationFlag, [110, 111]),
+            CreatePacketStream(keyFrameFlag | 400, [112]),
+        })
         {
             using (packet)
+            {
                 packet.CopyTo(stream);
+            }
         }
+
         stream.Position = 0;
+
         var received = new List<ScrcpyVideoPacket>();
 
         await ScrcpyVideoStream.ReadVideoAsync(stream, header, (packet, _) =>
         {
             received.Add(packet);
+
             return Task.CompletedTask;
         }, CancellationToken.None);
 

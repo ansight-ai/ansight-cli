@@ -23,47 +23,58 @@ public static class BinaryFileTransferProtocol
         if (!HasMagic(message.Span))
         {
             error = "The payload is not an ASFT binary transfer frame.";
+
             return false;
         }
 
         if (message.Length < HeaderSize)
         {
             error = $"The ASFT frame was shorter than the required {HeaderSize} byte header.";
+
             return false;
         }
 
         var span = message.Span;
         var version = span[4];
+
         if (version != 1)
         {
             error = $"Unsupported ASFT protocol version '{version}'.";
+
             return false;
         }
 
         var frameTypeValue = span[5];
+
         if (!Enum.IsDefined(typeof(BinaryFileTransferFrameType), frameTypeValue))
         {
             error = $"Unsupported ASFT frame type '{frameTypeValue}'.";
+
             return false;
         }
 
         var transferId = Encoding.ASCII.GetString(span[8..40]);
+
         if (transferId.Length != 32 || !Guid.TryParseExact(transferId, "N", out _))
         {
             error = "The ASFT frame contains an invalid transfer id.";
+
             return false;
         }
 
         var payloadByteCount = BinaryPrimitives.ReadInt32LittleEndian(span[52..56]);
+
         if (payloadByteCount < 0)
         {
             error = "The ASFT frame contains a negative payload length.";
+
             return false;
         }
 
         if (message.Length != HeaderSize + payloadByteCount)
         {
             error = $"The ASFT frame payload length '{payloadByteCount}' did not match the received byte count.";
+
             return false;
         }
 

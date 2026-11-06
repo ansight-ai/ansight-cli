@@ -9,50 +9,37 @@ internal sealed class LiveUiSelector
     }
 
     public string? NodeId { get; private init; }
-
     public string? AutomationId { get; private init; }
-
     public string? Text { get; private init; }
-
     public string? Role { get; private init; }
-
     public string? Type { get; private init; }
-
     public string? AncestorAutomationId { get; private init; }
-
     public string? Action { get; private init; }
-
     public bool? Visible { get; private init; }
-
     public bool? Enabled { get; private init; }
-
     public LiveUiStringMatchMode MatchMode { get; private init; }
-
     public bool MatchModeSpecified { get; private init; }
-
     public bool Exact => MatchMode == LiveUiStringMatchMode.Exact;
 
     public bool CaseSensitive { get; private init; }
-
     public int Index { get; private init; }
-
     public bool IndexSpecified { get; private init; }
-
     public bool HasCriteria => NodeId is not null
-                               || AutomationId is not null
-                               || Text is not null
-                               || Role is not null
-                               || Type is not null
-                               || AncestorAutomationId is not null
-                               || Action is not null
-                               || Visible.HasValue
-                               || Enabled.HasValue;
+        || AutomationId is not null
+        || Text is not null
+        || Role is not null
+        || Type is not null
+        || AncestorAutomationId is not null
+        || Action is not null
+        || Visible.HasValue
+        || Enabled.HasValue;
 
     public static LiveUiSelector Parse(JsonObject? arguments, bool exactByDefault = true)
     {
         var defaultMatchMode = ReadBoolean(arguments, "exact", fallback: exactByDefault)
             ? LiveUiStringMatchMode.Exact
             : LiveUiStringMatchMode.Contains;
+
         return new LiveUiSelector
         {
             NodeId = ReadString(arguments, "nodeId"),
@@ -104,9 +91,10 @@ internal sealed class LiveUiSelector
 
         var stringCriteriaMatch = fieldMatches.All(static field => field.Result.IsMatch);
         var stateCriteriaMatch = (!Visible.HasValue
-                                  || LiveUiNodeQuery.IsEffectivelyVisible(candidate) == Visible.Value)
-                                 && (!Enabled.HasValue
-                                     || LiveUiNodeQuery.IsEffectivelyEnabled(candidate) == Enabled.Value);
+            || LiveUiNodeQuery.IsEffectivelyVisible(candidate) == Visible.Value)
+            && (!Enabled.HasValue
+                || LiveUiNodeQuery.IsEffectivelyEnabled(candidate) == Enabled.Value);
+
         if (!stringCriteriaMatch || !stateCriteriaMatch)
         {
             return LiveUiSelectorMatchResult.NoMatch;
@@ -121,6 +109,7 @@ internal sealed class LiveUiSelector
         var reason = string.Join(
             ", ",
             scoredFields.Select(static field => $"{field.Name}:{field.Result.Reason}"));
+
         return new LiveUiSelectorMatchResult(true, score, reason);
     }
 
@@ -147,14 +136,25 @@ internal sealed class LiveUiSelector
 
     public string DescribeFailure(string message)
     {
-        if (!HasCriteria) return message;
+        if (!HasCriteria)
+        {
+            return message;
+        }
+
         var fields = ToJson();
+
         foreach (var field in fields.Where(static field => field.Value is null).Select(static field => field.Key).ToArray())
         {
             fields.Remove(field);
         }
+
         fields.Remove("indexSpecified");
-        if (!IndexSpecified) fields.Remove("index");
+
+        if (!IndexSpecified)
+        {
+            fields.Remove("index");
+        }
+
         return $"{message} Selector: {fields.ToJsonString()}.";
     }
 
@@ -179,14 +179,14 @@ internal sealed class LiveUiSelector
     }
 
     public bool CanUseOcr => Text is not null
-                             && NodeId is null
-                             && AutomationId is null
-                             && Role is null
-                             && Type is null
-                             && AncestorAutomationId is null
-                             && Action is null
-                             && Enabled is null
-                             && Visible != false;
+        && NodeId is null
+        && AutomationId is null
+        && Role is null
+        && Type is null
+        && AncestorAutomationId is null
+        && Action is null
+        && Enabled is null
+        && Visible != false;
 
     public IReadOnlyList<T> ApplyIndex<T>(IReadOnlyList<T> matches)
         => IndexSpecified
@@ -211,6 +211,7 @@ internal sealed class LiveUiSelector
         }
 
         var comparison = CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
         if (MatchMode == LiveUiStringMatchMode.Contains)
         {
             return actual.Contains(Text, comparison)
@@ -221,6 +222,7 @@ internal sealed class LiveUiSelector
         if (MatchMode == LiveUiStringMatchMode.Fuzzy)
         {
             var fuzzyMatch = LiveUiFuzzyStringMatcher.Evaluate(actual, Text, CaseSensitive);
+
             return fuzzyMatch.IsMatch
                 ? new LiveUiSelectorMatchResult(
                     true,
@@ -240,11 +242,13 @@ internal sealed class LiveUiSelector
         }
 
         var matchIndex = actual.IndexOf(Text, comparison);
+
         while (matchIndex >= 0)
         {
             var beforeIsBoundary = matchIndex == 0 || !char.IsLetterOrDigit(actual[matchIndex - 1]);
             var afterIndex = matchIndex + Text.Length;
             var afterIsBoundary = afterIndex == actual.Length || !char.IsLetterOrDigit(actual[afterIndex]);
+
             if (beforeIsBoundary && afterIsBoundary)
             {
                 return new LiveUiSelectorMatchResult(true, 0.99, "text:phrase-boundary");
@@ -285,6 +289,7 @@ internal sealed class LiveUiSelector
         }
 
         var comparison = CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
         if (string.Equals(actual, expected, comparison)
             || AndroidResourceIdsAreEquivalent(actual, expected, comparison))
         {
@@ -301,17 +306,18 @@ internal sealed class LiveUiSelector
     {
         var actualResourceName = ReadAndroidResourceName(actual);
         var expectedResourceName = ReadAndroidResourceName(expected);
+
         if (actualResourceName is not null && expectedResourceName is not null)
         {
             return false;
         }
 
         return (actualResourceName is not null
-                && IsUnqualifiedAutomationId(expected)
-                && string.Equals(actualResourceName, expected, comparison))
-               || (expectedResourceName is not null
-                   && IsUnqualifiedAutomationId(actual)
-                   && string.Equals(actual, expectedResourceName, comparison));
+            && IsUnqualifiedAutomationId(expected)
+            && string.Equals(actualResourceName, expected, comparison))
+            || (expectedResourceName is not null
+                && IsUnqualifiedAutomationId(actual)
+                && string.Equals(actual, expectedResourceName, comparison));
     }
 
     private static string? ReadAndroidResourceName(string automationId)
@@ -319,6 +325,7 @@ internal sealed class LiveUiSelector
         const string resourceMarker = ":id/";
         var markerIndex = automationId.IndexOf(resourceMarker, StringComparison.Ordinal);
         var nameIndex = markerIndex + resourceMarker.Length;
+
         return markerIndex > 0 && nameIndex < automationId.Length
             ? automationId[nameIndex..]
             : null;
@@ -326,7 +333,7 @@ internal sealed class LiveUiSelector
 
     private static bool IsUnqualifiedAutomationId(string automationId)
         => !automationId.Contains(':', StringComparison.Ordinal)
-           && !automationId.Contains('/', StringComparison.Ordinal);
+            && !automationId.Contains('/', StringComparison.Ordinal);
 
     private LiveUiStringFieldMatchResult EvaluateAction(
         JsonObject node,
@@ -361,6 +368,7 @@ internal sealed class LiveUiSelector
         }
 
         var comparison = CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
         if (MatchMode == LiveUiStringMatchMode.Exact || !allowFuzzy)
         {
             return string.Equals(actual, expected, comparison)
@@ -376,6 +384,7 @@ internal sealed class LiveUiSelector
         }
 
         var fuzzyMatch = LiveUiFuzzyStringMatcher.Evaluate(actual, expected, CaseSensitive);
+
         return fuzzyMatch.IsMatch
             ? new LiveUiStringFieldMatchResult(
                 true,
@@ -398,8 +407,8 @@ internal sealed class LiveUiSelector
 
     private static string? ReadString(JsonObject? arguments, string propertyName)
         => arguments?[propertyName] is JsonValue value
-           && value.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && value.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
@@ -413,6 +422,7 @@ internal sealed class LiveUiSelector
         LiveUiStringMatchMode fallback)
     {
         var value = ReadString(arguments, "matchMode");
+
         return value?.ToLowerInvariant() switch
         {
             "exact" => LiveUiStringMatchMode.Exact,
@@ -432,33 +442,3 @@ internal sealed class LiveUiSelector
             ? result
             : fallback;
 }
-
-internal enum LiveUiStringMatchMode
-{
-    Exact,
-    Contains,
-    Fuzzy
-}
-
-internal sealed record LiveUiSelectorMatchResult(
-    bool IsMatch,
-    double Score,
-    string Reason)
-{
-    public static LiveUiSelectorMatchResult NoMatch { get; } = new(false, 0, "no-match");
-}
-
-internal sealed record LiveUiStringFieldMatchResult(
-    bool Applies,
-    bool IsMatch,
-    double Score,
-    string Reason)
-{
-    public static LiveUiStringFieldMatchResult NotApplicable { get; } = new(false, true, 1, "not-applicable");
-
-    public static LiveUiStringFieldMatchResult NoMatch { get; } = new(true, false, 0, "no-match");
-}
-
-internal sealed record LiveUiSelectorFieldMatch(
-    string Name,
-    LiveUiStringFieldMatchResult Result);

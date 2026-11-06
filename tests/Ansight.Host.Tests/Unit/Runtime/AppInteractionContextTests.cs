@@ -12,16 +12,19 @@ public sealed class AppInteractionContextTests
         var context = new AppInteractionContext(backend);
         await context.ExecuteAsync(new("ready", "snapshot"));
         backend.Unsettled = true;
+
         var action = await context.ExecuteAsync(new("tap", "tap", 0.5, 0.5));
         Assert.Equal("ui_unsettled", action.Error);
         Assert.True(action.InputSucceeded);
         Assert.NotNull(action.Screenshot);
+
         var blocked = await context.ExecuteAsync(new("blocked", "type", Value: "no"));
         Assert.Equal("ui_unsettled", blocked.Error);
         Assert.Null(blocked.InputSucceeded);
         Assert.NotNull(blocked.Screenshot);
         Assert.Equal(1, backend.InputCount);
         backend.Unsettled = false;
+
         var recovered = await context.ExecuteAsync(new("recovered", "type", Value: "yes"));
         Assert.True(recovered.Succeeded);
         Assert.Equal(2, backend.InputCount);
@@ -33,6 +36,7 @@ public sealed class AppInteractionContextTests
         var backend = new RecordingBackend();
         var session = new AppInteractionContext(backend);
         var ready = await session.ExecuteAsync(new("ready", "snapshot"));
+
         for (var index = 0; index < 20; index++)
         {
             var result = await session.ExecuteAsync(new(index.ToString(), "tap", 0.5, 0.7));
@@ -41,6 +45,7 @@ public sealed class AppInteractionContextTests
             Assert.Equal($"frame-{index + 2}", result.Screenshot!.FrameId);
             Assert.True(result.Timing.TotalMs >= result.Timing.InputMs);
         }
+
         Assert.NotNull(ready.Screenshot);
         Assert.Equal(20, backend.InputCount);
         Assert.Equal(21, backend.CaptureCount);
@@ -70,6 +75,7 @@ public sealed class AppInteractionContextTests
         Assert.Equal("evidence_unavailable", failed.Error);
         Assert.Equal(0, backend.InputCount);
         backend.CaptureFailure = false;
+
         var recovered = await session.ExecuteAsync(new("2", "tap", 0.5, 0.5));
         Assert.True(recovered.Succeeded);
         Assert.Equal(1, backend.InputCount);
@@ -83,10 +89,12 @@ public sealed class AppInteractionContextTests
         var session = new AppInteractionContext(backend);
         await session.ExecuteAsync(new("ready", "snapshot"));
         backend.CaptureFailure = true;
+
         var failed = await session.ExecuteAsync(new("1", "tap", 0.5, 0.5));
         Assert.True(failed.InputSucceeded);
         Assert.False(failed.Succeeded);
         Assert.Null(failed.Screenshot);
+
         var blocked = await session.ExecuteAsync(new("2", "tap", 0.5, 0.5));
         Assert.Null(blocked.InputSucceeded);
         Assert.Equal(1, backend.InputCount);
@@ -157,7 +165,10 @@ public sealed class AppInteractionContextTests
 
         public void EnsureConnected()
         {
-            if (Disconnected) throw new InvalidOperationException("Disconnected.");
+            if (Disconnected)
+            {
+                throw new InvalidOperationException("Disconnected.");
+            }
         }
 
         public async Task<UiInputResult> ExecuteAsync(AppInteractionRequest request, CancellationToken cancellationToken)
@@ -165,21 +176,30 @@ public sealed class AppInteractionContextTests
             InputCount++;
             concurrentInputs++;
             MaximumConcurrentInputs = Math.Max(MaximumConcurrentInputs, concurrentInputs);
-            if (YieldDuringInput) await Task.Yield();
+
+            if (YieldDuringInput)
+            {
+                await Task.Yield();
+            }
+
             concurrentInputs--;
+
             return new(!InputFailure, "test", "Input attempted.");
         }
 
         public Task<AppInteractionScreenshot?> CaptureAsync(string actionId, CancellationToken cancellationToken, bool afterInput = false)
         {
             CaptureCount++;
+
             return Task.FromResult(CaptureFailure ? null : new AppInteractionScreenshot(
                 $"frame-{CaptureCount}", $"/tmp/frame-{CaptureCount}.png", DateTimeOffset.UtcNow, 390, 844,
                 new(Unsettled ? "timed_out" : "stable", 3, 400)));
         }
 
         public void Record(AppInteractionResult result) => Records.Add(result);
+
         public RepositoryTaskCatalog ListTasks() => throw new NotSupportedException();
+
         public Task<RepositoryTaskRunResult> RunTaskAsync(string taskId, JsonObject? input, CancellationToken cancellationToken)
             => throw new NotSupportedException();
     }

@@ -30,6 +30,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         UdpClient udpClient;
+
         try
         {
             udpClient = CreateBoundListener();
@@ -47,17 +48,20 @@ internal sealed class UdpPairingServer : IUdpPairingServer
                 ? warning
                 : $"Unable to start UDP enrollment listener: {ex.Message}";
             runtimeState.SetServerStatus(false, statusMessage);
+
             return;
         }
 
         using (udpClient)
         {
             var requestTasks = new List<Task>();
+
             try
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     UdpReceiveResult receiveResult;
+
                     try
                     {
                         receiveResult = await udpClient.ReceiveAsync(cancellationToken);
@@ -92,6 +96,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
             var response = await TryHandleRequestAsync(
                 receiveResult.RemoteEndPoint,
                 receiveResult.Buffer);
+
             if (response is null)
             {
                 return;
@@ -99,6 +104,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
 
             var responseBytes = JsonSerializer.SerializeToUtf8Bytes(response, JsonUtil.Compact);
             await responseSendGate.WaitAsync();
+
             try
             {
                 await udpClient.SendAsync(
@@ -123,6 +129,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
         byte[] payload)
     {
         EnrollmentConnectRequest? request;
+
         try
         {
             request = JsonSerializer.Deserialize<EnrollmentConnectRequest>(payload, JsonUtil.Compact);
@@ -148,10 +155,11 @@ internal sealed class UdpPairingServer : IUdpPairingServer
             request.DeviceName,
             request.AccessToken);
         DeviceConnectionAuthorization authorization;
+
         if (string.Equals(
-                request.EnrollmentMode,
-                EnrollmentConnectRequest.LocalMode,
-                StringComparison.Ordinal))
+            request.EnrollmentMode,
+            EnrollmentConnectRequest.LocalMode,
+            StringComparison.Ordinal))
         {
             if (!IsLoopback(remoteEndPoint.Address))
             {
@@ -167,9 +175,9 @@ internal sealed class UdpPairingServer : IUdpPairingServer
             }
         }
         else if (string.Equals(
-                     request.EnrollmentMode,
-                     EnrollmentConnectRequest.InviteMode,
-                     StringComparison.Ordinal))
+            request.EnrollmentMode,
+            EnrollmentConnectRequest.InviteMode,
+            StringComparison.Ordinal))
         {
             authorization = pairingCache.AuthorizeConnection(
                 connectionAttempt,
@@ -191,6 +199,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
                 sessionId: string.Empty,
                 authorization.ReasonCode,
                 authorization.ReasonMessage);
+
             return CreateRejectedResponse(
                 request,
                 hostIdentity,
@@ -211,6 +220,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
             sessionId,
             PairingSessionAuthorization.FromGrant(authorization.Grant),
             CancellationToken.None);
+
         if (session is null)
         {
             const string reasonCode = "WebSocketUnavailable";
@@ -223,6 +233,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
                 sessionId,
                 reasonCode,
                 reasonMessage);
+
             return CreateRejectedResponse(request, hostIdentity, reasonCode, reasonMessage);
         }
 
@@ -315,6 +326,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
         if (Socket.OSSupportsIPv6)
         {
             var ipv6Client = new UdpClient(AddressFamily.InterNetworkV6);
+
             try
             {
                 ipv6Client.Client.DualMode = true;
@@ -324,6 +336,7 @@ internal sealed class UdpPairingServer : IUdpPairingServer
                     false);
                 ipv6Client.Client.Bind(
                     new IPEndPoint(IPAddress.IPv6Any, ProtocolDefaults.DiscoveryPort));
+
                 return ipv6Client;
             }
             catch (Exception ex) when (IsUnsupportedIpv6ListenerException(ex))
@@ -339,18 +352,19 @@ internal sealed class UdpPairingServer : IUdpPairingServer
             false);
         ipv4Client.Client.Bind(
             new IPEndPoint(IPAddress.Any, ProtocolDefaults.DiscoveryPort));
+
         return ipv4Client;
     }
 
     private static bool IsUnsupportedIpv6ListenerException(Exception exception)
         => exception is PlatformNotSupportedException
-           || exception is SocketException
-           {
-               SocketErrorCode: SocketError.AddressFamilyNotSupported
-                   or SocketError.AddressNotAvailable
-                   or SocketError.OperationNotSupported
-                   or SocketError.ProtocolNotSupported
-           };
+            || exception is SocketException
+            {
+                SocketErrorCode: SocketError.AddressFamilyNotSupported
+                    or SocketError.AddressNotAvailable
+                    or SocketError.OperationNotSupported
+                    or SocketError.ProtocolNotSupported
+            };
 
     private static bool IsLoopback(IPAddress address)
     {
@@ -360,6 +374,6 @@ internal sealed class UdpPairingServer : IUdpPairingServer
         }
 
         return address.IsIPv4MappedToIPv6
-               && IPAddress.IsLoopback(address.MapToIPv4());
+            && IPAddress.IsLoopback(address.MapToIPv4());
     }
 }

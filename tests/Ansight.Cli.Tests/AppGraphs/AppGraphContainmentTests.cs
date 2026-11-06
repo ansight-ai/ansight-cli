@@ -12,6 +12,7 @@ public sealed class AppGraphContainmentTests
     public void CompilerAndPlannerPreserveFlyoutOwningOneTabbedPage(bool reverseHostOrder)
     {
         var summary = CreateNestedSummary();
+
         if (reverseHostOrder)
         {
             var hosts = summary["navigationHosts"]!.AsArray();
@@ -19,7 +20,9 @@ public sealed class AppGraphContainmentTests
             hosts.RemoveAt(0);
             hosts.Add(first);
         }
+
         Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error), error);
+
         var definition = candidate!.Definition;
         var nodes = definition["nodes"]!.AsArray().OfType<JsonObject>().ToArray();
         Assert.Null(nodes.Single(node => node["name"]!.GetValue<string>() == "Home flyout")["parentScreen"]);
@@ -27,6 +30,7 @@ public sealed class AppGraphContainmentTests
         Assert.Equal("Main tabs", nodes.Single(node => node["name"]!.GetValue<string>() == "Map")["parentScreen"]!.GetValue<string>());
         Assert.Equal("Main tabs", nodes.Single(node => node["name"]!.GetValue<string>() == "Crags")["parentScreen"]!.GetValue<string>());
         Assert.Empty(definition["edges"]!.AsArray());
+
         var detail = new CloudAppGraphDetail(new CloudAppGraphSummary(), new CloudAppGraphVersion { Definition = definition }, []);
         Assert.Empty(AppGraphPlanner.Validate(detail).Errors);
     }
@@ -46,6 +50,7 @@ public sealed class AppGraphContainmentTests
         var summary = CreateNestedSummary();
         var hosts = summary["navigationHosts"]!.AsArray();
         hosts.RemoveAt(1);
+
         var host = hosts[0]!.AsObject();
         host["kind"] = role;
         host["framework"] = framework;
@@ -58,6 +63,7 @@ public sealed class AppGraphContainmentTests
         };
 
         Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error), error);
+
         var detail = new CloudAppGraphDetail(new CloudAppGraphSummary(), new CloudAppGraphVersion { Definition = candidate!.Definition }, []);
         Assert.Empty(AppGraphPlanner.Validate(detail).Errors);
 
@@ -75,17 +81,24 @@ public sealed class AppGraphContainmentTests
         var summary = CreateNestedSummary();
         summary["destinations"]!.AsArray().Add(new JsonObject
         {
-            ["id"] = "panel", ["kind"] = "state", ["name"] = "Panel",
-            ["parentScreen"] = "map", ["purpose"] = "View content."
+            ["id"] = "panel",
+            ["kind"] = "state",
+            ["name"] = "Panel",
+            ["parentScreen"] = "map",
+            ["purpose"] = "View content."
         });
         summary["tabGroups"] = new JsonArray(new JsonObject
         {
-            ["id"] = "panels", ["parentDestinationId"] = "map", ["selectedDestinationId"] = "panel",
+            ["id"] = "panels",
+            ["parentDestinationId"] = "map",
+            ["selectedDestinationId"] = "panel",
             ["tabDestinationIds"] = new JsonArray("panel"),
             ["technology"] = new JsonObject
             {
-                ["framework"] = framework, ["kind"] = technologyKind,
-                ["navigationToolId"] = "", ["structureFingerprint"] = ""
+                ["framework"] = framework,
+                ["kind"] = technologyKind,
+                ["navigationToolId"] = "",
+                ["structureFingerprint"] = ""
             }
         });
         Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out _, out var error), error);
@@ -102,6 +115,7 @@ public sealed class AppGraphContainmentTests
         var summary = CreateNestedSummary();
         var hosts = summary["navigationHosts"]!.AsArray();
         hosts.RemoveAt(1);
+
         var host = hosts[0]!;
         host["kind"] = "shell";
         host["framework"] = framework;
@@ -109,15 +123,19 @@ public sealed class AppGraphContainmentTests
         host["activeChildDestinationId"] = "tabs";
         host["technology"] = new JsonObject
         {
-            ["framework"] = framework, ["kind"] = technologyKind,
-            ["navigationToolId"] = "", ["structureFingerprint"] = ""
+            ["framework"] = framework,
+            ["kind"] = technologyKind,
+            ["navigationToolId"] = "",
+            ["structureFingerprint"] = ""
         };
         Assert.Equal(firstChildCanBeActive, AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out _, out _));
         host["activeChildDestinationId"] = "map";
         Assert.True(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out var candidate, out var error), error);
+
         var compiledHost = Assert.Single(candidate!.Definition["navigationHosts"]!.AsArray())!;
         Assert.Equal("ordered_stack", compiledHost["technology"]!["paradigm"]!["topology"]!.GetValue<string>());
         compiledHost["activeChildDestinationId"] = compiledHost["childDestinationIds"]![0]!.DeepClone();
+
         var detail = new CloudAppGraphDetail(new CloudAppGraphSummary(), new CloudAppGraphVersion { Definition = candidate.Definition }, []);
         Assert.Equal(firstChildCanBeActive, AppGraphPlanner.Validate(detail).Errors.Count == 0);
     }
@@ -126,11 +144,11 @@ public sealed class AppGraphContainmentTests
     public void ContainmentValidationUsesOnlyDestinationInstanceRelations()
     {
         AppGraphContainmentRelation[] relations =
-        [
-            new("window", "presentation"),
+            [
+                new("window", "presentation"),
             new("presentation", "content"),
             new("content", "panel")
-        ];
+            ];
         Assert.Empty(AppGraphContainment.FindErrors(relations));
         Assert.Contains(AppGraphContainment.FindErrors([.. relations, new("panel", "window")]), error => error.Contains("cycle"));
         Assert.Contains(AppGraphContainment.FindErrors([.. relations, new("window", "panel")]), error => error.Contains("multiple direct owners"));
@@ -144,9 +162,22 @@ public sealed class AppGraphContainmentTests
     {
         var summary = CreateNestedSummary();
         var hosts = summary["navigationHosts"]!.AsArray();
-        if (corruption == "self") hosts[0]!["childDestinationIds"]!.AsArray().Add("flyout");
-        if (corruption == "cycle") hosts[1]!["childDestinationIds"]!.AsArray().Add("flyout");
-        if (corruption == "flattened") hosts[0]!["childDestinationIds"]!.AsArray().Add("map");
+
+        if (corruption == "self")
+        {
+            hosts[0]!["childDestinationIds"]!.AsArray().Add("flyout");
+        }
+
+        if (corruption == "cycle")
+        {
+            hosts[1]!["childDestinationIds"]!.AsArray().Add("flyout");
+        }
+
+        if (corruption == "flattened")
+        {
+            hosts[0]!["childDestinationIds"]!.AsArray().Add("map");
+        }
+
         Assert.False(AppGraphExplorationCompiler.TryCompile(summary.ToJsonString(), out _, out var error));
         Assert.Contains(expectedError, error, StringComparison.Ordinal);
     }

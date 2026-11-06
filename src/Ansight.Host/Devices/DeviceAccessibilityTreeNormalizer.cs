@@ -34,6 +34,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         int maxDepth)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         if (source is JsonObject nativeSnapshot
             && nativeSnapshot["elements"] is JsonArray nativeElements)
         {
@@ -50,6 +51,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             JsonObject singleRoot => [singleRoot],
             _ => []
         };
+
         if (sourceRoots.Length == 0)
         {
             throw new InvalidDataException("CoreSimulator accessibility returned no root elements.");
@@ -60,6 +62,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             .Select(ReadAxeFrame)
             .Where(static frame => frame.Width > 0 && frame.Height > 0)
             .ToArray();
+
         if (frames.Length == 0)
         {
             throw new InvalidDataException(
@@ -75,6 +78,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var viewportHeight = rootFrame.Height > 0
             ? rootFrame.Height
             : frames.Max(static frame => frame.Y + frame.Height);
+
         if (!double.IsFinite(viewportWidth) || viewportWidth <= 0
             || !double.IsFinite(viewportHeight) || viewportHeight <= 0)
         {
@@ -102,9 +106,11 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             ReturnedNodeCount = 1
         };
+
         foreach (var sourceRoot in sourceRoots)
         {
             AppendAxeDescendants(sourceRoot, root, semanticDepth: 0, state);
+
             if (state.ReturnedNodeCount >= state.MaxNodes)
             {
                 state.Truncated = true;
@@ -141,6 +147,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     {
         var roots = new JsonArray();
         var ancestors = new List<(int Depth, JsonObject Node)>();
+
         foreach (var element in elements.OfType<JsonObject>())
         {
             var role = ReadAxeString(element, "role") ?? "AXElement";
@@ -167,10 +174,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
                 ["children"] = new JsonArray()
             };
             var depth = Math.Max(0, (int)ReadAxeNumber(element, "depth"));
+
             while (ancestors.Count > 0 && ancestors[^1].Depth >= depth)
             {
                 ancestors.RemoveAt(ancestors.Count - 1);
             }
+
             if (ancestors.Count == 0)
             {
                 roots.Add(node);
@@ -179,6 +188,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             {
                 ((JsonArray)ancestors[^1].Node["children"]!).Add(node);
             }
+
             ancestors.Add((depth, node));
         }
 
@@ -190,9 +200,10 @@ internal static partial class DeviceAccessibilityTreeNormalizer
 
         var normalized = NormalizeIosSimulator(roots, maxNodes, maxDepth);
         normalized["rawNodeCount"] = source["rawNodeCount"]?.DeepClone()
-                                     ?? elements.Count;
+            ?? elements.Count;
         normalized["nativeNodeCount"] = elements.Count;
         normalized["provider"] = "resident-axptranslator";
+
         return normalized;
     }
 
@@ -221,6 +232,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         Func<XElement, double, double, ParsedAccessibilityNode> parser)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
         if (!double.IsFinite(viewportWidth) || viewportWidth <= 0
             || !double.IsFinite(viewportHeight) || viewportHeight <= 0)
         {
@@ -231,7 +243,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
 
         var document = XDocument.Parse(source, LoadOptions.None);
         var sourceRoot = document.Root
-                         ?? throw new InvalidDataException("The device accessibility source has no root element.");
+            ?? throw new InvalidDataException("The device accessibility source has no root element.");
         var typeIds = new Dictionary<string, int>(StringComparer.Ordinal);
         var types = new List<string>();
         var root = new JsonObject
@@ -255,6 +267,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         };
 
         AppendDescendants(sourceRoot, root, semanticDepth: 0, state, includeElement: true);
+
         return new JsonObject
         {
             ["format"] = "ansight.device-accessibility.compact.v2",
@@ -293,12 +306,14 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         if (state.ReturnedNodeCount >= state.MaxNodes)
         {
             state.Truncated = true;
+
             return;
         }
 
         var parsed = state.Parser(element, state.ViewportWidth, state.ViewportHeight);
         var parentForChildren = semanticParent;
         var childDepth = semanticDepth;
+
         if (includeElement && parsed.IsMeaningful && semanticDepth < state.MaxDepth)
         {
             var node = ToJson(parsed, state.TypeIds, state.Types);
@@ -311,6 +326,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         foreach (var child in element.Elements())
         {
             AppendDescendants(child, parentForChildren, childDepth, state, includeElement: true);
+
             if (state.ReturnedNodeCount >= state.MaxNodes)
             {
                 state.Truncated = child.ElementsAfterSelf().Any() || state.Truncated;
@@ -321,17 +337,17 @@ internal static partial class DeviceAccessibilityTreeNormalizer
 
     private static bool IsSdkInjectedAndroidOverlay(XElement element)
         => string.Equals(
-               Attribute(element, "class"),
-               AndroidUiEvidenceOverlayType,
-               StringComparison.Ordinal)
-           || string.Equals(
-               Attribute(element, "resource-id"),
-               SdkOverlayAutomationId,
-               StringComparison.Ordinal)
-           || string.Equals(
-               Attribute(element, "content-desc"),
-               SdkOverlayAutomationId,
-               StringComparison.Ordinal);
+            Attribute(element, "class"),
+            AndroidUiEvidenceOverlayType,
+            StringComparison.Ordinal)
+            || string.Equals(
+                Attribute(element, "resource-id"),
+                SdkOverlayAutomationId,
+                StringComparison.Ordinal)
+            || string.Equals(
+                Attribute(element, "content-desc"),
+                SdkOverlayAutomationId,
+                StringComparison.Ordinal);
 
     private static void AppendAxeDescendants(
         JsonObject element,
@@ -342,12 +358,14 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         if (state.ReturnedNodeCount >= state.MaxNodes)
         {
             state.Truncated = true;
+
             return;
         }
 
         var parsed = ParseAxe(element, state.ViewportWidth, state.ViewportHeight);
         var parentForChildren = semanticParent;
         var childDepth = semanticDepth;
+
         if (parsed.IsMeaningful && semanticDepth < state.MaxDepth)
         {
             var node = ToJson(parsed, state.TypeIds, state.Types);
@@ -360,6 +378,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         foreach (var child in ReadAxeChildren(element))
         {
             AppendAxeDescendants(child, parentForChildren, childDepth, state);
+
             if (state.ReturnedNodeCount >= state.MaxNodes)
             {
                 state.Truncated = true;
@@ -384,7 +403,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         AddString(node, "automationId", parsed.AutomationId);
         AddString(node, "text", parsed.Text);
         AddString(node, "label", parsed.Label);
-        if (parsed.Value is not null) node["value"] = parsed.Value;
+
+        if (parsed.Value is not null)
+        {
+            node["value"] = parsed.Value;
+        }
+
         if (parsed.Actions.Count > 0)
         {
             node["supportedActions"] = new JsonArray(
@@ -395,10 +419,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             node["selected"] = parsed.Selected.Value;
         }
+
         if (parsed.Checked.HasValue)
         {
             node["checked"] = parsed.Checked.Value;
         }
+
         if (parsed.Focused.HasValue)
         {
             node["focused"] = parsed.Focused.Value;
@@ -425,14 +451,15 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var name = Attribute(element, "identifier") ?? Attribute(element, "name");
         var value = Attribute(element, "value");
         var isRoot = type.Contains("Application", StringComparison.OrdinalIgnoreCase)
-                     || type.Contains("Window", StringComparison.OrdinalIgnoreCase);
+            || type.Contains("Window", StringComparison.OrdinalIgnoreCase);
         var meaningful = visible
-                         && width > 0
-                         && height > 0
-                         && (isRoot
-                             || actions.Count > 0
-                             || BooleanAttribute(element, "accessible", fallback: false)
-                             || FirstNonEmpty(label, name, value) is not null);
+            && width > 0
+            && height > 0
+            && (isRoot
+                || actions.Count > 0
+                || BooleanAttribute(element, "accessible", fallback: false)
+                || FirstNonEmpty(label, name, value) is not null);
+
         return new ParsedAccessibilityNode(
             type,
             role,
@@ -471,17 +498,18 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var inputValue = role == "textbox"
             ? BooleanAttribute(element, "password", fallback: false) ? null
                 : BooleanAttribute(element, "showing-hint", fallback: false)
-                  || BooleanAttribute(element, "showing-hint-text", fallback: false) ? string.Empty
-                : element.Attribute("text")?.Value
+                    || BooleanAttribute(element, "showing-hint-text", fallback: false) ? string.Empty
+                    : element.Attribute("text")?.Value
             : text;
         var label = Attribute(element, "content-desc");
         var automationId = Attribute(element, "resource-id");
         var meaningful = visible
-                         && bounds.Width > 0
-                         && bounds.Height > 0
-                         && (actions.Count > 0
-                             || checkable
-                             || FirstNonEmpty(text, label, automationId) is not null);
+            && bounds.Width > 0
+            && bounds.Height > 0
+            && (actions.Count > 0
+                || checkable
+                || FirstNonEmpty(text, label, automationId) is not null);
+
         return new ParsedAccessibilityNode(
             type,
             role,
@@ -508,30 +536,31 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         double viewportHeight)
     {
         var type = ReadAxeString(element, "type")
-                   ?? ReadAxeString(element, "role")
-                   ?? "Element";
+            ?? ReadAxeString(element, "role")
+            ?? "Element";
         var sourceRole = ReadAxeString(element, "role")
-                         ?? ReadAxeString(element, "role_description")
-                         ?? string.Empty;
+            ?? ReadAxeString(element, "role_description")
+            ?? string.Empty;
         var role = AxeRole(type, sourceRole);
         var frame = ReadAxeFrame(element);
         var enabled = ReadAxeBoolean(element, "enabled") ?? true;
         var visible = ReadAxeBoolean(element, "visible")
-                      ?? !(ReadAxeBoolean(element, "hidden") ?? false);
+            ?? !(ReadAxeBoolean(element, "hidden") ?? false);
         var label = ReadAxeString(element, "AXLabel")
-                    ?? ReadAxeString(element, "title");
+            ?? ReadAxeString(element, "title");
         var value = ReadAxeScalar(element, "AXValue");
         var automationId = ReadAxeString(element, "AXUniqueId")
-                           ?? ReadAxeString(element, "AXIdentifier");
+            ?? ReadAxeString(element, "AXIdentifier");
         var customActions = ReadAxeCustomActions(element);
         var actions = AxeActions(role, enabled, customActions.Count > 0);
         var isRoot = role == "application" || type.Contains("Window", StringComparison.OrdinalIgnoreCase);
         var meaningful = visible
-                         && frame.Width > 0
-                         && frame.Height > 0
-                         && (isRoot
-                             || actions.Count > 0
-                             || FirstNonEmpty(label, value, automationId) is not null);
+            && frame.Width > 0
+            && frame.Height > 0
+            && (isRoot
+                || actions.Count > 0
+                || FirstNonEmpty(label, value, automationId) is not null);
+
         return new ParsedAccessibilityNode(
             type,
             role,
@@ -563,10 +592,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return ["tap", "typeText", "focus"];
         }
+
         if (role == "scrollview")
         {
             return ["scroll", "swipe"];
         }
+
         if (role is "button" or "switch" or "checkbox" or "radio" or "link" or "tab"
             || type.Contains("Key", StringComparison.OrdinalIgnoreCase))
         {
@@ -588,18 +619,22 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         }
 
         var actions = new List<string>();
+
         if (clickable || role is "button" or "switch" or "checkbox" or "radio")
         {
             actions.Add("tap");
         }
+
         if (role == "textbox")
         {
             actions.AddRange(["tap", "typeText", "focus"]);
         }
+
         if (scrollable)
         {
             actions.AddRange(["scroll", "swipe"]);
         }
+
         return actions.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
@@ -617,14 +652,17 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return ["tap", "typeText", "focus"];
         }
+
         if (role == "scrollview")
         {
             return ["scroll", "swipe"];
         }
+
         if (role == "slider")
         {
             return ["tap", "adjust"];
         }
+
         if (role is "button" or "switch" or "checkbox" or "radio" or "link" or "tab" or "cell"
             || hasCustomActions)
         {
@@ -637,41 +675,113 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     private static string IosRole(string type)
     {
         var normalized = type.ToLowerInvariant();
+
         if (normalized.Contains("textfield", StringComparison.Ordinal)
             || normalized.Contains("textview", StringComparison.Ordinal)
             || normalized.Contains("searchfield", StringComparison.Ordinal))
         {
             return "textbox";
         }
+
         if (normalized.Contains("scrollview", StringComparison.Ordinal)
             || normalized.Contains("collectionview", StringComparison.Ordinal)
             || normalized.Contains("table", StringComparison.Ordinal))
         {
             return "scrollview";
         }
-        if (normalized.Contains("button", StringComparison.Ordinal)) return "button";
-        if (normalized.Contains("switch", StringComparison.Ordinal)) return "switch";
-        if (normalized.Contains("checkbox", StringComparison.Ordinal)) return "checkbox";
-        if (normalized.Contains("link", StringComparison.Ordinal)) return "link";
-        if (normalized.Contains("tab", StringComparison.Ordinal)) return "tab";
-        if (normalized.Contains("cell", StringComparison.Ordinal)) return "cell";
-        if (normalized.Contains("image", StringComparison.Ordinal)) return "image";
-        if (normalized.Contains("statictext", StringComparison.Ordinal)) return "text";
-        if (normalized.Contains("application", StringComparison.Ordinal)) return "application";
+
+        if (normalized.Contains("button", StringComparison.Ordinal))
+        {
+            return "button";
+        }
+
+        if (normalized.Contains("switch", StringComparison.Ordinal))
+        {
+            return "switch";
+        }
+
+        if (normalized.Contains("checkbox", StringComparison.Ordinal))
+        {
+            return "checkbox";
+        }
+
+        if (normalized.Contains("link", StringComparison.Ordinal))
+        {
+            return "link";
+        }
+
+        if (normalized.Contains("tab", StringComparison.Ordinal))
+        {
+            return "tab";
+        }
+
+        if (normalized.Contains("cell", StringComparison.Ordinal))
+        {
+            return "cell";
+        }
+
+        if (normalized.Contains("image", StringComparison.Ordinal))
+        {
+            return "image";
+        }
+
+        if (normalized.Contains("statictext", StringComparison.Ordinal))
+        {
+            return "text";
+        }
+
+        if (normalized.Contains("application", StringComparison.Ordinal))
+        {
+            return "application";
+        }
+
         return "view";
     }
 
     private static string AndroidRole(string type, bool checkable, bool scrollable)
     {
         var normalized = type.ToLowerInvariant();
-        if (normalized.Contains("edittext", StringComparison.Ordinal)) return "textbox";
-        if (scrollable) return "scrollview";
-        if (normalized.Contains("button", StringComparison.Ordinal)) return "button";
-        if (normalized.Contains("switch", StringComparison.Ordinal)) return "switch";
-        if (normalized.Contains("radiobutton", StringComparison.Ordinal)) return "radio";
-        if (checkable || normalized.Contains("checkbox", StringComparison.Ordinal)) return "checkbox";
-        if (normalized.Contains("image", StringComparison.Ordinal)) return "image";
-        if (normalized.Contains("text", StringComparison.Ordinal)) return "text";
+
+        if (normalized.Contains("edittext", StringComparison.Ordinal))
+        {
+            return "textbox";
+        }
+
+        if (scrollable)
+        {
+            return "scrollview";
+        }
+
+        if (normalized.Contains("button", StringComparison.Ordinal))
+        {
+            return "button";
+        }
+
+        if (normalized.Contains("switch", StringComparison.Ordinal))
+        {
+            return "switch";
+        }
+
+        if (normalized.Contains("radiobutton", StringComparison.Ordinal))
+        {
+            return "radio";
+        }
+
+        if (checkable || normalized.Contains("checkbox", StringComparison.Ordinal))
+        {
+            return "checkbox";
+        }
+
+        if (normalized.Contains("image", StringComparison.Ordinal))
+        {
+            return "image";
+        }
+
+        if (normalized.Contains("text", StringComparison.Ordinal))
+        {
+            return "text";
+        }
+
         return "view";
     }
 
@@ -681,8 +791,8 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     private static bool IsIosKeyboardElement(JsonObject element)
         => IsIosKeyboardType(
             ReadAxeString(element, "type")
-            ?? ReadAxeString(element, "role")
-            ?? ReadAxeString(element, "role_description"));
+                ?? ReadAxeString(element, "role")
+                ?? ReadAxeString(element, "role_description"));
 
     private static bool IsIosKeyboardType(string? value)
         => value?.Contains("keyboard", StringComparison.OrdinalIgnoreCase) == true;
@@ -692,10 +802,11 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var packageName = Attribute(element, "package");
         var resourceId = Attribute(element, "resource-id");
         var type = Attribute(element, "class");
+
         return ContainsAndroidKeyboardMarker(packageName)
-               || ContainsAndroidKeyboardMarker(resourceId)
-               || type?.Contains("inputmethodservice.Keyboard", StringComparison.OrdinalIgnoreCase) == true
-               || type?.Contains("KeyboardView", StringComparison.OrdinalIgnoreCase) == true;
+            || ContainsAndroidKeyboardMarker(resourceId)
+            || type?.Contains("inputmethodservice.Keyboard", StringComparison.OrdinalIgnoreCase) == true
+            || type?.Contains("KeyboardView", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static bool ContainsAndroidKeyboardMarker(string? value)
@@ -706,15 +817,16 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         }
 
         return value.Contains("inputmethod", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("keyboard", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("honeyboard", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("swiftkey", StringComparison.OrdinalIgnoreCase)
-               || value.Contains("touchtype", StringComparison.OrdinalIgnoreCase);
+            || value.Contains("keyboard", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("honeyboard", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("swiftkey", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("touchtype", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string AxeRole(string type, string role)
     {
         var normalized = $"{type} {role}".ToLowerInvariant();
+
         if (normalized.Contains("textfield", StringComparison.Ordinal)
             || normalized.Contains("text field", StringComparison.Ordinal)
             || normalized.Contains("textarea", StringComparison.Ordinal)
@@ -725,33 +837,84 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return "textbox";
         }
+
         if (normalized.Contains("scroll", StringComparison.Ordinal)
             || normalized.Contains("collection", StringComparison.Ordinal)
             || normalized.Contains("table", StringComparison.Ordinal))
         {
             return "scrollview";
         }
-        if (normalized.Contains("button", StringComparison.Ordinal)) return "button";
+
+        if (normalized.Contains("button", StringComparison.Ordinal))
+        {
+            return "button";
+        }
+
         if (normalized.Contains("switch", StringComparison.Ordinal)
-            || normalized.Contains("toggle", StringComparison.Ordinal)) return "switch";
-        if (normalized.Contains("checkbox", StringComparison.Ordinal)) return "checkbox";
-        if (normalized.Contains("radio", StringComparison.Ordinal)) return "radio";
-        if (normalized.Contains("link", StringComparison.Ordinal)) return "link";
-        if (normalized.Contains("tab", StringComparison.Ordinal)) return "tab";
-        if (normalized.Contains("slider", StringComparison.Ordinal)) return "slider";
-        if (normalized.Contains("cell", StringComparison.Ordinal)) return "cell";
+            || normalized.Contains("toggle", StringComparison.Ordinal))
+        {
+            return "switch";
+        }
+
+        if (normalized.Contains("checkbox", StringComparison.Ordinal))
+        {
+            return "checkbox";
+        }
+
+        if (normalized.Contains("radio", StringComparison.Ordinal))
+        {
+            return "radio";
+        }
+
+        if (normalized.Contains("link", StringComparison.Ordinal))
+        {
+            return "link";
+        }
+
+        if (normalized.Contains("tab", StringComparison.Ordinal))
+        {
+            return "tab";
+        }
+
+        if (normalized.Contains("slider", StringComparison.Ordinal))
+        {
+            return "slider";
+        }
+
+        if (normalized.Contains("cell", StringComparison.Ordinal))
+        {
+            return "cell";
+        }
+
         if (normalized.Contains("menuitem", StringComparison.Ordinal)
-            || normalized.Contains("menu item", StringComparison.Ordinal)) return "button";
-        if (normalized.Contains("image", StringComparison.Ordinal)) return "image";
+            || normalized.Contains("menu item", StringComparison.Ordinal))
+        {
+            return "button";
+        }
+
+        if (normalized.Contains("image", StringComparison.Ordinal))
+        {
+            return "image";
+        }
+
         if (normalized.Contains("statictext", StringComparison.Ordinal)
-            || normalized.Contains("static text", StringComparison.Ordinal)) return "text";
-        if (normalized.Contains("application", StringComparison.Ordinal)) return "application";
+            || normalized.Contains("static text", StringComparison.Ordinal))
+        {
+            return "text";
+        }
+
+        if (normalized.Contains("application", StringComparison.Ordinal))
+        {
+            return "application";
+        }
+
         return "view";
     }
 
     private static IEnumerable<JsonObject> EnumerateAxeNodes(JsonObject root)
     {
         yield return root;
+
         foreach (var child in ReadAxeChildren(root))
         {
             foreach (var descendant in EnumerateAxeNodes(child))
@@ -771,14 +934,15 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         if (element["frame"] is JsonObject frame)
         {
             return (
-                ReadAxeNumber(frame, "x"),
-                ReadAxeNumber(frame, "y"),
-                ReadAxeNumber(frame, "width"),
-                ReadAxeNumber(frame, "height"));
+                        ReadAxeNumber(frame, "x"),
+                        ReadAxeNumber(frame, "y"),
+                        ReadAxeNumber(frame, "width"),
+                        ReadAxeNumber(frame, "height"));
         }
 
         var serializedFrame = ReadAxeString(element, "AXFrame");
         var match = serializedFrame is null ? Match.Empty : AxeFramePattern().Match(serializedFrame);
+
         if (!match.Success)
         {
             return default;
@@ -800,12 +964,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
 
         return actions
             .Select(action => action switch
-            {
-                JsonValue => ReadAxeScalar(action),
-                JsonObject value => ReadAxeString(value, "name")
-                                    ?? ReadAxeString(value, "label"),
-                _ => null
-            })
+{
+    JsonValue => ReadAxeScalar(action),
+    JsonObject value => ReadAxeString(value, "name")
+        ?? ReadAxeString(value, "label"),
+    _ => null
+})
             .Where(static action => !string.IsNullOrWhiteSpace(action))
             .Select(static action => action!)
             .ToArray();
@@ -823,14 +987,17 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return null;
         }
+
         if (scalar.TryGetValue<string>(out var text))
         {
             return FirstNonEmpty(text);
         }
+
         if (scalar.TryGetValue<double>(out var number))
         {
             return number.ToString(CultureInfo.InvariantCulture);
         }
+
         if (scalar.TryGetValue<bool>(out var boolean))
         {
             return boolean ? "true" : "false";
@@ -845,10 +1012,12 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return null;
         }
+
         if (value.TryGetValue<bool>(out var boolean))
         {
             return boolean;
         }
+
         return value.TryGetValue<string>(out var text) && bool.TryParse(text, out boolean)
             ? boolean
             : null;
@@ -860,12 +1029,14 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         {
             return 0;
         }
+
         if (value.TryGetValue<double>(out var number))
         {
             return number;
         }
+
         return value.TryGetValue<string>(out var text)
-               && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
+            && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
             ? number
             : 0;
     }
@@ -878,6 +1049,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     private static (double X, double Y, double Width, double Height) ParseAndroidBounds(string? value)
     {
         var match = value is null ? Match.Empty : AndroidBoundsPattern().Match(value);
+
         if (!match.Success
             || !double.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var left)
             || !double.TryParse(match.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var top)
@@ -903,6 +1075,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         var created = types.Count;
         typeIds[type] = created;
         types.Add(type);
+
         return created;
     }
 
@@ -956,40 +1129,61 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     [GeneratedRegex(@"\{\{\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\}\s*,\s*\{\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\}\}", RegexOptions.CultureInvariant)]
     private static partial Regex AxeFramePattern();
 
-    private sealed class NormalizationState(
-        int maxNodes,
-        int maxDepth,
-        Dictionary<string, int> typeIds,
-        List<string> types,
-        Func<XElement, double, double, ParsedAccessibilityNode> parser,
-        double viewportWidth,
-        double viewportHeight)
+    private sealed class NormalizationState
     {
-        public int MaxNodes { get; } = maxNodes;
-        public int MaxDepth { get; } = maxDepth;
-        public Dictionary<string, int> TypeIds { get; } = typeIds;
-        public List<string> Types { get; } = types;
-        public Func<XElement, double, double, ParsedAccessibilityNode> Parser { get; } = parser;
-        public double ViewportWidth { get; } = viewportWidth;
-        public double ViewportHeight { get; } = viewportHeight;
+        public NormalizationState(
+            int maxNodes,
+            int maxDepth,
+            Dictionary<string, int> typeIds,
+            List<string> types,
+            Func<XElement, double, double, ParsedAccessibilityNode> parser,
+            double viewportWidth,
+            double viewportHeight)
+        {
+            this.MaxNodes = maxNodes;
+            this.MaxDepth = maxDepth;
+            this.TypeIds = typeIds;
+            this.Types = types;
+            this.Parser = parser;
+            this.ViewportWidth = viewportWidth;
+            this.ViewportHeight = viewportHeight;
+        }
+
+        public int MaxNodes { get; }
+        public int MaxDepth { get; }
+        public Dictionary<string, int> TypeIds { get; }
+        public List<string> Types { get; }
+        public Func<XElement, double, double, ParsedAccessibilityNode> Parser { get; }
+        public double ViewportWidth { get; }
+        public double ViewportHeight { get; }
         public int ReturnedNodeCount { get; set; }
         public bool Truncated { get; set; }
     }
 
-    private sealed class AxeNormalizationState(
-        int maxNodes,
-        int maxDepth,
-        Dictionary<string, int> typeIds,
-        List<string> types,
-        double viewportWidth,
-        double viewportHeight)
+    private sealed class AxeNormalizationState
     {
-        public int MaxNodes { get; } = maxNodes;
-        public int MaxDepth { get; } = maxDepth;
-        public Dictionary<string, int> TypeIds { get; } = typeIds;
-        public List<string> Types { get; } = types;
-        public double ViewportWidth { get; } = viewportWidth;
-        public double ViewportHeight { get; } = viewportHeight;
+        public AxeNormalizationState(
+            int maxNodes,
+            int maxDepth,
+            Dictionary<string, int> typeIds,
+            List<string> types,
+            double viewportWidth,
+            double viewportHeight)
+        {
+            this.MaxNodes = maxNodes;
+            this.MaxDepth = maxDepth;
+            this.TypeIds = typeIds;
+            this.Types = types;
+            this.ViewportWidth = viewportWidth;
+            this.ViewportHeight = viewportHeight;
+        }
+
+        public int MaxNodes { get; }
+        public int MaxDepth { get; }
+        public Dictionary<string, int> TypeIds { get; }
+        public List<string> Types { get; }
+        public double ViewportWidth { get; }
+        public double ViewportHeight { get; }
         public int ReturnedNodeCount { get; set; }
         public bool Truncated { get; set; }
     }

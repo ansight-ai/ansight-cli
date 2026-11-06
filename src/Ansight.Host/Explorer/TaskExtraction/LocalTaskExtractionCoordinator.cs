@@ -72,9 +72,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         var isLive = runtime.IsSessionLive(normalizedSessionId);
         AppSessionSnapshot? session;
+
         if (!runtime.Sessions.TryGetSnapshot(normalizedSessionId, out session) || session is null)
         {
             session = await runtime.Sessions.LoadSnapshotAsync(normalizedSessionId, cancellationToken: cancellationToken)
@@ -98,8 +100,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var catalog = isLive && session.CaptureSource != WorkspaceExecutionModes.Device
             ? await CaptureCurrentAppToolCatalogAsync(normalizedSessionId, cancellationToken).ConfigureAwait(false)
-              ?? session.AppToolCatalog
+                ?? session.AppToolCatalog
             : session.AppToolCatalog;
+
         if (catalog is null)
         {
             return new LocalTaskAuthoringReferenceCatalog(
@@ -112,8 +115,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 session.CaptureSource == WorkspaceExecutionModes.Device
                     ? "External capture supports host tools and portable tasks. " + ExecutionCapabilities.SdkSetupMessage
                     : isLive
-                    ? "The connected app has not published a usable tool catalog."
-                    : "This recording predates captured app-tool catalogs.");
+                        ? "The connected app has not published a usable tool catalog."
+                        : "This recording predates captured app-tool catalogs.");
         }
 
         return new LocalTaskAuthoringReferenceCatalog(
@@ -134,6 +137,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var toolResponse = await runtime.AppTools.QueryForTaskAuthoringAsync(sessionId, cancellationToken)
             .ConfigureAwait(false);
+
         if (!toolResponse.Success
             || toolResponse.Envelope?.Payload is not JsonObject toolCatalog)
         {
@@ -141,14 +145,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         JsonObject? artifactCatalog = null;
+
         if (HasExecutableTool(toolCatalog, "artifacts.query"))
         {
             var artifactResponse = await runtime.AppTools.CallForTaskAuthoringAsync(
-                    sessionId,
-                    "artifacts.query",
-                    new JsonObject(),
-                    cancellationToken)
+                sessionId,
+                "artifacts.query",
+                new JsonObject(),
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (artifactResponse.Success
                 && artifactResponse.Envelope is not null
                 && !string.Equals(artifactResponse.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal)
@@ -164,6 +170,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             toolCatalog.DeepClone().AsObject(),
             artifactCatalog);
         runtime.SessionEditing.SetAppToolCatalog(sessionId, snapshot);
+
         return snapshot;
     }
 
@@ -172,17 +179,20 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var references = new List<LocalTaskAuthoringReference>();
         var seenMentions = new HashSet<string>(StringComparer.Ordinal);
+
         if (catalog.ToolCatalog["tools"] is JsonArray tools)
         {
             foreach (var tool in tools.OfType<JsonObject>())
             {
                 var id = ReadOptionalString(tool, "id");
+
                 if (id is null || !ReadOptionalBoolean(tool, "executable", fallback: true))
                 {
                     continue;
                 }
 
                 var mention = $"@tool:{id}";
+
                 if (!seenMentions.Add(mention))
                 {
                     continue;
@@ -193,8 +203,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     mention,
                     id,
                     ReadOptionalString(tool, "title")
-                    ?? ReadOptionalString(tool, "name")
-                    ?? id,
+                        ?? ReadOptionalString(tool, "name")
+                        ?? id,
                     ReadOptionalString(tool, "description") ?? "App-published device tool.",
                     ReadOptionalString(tool, "policy"),
                     null,
@@ -203,6 +213,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         AddArtifactReferences(catalog.ArtifactCatalog, references, seenMentions);
+
         return references
             .OrderBy(static reference => reference.Kind, StringComparer.Ordinal)
             .ThenBy(static reference => reference.Name, StringComparer.OrdinalIgnoreCase)
@@ -216,6 +227,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         ISet<string> seenMentions)
     {
         var result = catalog?["result"] ?? catalog;
+
         if (result is not JsonObject resultObject)
         {
             return;
@@ -226,7 +238,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             foreach (var provider in providers.OfType<JsonObject>())
             {
                 var providerId = ReadOptionalString(provider, "providerId")
-                                 ?? ReadOptionalString(provider, "id");
+                    ?? ReadOptionalString(provider, "id");
+
                 if (providerId is null)
                 {
                     continue;
@@ -263,14 +276,17 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             var providerId = ReadOptionalString(artifact, "providerId") ?? inheritedProviderId;
             var artifactId = ReadOptionalString(artifact, "artifactId")
-                             ?? ReadOptionalString(artifact, "id");
+                ?? ReadOptionalString(artifact, "id");
+
             if (providerId is null || artifactId is null)
             {
                 continue;
             }
 
             AddArtifactProviderReference(providerId, artifact, references, seenMentions);
+
             var mention = $"@artifact:{providerId}/{artifactId}";
+
             if (!seenMentions.Add(mention))
             {
                 continue;
@@ -281,8 +297,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 mention,
                 artifactId,
                 ReadOptionalString(artifact, "name")
-                ?? ReadOptionalString(artifact, "title")
-                ?? artifactId,
+                    ?? ReadOptionalString(artifact, "title")
+                    ?? artifactId,
                 ReadOptionalString(artifact, "description") ?? "Artifact published by the connected app.",
                 ReadOptionalString(artifact, "policy"),
                 providerId,
@@ -297,6 +313,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         ISet<string> seenMentions)
     {
         var mention = $"@artifact-provider:{providerId}";
+
         if (!seenMentions.Add(mention))
         {
             return;
@@ -307,11 +324,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             mention,
             providerId,
             ReadOptionalString(source, "providerName")
-            ?? ReadOptionalString(source, "name")
-            ?? providerId,
+                ?? ReadOptionalString(source, "name")
+                ?? providerId,
             ReadOptionalString(source, "providerDescription")
-            ?? ReadOptionalString(source, "description")
-            ?? "App-published artifact provider.",
+                ?? ReadOptionalString(source, "description")
+                ?? "App-published artifact provider.",
             null,
             providerId,
             null));
@@ -319,9 +336,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
     private static bool HasExecutableTool(JsonObject catalog, string toolId)
         => catalog["tools"] is JsonArray tools
-           && tools.OfType<JsonObject>().Any(tool =>
+            && tools.OfType<JsonObject>().Any(tool =>
                string.Equals(ReadOptionalString(tool, "id"), toolId, StringComparison.Ordinal)
-               && ReadOptionalBoolean(tool, "executable", fallback: true));
+                   && ReadOptionalBoolean(tool, "executable", fallback: true));
 
     private static bool ReadOptionalBoolean(JsonObject source, string propertyName, bool fallback)
         => source[propertyName] is JsonValue value && value.TryGetValue<bool>(out var result)
@@ -342,6 +359,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     public LocalTaskExtractionSnapshot? Get(string extractionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
+
         lock (gate)
         {
             return extractions.GetValueOrDefault(extractionId.Trim())?.Snapshot();
@@ -354,6 +372,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             var extraction = extractions.GetValueOrDefault(extractionId)
                 ?? throw new InvalidDataException("The task extraction is unavailable.");
+
             return (extraction.WorkTask ?? Task.CompletedTask).WaitAsync(cancellationToken);
         }
     }
@@ -368,12 +387,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             candidate.SessionId,
             request.SessionId.Trim(),
             StringComparison.Ordinal));
+
         if (session is null)
         {
             throw new InvalidDataException($"Session '{request.SessionId.Trim()}' was not found.");
         }
 
         var app = runtime.Apps.Get(session.AppId);
+
         if (app is null || string.IsNullOrWhiteSpace(app.CodebasePath))
         {
             throw new InvalidDataException(
@@ -381,10 +402,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var mode = NormalizeMode(request.Mode);
+
         if (!string.IsNullOrWhiteSpace(request.ReplaceExtractionId))
         {
             var previous = Get(request.ReplaceExtractionId)
                 ?? throw new InvalidDataException("The draft to regenerate was not found.");
+
             if (previous.SessionId != session.SessionId
                 || previous.AppId != session.AppId
                 || previous.StartUtc != request.StartUtc.ToUniversalTime()
@@ -396,6 +419,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 throw new InvalidDataException("Only an uncommitted draft from this selected period can be regenerated.");
             }
         }
+
         var extraction = new ActiveTaskExtraction(
             Guid.CreateVersion7().ToString("N"),
             session.SessionId,
@@ -414,6 +438,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             request.TrimToTechnology,
             request.IncludeOnlyNecessaryFeatures,
             runtime.FeatureLifetime);
+
         lock (gate)
         {
             extractions[extraction.ExtractionId] = extraction;
@@ -421,6 +446,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         extraction.WorkTask = RunExtractionAsync(extraction, request.ReplaceExtractionId);
+
         return extraction.Snapshot();
     }
 
@@ -430,6 +456,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         ArgumentNullException.ThrowIfNull(snapshots);
         ObjectDisposedException.ThrowIf(disposed, this);
+
         if (snapshots.Count is < 1 or > MaximumRetainedExtractions
             || snapshots.Select(static item => item.ExtractionId).Distinct(StringComparer.Ordinal).Count() != snapshots.Count)
         {
@@ -437,6 +464,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var restored = new List<ActiveTaskExtraction>(snapshots.Count);
+
         try
         {
             foreach (var item in snapshots)
@@ -452,6 +480,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 }
 
                 var app = runtime.Apps.Get(item.AppId);
+
                 if (app is null || string.IsNullOrWhiteSpace(app.CodebasePath)
                     || !string.Equals(Path.GetFullPath(app.CodebasePath), Path.GetFullPath(item.WorkspacePath), StringComparison.Ordinal))
                 {
@@ -461,6 +490,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 var session = await runtime.Sessions.LoadSnapshotAsync(item.SessionId, cancellationToken: cancellationToken)
                     .ConfigureAwait(false)
                     ?? throw new InvalidDataException($"Session '{item.SessionId}' was not found.");
+
                 if (!string.Equals(session.AppId, item.AppId, StringComparison.Ordinal))
                 {
                     throw new InvalidDataException("The draft session belongs to another app.");
@@ -468,6 +498,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
                 var expectedRoot = Path.GetFullPath(Path.Combine(runtime.BaseFolderPath, "task-extraction-drafts", item.ExtractionId));
                 var sourcePath = Path.GetFullPath(item.Draft.SourcePath);
+
                 if (!string.Equals(Path.GetFullPath(item.Draft.DraftRootPath), expectedRoot, StringComparison.Ordinal)
                     || !sourcePath.StartsWith(expectedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                     || !File.Exists(sourcePath)
@@ -501,12 +532,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("One or more task drafts are already loaded.");
                 }
+
                 foreach (var item in restored)
                 {
                     extractions.Add(item.ExtractionId, item);
                 }
+
                 PruneCompletedExtractions();
             }
+
             return restored.Select(static item => item.Snapshot()).ToArray();
         }
         catch
@@ -515,6 +549,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 item.Dispose();
             }
+
             throw;
         }
     }
@@ -523,7 +558,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
         ArgumentNullException.ThrowIfNull(request);
+
         ActiveTaskExtraction? extraction;
+
         lock (gate)
         {
             extraction = extractions.GetValueOrDefault(extractionId.Trim());
@@ -536,24 +573,45 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var testCancellation = extraction.BeginTest(request.SessionId);
         extraction.TestTask = RunTestAsync(extraction, request, testCancellation);
+
         return extraction.Snapshot();
     }
 
     public async Task<LocalTaskExtractionSnapshot?> CancelTestAsync(string extractionId)
     {
         ActiveTaskExtraction? extraction;
-        lock (gate) extraction = extractions.GetValueOrDefault(extractionId.Trim());
-        if (extraction is null) return null;
+
+        lock (gate)
+        {
+            extraction = extractions.GetValueOrDefault(extractionId.Trim());
+        }
+
+        if (extraction is null)
+        {
+            return null;
+        }
+
         await extraction.CancelTestAsync().ConfigureAwait(false);
+
         return extraction.Snapshot();
     }
 
     public LocalTaskExtractionSnapshot? ClearTestResult(string extractionId)
     {
         ActiveTaskExtraction? extraction;
-        lock (gate) extraction = extractions.GetValueOrDefault(extractionId.Trim());
-        if (extraction is null) return null;
+
+        lock (gate)
+        {
+            extraction = extractions.GetValueOrDefault(extractionId.Trim());
+        }
+
+        if (extraction is null)
+        {
+            return null;
+        }
+
         extraction.ClearTestResult();
+
         return extraction.Snapshot();
     }
 
@@ -562,7 +620,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
+
         ActiveTaskExtraction? extraction;
+
         lock (gate)
         {
             extraction = extractions.GetValueOrDefault(extractionId.Trim());
@@ -577,6 +637,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var result = debugContext.TestResult;
         var findings = new List<LocalTaskExtractionFailureDebugFinding>();
         var failedAssertions = result.Assertions.Where(static assertion => !assertion.Passed).ToArray();
+
         foreach (var assertion in failedAssertions)
         {
             findings.Add(new LocalTaskExtractionFailureDebugFinding(
@@ -587,12 +648,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var failedToolCall = result.ToolCalls
             .OrderBy(static call => call.Sequence)
             .FirstOrDefault(static call => call.IsError);
+
         if (failedToolCall is null)
         {
             var failureKind = failedAssertions.Length > 0 ? "assertionFailed" : "runtimeFailure";
             var summary = failedAssertions.Length > 0
                 ? "The task reached its assertions, but at least one expected product outcome was false."
                 : "The run failed without a failed UI tool call in the retained task trace.";
+
             if (!string.IsNullOrWhiteSpace(result.StandardError))
             {
                 findings.Add(new LocalTaskExtractionFailureDebugFinding(
@@ -611,8 +674,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         findings.Add(new LocalTaskExtractionFailureDebugFinding(
             "failedToolCall",
             $"Tool call {failedToolCall.Sequence:N0} ({failedToolCall.ToolName}) failed after {failedToolCall.DurationMilliseconds:N0} ms: {failedToolCall.Message}"));
+
         var selectorCalls = LocalTaskSelectorEvidence.ExtractSelectorCalls(debugContext.Draft.Source);
         var failedSelector = FindSelectorCall(result.ToolCalls, failedToolCall, selectorCalls);
+
         if (failedSelector is null)
         {
             return new LocalTaskExtractionFailureDebugResult(
@@ -626,14 +691,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var runStartUtc = result.ToolCalls.Min(static call => call.StartedAtUtc);
         var runEndUtc = result.ToolCalls.Max(static call => call.StartedAtUtc.AddMilliseconds(call.DurationMilliseconds));
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(
-                result.SessionId,
-                cancellationToken: cancellationToken)
+            result.SessionId,
+            cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             findings.Add(new LocalTaskExtractionFailureDebugFinding(
                 "evidenceUnavailable",
                 $"Session evidence for test run '{result.RunId}' is no longer available."));
+
             return new LocalTaskExtractionFailureDebugResult(
                 "The failed selector was identified, but the test session evidence is unavailable.",
                 "evidenceUnavailable",
@@ -648,6 +715,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .ToArray();
         var runImages = snapshot.Images.Count(frame => IsWithin(frame.CapturedAtUtc, runStartUtc, runEndUtc));
         var evidence = LocalTaskSelectorEvidence.Create(runTrees, runImages);
+
         if (LocalTaskSelectorEvidence.CanUseOcr(failedSelector))
         {
             evidence = AugmentWithOcrEvidence(
@@ -662,6 +730,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var selectorObserved = evidence.Nodes.Any(node => LocalTaskSelectorEvidence.Matches(
             node,
             failedSelector.Fields));
+
         if (selectorObserved)
         {
             findings.Add(new LocalTaskExtractionFailureDebugFinding(
@@ -677,10 +746,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var logOnlyFields = failedSelector.Fields
             .Where(field => snapshot.Logs.Any(log => IsWithin(log.TimestampUtc, runStartUtc, runEndUtc)
-                                                   && log.Message.Contains(field.Value, StringComparison.OrdinalIgnoreCase)))
+                && log.Message.Contains(field.Value, StringComparison.OrdinalIgnoreCase)))
             .Select(static field => field.Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         if (!selectorObserved && logOnlyFields.Length > 0)
         {
             findings.Add(new LocalTaskExtractionFailureDebugFinding(
@@ -715,6 +785,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             : logOnlyFields.Length > 0
                 ? "The draft used an implementation or log string that was never exposed as a UI selector."
                 : "The failed selector was not grounded in the recorded UI evidence.";
+
         return new LocalTaskExtractionFailureDebugResult(
             debugSummary,
             selectorObserved ? "selectorStateOrTiming" : "selectorNotObserved",
@@ -729,7 +800,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
         ArgumentNullException.ThrowIfNull(request);
+
         ActiveTaskExtraction? extraction;
+
         lock (gate)
         {
             extraction = extractions.GetValueOrDefault(extractionId.Trim());
@@ -748,13 +821,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 currentDraft.Summary,
                 RequireValue(request.Source, "Task source is required.")));
         extraction.ApplyEditedDraft(result);
+
         return extraction.Snapshot();
     }
 
     public LocalTaskExtractionSnapshot? Commit(string extractionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
+
         ActiveTaskExtraction? extraction;
+
         lock (gate)
         {
             extraction = extractions.GetValueOrDefault(extractionId.Trim());
@@ -770,7 +846,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             extraction.WorkspacePath,
             RepositoryTaskLoader.TaskDirectoryRelativePath);
         Directory.CreateDirectory(taskDirectory);
+
         var destinationPath = Path.Combine(taskDirectory, draft.SuggestedName + ".ts");
+
         if (File.Exists(destinationPath))
         {
             throw new InvalidDataException(
@@ -783,62 +861,108 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         File.Move(temporaryPath, destinationPath);
         extraction.MarkCommitted(destinationPath);
         runtime.Analytics.RecordUsage("task_saved", outcome: "succeeded");
+
         return extraction.Snapshot();
     }
 
     internal static void EnsureRequiredTaskRuntime(string taskDirectory, string source)
     {
         var runtimePath = Path.Combine(taskDirectory, "ansight-task.js");
-        if (File.Exists(runtimePath)) return;
+
+        if (File.Exists(runtimePath))
+        {
+            return;
+        }
+
         var needsRuntime = ReferencesTaskRuntime(source)
             || Directory.EnumerateFiles(taskDirectory, "*.ts", SearchOption.AllDirectories)
                 .Where(path => !path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase))
                 .Any(path => ReferencesTaskRuntime(File.ReadAllText(path)));
+
         if (needsRuntime)
+        {
             File.WriteAllText(runtimePath, RepositoryModuleContractArtifacts.GetTaskRuntimeModule(), new UTF8Encoding(false));
+        }
     }
 
     private static bool ReferencesTaskRuntime(string source)
     {
         var tokens = TokenizeTaskSource(source, includeStrings: true);
+
         for (var index = 0; index + 1 < tokens.Count; index++)
         {
-            if (tokens[index].Text is not ("import" or "export")) continue;
+            if (tokens[index].Text is not ("import" or "export"))
+            {
+                continue;
+            }
+
             var next = index + 1;
-            if (tokens[next].Text == "type") continue;
-            if (tokens[next].Text == "(") next++;
+
+            if (tokens[next].Text == "type")
+            {
+                continue;
+            }
+
+            if (tokens[next].Text == "(")
+            {
+                next++;
+            }
             else if (tokens[next].Text is "{" or "*" || tokens[next].IsIdentifier)
             {
                 // Only import declarations and re-exports have a module specifier after `from`.
-                if (tokens[index].Text == "export" && tokens[next].Text is not ("{" or "*")) continue;
-                while (next < tokens.Count && tokens[next].Text is not ("from" or ";" or "import" or "export")) next++;
-                if (next == tokens.Count || tokens[next].Text != "from") continue;
+                if (tokens[index].Text == "export" && tokens[next].Text is not ("{" or "*"))
+                {
+                    continue;
+                } while (next < tokens.Count && tokens[next].Text is not ("from" or ";" or "import" or "export"))
+                {
+                    next++;
+                }
+
+                if (next == tokens.Count || tokens[next].Text != "from")
+                {
+                    continue;
+                }
+
                 next++;
             }
-            if (next >= tokens.Count) continue;
+
+            if (next >= tokens.Count)
+            {
+                continue;
+            }
+
             var value = tokens[next].Text;
+
             if (value.Length > 2 && value[0] is '\'' or '"' or '`'
-                && value[1..^1].EndsWith("/ansight-task.js", StringComparison.Ordinal)) return true;
+                && value[1..^1].EndsWith("/ansight-task.js", StringComparison.Ordinal))
+            {
+                return true;
+            }
         }
+
         return false;
     }
 
     public LocalTaskExtractionSnapshot? Cancel(string extractionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
+
         ActiveTaskExtraction? extraction;
+
         lock (gate)
         {
             extraction = extractions.GetValueOrDefault(extractionId.Trim());
         }
 
         extraction?.Cancel();
+
         return extraction?.Snapshot();
     }
 
     public bool Discard(string extractionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(extractionId);
+
         lock (gate)
         {
             if (!extractions.TryGetValue(extractionId.Trim(), out var extraction))
@@ -847,22 +971,27 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             var snapshot = extraction.Snapshot();
+
             if (snapshot.Status is "queued" or "running" || snapshot.TestStatus is "running" or "cancelling")
             {
                 throw new InvalidDataException("Wait for the extraction or test run to finish before discarding its draft.");
             }
+
             if (snapshot.CommittedPath is not null)
             {
                 throw new InvalidDataException("This task was saved to the workspace and is no longer a draft.");
             }
 
             var draftRoot = Path.Combine(runtime.BaseFolderPath, "task-extraction-drafts", extraction.ExtractionId);
+
             if (Directory.Exists(draftRoot))
             {
                 Directory.Delete(draftRoot, recursive: true);
             }
+
             extractions.Remove(extraction.ExtractionId);
             extraction.Dispose();
+
             return true;
         }
     }
@@ -875,7 +1004,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         disposed = true;
+
         ActiveTaskExtraction[] active;
+
         lock (gate)
         {
             active = extractions.Values.ToArray();
@@ -891,19 +1022,22 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var usageOutcome = "failed";
         extraction.Begin("Loading the selected capture period.");
+
         var stopwatch = Stopwatch.StartNew();
         WorkspaceTestRunPreparation? preparation = null;
         TimelineTaskExtraction? seed = null;
         LocalTaskExtractionDraft? latestDraft = null;
         var tokens = SimulatorAgentTokenUsage.Empty;
         var modelPasses = new List<SimulatorAgentModelPassUsage>();
+
         try
         {
             var snapshot = await runtime.Sessions.LoadSnapshotAsync(
-                    extraction.SessionId,
-                    cancellationToken: extraction.Cancellation.Token)
+                extraction.SessionId,
+                cancellationToken: extraction.Cancellation.Token)
                 .ConfigureAwait(false)
                 ?? throw new InvalidDataException($"Session '{extraction.SessionId}' could not be loaded.");
+
             if (!string.Equals(snapshot.AppId, extraction.AppId, StringComparison.Ordinal))
             {
                 throw new InvalidDataException("The selected session app changed while extraction was starting.");
@@ -915,6 +1049,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 extraction.StartUtc,
                 extraction.EndUtc,
                 extraction.TaskName);
+
             var selectedTrees = snapshot.VisualTreeSnapshots
                 .Where(tree => IsWithin(tree.CapturedAtUtc, extraction))
                 .ToArray();
@@ -927,18 +1062,22 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
             var validationEnvironmentError = LocalTypeScriptTaskCompiler.GetEnvironmentError(
                 runtime.JavaScriptExecutablePath);
+
             if (validationEnvironmentError is not null)
             {
                 throw new InvalidOperationException(validationEnvironmentError);
             }
 
             preparation = await PrepareAgentAsync(extraction).ConfigureAwait(false);
+
             if (!preparation.IsSuccess)
             {
                 throw new InvalidOperationException(preparation.Message);
             }
+
             extraction.ApplyReasoningConfiguration(preparation.ReasoningConfiguration
                 ?? AgentReasoningConfiguration.CreateDefault(extraction.Reasoning, extraction.ModelOverride));
+
             if (preparation.UsesExternalTransport)
             {
                 extraction.BeginTrace(preparation.TrackingRunId);
@@ -947,19 +1086,22 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             extraction.Report(
                 "agent.started",
                 "The extraction agent is inspecting the selected evidence.");
+
             var draftResult = await GenerateDraftAsync(
-                    extraction,
-                    snapshot,
-                    seed,
-                    preparation,
-                    modelPasses,
-                    usage => tokens = tokens.Add(usage),
-                    draft => latestDraft = draft)
+                extraction,
+                snapshot,
+                seed,
+                preparation,
+                modelPasses,
+                usage => tokens = tokens.Add(usage),
+                draft => latestDraft = draft)
                 .ConfigureAwait(false);
+
             if (draftResult.IsValid)
             {
                 extraction.Complete(draftResult.Draft, "The agent draft is ready to test.");
                 usageOutcome = "succeeded";
+
                 if (!string.IsNullOrWhiteSpace(replaceExtractionId))
                 {
                     try
@@ -987,6 +1129,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             var reason = SanitizeUserFacingMessage(
                 exception.GetBaseException().Message,
                 "The extraction agent could not finish the task.");
+
             if (seed is null)
             {
                 extraction.Fail("failed", reason);
@@ -994,6 +1137,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             else
             {
                 var draft = BuildRecoveryDraft(runtime.BaseFolderPath, extraction.ExtractionId, seed, latestDraft, reason);
+
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(draft.SourcePath)!);
@@ -1007,6 +1151,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                             $"The draft is available in the editor but could not be saved to disk: {saveException.Message}"]
                     };
                 }
+
                 extraction.NeedsReview(draft,
                     "An incomplete draft is available for review. " + string.Join(" ", draft.ValidationWarnings));
                 usageOutcome = "needsReview";
@@ -1018,6 +1163,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 outcome: extraction.Cancellation.IsCancellationRequested ? "cancelled" : usageOutcome,
                 durationSeconds: stopwatch.Elapsed.TotalSeconds);
             stopwatch.Stop();
+
             if (preparation?.UsesExternalTransport == true
                 && preparation.TrackingRunId is { } trackingRunId
                 && runtime.WorkspaceTests.RunGateway is { } gateway)
@@ -1028,22 +1174,24 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     "cancelled" => "cancelled",
                     _ => "failed"
                 };
+
                 try
                 {
                     var completion = await gateway.CompleteAsync(
-                            new WorkspaceTestRunMeterCompletion(
-                                trackingRunId,
-                                completionStatus,
-                                stopwatch.ElapsedMilliseconds,
-                                InstructionCount: 1,
-                                ModelPassCount: modelPasses.Count,
-                                AnsightToolCallCount: 0,
-                                SuccessfulAnsightToolCallCount: 0,
-                                preparation.ModelTransport is null ? null : tokens,
-                                preparation.ModelTransport is null ? null : modelPasses),
-                            CancellationToken.None)
+                        new WorkspaceTestRunMeterCompletion(
+                            trackingRunId,
+                            completionStatus,
+                            stopwatch.ElapsedMilliseconds,
+                            InstructionCount: 1,
+                            ModelPassCount: modelPasses.Count,
+                            AnsightToolCallCount: 0,
+                            SuccessfulAnsightToolCallCount: 0,
+                            preparation.ModelTransport is null ? null : tokens,
+                            preparation.ModelTransport is null ? null : modelPasses),
+                        CancellationToken.None)
                         .ConfigureAwait(false);
                     extraction.CompleteTrace(completion);
+
                     if (!completion.IsSuccess)
                     {
                         extraction.Report(
@@ -1070,22 +1218,23 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private async Task<WorkspaceTestRunPreparation> PrepareAgentAsync(ActiveTaskExtraction extraction)
     {
         var gateway = runtime.WorkspaceTests.RunGateway
-                      ?? throw new InvalidOperationException("Task extraction is unavailable on this host.");
+            ?? throw new InvalidOperationException("Task extraction is unavailable on this host.");
+
         return await gateway.PrepareAsync(
-                new WorkspaceTestRunPreparationRequest(
-                    extraction.TeamId,
-                    extraction.WorkspacePath,
-                    $"task-extraction-{extraction.ExtractionId}",
-                    extraction.TaskName,
-                    extraction.AppId,
-                    extraction.ModelOverride,
-                    ValidationAssertionCount: 1,
-                    InstructionCount: 1,
-                    IsDefinition: false)
-                {
-                    Reasoning = extraction.Reasoning
-                },
-                extraction.Cancellation.Token)
+            new WorkspaceTestRunPreparationRequest(
+                extraction.TeamId,
+                extraction.WorkspacePath,
+                $"task-extraction-{extraction.ExtractionId}",
+                extraction.TaskName,
+                extraction.AppId,
+                extraction.ModelOverride,
+                ValidationAssertionCount: 1,
+                InstructionCount: 1,
+                IsDefinition: false)
+            {
+                Reasoning = extraction.Reasoning
+            },
+            extraction.Cancellation.Token)
             .ConfigureAwait(false);
     }
 
@@ -1101,9 +1250,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var transport = preparation.ModelTransport
             ?? throw new InvalidOperationException("Task extraction requires a brokered model transport.");
         var apiKey = await transport.ResolveAccessKeyAsync(extraction.Cancellation.Token).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("The brokered model transport returned no access token.");
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException("The brokered model transport returned no access token.");
+        }
+
         if (extraction.Mode == LocalTaskExtractionModes.DirectWebSocket && !transport.SupportsWebSockets)
+        {
             throw new InvalidOperationException("The selected transport does not support WebSockets.");
+        }
 
         using var httpClient = new OpenAiResponsesClient();
         var useWebSocket = transport.SupportsWebSockets;
@@ -1126,16 +1282,20 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var requiresFullReplay = true;
         DraftMaterializationResult? lastRejectedDraft = null;
         var draftRevisionAttempts = 0;
+
         for (var turn = 1; turn <= MaximumAgentTurns; turn++)
         {
             extraction.Cancellation.Token.ThrowIfCancellationRequested();
+
             var submissionOnly = IsDraftSubmissionTurn(turn);
             extraction.Report("agent.turn", submissionOnly
                 ? $"Extraction agent pass {turn:N0}/{MaximumAgentTurns:N0}: writing or repairing the draft."
                 : $"Extraction agent pass {turn:N0}/{MaximumAgentTurns:N0}.");
+
             var guidance = CreateUserInput(BuildAgentTurnGuidance(turn));
             history.Add(guidance);
             pendingInput.Add(guidance.DeepClone());
+
             var tools = BuildAgentToolsForTurn(turn);
             var passStartedAtUtc = DateTimeOffset.UtcNow;
             var passStopwatch = Stopwatch.StartNew();
@@ -1164,6 +1324,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 CompactThresholdTokens = 160_000
             };
             OpenAiTurn response;
+
             try
             {
                 if (useWebSocket && webSocketSession is not null)
@@ -1197,7 +1358,9 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 });
                 throw;
             }
+
             passStopwatch.Stop();
+
             var passCompletedAtUtc = DateTimeOffset.UtcNow;
             addUsage(response.Tokens);
             extraction.RecordTracePass(new LocalTaskExtractionModelPassTrace(
@@ -1215,6 +1378,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 Context = context,
                 AssistantOutput = CreateTracePayload(response.AssistantText, MaximumTracePayloadCharacters)
             });
+
             if (!string.IsNullOrWhiteSpace(response.ResponseId))
             {
                 modelPasses.Add(new SimulatorAgentModelPassUsage(
@@ -1226,11 +1390,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             pendingInput.Clear();
+
             var responseStartIndex = history.Count;
+
             foreach (var output in response.Output)
             {
                 history.Add(output?.DeepClone());
             }
+
             TrimToLatestCompaction(history, responseStartIndex);
             requiresFullReplay = false;
 
@@ -1238,6 +1405,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 var toolStartedAtUtc = DateTimeOffset.UtcNow;
                 var toolStopwatch = Stopwatch.StartNew();
+
                 if (string.Equals(call.Name, SubmitDraftToolName, StringComparison.Ordinal))
                 {
                     try
@@ -1245,42 +1413,66 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                         var submission = ParseDraftSubmission(call.Arguments);
                         var draftResult = MaterializeAndValidateDraft(extraction, submission, preserveDraft);
                         preserveDraft(draftResult.Draft);
+
                         if (draftResult.IsValid)
                         {
                             RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
-                                JsonSerializer.Serialize(new { isSuccess = true, draftResult.Draft.SuggestedName, draftResult.Draft.TaskId, draftResult.Message }), false);
+                                JsonSerializer.Serialize(new
+                                {
+                                    isSuccess = true,
+                                    draftResult.Draft.SuggestedName,
+                                    draftResult.Draft.TaskId,
+                                    draftResult.Message
+                                }), false);
+
                             return draftResult;
                         }
 
                         lastRejectedDraft = draftResult;
+
                         if (draftResult.IsInfrastructureFailure)
                         {
                             RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
-                                JsonSerializer.Serialize(new { isSuccess = false, draftResult.Message, draftResult.Draft.ValidationWarnings }), true);
+                                JsonSerializer.Serialize(new
+                                {
+                                    isSuccess = false,
+                                    draftResult.Message,
+                                    draftResult.Draft.ValidationWarnings
+                                }), true);
                             extraction.Report(
                                 "validation.unavailable",
                                 draftResult.Message);
+
                             return draftResult;
                         }
 
                         draftRevisionAttempts++;
+
                         var firstDiagnostic = Truncate(
                             draftResult.Draft.ValidationWarnings.FirstOrDefault()
-                            ?? "The draft did not pass validation.",
+                                ?? "The draft did not pass validation.",
                             500);
+
                         if (draftRevisionAttempts >= MaximumDraftRevisionAttempts)
                         {
                             var stalledMessage =
-                                $"The extraction agent could not produce a valid module after {draftRevisionAttempts:N0} submissions. {firstDiagnostic}";
+                                                        $"The extraction agent could not produce a valid module after {draftRevisionAttempts:N0} submissions. {firstDiagnostic}";
                             extraction.Report("agent.stalled", stalledMessage);
                             RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
-                                JsonSerializer.Serialize(new { isSuccess = false, message = stalledMessage, draftResult.Draft.ValidationWarnings }), true);
+                                JsonSerializer.Serialize(new
+                                {
+                                    isSuccess = false,
+                                    message = stalledMessage,
+                                    draftResult.Draft.ValidationWarnings
+                                }), true);
+
                             return DraftMaterializationResult.Invalid(draftResult.Draft, stalledMessage);
                         }
 
                         extraction.Report(
                             "agent.revising",
                             $"Draft validation failed ({draftRevisionAttempts:N0}/{MaximumDraftRevisionAttempts:N0}): {firstDiagnostic}");
+
                         var rejectedOutput = CreateFunctionOutput(
                             call.CallId,
                             SerializeObject(new
@@ -1312,7 +1504,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     catch (Exception exception)
                     {
                         RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
-                            JsonSerializer.Serialize(new { isSuccess = false, message = exception.Message }), true);
+                            JsonSerializer.Serialize(new
+                            {
+                                isSuccess = false,
+                                message = exception.Message
+                            }), true);
                         throw;
                     }
 
@@ -1334,6 +1530,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 }
 
                 JsonObject toolOutput;
+
                 try
                 {
                     toolOutput = call.Name switch
@@ -1355,9 +1552,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 catch (Exception exception)
                 {
                     RecordTraceToolCall(extraction, turn, call, toolStartedAtUtc, toolStopwatch,
-                        JsonSerializer.Serialize(new { isSuccess = false, message = exception.Message }), true);
+                        JsonSerializer.Serialize(new
+                        {
+                            isSuccess = false,
+                            message = exception.Message
+                        }), true);
                     throw;
                 }
+
                 var functionOutput = CreateFunctionOutput(call.CallId, toolOutput.ToJsonString());
                 history.Add(functionOutput);
                 pendingInput.Add(functionOutput.DeepClone());
@@ -1375,8 +1577,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         return lastRejectedDraft
-               ?? throw new InvalidOperationException(
-                   $"The extraction agent reached its {MaximumAgentTurns:N0}-pass limit without completing a draft.");
+            ?? throw new InvalidOperationException(
+                $"The extraction agent reached its {MaximumAgentTurns:N0}-pass limit without completing a draft.");
     }
 
     internal static LocalTaskExtractionDraft BuildRecoveryDraft(
@@ -1396,7 +1598,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var draftRoot = Path.Combine(baseFolderPath, "task-extraction-drafts", extractionId);
         var suggestedName = Slugify(seed.SuggestedName);
-        if (string.IsNullOrWhiteSpace(suggestedName)) suggestedName = "extracted-task";
+
+        if (string.IsNullOrWhiteSpace(suggestedName))
+        {
+            suggestedName = "extracted-task";
+        }
+
         return new LocalTaskExtractionDraft(
             suggestedName,
             seed.Summary,
@@ -1419,6 +1626,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     internal static JsonArray BuildAgentToolsForTurn(int turn)
     {
         var tools = BuildAgentTools();
+
         return IsDraftSubmissionTurn(turn)
             ? new JsonArray(tools.OfType<JsonObject>()
                 .Single(tool => tool["name"]?.GetValue<string>() == SubmitDraftToolName).DeepClone())
@@ -1433,35 +1641,43 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var suggestedName = Slugify(extraction.TaskNameIsAuthoritative
             ? extraction.TaskName
             : submission.SuggestedName);
+
         if (string.IsNullOrWhiteSpace(suggestedName))
         {
             suggestedName = "extracted-task";
         }
 
         var source = NormalizeTaskDescriptorSource(submission.Source.Trim());
+
         if (source.Length > MaximumSourceCharacters)
         {
             throw new InvalidDataException(
                 $"The generated task exceeds the {MaximumSourceCharacters:N0}-character limit.");
         }
+
         var draftRoot = Path.Combine(runtime.BaseFolderPath, "task-extraction-drafts", extraction.ExtractionId);
         var taskDirectory = Path.Combine(draftRoot, RepositoryTaskLoader.TaskDirectoryRelativePath);
         var sourcePath = Path.Combine(taskDirectory, suggestedName + ".ts");
         preserveDraft?.Invoke(new LocalTaskExtractionDraft(
             suggestedName, submission.Summary.Trim(), source, suggestedName, draftRoot, sourcePath,
             ["Validation did not finish for this submitted draft."]));
+
         var validationWarnings = new List<string>();
+
         if (!source.Contains("expect(", StringComparison.Ordinal)
             && !source.Contains("expect.soft(", StringComparison.Ordinal))
         {
             validationWarnings.Add("The task has no named product-outcome assertion.");
         }
+
         if (source.Contains("REVIEW:", StringComparison.OrdinalIgnoreCase))
         {
             validationWarnings.Add("The task still contains unresolved REVIEW markers.");
         }
+
         validationWarnings.AddRange(ValidateTaskActionBudget(source));
         validationWarnings.AddRange(ValidateTaskApiSurface(source));
+
         if (extraction.ValidateSelectors)
         {
             validationWarnings.AddRange(ValidateSelectorGrounding(extraction, source));
@@ -1469,42 +1685,53 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         Directory.CreateDirectory(taskDirectory);
         CopyTaskSupportModules(extraction.WorkspacePath, taskDirectory);
+
         var previousSourcePath = extraction.ReplaceGeneratedSourcePath(sourcePath);
+
         if (previousSourcePath is not null
             && !string.Equals(previousSourcePath, sourcePath, StringComparison.Ordinal))
         {
             File.Delete(previousSourcePath);
         }
+
         File.WriteAllText(sourcePath, source + Environment.NewLine, new UTF8Encoding(false));
+
         var compilerValidation = LocalTypeScriptTaskCompiler.ValidateDetailed(
             taskDirectory,
             sourcePath,
             RepositoryModuleContractArtifacts.GetTaskTypeDefinitions(),
             runtime.JavaScriptExecutablePath);
         validationWarnings.AddRange(compilerValidation.Diagnostics);
+
         var catalog = runtime.InspectRepositoryTasks(extraction.AppId, draftRoot);
         validationWarnings.AddRange(catalog.Warnings);
+
         if (catalog.Tasks.Count != 1 && catalog.Warnings.Count == 0)
         {
             validationWarnings.Add($"Expected one task but discovered {catalog.Tasks.Count:N0}.");
         }
+
         if (catalog.Tasks.Count == 1 && extraction.TaskNameIsAuthoritative
             && !string.Equals(catalog.Tasks[0].Title, extraction.TaskName, StringComparison.Ordinal))
         {
             validationWarnings.Add(
                 $"The task title must exactly match the requested task name '{extraction.TaskName}'.");
         }
+
         if (catalog.Tasks.Count == 1 && !extraction.TaskNameIsAuthoritative)
         {
             var generatedTitle = catalog.Tasks[0].Title.Trim();
+
             if (generatedTitle.Length > MaximumGeneratedTaskNameCharacters || generatedTitle.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 7)
             {
                 validationWarnings.Add("Use a concise task title of at most seven words and 60 characters.");
             }
+
             if (!string.Equals(Slugify(generatedTitle), suggestedName, StringComparison.Ordinal))
             {
                 validationWarnings.Add("The suggested task file name must be the kebab-case form of its title.");
             }
+
             if (validationWarnings.Count == 0)
             {
                 extraction.ApplyGeneratedTaskName(generatedTitle);
@@ -1519,22 +1746,25 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             draftRoot,
             sourcePath,
             validationWarnings);
+
         return validationWarnings.Count == 0
             ? DraftMaterializationResult.Valid(draft)
             : DraftMaterializationResult.Invalid(
                 draft,
                 "The generated task needs edits before it can be tested. "
-                + string.Join(" ", validationWarnings),
-            compilerValidation.IsInfrastructureFailure);
+                    + string.Join(" ", validationWarnings),
+                compilerValidation.IsInfrastructureFailure);
     }
 
     private static void CopyTaskSupportModules(string workspacePath, string targetTaskDirectory)
     {
         var targetRoot = Path.GetFullPath(targetTaskDirectory) + Path.DirectorySeparatorChar;
+
         foreach (var module in RepositoryTaskLoader.DiscoverSupportModules(workspacePath))
         {
             var relativePath = module.RelativePath.Replace('/', Path.DirectorySeparatorChar);
             var targetPath = Path.GetFullPath(Path.Combine(targetTaskDirectory, relativePath));
+
             if (!targetPath.StartsWith(targetRoot, StringComparison.Ordinal))
             {
                 continue;
@@ -1556,6 +1786,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .Select(static issue => issue.Call)
             .Where(LocalTaskSelectorEvidence.CanUseOcr)
             .ToArray();
+
         if (unresolvedOcrCalls.Length > 0)
         {
             context.Evidence = AugmentWithOcrEvidence(
@@ -1574,9 +1805,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var messages = new List<string>();
         var emptyEvidence = new LocalTaskSelectorEvidenceIndex(0, 0, 0, []);
+
         foreach (var issue in LocalTaskSelectorEvidence.Validate(source, context.Evidence))
         {
             messages.Add(issue.Message);
+
             if (issue.Call.Fields.Count == 0)
             {
                 continue;
@@ -1586,14 +1819,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 issue.Call,
                 emptyEvidence,
                 context.Evidence);
+
             if (alternatives.Count > 0)
             {
                 messages.Add(
                     "Selectors actually observed in the selected UI evidence include: "
-                    + string.Join(
-                        ", ",
-                        alternatives.Take(3).Select(static alternative => alternative.Selector.ToJsonString()))
-                    + ".");
+                        + string.Join(
+                            ", ",
+                            alternatives.Take(3).Select(static alternative => alternative.Selector.ToJsonString()))
+                        + ".");
             }
         }
 
@@ -1609,8 +1843,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         ISet<string> scannedOcrFrameIds)
     {
         foreach (var frame in SelectRepresentativeFrames(
-                     snapshot.Images.Where(frame => IsWithin(frame.CapturedAtUtc, startUtc, endUtc)),
-                     MaximumOcrEvidenceFrames))
+            snapshot.Images.Where(frame => IsWithin(frame.CapturedAtUtc, startUtc, endUtc)),
+            MaximumOcrEvidenceFrames))
         {
             if (!scannedOcrFrameIds.Add(frame.FrameId))
             {
@@ -1621,30 +1855,34 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 runtime.ApplicationPaths,
                 snapshot,
                 frame);
+
             if (!File.Exists(imagePath))
             {
                 continue;
             }
 
             SessionScreenshotOcrResult scan;
+
             try
             {
                 scan = ocrScanner.Scan(imagePath);
             }
             catch (Exception exception) when (exception is IOException
-                                               or InvalidOperationException
-                                               or UnauthorizedAccessException)
+                or InvalidOperationException
+                or UnauthorizedAccessException)
             {
                 continue;
             }
+
             if (!scan.Available)
             {
                 continue;
             }
 
             evidence = evidence.WithOcrBlocks(frame, scan.Blocks);
+
             if (unresolvedOcrCalls.All(call => evidence.Nodes.Any(
-                    node => LocalTaskSelectorEvidence.Matches(node, call.Fields))))
+                node => LocalTaskSelectorEvidence.Matches(node, call.Fields))))
             {
                 break;
             }
@@ -1661,6 +1899,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .OrderBy(static frame => frame.CapturedAtUtc)
             .ThenBy(static frame => frame.FrameId, StringComparer.Ordinal)
             .ToArray();
+
         if (frames.Length <= maximumCount)
         {
             return frames;
@@ -1668,11 +1907,13 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var selected = new List<SessionImageFrame>(maximumCount);
         var selectedIds = new HashSet<string>(StringComparer.Ordinal);
+
         for (var index = 0; index < maximumCount; index++)
         {
             var sourceIndex = (int)Math.Round(
                 index * (frames.Length - 1d) / (maximumCount - 1d),
                 MidpointRounding.AwayFromZero);
+
             if (selectedIds.Add(frames[sourceIndex].FrameId))
             {
                 selected.Add(frames[sourceIndex]);
@@ -1695,10 +1936,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 candidate.SessionId,
                 sessionId,
                 StringComparison.Ordinal));
+
             if (session is null || !runtime.IsSessionLive(sessionId))
             {
                 throw new InvalidDataException("Choose a connected live session for the test run.");
             }
+
             if (!string.Equals(session.AppId, extraction.AppId, StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
@@ -1706,13 +1949,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             extraction.Report("test.running", $"Running draft '{draft.TaskId}' on '{sessionId}'.");
+
             var result = await runtime.RunRepositoryTaskAsync(
-                    draft.DraftRootPath,
-                    extraction.AppId,
-                    sessionId,
-                    draft.TaskId,
-                    request.Input,
-                    testCancellation)
+                draft.DraftRootPath,
+                extraction.AppId,
+                sessionId,
+                draft.TaskId,
+                request.Input,
+                testCancellation)
                 .ConfigureAwait(false);
             extraction.CompleteTest(CreateTestResult(result));
         }
@@ -1744,11 +1988,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var toolOccurrence = toolCalls
             .Where(call => call.Sequence <= failedToolCall.Sequence
-                           && string.Equals(
-                               call.ToolName,
-                               failedToolCall.ToolName,
-                               StringComparison.Ordinal))
+                && string.Equals(
+                    call.ToolName,
+                    failedToolCall.ToolName,
+                    StringComparison.Ordinal))
             .Count();
+
         return selectorCalls
             .Where(call => string.Equals(
                 call.ToolName,
@@ -1821,7 +2066,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .Take(100);
         var annotations = snapshot.Annotations
             .Where(item => item.EndUtc.GetValueOrDefault(item.StartUtc) >= extraction.StartUtc
-                           && item.StartUtc <= extraction.EndUtc)
+                && item.StartUtc <= extraction.EndUtc)
             .OrderBy(item => item.StartUtc)
             .Take(100)
             .Select(item => new
@@ -1833,6 +2078,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 item.Notes,
                 target = item.Target
             });
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-evidence/v1",
@@ -1843,7 +2089,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 snapshot.ClientName,
                 snapshot.CreatedUtc
             },
-            selectedPeriod = new { extraction.StartUtc, extraction.EndUtc },
+            selectedPeriod = new
+            {
+                extraction.StartUtc,
+                extraction.EndUtc
+            },
             taskName = extraction.TaskName,
             handoffDescription = extraction.Description,
             counts = new
@@ -1897,7 +2147,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         JsonObject arguments)
     {
         var nodeOffset = arguments["nodeOffset"] is JsonValue offsetValue
-                         && offsetValue.TryGetValue<int>(out var requestedOffset)
+            && offsetValue.TryGetValue<int>(out var requestedOffset)
             ? Math.Clamp(requestedOffset, 0, 10_000)
             : 0;
         var requestedIds = arguments["snapshotIds"] is JsonArray values
@@ -1913,16 +2163,17 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .OrderBy(tree => tree.CapturedAtUtc)
             .ToArray();
         var trees = (requestedIds.Count == 0
-                ? SelectRepresentativeTrees(candidates, 3)
-                : candidates.Take(3))
+            ? SelectRepresentativeTrees(candidates, 3)
+            : candidates.Take(3))
             .Select(tree =>
             {
                 var visibleNodes = evidence.Nodes
                     .Where(node => string.Equals(node.SnapshotId, tree.SnapshotId, StringComparison.Ordinal)
-                                   && !string.Equals(node.Source, "ocr", StringComparison.Ordinal))
+                        && !string.Equals(node.Source, "ocr", StringComparison.Ordinal))
                     .OrderByDescending(node => !string.IsNullOrWhiteSpace(node.AutomationId)
-                                               || node.TextValues.Count > 0)
+                        || node.TextValues.Count > 0)
                     .ToArray();
+
                 return new
                 {
                     tree.SnapshotId,
@@ -1946,6 +2197,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     })
                 };
             });
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-visual-trees/v1",
@@ -1970,6 +2222,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var snapshotId = ReadOptionalString(arguments, "snapshotId");
         var tree = selectedTrees.FirstOrDefault(candidate => string.Equals(
             candidate.SnapshotId, snapshotId, StringComparison.Ordinal));
+
         if (tree is null)
         {
             return new JsonObject
@@ -1980,13 +2233,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var requestedOffset = arguments["characterOffset"] is JsonValue offsetValue
-                              && offsetValue.TryGetValue<int>(out var value)
+            && offsetValue.TryGetValue<int>(out var value)
             ? Math.Max(value, 0)
             : 0;
         var serialized = tree.Payload.ToJsonString();
         var offset = Math.Min(requestedOffset, serialized.Length);
         const int maximumChunkCharacters = 32_000;
         var length = Math.Min(maximumChunkCharacters, serialized.Length - offset);
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-raw-visual-tree/v1",
@@ -2008,6 +2262,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var symbol = ReadOptionalString(arguments, "symbol") ?? string.Empty;
         var full = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
         string source;
+
         if (symbol.Length == 0)
         {
             source = CompactTypeDefinitions(full);
@@ -2015,18 +2270,26 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         else
         {
             if (symbol.Length > 120 || !Regex.IsMatch(symbol, @"^[A-Za-z][A-Za-z0-9_]*$"))
+            {
                 return new JsonObject { ["isSuccess"] = false, ["message"] = "Use an exact exported TypeScript symbol name." };
+            }
+
             var declarations = Regex.Matches(full,
-                    @"(?m)^export (?:interface|type|const) (?<name>[A-Za-z][A-Za-z0-9_]*)")
+                @"(?m)^export (?:interface|type|const) (?<name>[A-Za-z][A-Za-z0-9_]*)")
                 .Cast<Match>()
                 .ToArray();
             var selected = declarations
                 .Select((declaration, index) => new { declaration, index })
                 .Where(item => string.Equals(item.declaration.Groups["name"].Value, symbol, StringComparison.Ordinal))
                 .ToArray();
+
             if (selected.Length == 0)
+            {
                 return new JsonObject { ["isSuccess"] = false, ["message"] = $"Exported symbol '{symbol}' was not found." };
+            }
+
             var declarationsWithDocs = new StringBuilder();
+
             foreach (var item in selected)
             {
                 var start = item.declaration.Index;
@@ -2035,21 +2298,27 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     : full.Length;
                 var commentStart = full.LastIndexOf("/**", start, StringComparison.Ordinal);
                 var commentEnd = full.LastIndexOf("*/", start, StringComparison.Ordinal);
+
                 if (commentStart >= 0 && commentEnd > commentStart
                     && string.IsNullOrWhiteSpace(full[(commentEnd + 2)..start]))
+                {
                     start = commentStart;
+                }
+
                 declarationsWithDocs.Append(full.AsSpan(start, end - start));
             }
+
             source = declarationsWithDocs.ToString();
         }
 
         var requestedOffset = arguments["characterOffset"] is JsonValue offsetValue
-                              && offsetValue.TryGetValue<int>(out var value)
+            && offsetValue.TryGetValue<int>(out var value)
             ? Math.Max(value, 0)
             : 0;
         var offset = Math.Min(requestedOffset, source.Length);
         const int maximumChunkCharacters = 32_000;
         var length = Math.Min(maximumChunkCharacters, source.Length - offset);
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-contract-evidence/v1",
@@ -2076,7 +2345,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             : [];
         var candidates = snapshot.Images
             .Where(frame => IsWithin(frame.CapturedAtUtc, extraction)
-                            && (requestedIds.Count == 0 || requestedIds.Contains(frame.FrameId)))
+                && (requestedIds.Count == 0 || requestedIds.Contains(frame.FrameId)))
             .OrderBy(frame => frame.CapturedAtUtc)
             .ToArray();
         var frames = requestedIds.Count == 0
@@ -2084,16 +2353,19 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             : candidates.Take(3).ToArray();
         var context = extraction.RequireSelectorEvidenceContext();
         var results = new JsonArray();
+
         foreach (var frame in frames)
         {
             string? provider = null;
             string? message = null;
+
             if (context.ScannedOcrFrameIds.Add(frame.FrameId))
             {
                 var imagePath = SessionFileLocator.ResolveScreenshotPath(
                     runtime.ApplicationPaths,
                     snapshot,
                     frame);
+
                 if (!File.Exists(imagePath))
                 {
                     message = "The retained screenshot file is unavailable.";
@@ -2105,14 +2377,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                         var scan = ocrScanner.Scan(imagePath);
                         provider = scan.Provider;
                         message = scan.Message;
+
                         if (scan.Available)
                         {
                             context.Evidence = context.Evidence.WithOcrBlocks(frame, scan.Blocks);
                         }
                     }
                     catch (Exception exception) when (exception is IOException
-                                                       or InvalidOperationException
-                                                       or UnauthorizedAccessException)
+                        or InvalidOperationException
+                        or UnauthorizedAccessException)
                     {
                         message = "Screenshot OCR was unavailable for this frame.";
                     }
@@ -2121,7 +2394,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
             var text = context.Evidence.Nodes
                 .Where(node => string.Equals(node.Source, "ocr", StringComparison.Ordinal)
-                               && string.Equals(node.SnapshotId, frame.FrameId, StringComparison.Ordinal))
+                    && string.Equals(node.SnapshotId, frame.FrameId, StringComparison.Ordinal))
                 .SelectMany(static node => node.TextValues)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Order(StringComparer.OrdinalIgnoreCase)
@@ -2161,6 +2434,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 .Take(3)
                 .ToHashSet(StringComparer.Ordinal)
             : [];
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-support-modules/v1",
@@ -2172,7 +2446,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     ? Truncate(module.Source, 120_000)
                     : null,
                 sourceTruncated = requestedPaths.Contains(module.RelativePath)
-                                  && module.Source.Length > 120_000
+                    && module.Source.Length > 120_000
             })
         });
     }
@@ -2188,11 +2462,13 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var selected = new List<SessionVisualTreeSnapshot>(maximumCount);
         var selectedIds = new HashSet<string>(StringComparer.Ordinal);
+
         for (var index = 0; index < maximumCount; index++)
         {
             var sourceIndex = (int)Math.Round(
                 index * (trees.Count - 1d) / (maximumCount - 1d),
                 MidpointRounding.AwayFromZero);
+
             if (selectedIds.Add(trees[sourceIndex].SnapshotId))
             {
                 selected.Add(trees[sourceIndex]);
@@ -2396,15 +2672,19 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     internal static string CompactTypeDefinitions(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         var compact = new StringBuilder(source.Length);
         char quote = '\0';
+
         for (var index = 0; index < source.Length; index++)
         {
             var current = source[index];
             var next = index + 1 < source.Length ? source[index + 1] : '\0';
+
             if (quote != '\0')
             {
                 compact.Append(current);
+
                 if (current == '\\' && index + 1 < source.Length)
                 {
                     compact.Append(source[++index]);
@@ -2413,29 +2693,48 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     quote = '\0';
                 }
+
                 continue;
             }
+
             if (current is '\'' or '"' or '`')
             {
                 quote = current;
                 compact.Append(current);
                 continue;
             }
+
             if (current == '/' && next == '/')
             {
                 index += 2;
-                while (index < source.Length && source[index] != '\n') index++;
-                if (index < source.Length) compact.Append('\n');
+
+                while (index < source.Length && source[index] != '\n')
+                {
+                    index++;
+                }
+
+                if (index < source.Length)
+                {
+                    compact.Append('\n');
+                }
+
                 continue;
             }
+
             if (current == '/' && next == '*')
             {
                 index += 2;
-                while (index + 1 < source.Length && !(source[index] == '*' && source[index + 1] == '/')) index++;
+
+                while (index + 1 < source.Length && !(source[index] == '*' && source[index + 1] == '/'))
+                {
+                    index++;
+                }
+
                 index = Math.Min(index + 1, source.Length - 1);
                 compact.Append(' ');
                 continue;
             }
+
             compact.Append(current);
         }
 
@@ -2463,6 +2762,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var frameworks = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var tree in selectedTrees)
         {
             switch (tree.VisualTreeKind)
@@ -2480,6 +2780,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var capabilities = SessionCapabilities.FromPublishedTools(null, appToolCatalog);
+
         foreach (var toolId in capabilities.VisualTreeToolIds)
         {
             switch (toolId)
@@ -2495,6 +2796,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                     break;
             }
         }
+
         foreach (var framework in capabilities.NavigationFrameworks)
         {
             switch (framework)
@@ -2514,6 +2816,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var frameworkSelected = frameworks.Count == 1
             ? TrimTypeDefinitionsForFramework(source, frameworks.Single())
             : CompactTypeDefinitions(source);
+
         return platforms.Length == 1
             ? TrimTypeDefinitionsForPlatform(frameworkSelected, platforms[0])
             : frameworkSelected;
@@ -2527,19 +2830,25 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             VisualTreeContract.AndroidRuntimePlatform => "ios",
             _ => null
         };
-        if (excludedProperty is null) return compactDeclarations;
+
+        if (excludedProperty is null)
+        {
+            return compactDeclarations;
+        }
+
         var selected = Regex.Replace(compactDeclarations,
             $@"(?ms)^  readonly {excludedProperty}: NativePermissionsContext<.*?^  \}};\n?",
             string.Empty);
         var excludedSymbols = excludedProperty == "android"
-            ? new[] { "AndroidPermissionNames", "AndroidPermission", "CommonAndroidPermission" }
-            : ["IosPermissionNames", "IosPermission"];
+            ? new[] { "AndroidPermissionNames", "AndroidPermission", "CommonAndroidPermission" } : ["IosPermissionNames", "IosPermission"];
+
         foreach (var symbol in excludedSymbols)
         {
             selected = Regex.Replace(selected,
                 $@"(?ms)^export (?:interface|type|const) {Regex.Escape(symbol)}(?=\W).*?(?=^export (?:interface|type|const) |\z)",
                 string.Empty);
         }
+
         return selected;
     }
 
@@ -2547,11 +2856,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(framework);
+
         var compact = CompactTypeDefinitions(source);
+
         foreach (Match declaration in Regex.Matches(source, @"export interface (Task[A-Za-z]+Context)\s*\{"))
         {
             var commentStart = source.LastIndexOf("/**", declaration.Index, StringComparison.Ordinal);
             var commentEnd = source.LastIndexOf("*/", declaration.Index, StringComparison.Ordinal);
+
             if (commentStart < 0 || commentEnd < commentStart
                 || !string.IsNullOrWhiteSpace(source[(commentEnd + 2)..declaration.Index]))
             {
@@ -2559,11 +2871,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             }
 
             var annotation = Regex.Match(source[commentStart..commentEnd], @"@supportedFrameworks\s+([^\r\n*]+)");
+
             if (!annotation.Success)
             {
                 continue;
             }
+
             var supportedFrameworks = annotation.Groups[1].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
             if (supportedFrameworks.Contains(framework, StringComparer.Ordinal))
             {
                 continue;
@@ -2573,6 +2888,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             var property = char.ToLowerInvariant(name[4]) + name[5..^7];
             var declarationPattern = $@"(?ms)^export interface {Regex.Escape(name)}\s*\{{.*?^\}}\n?";
             var propertyPattern = $@"(?m)^[ \t]*readonly {Regex.Escape(property)}: {Regex.Escape(name)};\n?";
+
             if (Regex.Matches(compact, $@"\b{Regex.Escape(name)}\b").Count != 2
                 || !Regex.IsMatch(compact, declarationPattern)
                 || !Regex.IsMatch(compact, propertyPattern))
@@ -2594,7 +2910,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             if (history[index] is JsonObject item
                 && string.Equals(ReadOptionalString(item, "type"), "compaction", StringComparison.Ordinal))
             {
-                for (var removed = 0; removed < index; removed++) history.RemoveAt(0);
+                for (var removed = 0; removed < index; removed++)
+                {
+                    history.RemoveAt(0);
+                }
+
                 return;
             }
         }
@@ -2654,10 +2974,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             });
         var annotations = snapshot.Annotations
             .Where(item => item.EndUtc.GetValueOrDefault(item.StartUtc) >= extraction.StartUtc
-                           && item.StartUtc <= extraction.EndUtc)
+                && item.StartUtc <= extraction.EndUtc)
             .OrderBy(item => item.StartUtc)
             .Take(20)
             .Select(item => new { item.StartUtc, item.EndUtc, item.Label, notes = item.Notes is null ? null : Truncate(item.Notes, 300) });
+
         return SerializeObject(new
         {
             schema = "ansight.task-extraction-initial-evidence/v1",
@@ -2686,6 +3007,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private static string BuildTaskSupportModuleHandoff(string workspacePath)
     {
         var modules = RepositoryTaskLoader.DiscoverSupportModules(workspacePath);
+
         if (modules.Count == 0)
         {
             return "No workspace-authored task support modules were discovered.";
@@ -2696,6 +3018,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             ["path"] = module.RelativePath,
             ["isDeclaration"] = module.IsDeclaration
         }).ToArray());
+
         return $"""
                BEGIN WORKSPACE TASK SUPPORT MODULE MANIFEST
                These modules are available for import. Call `inspect_task_support_modules` with exact paths to read relevant source before using them:
@@ -2714,11 +3037,13 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var selectedTools = new JsonArray();
+
         if (catalog.ToolCatalog["tools"] is JsonArray tools)
         {
             foreach (var tool in tools.OfType<JsonObject>())
             {
                 var toolId = ReadOptionalString(tool, "id");
+
                 if (toolId is not null
                     && ContainsReferenceMention(description, $"@tool:{toolId}"))
                 {
@@ -2728,7 +3053,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         }
 
         var referencesArtifacts = description.Contains("@artifact:", StringComparison.Ordinal)
-                                  || description.Contains("@artifact-provider:", StringComparison.Ordinal);
+            || description.Contains("@artifact-provider:", StringComparison.Ordinal);
+
         if (selectedTools.Count == 0 && !referencesArtifacts)
         {
             return "No app-tool or artifact references were selected in the handoff.";
@@ -2742,6 +3068,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 ? catalog.ArtifactCatalog?.DeepClone()
                 : null
         };
+
         return $"""
                BEGIN USER-REFERENCED SESSION CAPABILITIES
                The `@...` tokens in the handoff refer to these exact recorded definitions:
@@ -2753,15 +3080,18 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private static bool ContainsReferenceMention(string description, string mention)
     {
         var searchStart = 0;
+
         while (searchStart < description.Length)
         {
             var index = description.IndexOf(mention, searchStart, StringComparison.Ordinal);
+
             if (index < 0)
             {
                 return false;
             }
 
             var boundaryIndex = index + mention.Length;
+
             if (boundaryIndex >= description.Length
                 || !IsReferenceIdentifierContinuation(description, boundaryIndex))
             {
@@ -2777,15 +3107,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private static bool IsReferenceIdentifierContinuation(string description, int index)
     {
         var value = description[index];
+
         if (char.IsLetterOrDigit(value) || value is '_' or '-' or ':' or '/')
         {
             return true;
         }
 
         return value == '.'
-               && index + 1 < description.Length
-               && (char.IsLetterOrDigit(description[index + 1])
-                   || description[index + 1] is '_' or '-');
+            && index + 1 < description.Length
+            && (char.IsLetterOrDigit(description[index + 1])
+                || description[index + 1] is '_' or '-');
     }
 
     private static AgentDraftSubmission ParseDraftSubmission(JsonObject arguments)
@@ -2793,6 +3124,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         var suggestedName = ReadRequiredString(arguments, "suggestedName");
         var summary = ReadRequiredString(arguments, "summary");
         var source = ReadRequiredString(arguments, "source");
+
         return new AgentDraftSubmission(suggestedName, summary, source);
     }
 
@@ -2834,6 +3166,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             return LocalTaskExtractionModes.Hosted;
         }
+
         if (mode.Equals(LocalTaskExtractionModes.DirectWebSocket, StringComparison.OrdinalIgnoreCase)
             || mode.Equals("websocket", StringComparison.OrdinalIgnoreCase)
             || mode.Equals("direct", StringComparison.OrdinalIgnoreCase))
@@ -2860,6 +3193,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             "proxy",
             "websocket"
         ];
+
         return implementationTerms.Any(term => message.Contains(term, StringComparison.OrdinalIgnoreCase))
             ? fallback
             : message;
@@ -2873,14 +3207,17 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Description);
         _ = AgentReasoningModes.Normalize(request.Reasoning);
+
         if (request.EndUtc.ToUniversalTime() <= request.StartUtc.ToUniversalTime())
         {
             throw new InvalidDataException("Select a timeline period with a positive duration.");
         }
+
         if (request.Description.Trim().Length > 8_000)
         {
             throw new InvalidDataException("The extraction handoff must be 8,000 characters or fewer.");
         }
+
         if (request.TaskName?.Trim().Length > MaximumTaskNameCharacters)
         {
             throw new InvalidDataException($"The task name must be {MaximumTaskNameCharacters} characters or fewer.");
@@ -2897,6 +3234,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         // Metering needs a short provisional title before the agent can name the task.
         // Keep the complete description in the handoff, not in the title.
         var title = Regex.Replace(request.Description.Trim(), @"\s+", " ");
+
         if (title.Length <= MaximumGeneratedTaskNameCharacters)
         {
             return title;
@@ -2904,6 +3242,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var length = MaximumGeneratedTaskNameCharacters - 1;
         var wordBoundary = title.LastIndexOf(' ', length);
+
         if (wordBoundary > 0)
         {
             length = wordBoundary;
@@ -2918,15 +3257,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
     private static string ReadRequiredString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var result)
-           && !string.IsNullOrWhiteSpace(result)
+            && property.TryGetValue<string>(out var result)
+            && !string.IsNullOrWhiteSpace(result)
             ? result.Trim()
             : throw new InvalidDataException($"The extraction agent omitted '{propertyName}'.");
 
     private static string? ReadOptionalString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var result)
-           && !string.IsNullOrWhiteSpace(result)
+            && property.TryGetValue<string>(out var result)
+            && !string.IsNullOrWhiteSpace(result)
             ? result.Trim()
             : null;
 
@@ -2937,12 +3276,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var builder = new StringBuilder();
         var lastWasSeparator = false;
+
         foreach (var character in value.Trim().ToLowerInvariant())
         {
             if (builder.Length >= 80)
             {
                 break;
             }
+
             if (char.IsAsciiLetterOrDigit(character))
             {
                 builder.Append(character);
@@ -2961,24 +3302,29 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     internal static string NormalizeTaskDescriptorSource(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         const string exportMarker = "export const task";
         var markerIndex = source.IndexOf(exportMarker, StringComparison.Ordinal);
+
         if (markerIndex < 0)
         {
             return source;
         }
 
         var equalsIndex = source.IndexOf('=', markerIndex + exportMarker.Length);
+
         if (equalsIndex < 0)
         {
             return source;
         }
 
         var objectStart = equalsIndex + 1;
+
         while (objectStart < source.Length && char.IsWhiteSpace(source[objectStart]))
         {
             objectStart++;
         }
+
         if (objectStart >= source.Length || source[objectStart] != '{')
         {
             return source;
@@ -2986,16 +3332,20 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
         var builder = new StringBuilder(source.Length + 64);
         builder.Append(source.AsSpan(0, objectStart));
+
         var isInString = false;
         var isEscaped = false;
         var stringDelimiter = '\0';
         var objectDepth = 0;
+
         for (var index = objectStart; index < source.Length; index++)
         {
             var character = source[index];
+
             if (isInString)
             {
                 builder.Append(character);
+
                 if (isEscaped)
                 {
                     isEscaped = false;
@@ -3028,9 +3378,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 objectDepth--;
                 builder.Append(character);
+
                 if (objectDepth == 0)
                 {
                     builder.Append(source.AsSpan(index + 1));
+
                     return builder.ToString();
                 }
 
@@ -3040,17 +3392,21 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             if (IsIdentifierStart(character))
             {
                 var identifierEnd = index + 1;
+
                 while (identifierEnd < source.Length && IsIdentifierPart(source[identifierEnd]))
                 {
                     identifierEnd++;
                 }
 
                 var colonIndex = identifierEnd;
+
                 while (colonIndex < source.Length && char.IsWhiteSpace(source[colonIndex]))
                 {
                     colonIndex++;
                 }
+
                 var previousSignificant = PreviousSignificantCharacter(source, index - 1, objectStart);
+
                 if (colonIndex < source.Length
                     && source[colonIndex] == ':'
                     && previousSignificant is '{' or ',')
@@ -3072,11 +3428,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     internal static IReadOnlyList<string> ValidateTaskApiSurface(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         var tokens = TokenizeTaskSource(source);
         var errors = new HashSet<string>(StringComparer.Ordinal);
+
         for (var tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
         {
             var root = tokens[tokenIndex].Text;
+
             if (root is not "ansight" and not "app" and not "expect" and not "check")
             {
                 continue;
@@ -3084,19 +3443,22 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
             var path = new List<string> { root };
             var cursor = tokenIndex + 1;
+
             while (cursor + 1 < tokens.Count
-                   && tokens[cursor].Text == "."
-                   && tokens[cursor + 1].IsIdentifier)
+                && tokens[cursor].Text == "."
+                && tokens[cursor + 1].IsIdentifier)
             {
                 path.Add(tokens[cursor + 1].Text);
                 cursor += 2;
             }
+
             if (cursor >= tokens.Count || tokens[cursor].Text != "(")
             {
                 continue;
             }
 
             var callPath = string.Join('.', path);
+
             switch (root)
             {
                 case "ansight":
@@ -3136,13 +3498,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     internal static IReadOnlyList<string> ValidateTaskActionBudget(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
+
         var actionCallCount = CountTaskActionCalls(source);
+
         if (actionCallCount == 0)
         {
             return [];
         }
 
         int maximumActions;
+
         try
         {
             var descriptor = RepositoryModuleDescriptorReader.ExtractObject(
@@ -3152,8 +3517,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 "Task");
             using var document = JsonDocument.Parse(descriptor);
             maximumActions = document.RootElement.TryGetProperty("maximumActions", out var value)
-                             && value.ValueKind == JsonValueKind.Number
-                             && value.TryGetInt32(out var declaredMaximum)
+                && value.ValueKind == JsonValueKind.Number
+                && value.TryGetInt32(out var declaredMaximum)
                 ? declaredMaximum
                 : RepositoryTaskLoader.DefaultMaximumActionsPerTask;
         }
@@ -3170,8 +3535,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         return
         [
             $"The task declares an action budget of {maximumActions:N0}, but its source contains at least "
-            + $"{actionCallCount:N0} ansight/app action calls. Omit maximumActions to use the "
-            + $"{RepositoryTaskLoader.DefaultMaximumActionsPerTask:N0}-action default, or raise it to cover every possible runtime action."
+                + $"{actionCallCount:N0} ansight/app action calls. Omit maximumActions to use the "
+                + $"{RepositoryTaskLoader.DefaultMaximumActionsPerTask:N0}-action default, or raise it to cover every possible runtime action."
         ];
     }
 
@@ -3179,6 +3544,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var tokens = TokenizeTaskSource(source);
         var count = 0;
+
         for (var tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
         {
             if (tokens[tokenIndex].Text is not "ansight" and not "app")
@@ -3188,9 +3554,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
 
             var pathLength = 1;
             var cursor = tokenIndex + 1;
+
             while (cursor + 1 < tokens.Count
-                   && tokens[cursor].Text == "."
-                   && tokens[cursor + 1].IsIdentifier)
+                && tokens[cursor].Text == "."
+                && tokens[cursor + 1].IsIdentifier)
             {
                 pathLength++;
                 cursor += 2;
@@ -3216,6 +3583,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             return;
         }
+
         if (path.Count >= 3
             && suites.TryGetValue(string.Join('.', path.Skip(1).SkipLast(1)), out var methods)
             && methods.ContainsKey(path[^1]))
@@ -3229,12 +3597,15 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             errors.Add(
                 $"'{callPath}' is not declared by AnsightHost. Use 'ansight.ui.{path[1]}(...)'.");
+
             return;
         }
+
         if (string.Equals(callPath, "ansight.getCurrentPage", StringComparison.Ordinal))
         {
             errors.Add(
                 "'ansight.getCurrentPage' is not declared by AnsightHost. For visible state use ansight.ui.find/waitFor; framework inspection is app.maui.getCurrentPage and returns AppToolCallResult.");
+
             return;
         }
 
@@ -3246,48 +3617,65 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private static IReadOnlyList<TaskSourceToken> TokenizeTaskSource(string source, bool includeStrings = false)
     {
         var tokens = new List<TaskSourceToken>();
+
         for (var index = 0; index < source.Length;)
         {
             var character = source[index];
+
             if (char.IsWhiteSpace(character))
             {
                 index++;
                 continue;
             }
+
             if (character == '/' && index + 1 < source.Length && source[index + 1] == '/')
             {
                 index += 2;
+
                 while (index < source.Length && source[index] is not '\r' and not '\n')
                 {
                     index++;
                 }
+
                 continue;
             }
+
             if (character == '/' && index + 1 < source.Length && source[index + 1] == '*')
             {
                 index += 2;
+
                 while (index + 1 < source.Length
-                       && (source[index] != '*' || source[index + 1] != '/'))
+                    && (source[index] != '*' || source[index + 1] != '/'))
                 {
                     index++;
                 }
+
                 index = Math.Min(source.Length, index + 2);
                 continue;
             }
+
             if (character is '\'' or '"' or '`')
             {
                 var end = SkipQuotedSource(source, index, character);
-                if (includeStrings) tokens.Add(new TaskSourceToken(source[index..end], IsIdentifier: false));
+
+                if (includeStrings)
+                {
+                    tokens.Add(new TaskSourceToken(source[index..end], IsIdentifier: false));
+                }
+
                 index = end;
                 continue;
             }
+
             if (IsIdentifierStart(character))
             {
                 var end = index + 1;
+
                 while (end < source.Length && IsIdentifierPart(source[end]))
                 {
                     end++;
                 }
+
                 tokens.Add(new TaskSourceToken(source[index..end], IsIdentifier: true));
                 index = end;
                 continue;
@@ -3303,9 +3691,11 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     private static int SkipQuotedSource(string source, int start, char delimiter)
     {
         var escaped = false;
+
         for (var index = start + 1; index < source.Length; index++)
         {
             var character = source[index];
+
             if (escaped)
             {
                 escaped = false;
@@ -3349,6 +3739,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             .OrderByDescending(static extraction => extraction.UpdatedAtUtc)
             .Skip(MaximumRetainedExtractions)
             .ToArray();
+
         foreach (var extraction in completed)
         {
             extractions.Remove(extraction.ExtractionId);
@@ -3360,6 +3751,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
     {
         var value = content ?? string.Empty;
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
         return new SimulatorAgentAuditPayload(
             value.Length <= maximumCharacters ? value : value[..maximumCharacters],
             value.Length,
@@ -3400,7 +3792,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         bool IsInfrastructureFailure)
     {
         public static DraftMaterializationResult Valid(LocalTaskExtractionDraft draft)
-            => new(draft, true, string.Empty, false);
+                => new(draft, true, string.Empty, false);
 
         public static DraftMaterializationResult Invalid(
             LocalTaskExtractionDraft draft,
@@ -3504,6 +3896,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             {
                 var previousSourcePath = generatedSourcePath;
                 generatedSourcePath = sourcePath;
+
                 return previousSourcePath;
             }
         }
@@ -3545,6 +3938,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         public void RecordTracePass(LocalTaskExtractionModelPassTrace pass)
         {
             ArgumentNullException.ThrowIfNull(pass);
+
             lock (gate)
             {
                 if (traceStatus == "idle")
@@ -3562,7 +3956,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             lock (gate)
             {
-                traceToolCalls.Add(call with { Sequence = traceToolCalls.Count + 1 });
+                traceToolCalls.Add(call with
+                {
+                    Sequence = traceToolCalls.Count + 1
+                });
                 Touch();
             }
         }
@@ -3570,6 +3967,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         public void CompleteTrace(WorkspaceTestRunMeterResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
+
             lock (gate)
             {
                 traceStatus = result.IsSuccess ? "complete" : "failed";
@@ -3595,6 +3993,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             ArgumentNullException.ThrowIfNull(snapshot);
             ArgumentNullException.ThrowIfNull(evidence);
+
             lock (gate)
             {
                 selectorEvidenceContext = new SelectorEvidenceContext(snapshot, evidence);
@@ -3615,6 +4014,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 ReasoningConfigurationRevision = snapshot.ReasoningConfigurationRevision;
                 progress.Clear();
                 progress.AddRange(snapshot.Progress.TakeLast(MaximumProgressEntries));
+
                 var wasRunning = snapshot.TestStatus is "running" or "cancelling";
                 testStatus = wasRunning ? "idle" : snapshot.TestStatus;
                 testMessage = wasRunning ? null : snapshot.TestMessage;
@@ -3626,6 +4026,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 traceCost = snapshot.Trace?.CalculatedCost;
                 traceModelPasses.Clear();
                 traceToolCalls.Clear();
+
                 if (snapshot.Trace is not null)
                 {
                     traceModelPasses.AddRange(snapshot.Trace.ModelPasses);
@@ -3639,8 +4040,8 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             lock (gate)
             {
                 return selectorEvidenceContext
-                       ?? throw new InvalidOperationException(
-                           "The selected UI evidence has not finished loading.");
+                    ?? throw new InvalidOperationException(
+                        "The selected UI evidence has not finished loading.");
             }
         }
 
@@ -3651,7 +4052,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 lock (gate)
                 {
                     return testStatus is not ("running" or "cancelling")
-                           && status is "ready" or "needsReview" or "failed" or "cancelled" or "committed";
+                        && status is "ready" or "needsReview" or "failed" or "cancelled" or "committed";
                 }
             }
         }
@@ -3742,6 +4143,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for a ready task draft before testing it.");
                 }
+
                 if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("This task draft already has a test run in progress.");
@@ -3754,6 +4156,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 testResult = null;
                 Touch();
                 AddProgress("test.started", testMessage);
+
                 return testCancellation.Token;
             }
         }
@@ -3762,11 +4165,16 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         {
             lock (gate)
             {
-                if (testStatus is not "running" || testCancellation is null) return Task.CompletedTask;
+                if (testStatus is not "running" || testCancellation is null)
+                {
+                    return Task.CompletedTask;
+                }
+
                 testStatus = "cancelling";
                 testMessage = "Cancelling test run…";
                 Touch();
                 AddProgress("test.cancelling", testMessage);
+
                 // CancelAsync marks the token now but runs callbacks outside this lock.
                 return testCancellation.CancelAsync();
             }
@@ -3777,7 +4185,10 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             lock (gate)
             {
                 if (testStatus is "running" or "cancelling")
+                {
                     throw new InvalidDataException("Cancel the test run and wait for it to stop before clearing its result.");
+                }
+
                 testStatus = "idle";
                 testMessage = null;
                 testResult = null;
@@ -3791,7 +4202,14 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             lock (gate)
             {
                 if (testCancellation?.IsCancellationRequested == true)
-                    result = result with { Status = "cancelled", Message = "Task test run cancelled." };
+                {
+                    result = result with
+                    {
+                        Status = "cancelled",
+                        Message = "Task test run cancelled."
+                    };
+                }
+
                 testResult = result;
                 testStatus = result.Status;
                 testMessage = result.Message;
@@ -3820,6 +4238,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for the agent to produce a task draft.");
                 }
+
                 if (draft.ValidationWarnings.Count > 0 || status == "needsReview")
                 {
                     throw new InvalidDataException("Resolve the task draft validation errors before testing or saving it.");
@@ -3837,10 +4256,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for the agent to produce a task draft.");
                 }
+
                 if (testStatus is "running" or "cancelling")
                 {
                     throw new InvalidDataException("Wait for the task test run to finish before editing the draft.");
                 }
+
                 if (status == "committed")
                 {
                     throw new InvalidDataException("The task was already saved and can no longer be edited in this extraction.");
@@ -3858,10 +4279,12 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
                 {
                     throw new InvalidDataException("Wait for the task test run to finish before debugging it.");
                 }
+
                 if (testResult is null || draft is null)
                 {
                     throw new InvalidDataException("Run the task draft before debugging a failure.");
                 }
+
                 if (testStatus is "passed" or "succeeded")
                 {
                     throw new InvalidDataException("The latest task test passed and has no failure to debug.");
@@ -3886,6 +4309,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         public void Cancel()
         {
             Cancellation.Cancel();
+
             lock (gate)
             {
                 if (status is "queued" or "running")
@@ -3961,6 +4385,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
         private void AddProgress(string stage, string nextMessage)
         {
             progress.Add(new LocalTaskExtractionProgress(stage, nextMessage, DateTimeOffset.UtcNow));
+
             if (progress.Count > MaximumProgressEntries)
             {
                 progress.RemoveRange(0, progress.Count - MaximumProgressEntries);

@@ -16,6 +16,7 @@ internal abstract class PairingOperation : Operation
         var durationInput = NormalizeOptionalString(arguments?["duration"]?.GetValue<string>());
         var requestedAppName = NormalizeOptionalString(arguments?["appName"]?.GetValue<string>());
         var result = hostPairingService.Issue(requestedAppId, requestedAppName, durationInput);
+
         if (!result.IsSuccess || result.Invite is null)
         {
             return RequestResult.ToolResult(
@@ -72,12 +73,14 @@ internal abstract class PairingOperation : Operation
     protected RequestResult BuildGetPairingConfigResult(JsonObject? arguments)
     {
         var configId = NormalizeOptionalString(arguments?["inviteId"]?.GetValue<string>());
+
         if (string.IsNullOrWhiteSpace(configId))
         {
             return ToolError("inviteId is required.");
         }
 
         var item = hostPairingService.Get(configId);
+
         if (item is null)
         {
             return RequestResult.ToolResult(
@@ -92,6 +95,7 @@ internal abstract class PairingOperation : Operation
         var payload = BuildPairingConfigSummaryPayload(item.Summary);
         payload["invite"] = JsonNode.Parse(item.InviteJson);
         payload["inviteJson"] = item.InviteJson;
+
         return RequestResult.ToolResult(payload, isError: false);
     }
 

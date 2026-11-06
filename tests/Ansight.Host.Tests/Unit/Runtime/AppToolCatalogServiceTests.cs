@@ -70,6 +70,7 @@ public sealed class AppToolCatalogServiceTests
             {
                 requests.Add(envelope.Payload?.DeepClone().AsObject() ?? new JsonObject());
                 responseNumber++;
+
                 return Task.FromResult(AppToolBridgeResponse.FromSuccess(
                     "Catalog returned.",
                     CreateIndexResponse(envelope, sessionId, responseNumber)));
@@ -124,6 +125,7 @@ public sealed class AppToolCatalogServiceTests
             (sessionId, envelope, cancellationToken, requestContext) =>
             {
                 requests.Add(envelope.Payload?.DeepClone().AsObject() ?? new JsonObject());
+
                 return Task.FromResult(AppToolBridgeResponse.FromSuccess(
                     "Catalog returned.",
                     new ToolProtocolEnvelope
@@ -147,6 +149,7 @@ public sealed class AppToolCatalogServiceTests
         connections.Register(
             "session-1",
             new LiveSessionConnection("session-1", firstSocket, authorization));
+
         var firstResponse = await service.QueryAsync(
             "session-1",
             new JsonObject { ["detail"] = "summary" },
@@ -157,6 +160,7 @@ public sealed class AppToolCatalogServiceTests
         connections.Register(
             "session-1",
             new LiveSessionConnection("session-1", secondSocket, authorization));
+
         var secondResponse = await service.QueryAsync(
             "session-1",
             new JsonObject { ["detail"] = "summary" },

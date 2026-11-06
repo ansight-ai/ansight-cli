@@ -6,16 +6,19 @@ internal static class LiveUiScreenTextSelection
         IReadOnlyList<SessionScreenshotTextBlock> source, int imageHeight, int limit)
     {
         var compact = new List<SessionScreenshotTextBlock>();
+
         foreach (var block in source.OrderByDescending(block => block.Text.Length)
-                     .ThenByDescending(block => block.Confidence))
+            .ThenByDescending(block => block.Confidence))
         {
             var alreadyRepresented = compact.Any(line =>
             {
                 var containsSameText = line.Confidence >= block.Confidence - 10
                     && line.Text.Contains(block.Text, StringComparison.OrdinalIgnoreCase)
                     && Covers(line.Bounds, block.Bounds);
+
                 return containsSameText;
             });
+
             if (!alreadyRepresented)
             {
                 compact.Add(block);
@@ -23,6 +26,7 @@ internal static class LiveUiScreenTextSelection
         }
 
         var ordered = compact.OrderBy(block => block.Bounds.Y).ThenBy(block => block.Bounds.X).ToArray();
+
         if (ordered.Length <= limit)
         {
             return new LiveUiScreenTextSelectionResult(ordered, ordered.Length, source.Count);
@@ -34,6 +38,7 @@ internal static class LiveUiScreenTextSelection
         const int bandCount = 8;
         var bands = Enumerable.Range(0, bandCount)
             .Select(_ => new Queue<SessionScreenshotTextBlock>()).ToArray();
+
         foreach (var block in ordered)
         {
             var centerY = block.Bounds.Y + block.Bounds.Height / 2.0;
@@ -42,6 +47,7 @@ internal static class LiveUiScreenTextSelection
         }
 
         var selected = new List<SessionScreenshotTextBlock>();
+
         while (selected.Count < limit)
         {
             foreach (var band in bands)
@@ -68,9 +74,7 @@ internal static class LiveUiScreenTextSelection
         var width = Math.Max(0, Math.Min(line.X + line.Width, word.X + word.Width) - Math.Max(line.X, word.X));
         var height = Math.Max(0, Math.Min(line.Y + line.Height, word.Y + word.Height) - Math.Max(line.Y, word.Y));
         var area = (double)word.Width * word.Height;
+
         return area > 0 && width * height / area >= 0.9;
     }
 }
-
-internal sealed record LiveUiScreenTextSelectionResult(
-    IReadOnlyList<SessionScreenshotTextBlock> Blocks, int TotalCount, int RawCount);

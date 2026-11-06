@@ -30,6 +30,7 @@ internal sealed record ReleaseChannel(
             var downloadBaseUrl = string.IsNullOrWhiteSpace(receipt.DownloadBaseUrl)
                 ? GetDefaultDownloadBaseUrl(installedChannel)
                 : receipt.DownloadBaseUrl.TrimEnd('/');
+
             if (IsCanonicalReleaseUrl(installedChannel, releaseUrl)
                 && IsLocalFileUrl(downloadBaseUrl))
             {
@@ -61,6 +62,7 @@ internal sealed record ReleaseChannel(
     private static bool TryNormalize(string? channel, out string normalized)
     {
         normalized = channel?.Trim().ToLowerInvariant() ?? string.Empty;
+
         return normalized is PublicName or PreviewName;
     }
 

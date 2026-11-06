@@ -27,6 +27,7 @@ public sealed partial class SessionCaptureStoreTests
         Assert.NotNull(icon);
         Assert.Equal("app-icon.png", icon!.FileName);
         Assert.Equal(bytes.Length, icon.ByteCount);
+
         var iconPath = SessionAppIconArtifactPath.ResolveSessionIconPath(
             SessionAppIconArtifactPath.ResolveSessionCapturesRootPath(environment.ApplicationPaths),
             "com.example.testapp",

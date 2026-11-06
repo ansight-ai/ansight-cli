@@ -19,12 +19,15 @@ public sealed partial class RepositoryTaskTests
               expect(result.passed, { id: 'masked-comparison' }).toBe(true);
             }
             """.Replace("METHOD", method));
+
         var result = await CreateExecutor((name, args, _) =>
         {
             Assert.Equal(operation, name);
+
             var region = Assert.Single(args["ignoreRegions"]!.AsArray())!;
             Assert.Equal(0.8, region["x"]!.GetValue<double>());
             Assert.Equal(0.05, region["height"]!.GetValue<double>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["passed"] = true }, false));
         }).ExecuteAsync(new RepositoryTaskExecutionRequest("images", task, "session", new JsonObject(), "images"), CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
@@ -46,14 +49,18 @@ public sealed partial class RepositoryTaskTests
               expect(result.passed, { id: 'visual-check' }).toBe(true);
             }
             """.Replace("METHOD", method));
+
         var result = await CreateExecutor((name, args, _) =>
         {
             Assert.Equal(operation, name);
             Assert.Equal(repository.RootPath, ScreenshotWorkspaceScope.RepositoryRoot);
             Assert.Equal("references/cubes.png", args["reference"]!["workspacePath"]!.GetValue<string>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["passed"] = false, ["verdict"] = "inconclusive" }, false));
         }).ExecuteAsync(new RepositoryTaskExecutionRequest("images", task, "session", new JsonObject(), "images")
-        { CaptureTrace = true }, CancellationToken.None);
+        {
+            CaptureTrace = true
+        }, CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Failed, result.Status);
         Assert.Equal("visual-check", Assert.Single(result.Assertions).AssertionId);
         Assert.False(Assert.Single(result.ToolCalls).IsError);

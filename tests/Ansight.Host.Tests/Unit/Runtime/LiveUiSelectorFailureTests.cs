@@ -22,6 +22,7 @@ public sealed class LiveUiSelectorFailureTests
         Assert.False(payload["performed"]!.GetValue<bool>());
         Assert.True(JsonNode.DeepEquals(selector.ToJson(), payload["selector"]));
         Assert.True(JsonNode.DeepEquals(evidence, payload[LiveUiOcrTraceEvidence.PayloadPropertyName]));
+
         var message = payload["message"]!.GetValue<string>();
         Assert.StartsWith("No live UI node matched", message);
         Assert.Contains("\"automationId\":\"save-button\"", message);

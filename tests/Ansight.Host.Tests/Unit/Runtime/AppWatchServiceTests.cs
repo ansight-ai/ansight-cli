@@ -11,12 +11,14 @@ public sealed class AppWatchServiceTests
         var backend = new Backend();
         var service = new AppWatchService(environment.RootPath, backend);
         await service.AddAsync("test.app", "ios", "phone", []);
+
         var device = new DeviceDescriptor("phone", "Phone", "ios", "test", "booted", true, true, DeviceKinds.Physical);
         var foregroundAt = DateTimeOffset.UtcNow;
         var backgroundAt = foregroundAt.AddSeconds(5);
         backend.Observations = [new(device, "42", AppState: global::Ansight.AppLifecycleState.Foreground,
             ObservedAtUtc: foregroundAt)];
         await service.PollAsync();
+
         var capture = Assert.Single(backend.Captures);
         Assert.Equal(new LifecycleObservation(global::Ansight.AppLifecycleState.Foreground, foregroundAt),
             Assert.Single(capture.AppStates));
@@ -54,6 +56,7 @@ public sealed class AppWatchServiceTests
         var service = new AppWatchService(environment.RootPath, backend);
         await service.AddAsync("test.app", "ios", "simulator", []);
         await service.PollAsync();
+
         var failed = Assert.Single(backend.Captures);
         failed.IsActive = false;
         backend.Failure = new IOException("Appium connection unavailable");
@@ -83,6 +86,7 @@ public sealed class AppWatchServiceTests
             screenshotIntervalMilliseconds: 1_000);
         var second = await service.AddAsync("other.app", "ios", "simulator", []);
         await service.PollAsync();
+
         var capture = backend.Captures[0];
         Assert.Equal(1_000, capture.ScreenshotIntervalMilliseconds);
 
@@ -90,6 +94,7 @@ public sealed class AppWatchServiceTests
         Assert.Equal(500, capture.ScreenshotIntervalMilliseconds);
         Assert.Equal(0, capture.Stops);
         Assert.Equal(capture.SessionId, service.List().Single(status => status.Watch.Id == first.Id).SessionId);
+
         var reloaded = new AppWatchService(environment.RootPath, new Backend()).List();
         Assert.Equal(500, reloaded.Single(status => status.Watch.Id == first.Id).Watch.ScreenshotIntervalMilliseconds);
         Assert.Equal(2_000, reloaded.Single(status => status.Watch.Id == second.Id).Watch.ScreenshotIntervalMilliseconds);
@@ -108,6 +113,7 @@ public sealed class AppWatchServiceTests
         using var environment = new TestEnvironment();
         File.WriteAllText(Path.Combine(environment.RootPath, "app-watches.json"),
             """[{"id":"old-watch","appId":"test.app","enabled":true,"captureFiles":[]}]""");
+
         var watch = Assert.Single(new AppWatchService(environment.RootPath, new Backend()).List()).Watch;
         Assert.Equal(2_000, watch.ScreenshotIntervalMilliseconds);
     }
@@ -123,9 +129,11 @@ public sealed class AppWatchServiceTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.AddAsync("test.app", null, null,
             [], screenshotIntervalMilliseconds: interval));
         Assert.Empty(service.List());
+
         var watch = await service.AddAsync("test.app", "ios", "physical-udid", ["Documents/data.json"],
             captureInstruments: true, screenshotIntervalMilliseconds: 1_000);
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => service.SetScreenshotIntervalAsync(watch.Id, interval));
+
         var saved = Assert.Single(new AppWatchService(environment.RootPath, new Backend()).List()).Watch;
         Assert.Equal(1_000, saved.ScreenshotIntervalMilliseconds);
         Assert.True(saved.CaptureInstruments);
@@ -157,15 +165,18 @@ public sealed class AppWatchServiceTests
         var watch = await service.AddAsync("test.app", null, null, []);
         await service.PollAsync();
         Assert.Equal("waiting-for-device", Assert.Single(service.List()).State);
+
         var stored = Assert.Single(new AppWatchService(environment.RootPath, backend).List()).Watch;
         Assert.Null(stored.Platform);
         Assert.Null(stored.DeviceId);
 
         backend.Observations.Add(ObserveDevice("ios-one", "ios"));
         await service.PollAsync();
+
         var first = Assert.Single(backend.Captures);
         backend.Observations.Add(ObserveDevice("android-two", "android"));
         await service.PollAsync();
+
         var both = Assert.Single(service.List());
         Assert.Equal(2, backend.Captures.Count);
         Assert.Equal(2, both.Devices.Count(device => device.SessionId is not null));
@@ -223,6 +234,7 @@ public sealed class AppWatchServiceTests
         using var environment = new TestEnvironment();
         var backend = new Backend { Observations = [ObserveDevice("one", "ios"), ObserveDevice("two", "android")] };
         backend.BusyDevices.Add("one");
+
         var service = new AppWatchService(environment.RootPath, backend);
         await service.AddAsync("test.app", null, null, []);
         await service.PollAsync();
@@ -246,9 +258,11 @@ public sealed class AppWatchServiceTests
         var first = await service.AddAsync("test.app", "ios", "simulator", ["Documents/notes.sqlite"]);
         await service.SetEnabledAsync(first.Id, false);
         Assert.False(Assert.Single(new AppWatchService(environment.RootPath, backend).List()).Watch.Enabled);
+
         var second = await service.AddAsync("test.app", "ios", "simulator", ["Documents/new.sqlite"]);
         Assert.Equal(first.Id, second.Id);
         second.CaptureFiles[0] = "changed-by-caller";
+
         var reloaded = new AppWatchService(environment.RootPath, backend);
         var status = Assert.Single(reloaded.List());
         Assert.True(status.Watch.Enabled);
@@ -282,6 +296,7 @@ public sealed class AppWatchServiceTests
         await service.PollAsync();
         await service.PollAsync(); // Background/foreground transitions do not change process identity.
         Assert.Equal("capturing", Assert.Single(service.List()).State);
+
         var capture = Assert.Single(backend.Captures);
         backend.Identity = null;
         await service.PollAsync();
@@ -333,6 +348,7 @@ public sealed class AppWatchServiceTests
         await service.PollAsync();
         await service.PollAsync();
         Assert.Equal("waiting-for-device", service.List()[0].State);
+
         var capture = Assert.Single(backend.Captures);
         Assert.Equal("device.unavailable", capture.Reason);
         Assert.Empty(capture.Files);
@@ -376,6 +392,7 @@ public sealed class AppWatchServiceTests
         Assert.False(service.IsRunning);
         Assert.Equal("host.stopped", Assert.Single(backend.Captures).Reason);
         Assert.Equal(1, backend.Captures[0].Stops);
+
         var restored = new AppWatchService(environment.RootPath, backend);
         await restored.PollAsync();
         Assert.Equal(2, backend.Captures.Count);
@@ -410,13 +427,19 @@ public sealed class AppWatchServiceTests
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<AppWatchObservation>? Observations { get; set; }
         public string? InventoryWarning { get; set; }
+
         public Task<AppWatchDiscovery> ObserveAsync(AppWatchDefinition watch, CancellationToken cancellationToken)
-            => Failure is not null ? Task.FromException<AppWatchDiscovery>(Failure) : Task.FromResult(new AppWatchDiscovery(
-                Observations ?? (Available ? [new AppWatchObservation(new DeviceDescriptor("simulator", "Phone", watch.Platform ?? "ios", "test", "booted", true, true,
-                    watch.Platform == "android" ? DeviceKinds.Emulator : DeviceKinds.Simulator), Identity)] : []), InventoryWarning));
+                    => Failure is not null ? Task.FromException<AppWatchDiscovery>(Failure) : Task.FromResult(new AppWatchDiscovery(
+                        Observations ?? (Available ? [new AppWatchObservation(new DeviceDescriptor("simulator", "Phone", watch.Platform ?? "ios", "test", "booted", true, true,
+                            watch.Platform == "android" ? DeviceKinds.Emulator : DeviceKinds.Simulator), Identity)] : []), InventoryWarning));
+
         public Task<IAppWatchCapture?> TryStartAsync(AppWatchDefinition watch, AppWatchObservation observation, CancellationToken cancellationToken)
         {
-            if (Busy || BusyDevices.Contains(observation.Device.Identifier)) return Task.FromResult<IAppWatchCapture?>(null);
+            if (Busy || BusyDevices.Contains(observation.Device.Identifier))
+            {
+                return Task.FromResult<IAppWatchCapture?>(null);
+            }
+
             var capture = new Capture(Guid.NewGuid().ToString("N"))
             {
                 DeviceId = observation.Device.Identifier,
@@ -424,30 +447,43 @@ public sealed class AppWatchServiceTests
             };
             Captures.Add(capture);
             Started.TrySetResult();
+
             return Task.FromResult<IAppWatchCapture?>(capture);
         }
     }
 
-    private sealed class Capture(string sessionId) : IAppWatchCapture
+    private sealed class Capture : IAppWatchCapture
     {
+        public Capture(string sessionId)
+        {
+            this.SessionId = sessionId;
+            this.IsActive = true;
+            this.Files = [];
+            this.AppStates = [];
+        }
+
         public string? DeviceId { get; init; }
-        public string SessionId { get; } = sessionId;
-        public bool IsActive { get; set; } = true;
+        public string SessionId { get; }
+        public bool IsActive { get; set; }
         public int Stops { get; private set; }
         public string? Reason { get; private set; }
-        public IReadOnlyList<string> Files { get; private set; } = [];
+        public IReadOnlyList<string> Files { get; private set; }
         public bool FailStop { get; set; }
         public int ScreenshotIntervalMilliseconds { get; set; }
-        public List<LifecycleObservation> AppStates { get; } = [];
+        public List<LifecycleObservation> AppStates { get; }
+
         public void SetAppState(global::Ansight.AppLifecycleState state, DateTimeOffset observedAtUtc)
-            => AppStates.Add(new LifecycleObservation(state, observedAtUtc));
+                    => AppStates.Add(new LifecycleObservation(state, observedAtUtc));
+
         public void SetScreenshotInterval(int intervalMilliseconds)
             => ScreenshotIntervalMilliseconds = intervalMilliseconds;
+
         public Task StopAsync(string reason, IReadOnlyList<string> captureFiles)
         {
             Stops++;
             Reason = reason;
             Files = captureFiles;
+
             return FailStop ? Task.FromException(new IOException("File read failed")) : Task.CompletedTask;
         }
     }

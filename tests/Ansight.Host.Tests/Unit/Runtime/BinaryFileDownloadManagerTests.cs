@@ -30,6 +30,7 @@ public sealed class BinaryFileDownloadManagerTests
 
         var payload = Assert.IsType<JsonObject>(operation.RequestEnvelope.Payload);
         Assert.Equal("files.begin_binary_download", payload["toolId"]?.GetValue<string>());
+
         var arguments = Assert.IsType<JsonObject>(payload["arguments"]);
         Assert.Equal("appData", arguments["root"]?.GetValue<string>());
         Assert.Equal("db/app.db", arguments["path"]?.GetValue<string>());
@@ -168,6 +169,7 @@ public sealed class BinaryFileDownloadManagerTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44, 8), offsetBytes);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52, 4), payload.Length);
         payload.CopyTo(frame, BinaryFileTransferProtocol.HeaderSize);
+
         return frame;
     }
 }

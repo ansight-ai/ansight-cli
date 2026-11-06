@@ -8,10 +8,7 @@ public sealed record WorkspaceTestBatchResult(
     bool WasCancelled)
 {
     public string? BatchRunId { get; init; }
-
     public string? HistoryFilePath { get; init; }
-
     public string? HistoryPersistenceError { get; init; }
-
     public bool Parallel { get; init; }
 }

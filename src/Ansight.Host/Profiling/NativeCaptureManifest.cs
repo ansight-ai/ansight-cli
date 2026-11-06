@@ -1,0 +1,26 @@
+namespace Ansight.Host.Profiling;
+
+public sealed record NativeCaptureManifest(
+    string Schema,
+    string CaptureId,
+    string Platform,
+    string Engine,
+    string Preset,
+    string AppId,
+    string ApplicationPath,
+    string DeviceId,
+    int RequestedDurationSeconds,
+    string State,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset? StartedUtc,
+    DateTimeOffset? CompletedUtc,
+    string? StopReason,
+    string? FailureMessage,
+    string? CaptureToolPath,
+    string? CaptureToolVersion,
+    string? SupportingToolVersion,
+    IReadOnlyList<NativeCaptureArtifact> Artifacts,
+    IReadOnlyList<string> Warnings,
+    int? ProcessId,
+    string? ProcessName,
+    int? SampleIntervalMilliseconds);

@@ -1,3 +1,5 @@
+using Ansight.Host.Runtime.WebSocketSessions;
+
 namespace Ansight.Host.Tests.TestSupport;
 
 internal sealed class TestEnvironment : IDisposable
@@ -97,8 +99,8 @@ internal sealed class TestEnvironment : IDisposable
 
     private static int FindFreeTcpPort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
+        var listener = SessionPortLeasePool.StartListener(0, backlog: 1);
+
         try
         {
             return ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -119,12 +121,12 @@ internal sealed class TestEnvironment : IDisposable
         {
             var start = random.Next(firstCandidate, lastCandidate + 1);
             var listeners = new List<TcpListener>(count);
+
             try
             {
                 for (var offset = 0; offset < count; offset++)
                 {
-                    var listener = new TcpListener(IPAddress.Loopback, start + offset);
-                    listener.Start();
+                    var listener = SessionPortLeasePool.StartListener(start + offset, backlog: 1);
                     listeners.Add(listener);
                 }
 
@@ -150,6 +152,7 @@ internal sealed class TestEnvironment : IDisposable
     private static int FindFreeUdpPort()
     {
         using var client = new UdpClient(0);
+
         return ((IPEndPoint)client.Client.LocalEndPoint!).Port;
     }
 

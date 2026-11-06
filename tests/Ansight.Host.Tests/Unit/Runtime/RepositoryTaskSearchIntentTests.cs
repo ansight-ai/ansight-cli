@@ -55,7 +55,10 @@ public sealed class RepositoryTaskSearchIntentTests
         };
 
         var parameterizedMatch = RepositoryTaskSearchMatcher.Match(task, query);
-        var noInputMatch = RepositoryTaskSearchMatcher.Match(task with { InputSchema = EmptyInputSchema() }, query);
+        var noInputMatch = RepositoryTaskSearchMatcher.Match(task with
+        {
+            InputSchema = EmptyInputSchema()
+        }, query);
 
         Assert.False(RepositoryTaskSearchMatcher.HasTaskIntentMatch(task.TaskId, task.Title, task.Feature, query, task.Keywords));
         Assert.Equal(noInputMatch?.Score, parameterizedMatch?.Score);
@@ -115,6 +118,7 @@ public sealed class RepositoryTaskSearchIntentTests
         var match = RepositoryTaskSearchMatcher.Match(task, "search Siuana area");
 
         Assert.NotNull(match);
+
         var evidence = Assert.Single(match.Evidence, candidate => candidate.QueryTerm == "siuana");
         Assert.Equal("siurana", evidence.IndexedTerm);
         Assert.Equal("inputSchema", evidence.IndexedSource);

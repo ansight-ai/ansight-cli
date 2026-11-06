@@ -11,17 +11,27 @@ public static partial class WorkspacePromptReferences
     public static IReadOnlyList<Reference> Read(string text)
     {
         var references = new List<Reference>();
+
         foreach (Match match in ReferencePattern().Matches(text))
         {
             var encoded = match.Groups["id"].Value.TrimEnd('.', ':');
+
             if (encoded.Length == 0 || Regex.IsMatch(encoded, "%($|[^0-9a-fA-F]|[0-9a-fA-F]($|[^0-9a-fA-F]))"))
+            {
                 throw new InvalidDataException($"Invalid prompt reference '{match.Value}'. Supply an ID after the slash; percent-encode special characters.");
+            }
+
             var id = Uri.UnescapeDataString(encoded);
+
             if (string.IsNullOrWhiteSpace(id) || id.Any(char.IsControl))
+            {
                 throw new InvalidDataException($"Invalid prompt reference '{match.Value}'. IDs must be non-empty and cannot contain control characters.");
+            }
+
             references.Add(new Reference(match.Groups["kind"].Value, id, match.Index,
                 match.Length - match.Groups["id"].Length + encoded.Length));
         }
+
         return references;
     }
 
@@ -38,6 +48,7 @@ public static partial class WorkspacePromptReferences
                 });
             text = text.Remove(reference.Start, reference.Length).Insert(reference.Start, replacement);
         }
+
         return text;
     }
 

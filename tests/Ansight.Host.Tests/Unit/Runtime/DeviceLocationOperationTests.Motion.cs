@@ -13,6 +13,7 @@ public sealed partial class DeviceLocationOperationTests
         var driver = new RecordingMotionDriver();
         var router = new DeviceMotionRouter();
         router.Configure(driver);
+
         var catalog = CreateToolCatalog(runtimeState, environment, new TestAppToolBridge(),
             driver: null, motionRouter: router);
 
@@ -46,6 +47,7 @@ public sealed partial class DeviceLocationOperationTests
         var driver = new RecordingMotionDriver();
         var router = new DeviceMotionRouter();
         router.Configure(driver);
+
         var catalog = CreateToolCatalog(runtimeState, environment, new TestAppToolBridge(),
             driver: null, motionRouter: router);
 
@@ -116,7 +118,10 @@ public sealed partial class DeviceLocationOperationTests
                 ["deviceId"] = "emulator-5554",
                 ["samples"] = new JsonArray(new JsonObject
                 {
-                    ["x"] = x, ["y"] = 0, ["z"] = 0, ["holdMs"] = holdMs
+                    ["x"] = x,
+                    ["y"] = 0,
+                    ["z"] = 0,
+                    ["holdMs"] = holdMs
                 })
             }
         });
@@ -134,6 +139,7 @@ public sealed partial class DeviceLocationOperationTests
         public Task ShakeIosSimulatorAsync(string deviceUdid, CancellationToken cancellationToken = default)
         {
             ShakenSimulatorUdid = deviceUdid;
+
             return Task.CompletedTask;
         }
 
@@ -142,6 +148,7 @@ public sealed partial class DeviceLocationOperationTests
         {
             DeviceSerial = deviceSerial;
             Samples = samples;
+
             return Task.CompletedTask;
         }
     }

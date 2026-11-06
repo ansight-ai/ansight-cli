@@ -7,9 +7,11 @@ internal static class WorkspaceTestTeamOptions
     public static Guid? Resolve(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         var value = arguments.GetOption("team-id")
-                    ?? Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.TeamId
-                    ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID");
+            ?? Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.TeamId
+            ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID");
+
         if (value is null)
         {
             return null;

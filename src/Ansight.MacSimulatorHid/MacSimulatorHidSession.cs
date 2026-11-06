@@ -13,11 +13,13 @@ public sealed class MacSimulatorHidSession : IDisposable
     public MacSimulatorHidSession(string developerDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(developerDirectory);
+
         var errorBuffer = new byte[ErrorBufferSize];
         handle = NativeMethods.SessionCreate(
             developerDirectory,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (handle.IsInvalid)
         {
             handle.Dispose();
@@ -54,6 +56,7 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         if (!double.IsFinite(normalizedX) || !double.IsFinite(normalizedY))
         {
             throw new ArgumentException("Pointer coordinates must be finite.");
@@ -73,6 +76,7 @@ public sealed class MacSimulatorHidSession : IDisposable
             timestampMilliseconds,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (!success)
         {
             throw new MacSimulatorHidException(ReadError(
@@ -84,7 +88,12 @@ public sealed class MacSimulatorHidSession : IDisposable
     public MacSimulatorStylusSample StampStylus(MacSimulatorStylusSample sample)
     {
         var ticks = NativeMethods.CreateTimestamp(out var seconds);
-        return sample with { EventTimestampTicks = ticks, EventTimestampSeconds = seconds };
+
+        return sample with
+        {
+            EventTimestampTicks = ticks,
+            EventTimestampSeconds = seconds
+        };
     }
 
     public void SendStylus(string deviceUdid, MacSimulatorStylusSample sample, uint pointerId)
@@ -93,13 +102,21 @@ public sealed class MacSimulatorHidSession : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
         ArgumentNullException.ThrowIfNull(sample);
         sample.Validate();
-        if (pointerId == 0) throw new ArgumentOutOfRangeException(nameof(pointerId));
+
+        if (pointerId == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pointerId));
+        }
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.SessionSendStylus(handle, deviceUdid, sample.Phase,
-                sample.NormalizedX, sample.NormalizedY, sample.Pressure, sample.AltitudeRadians,
-                sample.AzimuthRadians, sample.RollRadians, sample.Distance, pointerId, sample.EventTimestampTicks,
-                errorBuffer, (nuint)errorBuffer.Length))
+            sample.NormalizedX, sample.NormalizedY, sample.Pressure, sample.AltitudeRadians,
+            sample.AzimuthRadians, sample.RollRadians, sample.Distance, pointerId, sample.EventTimestampTicks,
+            errorBuffer, (nuint)errorBuffer.Length))
+        {
             throw new MacSimulatorHidException(ReadError(errorBuffer, "Simulator stylus HID input failed."));
+        }
     }
 
     public void SendButton(
@@ -109,6 +126,7 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         var errorBuffer = new byte[ErrorBufferSize];
         var success = NativeMethods.SessionSendButton(
             handle,
@@ -117,6 +135,7 @@ public sealed class MacSimulatorHidSession : IDisposable
             phase,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (!success)
         {
             throw new MacSimulatorHidException(ReadError(
@@ -129,12 +148,14 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         if (orientation is < 1 or > 4)
         {
             throw new ArgumentOutOfRangeException(nameof(orientation));
         }
 
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.SessionSendOrientation(handle, deviceUdid, orientation, errorBuffer, (nuint)errorBuffer.Length))
         {
             throw new MacSimulatorHidException(ReadError(errorBuffer, "Simulator rotation failed."));
@@ -145,7 +166,9 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.SessionSendShake(handle, deviceUdid, errorBuffer, (nuint)errorBuffer.Length))
         {
             throw new MacSimulatorHidException(ReadError(
@@ -158,6 +181,7 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         var errorBuffer = new byte[ErrorBufferSize];
         var success = NativeMethods.SessionGetMainScreenMetrics(
             handle,
@@ -167,6 +191,7 @@ public sealed class MacSimulatorHidSession : IDisposable
             out var scale,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (!success)
         {
             throw new MacSimulatorHidException(ReadError(
@@ -181,12 +206,14 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         var errorBuffer = new byte[ErrorBufferSize];
         var nativeJson = NativeMethods.SessionCopyAccessibilityTreeJson(
             handle,
             deviceUdid,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (nativeJson == IntPtr.Zero)
         {
             throw new MacSimulatorHidException(ReadError(
@@ -197,8 +224,8 @@ public sealed class MacSimulatorHidSession : IDisposable
         try
         {
             return Marshal.PtrToStringUTF8(nativeJson)
-                   ?? throw new MacSimulatorHidException(
-                       "The Simulator accessibility hierarchy was not valid UTF-8.");
+                ?? throw new MacSimulatorHidException(
+                    "The Simulator accessibility hierarchy was not valid UTF-8.");
         }
         finally
         {
@@ -213,6 +240,7 @@ public sealed class MacSimulatorHidSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         if (usageCode is < 4 or > 231)
         {
             throw new ArgumentOutOfRangeException(
@@ -228,6 +256,7 @@ public sealed class MacSimulatorHidSession : IDisposable
             phase,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (!success)
         {
             throw new MacSimulatorHidException(ReadError(
@@ -250,12 +279,14 @@ public sealed class MacSimulatorHidSession : IDisposable
     private static string ReadError(byte[] buffer, string fallback)
     {
         var length = Array.IndexOf(buffer, (byte)0);
+
         if (length < 0)
         {
             length = buffer.Length;
         }
 
         var message = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
 }

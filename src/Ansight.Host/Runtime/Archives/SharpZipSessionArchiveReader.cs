@@ -12,6 +12,7 @@ internal sealed class SharpZipSessionArchiveReader : ISessionArchiveReader
     public SharpZipSessionArchiveReader(string archiveFilePath, string? password)
     {
         archive = new SharpZipFile(archiveFilePath);
+
         if (!string.IsNullOrEmpty(password))
         {
             archive.Password = password;
@@ -37,6 +38,7 @@ internal sealed class SharpZipSessionArchiveReader : ISessionArchiveReader
         }
 
         var index = archive.FindEntry(path, ignoreCase: false);
+
         return index < 0
             ? null
             : new SharpZipSessionArchiveEntry(archive, archive[index]);
@@ -47,8 +49,17 @@ internal sealed class SharpZipSessionArchiveReader : ISessionArchiveReader
         archive.Close();
     }
 
-    private sealed class SharpZipSessionArchiveEntry(SharpZipFile archive, ZipEntry entry) : ISessionArchiveEntry
+    private sealed class SharpZipSessionArchiveEntry : ISessionArchiveEntry
     {
+        private readonly SharpZipFile archive;
+        private readonly ZipEntry entry;
+
+        public SharpZipSessionArchiveEntry(SharpZipFile archive, ZipEntry entry)
+        {
+            this.archive = archive;
+            this.entry = entry;
+        }
+
         public string Name => entry.IsDirectory ? string.Empty : Path.GetFileName(entry.Name);
         public string FullName => entry.Name;
         public long Length => entry.Size;

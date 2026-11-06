@@ -13,6 +13,7 @@ internal sealed record ExternalSessionScreenshotCaptureProfile(
         ExternalSessionScreenshotCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return new ExternalSessionScreenshotCaptureProfile(
             TimeSpan.FromMilliseconds(request.IntervalMilliseconds),
             WebpQuality,
@@ -23,6 +24,7 @@ internal sealed record ExternalSessionScreenshotCaptureProfile(
         ExternalSessionScreenshotCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return new ExternalSessionScreenshotCaptureProfile(
             TimeSpan.FromMilliseconds(TestRunIntervalMilliseconds),
             WebpQuality,

@@ -41,6 +41,7 @@ public sealed class WorkspaceTestServiceTests
         var workspacePath = CreateWorkspace(environment.RootPath);
         File.WriteAllText(Path.Combine(workspacePath, "ansight", "tests", "example.json"),
             """{"appId":"com.example.target","prompt":"Run @task/missing."}""");
+
         var launcher = new FakeTargetLauncher(new WorkspaceTestTarget(
             DevicePlatforms.Android, "android-1", "Pixel", "com.example.target", false, false, true));
         var service = new WorkspaceTestService(runtime, runtime.SimulatorAgent, launcher);
@@ -56,6 +57,7 @@ public sealed class WorkspaceTestServiceTests
         var rootPath = Path.Combine(Path.GetTempPath(), $"ansight-workspace-{Guid.NewGuid():N}");
         var testsPath = Path.Combine(rootPath, "ansight", "tests");
         Directory.CreateDirectory(testsPath);
+
         try
         {
             var longPrompt = new string('x', SimulatorAgentService.MaximumInstructionCharacters);
@@ -76,7 +78,7 @@ public sealed class WorkspaceTestServiceTests
             Assert.Single(catalog.Tests);
             Assert.Contains(catalog.Warnings, warning =>
                 warning.Contains("Expanded runner instruction", StringComparison.Ordinal)
-                && warning.Contains("4,000", StringComparison.Ordinal));
+                    && warning.Contains("4,000", StringComparison.Ordinal));
         }
         finally
         {
@@ -118,8 +120,8 @@ public sealed class WorkspaceTestServiceTests
         Assert.Same(target, targetLauncher.StoppedTarget);
         Assert.Contains(progress.Values, value =>
             value.Stage == "app.stop"
-            && value.Message.Contains("after the test", StringComparison.Ordinal)
-            && value.Message.StartsWith("Stopped", StringComparison.Ordinal));
+                && value.Message.Contains("after the test", StringComparison.Ordinal)
+                && value.Message.StartsWith("Stopped", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -135,6 +137,7 @@ public sealed class WorkspaceTestServiceTests
                 "\"schemaVersion\": 1,",
                 "\"schemaVersion\": 1,\n              \"enabled\": false,",
                 StringComparison.Ordinal));
+
         var target = new WorkspaceTestTarget(
             DevicePlatforms.Android,
             "android-1",
@@ -167,6 +170,7 @@ public sealed class WorkspaceTestServiceTests
                               {"enabled":false,"appId":"com.example.target","prompt":"Open the app and verify the home screen."}
                               """;
         File.WriteAllText(testPath, source);
+
         var target = new WorkspaceTestTarget(
             DevicePlatforms.Android, "android-1", "Pixel", "com.example.target", false, false, true);
         var launcher = new FakeTargetLauncher(target);
@@ -196,6 +200,7 @@ public sealed class WorkspaceTestServiceTests
         using var runtime = environment.CreateRuntime();
         var workspacePath = CreateWorkspace(environment.RootPath);
         AddTaskTargetMetadata(workspacePath, "ios", "virtual");
+
         var target = new WorkspaceTestTarget(
             DevicePlatforms.Android,
             "android-1",
@@ -237,6 +242,7 @@ public sealed class WorkspaceTestServiceTests
                 "\"appId\": \"com.example.target\",",
                 "\"appId\": \"com.example.target\",\n              \"taskId\": \"missing\",",
                 StringComparison.Ordinal));
+
         var targetLauncher = new FakeTargetLauncher(new WorkspaceTestTarget(
             DevicePlatforms.Ios,
             "simulator-1",
@@ -265,6 +271,7 @@ public sealed class WorkspaceTestServiceTests
         using var runtime = environment.CreateRuntime();
         var workspacePath = CreateWorkspace(environment.RootPath);
         AddTaskTargetMetadata(workspacePath, "ios", "virtual");
+
         var target = new WorkspaceTestTarget(
             DevicePlatforms.Ios,
             "simulator-1",
@@ -397,14 +404,17 @@ public sealed class WorkspaceTestServiceTests
         Assert.NotNull(result.HistoryFilePath);
         Assert.Null(result.HistoryPersistenceError);
         Assert.Equal(1, result.FailedCount);
+
         var history = service.History.List(workspacePath: workspacePath);
         var batch = Assert.Single(history.Batches);
         Assert.Equal(result.BatchRunId, batch.Audit.BatchRunId);
         Assert.Equal("test", batch.Audit.Source);
         Assert.Equal(WorkspaceTestHistoryStatuses.Failed, batch.Audit.Status);
+
         var item = Assert.Single(batch.Audit.Tests);
         Assert.Equal(WorkspaceTestHistoryStatuses.Failed, item.Status);
         Assert.Null(item.AgentRunId);
+
         var inspection = service.History.Inspect(result.BatchRunId!);
         Assert.NotNull(inspection);
         Assert.Empty(inspection.Runs);
@@ -522,10 +532,10 @@ public sealed class WorkspaceTestServiceTests
         var catalog = new WorkspaceTestCatalogResult(
             "/workspace",
             [
-                CreateTestDefinition("login", "Login"),
+                    CreateTestDefinition("login", "Login"),
                 CreateTestDefinition("map-search", "Map search"),
                 CreateTestDefinition("view-3d-guide", "View 3D guide")
-            ],
+                ],
             []);
 
         var message = WorkspaceTestService.BuildMissingTestMessage(catalog, "open-3d-guide");
@@ -656,6 +666,7 @@ public sealed class WorkspaceTestServiceTests
               }
             }
             """);
+
         return workspacePath;
     }
 
@@ -668,6 +679,7 @@ public sealed class WorkspaceTestServiceTests
                 "\"appId\": \"com.example.target\",",
                 "\"appId\": \"com.example.target\",\n              \"taskId\": \"example\",",
                 StringComparison.Ordinal));
+
         var tasksPath = Path.Combine(workspacePath, "ansight", "tasks");
         Directory.CreateDirectory(tasksPath);
         File.WriteAllText(
@@ -743,14 +755,18 @@ public sealed class WorkspaceTestServiceTests
             BatchRunId = batchRunId
         };
 
-    private sealed class FakeTargetLauncher(WorkspaceTestTarget target) : IWorkspaceTestTargetLauncher
+    private sealed class FakeTargetLauncher : IWorkspaceTestTargetLauncher
     {
+        private readonly WorkspaceTestTarget target;
+
+        public FakeTargetLauncher(WorkspaceTestTarget target)
+        {
+            this.target = target;
+        }
+
         public int LaunchCallCount { get; private set; }
-
         public int StopCallCount { get; private set; }
-
         public WorkspaceTestTarget? StoppedTarget { get; private set; }
-
         public WorkspaceTestTargetRequest? LastRequest { get; private set; }
 
         public Task<WorkspaceTestTargetLaunchResult> LaunchAsync(
@@ -761,6 +777,7 @@ public sealed class WorkspaceTestServiceTests
         {
             LaunchCallCount++;
             LastRequest = request;
+
             return Task.FromResult(WorkspaceTestTargetLaunchResult.Success(target));
         }
 
@@ -770,6 +787,7 @@ public sealed class WorkspaceTestServiceTests
         {
             StopCallCount++;
             StoppedTarget = targetToStop;
+
             return Task.FromResult(DeviceOperationResult.Success(
                 "terminate-app",
                 targetToStop.Platform,

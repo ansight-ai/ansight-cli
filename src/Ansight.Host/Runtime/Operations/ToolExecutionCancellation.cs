@@ -10,13 +10,19 @@ internal static class ToolExecutionCancellation
     {
         var previous = current.Value;
         current.Value = cancellationToken;
+
         return new Scope(previous);
     }
 
-    private sealed class Scope(CancellationToken? previous) : IDisposable
+    private sealed class Scope : IDisposable
     {
-        private CancellationToken? previous = previous;
+        private CancellationToken? previous;
         private bool disposed;
+
+        public Scope(CancellationToken? previous)
+        {
+            this.previous = previous;
+        }
 
         public void Dispose()
         {

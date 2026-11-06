@@ -20,21 +20,23 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (request.Frames.Count == 0)
         {
             throw new ArgumentException("At least one frame is required.", nameof(request));
         }
 
         var outputDirectoryPath = Path.GetDirectoryName(request.OutputFilePath)
-                                  ?? throw new ArgumentException(
-                                      "The video output path must have a parent directory.",
-                                      nameof(request));
+            ?? throw new ArgumentException(
+                "The video output path must have a parent directory.",
+                nameof(request));
         Directory.CreateDirectory(outputDirectoryPath);
+
         var outputFolder = await StorageFolder.GetFolderFromPathAsync(outputDirectoryPath)
             .AsTask(cancellationToken).ConfigureAwait(false);
         var outputFile = await outputFolder.CreateFileAsync(
-                Path.GetFileName(request.OutputFilePath),
-                CreationCollisionOption.ReplaceExisting)
+            Path.GetFileName(request.OutputFilePath),
+            CreationCollisionOption.ReplaceExisting)
             .AsTask(cancellationToken).ConfigureAwait(false);
 
         var sourceProperties = VideoEncodingProperties.CreateUncompressed(
@@ -45,6 +47,7 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
         sourceProperties.FrameRate.Denominator = 1;
         sourceProperties.PixelAspectRatio.Numerator = 1;
         sourceProperties.PixelAspectRatio.Denominator = 1;
+
         var streamDescriptor = new VideoStreamDescriptor(sourceProperties);
         var streamSource = new MediaStreamSource(streamDescriptor)
         {
@@ -75,10 +78,11 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
             using var outputStream = await outputFile.OpenAsync(FileAccessMode.ReadWrite)
                 .AsTask(cancellationToken).ConfigureAwait(false);
             var preparation = await transcoder.PrepareMediaStreamSourceTranscodeAsync(
-                    streamSource,
-                    outputStream,
-                    targetProfile)
+                streamSource,
+                outputStream,
+                targetProfile)
                 .AsTask(cancellationToken).ConfigureAwait(false);
+
             if (!preparation.CanTranscode)
             {
                 throw new InvalidOperationException(
@@ -87,6 +91,7 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
 
             await preparation.TranscodeAsync().AsTask(cancellationToken).ConfigureAwait(false);
             frameProvider.ThrowIfFailed();
+
             return new SessionVideoEncodingResult(Name, frameProvider.WrittenPresentationTimesUs);
         }
         finally
@@ -120,6 +125,7 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
                     if (failure is not null || nextFrameIndex >= request.Frames.Count)
                     {
                         args.Request.Sample = null;
+
                         return;
                     }
 
@@ -154,21 +160,25 @@ internal sealed class WindowsSessionVideoEncoder : ISessionVideoEncoder
         private static byte[] RenderFrame(string sourceFilePath, int width, int height)
         {
             using var sourceBitmap = SKBitmap.Decode(sourceFilePath)
-                                     ?? throw new InvalidDataException(
-                                         $"Unable to decode screenshot '{sourceFilePath}'.");
+                ?? throw new InvalidDataException(
+                    $"Unable to decode screenshot '{sourceFilePath}'.");
             var imageInfo = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
             using var outputBitmap = new SKBitmap(imageInfo);
+
             using (var canvas = new SKCanvas(outputBitmap))
-            using (var paint = new SKPaint { IsAntialias = true })
             {
-                canvas.Clear(SKColors.Black);
-                canvas.DrawBitmap(sourceBitmap, new SKRect(0, 0, width, height), paint);
-                canvas.Flush();
+                using (var paint = new SKPaint { IsAntialias = true })
+                {
+                    canvas.Clear(SKColors.Black);
+                    canvas.DrawBitmap(sourceBitmap, new SKRect(0, 0, width, height), paint);
+                    canvas.Flush();
+                }
             }
 
             var copiedBytesPerRow = checked(width * 4);
             var bytes = new byte[checked(copiedBytesPerRow * height)];
             var sourceAddress = outputBitmap.GetPixels();
+
             for (var y = 0; y < height; y++)
             {
                 Marshal.Copy(

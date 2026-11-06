@@ -18,7 +18,7 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
 
     protected override string Description =>
         "Read toolkit-owned navigation structure from a connected app. Supports exact navigation tools exposed by "
-        + "MAUI, React Native, Flutter, UIKit, SwiftUI, AppKit, Android Views, or Jetpack Compose.";
+            + "MAUI, React Native, Flutter, UIKit, SwiftUI, AppKit, Android Views, or Jetpack Compose.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: new Dictionary<string, ToolSchema>
@@ -60,17 +60,19 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
             snapshot!.SessionId,
             ToolExecutionCancellation.Current,
             requestContext);
+
         if (!catalogResponse.Success || catalogResponse.Envelope is null)
         {
             return ToolError(catalogResponse.Message);
         }
 
         var framework = NormalizeOptional(arguments?["framework"]?.GetValue<string>());
+
         if (!TryResolveNavigationTool(
-                catalogResponse.Envelope.Payload,
-                framework,
-                out var selectedController,
-                out var navigationToolId))
+            catalogResponse.Envelope.Payload,
+            framework,
+            out var selectedController,
+            out var navigationToolId))
         {
             return RequestResult.ToolResult(
                 new JsonObject
@@ -95,6 +97,7 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
             correlationId,
             Name,
             requestSource: "host-ui");
+
         if (result.Payload?["structuredContent"] is not JsonObject structuredContent)
         {
             return result;
@@ -104,6 +107,7 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
             structuredContent,
             catalogResponse.Envelope.Payload,
             selectedController);
+
         return RequestResult.ToolResult(
             navigationContent,
             result.Payload["isError"]?.GetValue<bool>() ?? result.IsError);
@@ -119,6 +123,7 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
         navigationContent["availableNavigationControllers"] = BuildAvailableNavigationControllers(
             catalogPayload,
             selectedController?.Framework);
+
         return navigationContent;
     }
 
@@ -130,7 +135,9 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
     {
         controller = null;
         navigationToolId = null;
+
         var normalizedFramework = NormalizeOptional(framework);
+
         foreach (var candidate in NavigationControllerCatalog.All)
         {
             if (normalizedFramework is not null
@@ -141,12 +148,15 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
 
             navigationToolId = candidate.NavigationToolIds.FirstOrDefault(toolId =>
                 RemoteAppToolCatalog.HasTool(catalogPayload, toolId));
+
             if (navigationToolId is not null)
             {
                 controller = candidate;
+
                 return true;
             }
         }
+
         return false;
     }
 
@@ -162,11 +172,13 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
                 StringComparison.Ordinal));
         var claimedToolIds = new HashSet<string>(StringComparer.Ordinal);
         var results = new JsonArray();
+
         foreach (var candidate in candidates)
         {
             var toolId = candidate.NavigationToolIds.FirstOrDefault(navigationToolId =>
-                !claimedToolIds.Contains(navigationToolId)
-                && RemoteAppToolCatalog.HasTool(catalogPayload, navigationToolId));
+                        !claimedToolIds.Contains(navigationToolId)
+                            && RemoteAppToolCatalog.HasTool(catalogPayload, navigationToolId));
+
             if (toolId is null)
             {
                 continue;
@@ -181,6 +193,7 @@ internal sealed class GetLiveNavigationStructureTool : RemoteAppOperation
                 ["technologyKinds"] = AppGraphNavigationTechnologyCatalog.BuildKindsJson(candidate.Framework)
             });
         }
+
         return results;
     }
 

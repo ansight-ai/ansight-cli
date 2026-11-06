@@ -19,9 +19,9 @@ internal static class VisualTreeSnapshotContentFingerprint
         SessionVisualTreeSnapshot right)
     {
         return string.Equals(left.VisualTreeKind, right.VisualTreeKind, StringComparison.Ordinal)
-               && string.Equals(left.VisualTreeFormat, right.VisualTreeFormat, StringComparison.Ordinal)
-               && string.Equals(left.RuntimePlatform, right.RuntimePlatform, StringComparison.Ordinal)
-               && string.Equals(left.RootScope, right.RootScope, StringComparison.Ordinal);
+            && string.Equals(left.VisualTreeFormat, right.VisualTreeFormat, StringComparison.Ordinal)
+            && string.Equals(left.RuntimePlatform, right.RuntimePlatform, StringComparison.Ordinal)
+            && string.Equals(left.RootScope, right.RootScope, StringComparison.Ordinal);
     }
 
     public static string Compute(SessionVisualTreeSnapshot snapshot)
@@ -29,6 +29,7 @@ internal static class VisualTreeSnapshotContentFingerprint
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var buffer = new ArrayBufferWriter<byte>();
+
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
@@ -68,7 +69,6 @@ internal static class VisualTreeSnapshotContentFingerprint
                     writer.WritePropertyName(property.Key);
                     WriteCanonicalNode(writer, property.Value);
                 }
-
                 writer.WriteEndObject();
                 return;
             case JsonArray jsonArray:
@@ -77,7 +77,6 @@ internal static class VisualTreeSnapshotContentFingerprint
                 {
                     WriteCanonicalNode(writer, item);
                 }
-
                 writer.WriteEndArray();
                 return;
             default:

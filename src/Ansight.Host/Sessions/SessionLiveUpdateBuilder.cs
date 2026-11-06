@@ -6,19 +6,19 @@ internal static class SessionLiveUpdateBuilder
     {
         var retainedLogStartIndex = Math.Max(0, session.TotalLogCount - session.Logs.Count);
         var requiresReset = cursor.LogIndex < retainedLogStartIndex
-                            || cursor.LogIndex > session.TotalLogCount
-                            || cursor.ImageIndex < 0
-                            || cursor.ImageIndex > session.Images.Count
-                            || cursor.TouchIndex < 0
-                            || cursor.TouchIndex > session.Touches.Count
-                            || cursor.NetworkRequestIndex < 0
-                            || cursor.NetworkRequestIndex > session.NetworkRequests.Count
-                            || cursor.VisualTreeIndex < 0
-                            || cursor.VisualTreeIndex > session.VisualTreeSnapshots.Count
-                            || cursor.ArtifactIndex < 0
-                            || cursor.ArtifactIndex > session.ArtifactSnapshots.Count
-                            || cursor.MetricIndex < 0
-                            || cursor.MetricIndex > session.Metrics.Count;
+            || cursor.LogIndex > session.TotalLogCount
+            || cursor.ImageIndex < 0
+            || cursor.ImageIndex > session.Images.Count
+            || cursor.TouchIndex < 0
+            || cursor.TouchIndex > session.Touches.Count
+            || cursor.NetworkRequestIndex < 0
+            || cursor.NetworkRequestIndex > session.NetworkRequests.Count
+            || cursor.VisualTreeIndex < 0
+            || cursor.VisualTreeIndex > session.VisualTreeSnapshots.Count
+            || cursor.ArtifactIndex < 0
+            || cursor.ArtifactIndex > session.ArtifactSnapshots.Count
+            || cursor.MetricIndex < 0
+            || cursor.MetricIndex > session.Metrics.Count;
 
         var logs = requiresReset
             ? Array.Empty<LogEntry>()
@@ -91,6 +91,7 @@ internal static class SessionLiveUpdateBuilder
         }
 
         var result = new T[source.Count - startIndex];
+
         for (var index = startIndex; index < source.Count; index++)
         {
             result[index - startIndex] = source[index];

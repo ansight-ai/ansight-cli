@@ -4,7 +4,7 @@ namespace Ansight.Host.Runtime.Archives;
 
 internal static class SessionArchiveJsonValueReader
 {
-    private static readonly JsonSerializerOptions ArchiveJsonOptions = new()
+    private static readonly JsonSerializerOptions archiveJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true
@@ -19,12 +19,14 @@ internal static class SessionArchiveJsonValueReader
                 if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
                 {
                     value = property.Value;
+
                     return true;
                 }
             }
         }
 
         value = default;
+
         return false;
     }
 
@@ -33,6 +35,7 @@ internal static class SessionArchiveJsonValueReader
         foreach (var propertyName in propertyNames)
         {
             var value = TryGetString(element, propertyName);
+
             if (!string.IsNullOrWhiteSpace(value))
             {
                 return value;
@@ -196,6 +199,7 @@ internal static class SessionArchiveJsonValueReader
     internal static LogPriority? TryGetLogPriority(JsonElement element)
     {
         var value = FirstString(element, "priority", "level", "severity");
+
         if (string.IsNullOrWhiteSpace(value))
         {
             return null;
@@ -241,12 +245,14 @@ internal static class SessionArchiveJsonValueReader
     {
         try
         {
-            value = JsonSerializer.Deserialize<T>(element.GetRawText(), ArchiveJsonOptions);
+            value = JsonSerializer.Deserialize<T>(element.GetRawText(), archiveJsonOptions);
+
             return value is not null;
         }
         catch (JsonException)
         {
             value = default;
+
             return false;
         }
     }
@@ -254,13 +260,13 @@ internal static class SessionArchiveJsonValueReader
     internal static bool IsWireEventType(string? type)
     {
         return string.Equals(type, WebSocketClientEventConstants.ClientLog, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientMetricChannels, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientMetrics, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientEvents, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientTouchInput, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientAppState, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.DeviceAppProfile, StringComparison.Ordinal)
-               || string.Equals(type, WebSocketClientEventConstants.ClientJpeg, StringComparison.Ordinal);
+            || string.Equals(type, WebSocketClientEventConstants.ClientMetricChannels, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.ClientMetrics, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.ClientEvents, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.ClientTouchInput, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.ClientAppState, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.DeviceAppProfile, StringComparison.Ordinal)
+            || string.Equals(type, WebSocketClientEventConstants.ClientJpeg, StringComparison.Ordinal);
     }
 
     internal static string? NormalizeOptionalString(string? value)
@@ -276,6 +282,7 @@ internal static class SessionArchiveJsonValueReader
         }
 
         var trimmed = colorHex.Trim();
+
         if (trimmed.Length == 7 && trimmed[0] == '#')
         {
             return trimmed.ToUpperInvariant();
@@ -323,6 +330,7 @@ internal static class SessionArchiveJsonValueReader
     internal static string NormalizeImageFormat(string value)
     {
         var normalized = value.Trim().TrimStart('.').ToLowerInvariant();
+
         if (normalized.Contains("jpeg", StringComparison.Ordinal) || normalized == "jpg")
         {
             return "jpeg";
@@ -345,5 +353,4 @@ internal static class SessionArchiveJsonValueReader
     {
         return $"touch-{capturedAtUtc.UtcDateTime:yyyyMMddHHmmssfff}-{pointerId}";
     }
-
 }

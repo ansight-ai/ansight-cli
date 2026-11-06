@@ -29,10 +29,3 @@ public interface IUiInputDriver
         UiButtonRequest request,
         CancellationToken cancellationToken = default);
 }
-
-public interface IUiInputPreflightDriver
-{
-    Task<UiInputResult> PrepareForInputAsync(
-        UiInputPreflightRequest request,
-        CancellationToken cancellationToken = default);
-}

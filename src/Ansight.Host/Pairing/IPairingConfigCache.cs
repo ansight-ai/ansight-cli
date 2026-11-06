@@ -3,6 +3,7 @@ namespace Ansight.Host.Pairing;
 internal interface IPairingConfigCache
 {
     void Add(PairingConfig config);
+
     void Add(CachedPairingConfig config);
 
     IReadOnlyList<CachedPairingConfig> GetSnapshot();

@@ -9,6 +9,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
     public async Task LargeOcrResponseKeepsCompleteTargetsWithinModelBudgetAndFullAudit()
     {
         var content = new JsonArray();
+
         for (var index = 0; index < 100; index++)
         {
             content.Add(new JsonObject
@@ -26,18 +27,24 @@ public sealed partial class SimulatorAgentToolGatewayTests
 
         // Oversized individual strings must not become misleading partial selectors.
         content.Insert(0, new JsonObject { ["text"] = new string('y', 15_000) });
+
         var dispatcher = new RecordingOperationDispatcher();
         dispatcher.Responses["ansight_scan_screen"] = RequestResult.ToolResult(new JsonObject
         {
-            ["content"] = content, ["totalCount"] = 101, ["truncated"] = false,
-            ["screenshotFrameId"] = "ocr-frame", ["evidenceSource"] = "screenshotOcr"
+            ["content"] = content,
+            ["totalCount"] = 101,
+            ["truncated"] = false,
+            ["screenshotFrameId"] = "ocr-frame",
+            ["evidenceSource"] = "screenshotOcr"
         }, isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var response = await gateway.ExecuteAsync("ansight_scan_screen", new JsonObject(), "session", "scan", default);
 
         Assert.False(response.IsError);
         Assert.True(response.ModelOutput!.Length <= 12_000);
+
         var model = JsonNode.Parse(response.ModelOutput)!["result"]!;
         var entries = model["content"]!.AsArray();
         Assert.NotEmpty(entries);

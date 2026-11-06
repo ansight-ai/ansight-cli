@@ -47,6 +47,7 @@ internal static class SessionListingPayloads
         var appId = arguments?["appId"]?.GetValue<string>();
         var limit = arguments?["limit"]?.GetValue<int?>() ?? defaultLimit;
         limit = Math.Clamp(limit, 1, maxLimit);
+
         var filters = SessionListingFilters.Read(arguments);
 
         var liveSessionIds = sessionResolver.GetLiveSessionIds();
@@ -61,6 +62,7 @@ internal static class SessionListingPayloads
 
         AppSessionSnapshot[] matchedSessions;
         AppSessionSnapshot[] returnedSessions;
+
         if (requireLogs.HasValue || requireTelemetry.HasValue)
         {
             matchedSessions = sessionResolver.LoadResolvedSnapshots(candidateSessions)

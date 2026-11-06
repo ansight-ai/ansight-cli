@@ -17,25 +17,35 @@ internal sealed partial class RuntimeState
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var normalization = NormalizeSession(sessionId, options, report, cancellationToken);
+
         if (!normalization.IsSuccess)
+        {
             return new(false, normalization.Message, 0, 0, 0);
+        }
 
         sessionId = sessionId.Trim();
+
         if (!TryGetSessionSnapshot(sessionId, out var snapshot) || snapshot is null)
+        {
             throw new InvalidOperationException("The session is no longer available.");
+        }
 
         var converted = new List<ConvertedSessionImage>();
+
         try
         {
             var frames = options.OptimizeScreenshots
                 ? snapshot.Images.Where(frame =>
-                    SessionImageArtifactPath.ResolveFileExtension(frame.Format) != "webp").ToArray()
+                            SessionImageArtifactPath.ResolveFileExtension(frame.Format) != "webp").ToArray()
                 : [];
             report?.Invoke(new("Converting screenshots to WebP…", 0, frames.Length));
+
             foreach (var frame in frames)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var sourcePath = SessionImageArtifactPath.ResolveCapturedImagePath(
                     sessionCaptureStore.CapturesRootPath, snapshot.AppId, sessionId, frame);
                 using var bitmap = SKBitmap.Decode(sourcePath)
@@ -46,20 +56,30 @@ internal sealed partial class RuntimeState
                 var replacement = new SessionImageFrame
                 {
                     Geometry = frame.Geometry?.DeepClone().AsObject(),
-                    FrameId = frame.FrameId, CapturedAtUtc = frame.CapturedAtUtc,
-                    Format = "webp", Width = bitmap.Width, Height = bitmap.Height,
-                    Quality = 80, ByteCount = data.Size
+                    FrameId = frame.FrameId,
+                    CapturedAtUtc = frame.CapturedAtUtc,
+                    Format = "webp",
+                    Width = bitmap.Width,
+                    Height = bitmap.Height,
+                    Quality = 80,
+                    ByteCount = data.Size
                 };
                 var destinationPath = SessionImageArtifactPath.ResolveCapturedImagePath(
                     sessionCaptureStore.CapturesRootPath, snapshot.AppId, sessionId, replacement);
                 var temporaryPath = destinationPath + $".{Guid.NewGuid():N}.tmp";
                 converted.Add(new(replacement, temporaryPath, destinationPath));
-                using (var output = File.Create(temporaryPath)) data.SaveTo(output);
+
+                using (var output = File.Create(temporaryPath))
+                {
+                    data.SaveTo(output);
+                }
+
                 report?.Invoke(new("Converting screenshots to WebP…", converted.Count, frames.Length));
             }
 
             cancellationToken.ThrowIfCancellationRequested();
             report?.Invoke(new("Saving converted screenshots…"));
+
             if (converted.Count > 0)
             {
                 lock (gate)
@@ -67,16 +87,30 @@ internal sealed partial class RuntimeState
                     if (!sessionsById.TryGetValue(sessionId, out var session)
                         || IsSessionLive(session)
                         || !session.Images.Select(ImageVersion).SequenceEqual(snapshot.Images.Select(ImageVersion)))
+                    {
                         throw new InvalidOperationException("The session changed during optimisation. Please retry.");
+                    }
 
-                    foreach (var item in converted) File.Move(item.TemporaryPath, item.DestinationPath, overwrite: true);
+                    foreach (var item in converted)
+                    {
+                        File.Move(item.TemporaryPath, item.DestinationPath, overwrite: true);
+                    }
+
                     var replacements = converted.ToDictionary(item => item.Frame.FrameId, item => item.Frame);
                     var originalFrames = session.Images.ToArray();
+
                     for (var index = 0; index < session.Images.Count; index++)
+                    {
                         if (replacements.TryGetValue(session.Images[index].FrameId, out var replacement))
+                        {
                             session.Images[index] = replacement;
+                        }
+                    }
+
                     session.MarkAllContentChanged();
+
                     var optimizedSnapshot = SessionStateMapper.CreateSnapshot(session);
+
                     try
                     {
                         // Persist the new references before pruning the original image files.
@@ -89,20 +123,27 @@ internal sealed partial class RuntimeState
                         session.MarkAllContentChanged();
                         throw;
                     }
+
                     sessionCaptureStore.SaveAndPruneDetachedContent(optimizedSnapshot);
                 }
+
                 QueueSessionUpdated(sessionId);
             }
 
             return new(true,
                 $"Optimised session: removed {normalization.RemovedScreenshotCount:N0} duplicate screenshots and "
-                + $"{normalization.RemovedVisualTreeSnapshotCount:N0} duplicate visual trees; converted {converted.Count:N0} images to WebP.",
+                    + $"{normalization.RemovedVisualTreeSnapshotCount:N0} duplicate visual trees; converted {converted.Count:N0} images to WebP.",
                 normalization.RemovedScreenshotCount, normalization.RemovedVisualTreeSnapshotCount, converted.Count);
         }
         finally
         {
             foreach (var item in converted)
-                if (File.Exists(item.TemporaryPath)) File.Delete(item.TemporaryPath);
+            {
+                if (File.Exists(item.TemporaryPath))
+                {
+                    File.Delete(item.TemporaryPath);
+                }
+            }
         }
     }
 

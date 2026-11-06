@@ -14,18 +14,18 @@ internal sealed record DotNetTraceToolchain(
     public bool IsAvailable => DotNetTracePath is not null && DotNetDsRouterPath is not null;
 
     public bool IsAndroidEmulatorAvailable => IsAvailable
-                                              && AdbPath is not null;
+        && AdbPath is not null;
 
     public bool IsAndroidDeviceAvailable => IsAndroidEmulatorAvailable;
 
     public bool IsIosSimulatorAvailable => IsAppleDesktopHost
-                                           && IsAvailable
-                                           && XcrunPath is not null
-                                           && SimCtlPath is not null;
+        && IsAvailable
+        && XcrunPath is not null
+        && SimCtlPath is not null;
 
     public bool IsIosDeviceAvailable => IsAppleDesktopHost
-                                        && IsAvailable
-                                        && XcrunPath is not null;
+        && IsAvailable
+        && XcrunPath is not null;
 
     private static bool IsAppleDesktopHost => OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst();
 }

@@ -11,12 +11,14 @@ public sealed class DotNetProfilingArtifactInspectorTests
     public void TryRead_ReadsApplicationBundleManifest()
     {
         var rootPath = CreateTemporaryPath();
+
         try
         {
             var applicationPath = Path.Combine(rootPath, "Example.app");
             var manifestPath = Path.Combine(applicationPath, "ansight", "dotnet-profiling.json");
             Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
             File.WriteAllText(manifestPath, CreateManifestJson("ios-simulator"));
+
             using var package = WorkspaceTestApplicationPackage.Open(applicationPath);
 
             var manifest = DotNetProfilingArtifactInspector.TryRead(package);
@@ -35,9 +37,11 @@ public sealed class DotNetProfilingArtifactInspectorTests
     public void TryRead_ReadsAndroidPackageManifest()
     {
         var rootPath = CreateTemporaryPath();
+
         try
         {
             var applicationPath = Path.Combine(rootPath, "Example.apk");
+
             using (var archive = ZipFile.Open(applicationPath, ZipArchiveMode.Create))
             {
                 var entry = archive.CreateEntry("assets/ansight/dotnet-profiling.json");
@@ -86,10 +90,12 @@ public sealed class DotNetProfilingArtifactInspectorTests
     public void TryRead_ReturnsNullWhenArtifactWasConfiguredManually()
     {
         var rootPath = CreateTemporaryPath();
+
         try
         {
             var applicationPath = Path.Combine(rootPath, "Example.app");
             Directory.CreateDirectory(applicationPath);
+
             using var package = WorkspaceTestApplicationPackage.Open(applicationPath);
 
             Assert.Null(DotNetProfilingArtifactInspector.TryRead(package));
@@ -104,6 +110,7 @@ public sealed class DotNetProfilingArtifactInspectorTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"ansight-profile-artifact-{Guid.NewGuid():N}");
         Directory.CreateDirectory(path);
+
         return path;
     }
 
@@ -111,6 +118,7 @@ public sealed class DotNetProfilingArtifactInspectorTests
     {
         var address = target == "android-emulator" ? "10.0.2.2" : "127.0.0.1";
         var listenMode = target.StartsWith("android-", StringComparison.Ordinal) ? "connect" : "listen";
+
         return $$"""
             {
               "schema": "ansight.dotnet-profile-app/v1",

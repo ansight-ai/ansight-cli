@@ -50,6 +50,7 @@ internal sealed class GetTouchContextTool : Operation
         }
 
         var touches = TouchReviewFiltering.GetFilteredTouches(snapshot!, filters).ToArray();
+
         if (touches.Length == 0)
         {
             return Task.FromResult(ToolError($"Session '{snapshot!.SessionId}' has no matching touch input."));
@@ -103,6 +104,7 @@ internal sealed class GetTouchContextTool : Operation
         properties["before"] = ToolSchema.Integer("Number of touches before the target to return. Defaults to 12, max 100.", nullable: true);
         properties["after"] = ToolSchema.Integer("Number of touches after the target to return. Defaults to 12, max 100.", nullable: true);
         properties["artifactWindowSeconds"] = ToolSchema.Integer("Seconds around the target touch used to collect nearby artifacts. Defaults to 10, max 3600.", nullable: true);
+
         return properties;
     }
 }

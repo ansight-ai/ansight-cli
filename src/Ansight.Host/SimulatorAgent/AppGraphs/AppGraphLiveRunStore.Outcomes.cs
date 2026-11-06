@@ -17,13 +17,18 @@ internal sealed partial class AppGraphLiveRunStore
             }
 
             RecordActionAttempt(runId, destinationId, toolName, selector, true, message, persist: false);
+
             var normalized = AppGraphActionIdentity.NormalizeSelector(selector);
             var action = FindMatchingAction(run.Actions.Values, destinationId, toolName,
                 ReadString(normalized, "automationId") ?? string.Empty, normalized)
                 ?? run.Actions[BuildActionId(destinationId, toolName, normalized)];
+
             if (!action.IsNavigationEssential && action.Status != "explored")
             {
-                run.Actions[action.Id] = action with { Status = "needs_verification" };
+                run.Actions[action.Id] = action with
+                {
+                    Status = "needs_verification"
+                };
             }
 
             run.PendingOutcome = new SimulatorAgentAppGraphPendingOutcome(
@@ -35,6 +40,7 @@ internal sealed partial class AppGraphLiveRunStore
             run.CurrentDestinationId = null;
             run.Coverage = DeriveCoverage(run, run.Coverage);
             database.Save(CreateSnapshot(run));
+
             return run.PendingOutcome;
         }
     }
@@ -57,6 +63,7 @@ internal sealed partial class AppGraphLiveRunStore
         var matchesPending = ReadString(outcome, "inputId") == pending.InputId
             && (NormalizeOptional(ReadString(outcome, "actionId")) is null || ReadString(outcome, "actionId") == pending.ActionId)
             && ReadStringArray(outcome, "evidenceRefs").Contains(pending.EvidenceId, StringComparer.Ordinal);
+
         if (!matchesPending)
         {
             return $"actionOutcome must identify input '{pending.InputId}', action '{pending.ActionId}', "
@@ -70,6 +77,7 @@ internal sealed partial class AppGraphLiveRunStore
             || !run.Nodes.ContainsKey(run.CurrentDestinationId);
         var missingRequiredDestination = status != "needs_verification" && missingCurrentDestination;
         var missingObservation = evidence is null || missingRequiredDestination;
+
         if (missingObservation)
         {
             return "actionOutcome requires after-state evidence, not just input delivery. Closing an obligation also requires the observed current destination; needs_verification may leave it unknown while input stays locked.";
@@ -81,6 +89,7 @@ internal sealed partial class AppGraphLiveRunStore
         }
 
         var needsReason = status is "needs_verification" or "deferred" or "blocked";
+
         if (needsReason && reason is null)
         {
             return "Unresolved action outcomes require a concrete reason and the remaining work.";
@@ -94,7 +103,11 @@ internal sealed partial class AppGraphLiveRunStore
         var action = run.Actions[pending.ActionId];
         var navigationKind = AppGraphActionIdentity.NavigationKind(action.ToolName, action.AutomationId,
             action.Selector, NormalizeOptional(action.NavigationKind) ?? ReadString(outcome, "navigationKind"));
-        action = action with { NavigationKind = navigationKind };
+        action = action with
+        {
+            NavigationKind = navigationKind
+        };
+
         var resolved = status is "verified" or "no_change";
         run.Actions[action.Id] = action with
         {
@@ -120,6 +133,7 @@ internal sealed partial class AppGraphLiveRunStore
                 ["semanticMeaning"] = evidence,
                 ["confidence"] = 1m
             };
+
             if (!TryReadTransition(transition, run.Edges, run.Nodes, run.Actions.Values, now, out var edge, out var error))
             {
                 return error;
@@ -131,7 +145,11 @@ internal sealed partial class AppGraphLiveRunStore
         if (pending.ToolName == "ansight_scroll_ui" && status == "deferred")
         {
             var node = run.Nodes[run.CurrentDestinationId!];
-            run.Nodes[node.Id] = node with { ScrollStatus = "in_progress", UpdatedUtc = now };
+            run.Nodes[node.Id] = node with
+            {
+                ScrollStatus = "in_progress",
+                UpdatedUtc = now
+            };
         }
 
         if (status != "needs_verification")

@@ -13,18 +13,18 @@ internal static partial class SessionArchiveExternalPayloadReader
     private const string SessionTelemetryArchiveEntryPath = "session-data/telemetry.json";
     private const string SessionTouchesArchiveEntryPath = "session-data/touches.json";
 
-    private static readonly JsonSerializerOptions ArchiveJsonOptions = new()
+    private static readonly JsonSerializerOptions archiveJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly JsonDocumentOptions JsonDocumentOptions = new()
+    private static readonly JsonDocumentOptions jsonDocumentOptions = new()
     {
         AllowTrailingCommas = true
     };
 
-    private static readonly string[] JsonLinesArchiveEntryPaths =
+    private static readonly string[] jsonLinesArchiveEntryPaths =
     [
         "session-data/logs.jsonl",
         "logs.jsonl",
@@ -45,8 +45,9 @@ internal static partial class SessionArchiveExternalPayloadReader
     public static bool IsJsonLinesFilePath(string filePath)
     {
         var extension = Path.GetExtension(filePath);
+
         return string.Equals(extension, ".jsonl", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(extension, ".ndjson", StringComparison.OrdinalIgnoreCase);
+            || string.Equals(extension, ".ndjson", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool TryReadJsonLinesFile(
@@ -66,15 +67,18 @@ internal static partial class SessionArchiveExternalPayloadReader
             if (!builder.HasAnyEvidence)
             {
                 errorMessage = "The selected JSONL file did not contain any supported Ansight session records.";
+
                 return false;
             }
 
             payload = builder.Build(Path.GetFileNameWithoutExtension(filePath));
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException)
         {
             errorMessage = $"Unable to read JSONL session archive: {ex.Message}";
+
             return false;
         }
     }
@@ -86,6 +90,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         out string? errorMessage)
     {
         using var reader = new SystemZipSessionArchiveReader(archive);
+
         return TryReadJsonLinesArchive(reader, sourceName, out payload, out errorMessage);
     }
 
@@ -108,14 +113,15 @@ internal static partial class SessionArchiveExternalPayloadReader
 
             var jsonLinesEntries = archive.Entries
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
-                                && IsJsonLinesFilePath(entry.Name)
-                                && !entry.FullName.StartsWith(ArtifactsArchiveDirectoryName + "/", StringComparison.Ordinal))
+                    && IsJsonLinesFilePath(entry.Name)
+                    && !entry.FullName.StartsWith(ArtifactsArchiveDirectoryName + "/", StringComparison.Ordinal))
                 .OrderBy(entry => entry.FullName, StringComparer.Ordinal)
                 .ToArray();
 
             if (jsonLinesEntries.Length == 0 && !builder.HasAnyEvidence)
             {
                 errorMessage = "The selected archive is missing session.json and does not contain JSONL session records.";
+
                 return false;
             }
 
@@ -130,11 +136,13 @@ internal static partial class SessionArchiveExternalPayloadReader
             if (!builder.HasAnyEvidence)
             {
                 errorMessage = "The selected archive did not contain any supported JSONL session records.";
+
                 return false;
             }
 
             var builtPayload = builder.Build(Path.GetFileNameWithoutExtension(sourceName));
             var imageBytesByFrameId = new Dictionary<string, byte[]>(builtPayload.ImageBytesByFrameId, StringComparer.Ordinal);
+
             foreach (var frame in builtPayload.Snapshot.Images)
             {
                 if (imageBytesByFrameId.ContainsKey(frame.FrameId))
@@ -143,6 +151,7 @@ internal static partial class SessionArchiveExternalPayloadReader
                 }
 
                 var imageEntry = archive.GetEntry(SessionImageArtifactPath.ResolveArchiveEntryPath(frame));
+
                 if (imageEntry is null)
                 {
                     continue;
@@ -160,11 +169,13 @@ internal static partial class SessionArchiveExternalPayloadReader
                 ImageBytesByFrameId = imageBytesByFrameId,
                 ArtifactBytesByRelativePath = builtPayload.ArtifactBytesByRelativePath
             };
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or FormatException)
         {
             errorMessage = $"Unable to read JSONL session archive: {ex.Message}";
+
             return false;
         }
     }
@@ -175,6 +186,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         IReadOnlyList<SessionVisualTreeSnapshotIndexEntry>? visualTreeSnapshotIndex = null)
     {
         using var reader = new SystemZipSessionArchiveReader(archive);
+
         return ApplyExternalArchivePayloads(reader, snapshot, visualTreeSnapshotIndex);
     }
 
@@ -184,9 +196,9 @@ internal static partial class SessionArchiveExternalPayloadReader
         IReadOnlyList<SessionVisualTreeSnapshotIndexEntry>? visualTreeSnapshotIndex = null)
     {
         var legacyLogs = ReadArchiveJsonEntry<SessionArchiveExternalLogsDocument>(archive, SessionLogsArchiveEntryPath)?.Logs
-                         ?? snapshot.Logs;
-        var logStreams = SessionLogStreamArchiveCodec.TryRead(archive, ArchiveJsonOptions)
-                         ?? SessionLogStreams.Normalize(snapshot.LogStreams, legacyLogs);
+            ?? snapshot.Logs;
+        var logStreams = SessionLogStreamArchiveCodec.TryRead(archive, archiveJsonOptions)
+            ?? SessionLogStreams.Normalize(snapshot.LogStreams, legacyLogs);
         var logs = SessionLogStreams.Flatten(logStreams);
         var telemetry = ReadArchiveJsonEntry<SessionArchiveExternalTelemetryDocument>(archive, SessionTelemetryArchiveEntryPath);
         var touchDocument = ReadArchiveJsonEntry<SessionArchiveExternalTouchesDocument>(archive, SessionTouchesArchiveEntryPath);
@@ -195,14 +207,15 @@ internal static partial class SessionArchiveExternalPayloadReader
             : SessionTouchPacking.Unpack(touchDocument.Batches);
         var metricChannels = telemetry?.Channels ?? snapshot.MetricChannels;
         var metrics = telemetry?.Metrics ?? snapshot.Metrics;
-        var visualTreeSnapshots = visualTreeSnapshotIndex is { Count: > 0 }
-            ? SessionArchiveVisualTreeCodec.Read(archive, visualTreeSnapshotIndex)
+        var visualTreeSnapshots = visualTreeSnapshotIndex is { Count: > 0 } ? SessionArchiveVisualTreeCodec.Read(archive, visualTreeSnapshotIndex)
             : snapshot.VisualTreeSnapshots;
 
         var builder = new JsonLinesSessionBuilder(snapshot.SessionId);
-        foreach (var entryPath in JsonLinesArchiveEntryPaths)
+
+        foreach (var entryPath in jsonLinesArchiveEntryPaths)
         {
             var entry = archive.GetEntry(entryPath);
+
             if (entry is null)
             {
                 continue;
@@ -281,14 +294,19 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyConnectivityDocuments(ISessionArchiveReader archive, JsonLinesSessionBuilder builder)
     {
         foreach (var entry in archive.Entries.Where(entry =>
-            entry.FullName.Replace('\\', '/').Contains("connectivity/segments/", StringComparison.OrdinalIgnoreCase)
-            && entry.FullName.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase)).OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+                entry.FullName.Replace('\\', '/').Contains("connectivity/segments/", StringComparison.OrdinalIgnoreCase)
+                    && entry.FullName.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase)).OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
             using var stream = entry.Open();
             using var reader = new StreamReader(stream);
+
             while (reader.ReadLine() is { } line)
+            {
                 if (Ansight.Host.Connectivity.ConnectivityJson.Parse(line) is { } record)
+                {
                     builder.AddApplicationEvent(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(record));
+                }
+            }
         }
     }
 
@@ -297,15 +315,16 @@ internal static partial class SessionArchiveExternalPayloadReader
         JsonLinesSessionBuilder builder)
     {
         foreach (var entry in archive.Entries
-                     .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
-                                     && entry.FullName.Contains("network/requests/", StringComparison.OrdinalIgnoreCase)
-                                     && entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
+                && entry.FullName.Contains("network/requests/", StringComparison.OrdinalIgnoreCase)
+                && entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
             try
             {
                 using var stream = entry.Open();
-                var request = JsonSerializer.Deserialize<SessionNetworkRequest>(stream, ArchiveJsonOptions);
+                var request = JsonSerializer.Deserialize<SessionNetworkRequest>(stream, archiveJsonOptions);
+
                 if (request is not null)
                 {
                     builder.AddNetworkRequest(request);
@@ -332,6 +351,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         builder.Status ??= builder.LastUpdatedUtc is null ? "Offline Capture" : "Offline Capture Complete";
 
         var appState = FirstString(root, "appState");
+
         if (!string.IsNullOrWhiteSpace(appState)
             && Enum.TryParse<AppLifecycleState>(appState, ignoreCase: true, out var parsedAppState))
         {
@@ -373,6 +393,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ApplyOfflineCaptureDeviceProfile(JsonElement root, JsonLinesSessionBuilder builder)
     {
         builder.DeviceProfileJson = root.GetRawText();
+
         if (TryDeserialize(root, out DeviceAppProfile? profile))
         {
             builder.DeviceProfile = profile;
@@ -383,7 +404,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     {
         try
         {
-            builder.CustomProperties = JsonSerializer.Deserialize<JsonObject>(root.GetRawText(), ArchiveJsonOptions);
+            builder.CustomProperties = JsonSerializer.Deserialize<JsonObject>(root.GetRawText(), archiveJsonOptions);
         }
         catch (JsonException)
         {
@@ -396,24 +417,26 @@ internal static partial class SessionArchiveExternalPayloadReader
         JsonLinesSessionBuilder builder)
     {
         foreach (var entry in archive.Entries
-                     .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
-                                     && IsJsonLinesFilePath(entry.Name)
-                                     && entry.FullName.Contains("screenshots/index/", StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
+                && IsJsonLinesFilePath(entry.Name)
+                && entry.FullName.Contains("screenshots/index/", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
             var indexStart = entry.FullName.IndexOf("screenshots/index/", StringComparison.OrdinalIgnoreCase);
             var sessionRoot = indexStart <= 0 ? string.Empty : entry.FullName[..indexStart];
             using var stream = entry.Open();
             using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
             while (reader.ReadLine() is { } line)
             {
                 var trimmed = line.Trim();
+
                 if (trimmed.Length == 0)
                 {
                     continue;
                 }
 
-                using var document = JsonDocument.Parse(trimmed, JsonDocumentOptions);
+                using var document = JsonDocument.Parse(trimmed, jsonDocumentOptions);
                 ApplyOfflineCaptureScreenshotIndex(archive, sessionRoot, document.RootElement, builder);
             }
         }
@@ -424,10 +447,10 @@ internal static partial class SessionArchiveExternalPayloadReader
         JsonLinesSessionBuilder builder)
     {
         foreach (var entry in archive.Entries
-                     .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
-                                     && entry.FullName.Contains("annotations/bundles/", StringComparison.OrdinalIgnoreCase)
-                                     && entry.FullName.EndsWith(".ansightannotation", StringComparison.OrdinalIgnoreCase))
-                     .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Name)
+                && entry.FullName.Contains("annotations/bundles/", StringComparison.OrdinalIgnoreCase)
+                && entry.FullName.EndsWith(".ansightannotation", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
             try
             {
@@ -440,17 +463,19 @@ internal static partial class SessionArchiveExternalPayloadReader
                 using var bundleStream = new MemoryStream(
                     entry.Length > 0 ? checked((int)Math.Min(entry.Length, int.MaxValue)) : 0);
                 entryStream.CopyTo(bundleStream);
+
                 if (bundleStream.Length > AnnotatedFeedbackBundleReader.MaximumBundleBytes)
                 {
                     continue;
                 }
 
                 bundleStream.Position = 0;
+
                 if (AnnotatedFeedbackBundleReader.TryRead(
-                        bundleStream,
-                        entry.FullName,
-                        out var content,
-                        out _)
+                    bundleStream,
+                    entry.FullName,
+                    out var content,
+                    out _)
                     && content is not null)
                 {
                     builder.AddAnnotatedFeedback(content);
@@ -470,6 +495,7 @@ internal static partial class SessionArchiveExternalPayloadReader
         JsonLinesSessionBuilder builder)
     {
         var relativePath = FirstString(root, "path", "p");
+
         if (string.IsNullOrWhiteSpace(relativePath))
         {
             return;
@@ -477,7 +503,8 @@ internal static partial class SessionArchiveExternalPayloadReader
 
         var normalizedRelativePath = relativePath.Replace('\\', '/').TrimStart('/');
         var imageEntry = archive.GetEntry(sessionRoot + normalizedRelativePath)
-                         ?? archive.GetEntry(normalizedRelativePath);
+            ?? archive.GetEntry(normalizedRelativePath);
+
         if (imageEntry is null)
         {
             return;
@@ -486,17 +513,19 @@ internal static partial class SessionArchiveExternalPayloadReader
         using var imageStream = imageEntry.Open();
         using var imageBuffer = new MemoryStream();
         imageStream.CopyTo(imageBuffer);
+
         var bytes = imageBuffer.ToArray();
+
         if (bytes.Length == 0)
         {
             return;
         }
 
         var capturedAtUtc = FirstTimestamp(root, "capturedAtUtc", "timestampUtc", "timestamp", "t")
-                            ?? DateTimeOffset.UtcNow;
+            ?? DateTimeOffset.UtcNow;
         var frameId = FirstString(root, "frameId", "id")
-                      ?? Path.GetFileNameWithoutExtension(normalizedRelativePath)
-                      ?? BuildFrameId(capturedAtUtc, builder.Images.Count);
+            ?? Path.GetFileNameWithoutExtension(normalizedRelativePath)
+            ?? BuildFrameId(capturedAtUtc, builder.Images.Count);
         var format = NormalizeImageFormat(Path.GetExtension(normalizedRelativePath));
 
         builder.AddImage(
@@ -518,7 +547,7 @@ internal static partial class SessionArchiveExternalPayloadReader
     private static void ReadArchiveJsonElement(ISessionArchiveEntry entry, Action<JsonElement> apply)
     {
         using var stream = entry.Open();
-        using var document = JsonDocument.Parse(stream, JsonDocumentOptions);
+        using var document = JsonDocument.Parse(stream, jsonDocumentOptions);
         apply(document.RootElement);
     }
 
@@ -526,10 +555,13 @@ internal static partial class SessionArchiveExternalPayloadReader
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         var lineNumber = 0;
+
         while (reader.ReadLine() is { } line)
         {
             lineNumber++;
+
             var trimmed = line.Trim();
+
             if (trimmed.Length == 0)
             {
                 continue;
@@ -537,7 +569,7 @@ internal static partial class SessionArchiveExternalPayloadReader
 
             try
             {
-                using var document = JsonDocument.Parse(trimmed, JsonDocumentOptions);
+                using var document = JsonDocument.Parse(trimmed, jsonDocumentOptions);
                 ApplyJsonLineElement(document.RootElement, builder);
             }
             catch (JsonException ex)
@@ -568,8 +600,10 @@ internal static partial class SessionArchiveExternalPayloadReader
             && Ansight.Host.Connectivity.ConnectivityJson.Parse(element.GetRawText()) is { } connectivity)
         {
             builder.AddApplicationEvent(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(connectivity));
+
             return;
         }
+
         ApplySessionMetadata(element, builder);
         ApplySessionObject(element, builder);
         ApplyDeviceProfile(element, builder);
@@ -580,8 +614,10 @@ internal static partial class SessionArchiveExternalPayloadReader
         ApplyTouches(element, builder);
         ApplyNetworkRequest(element, builder);
         ApplyImage(element, builder);
-        if (ClientEventParser.ParseSessionVisualTreeSnapshot(element) is { } tree)
-            builder.AddVisualTreeSnapshot(tree);
-    }
 
+        if (ClientEventParser.ParseSessionVisualTreeSnapshot(element) is { } tree)
+        {
+            builder.AddVisualTreeSnapshot(tree);
+        }
+    }
 }

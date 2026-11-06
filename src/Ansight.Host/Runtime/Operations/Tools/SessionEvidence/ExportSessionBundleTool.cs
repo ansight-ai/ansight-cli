@@ -31,7 +31,7 @@ internal sealed class ExportSessionBundleTool : Operation
         }
 
         var archiveFilePath = NormalizeOptionalString(arguments?["archiveFilePath"]?.GetValue<string>())
-                              ?? SessionArchiveExporter.ResolveDefaultArchivePath(applicationPaths, snapshot!);
+            ?? SessionArchiveExporter.ResolveDefaultArchivePath(applicationPaths, snapshot!);
         var options = new SessionBundleExportOptions
         {
             IncludeScreenshots = includeScreenshots,
@@ -56,6 +56,7 @@ internal sealed class ExportSessionBundleTool : Operation
         }
 
         var archiveInfo = new FileInfo(archiveFilePath);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -80,6 +81,7 @@ internal sealed class ExportSessionBundleTool : Operation
         properties["includeScreenshots"] = ToolSchema.Boolean("Include captured screenshot image files. Defaults to true.", nullable: true);
         properties["includeArtifactFiles"] = ToolSchema.Boolean("Include persisted app artifact files. Defaults to true.", nullable: true);
         properties["includeVisualTreePayloads"] = ToolSchema.Boolean("Include full visual-tree JSON payload files. Defaults to true.", nullable: true);
+
         return properties;
     }
 }

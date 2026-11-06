@@ -20,6 +20,7 @@ public sealed class DeviceAccessibilityTreeNormalizerTests
             """;
         var payload = DeviceAccessibilityTreeNormalizer.NormalizeAndroid(source, 100, 100, 40, 16);
         Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var types, out var root));
+
         var match = Assert.Single(LiveUiNodeQuery.Find(root!,
             LiveUiSelector.Parse(new JsonObject { ["automationId"] = "search" }), types!));
         Assert.Equal(expected, LiveUiNodeQuery.ReadValue(match.Node));
@@ -211,6 +212,7 @@ public sealed class DeviceAccessibilityTreeNormalizerTests
             payload,
             out var typeRegistry,
             out var root));
+
         var buttonSelector = LiveUiSelector.Parse(new JsonObject
         {
             ["automationId"] = "continue-button",
@@ -263,6 +265,7 @@ public sealed class DeviceAccessibilityTreeNormalizerTests
             payload,
             out var typeRegistry,
             out var root));
+
         var selector = LiveUiSelector.Parse(new JsonObject
         {
             ["text"] = "Crags",
@@ -306,6 +309,7 @@ public sealed class DeviceAccessibilityTreeNormalizerTests
             payload,
             out var typeRegistry,
             out var root));
+
         var selector = LiveUiSelector.Parse(new JsonObject
         {
             ["automationId"] = "com.example:id/search",

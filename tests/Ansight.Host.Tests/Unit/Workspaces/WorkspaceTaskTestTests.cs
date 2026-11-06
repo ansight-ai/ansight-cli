@@ -78,13 +78,19 @@ public sealed class WorkspaceTaskTestTests
         JsonObject? runningMetadata = null;
         var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
         {
-            if (value.Stage != "task.running") return;
+            if (value.Stage != "task.running")
+            {
+                return;
+            }
+
             Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var running));
             runningMetadata = running!.CustomProperties?["ui-test"]?.DeepClone().AsObject();
         });
         var result = await fixture.Service.RunAsync(fixture.Request with
         {
-            BatchRunId = "batch-123", BatchIndex = 2, BatchCount = 3
+            BatchRunId = "batch-123",
+            BatchIndex = 2,
+            BatchCount = 3
         }, progress);
         Assert.True(result.TaskResult is not null, result.Message);
         Assert.Equal(status, result.TaskResult.Status);
@@ -97,10 +103,12 @@ public sealed class WorkspaceTaskTestTests
         Assert.Empty(result.TaskAudit.Instructions);
         Assert.Equal(0, fixture.Gateway.Calls);
         Assert.True(fixture.Runtime.IsSessionLive(fixture.Session.SessionId));
+
         using var claim = fixture.Service.ReserveSession(fixture.Session);
         var history = Assert.Single(fixture.Service.History.List(workspacePath: fixture.Workspace).Runs);
         Assert.Equal("task", history.ExecutionKind);
         Assert.Equal(result.TaskResult!.RunId, history.RunId);
+
         var saved = Assert.Single(fixture.Service.History.Inspect(history.RunId)!.Runs).Audit;
         Assert.Equal(status, saved.TaskResult!.Status);
         Assert.Equal(result.TaskResult.Assertions.Count, saved.TaskResult.Assertions.Count);
@@ -109,6 +117,7 @@ public sealed class WorkspaceTaskTestTests
         Assert.Equal("running", runningMetadata["status"]!.GetValue<string>());
         Assert.Equal(history.RunId, runningMetadata["runId"]!.GetValue<string>());
         Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var completed));
+
         var metadata = completed!.CustomProperties!["ui-test"]!;
         Assert.Equal("example", metadata["testId"]!.GetValue<string>());
         Assert.Equal(result.Test!.Name, metadata["testName"]!.GetValue<string>());
@@ -124,6 +133,7 @@ public sealed class WorkspaceTaskTestTests
         var export = await fixture.Service.TraceExports.ExportAsync(history.RunId, exportPath);
         Assert.True(export.IsSuccess, export.Message);
         Assert.Equal(1, export.TraceCount);
+
         using var archive = ZipFile.OpenRead(exportPath);
         Assert.Contains(archive.Entries, entry => entry.FullName.EndsWith(".json", StringComparison.Ordinal));
     }
@@ -138,7 +148,10 @@ public sealed class WorkspaceTaskTestTests
             return { batchRunId: run.batchRunId, hasBatchRunId: Object.hasOwn(run, 'batchRunId') };
             """);
 
-        var result = await fixture.Service.RunAsync(fixture.Request with { BatchRunId = batchRunId });
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            BatchRunId = batchRunId
+        });
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal(batchRunId, result.TaskResult!.Output?["batchRunId"]?.GetValue<string>());
@@ -153,7 +166,12 @@ public sealed class WorkspaceTaskTestTests
     {
         using var fixture = new Fixture("expect(true).toBe(true);");
         fixture.WriteTest(fields);
-        var result = await fixture.Service.RunAsync(fixture.Request with { SessionId = null, Target = fixture.TargetRequest });
+
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            SessionId = null,
+            Target = fixture.TargetRequest
+        });
         Assert.False(result.IsSuccess);
         Assert.Null(result.TaskResult);
         Assert.Contains(expectedMessage, result.Message, StringComparison.OrdinalIgnoreCase);
@@ -167,6 +185,7 @@ public sealed class WorkspaceTaskTestTests
         using var fixture = new Fixture("expect(secrets.require('login.password').length, { id: 'secret' }).toBe(16);");
         fixture.WriteTest("taskId: example\nrequiredSecrets: [login.password]");
         fixture.Runtime.SimulatorAgent.SetTestSecret("test.tasks", "login.password", "private-password");
+
         var result = await fixture.Service.RunAsync(fixture.Request);
         Assert.True(result.IsSuccess, result.Message);
         Assert.DoesNotContain("private-password", File.ReadAllText(result.TaskAuditFilePath!));
@@ -177,6 +196,7 @@ public sealed class WorkspaceTaskTestTests
     {
         using var fixture = new Fixture("expect(input.count, { id: 'default-input' }).toBe(2);");
         fixture.WriteTest("taskId: example"); // The task's input default is applied.
+
         var service = new WorkspaceTestService(fixture.Runtime, fixture.Runtime.SimulatorAgent, fixture.Launcher);
         var result = await service.RunAsync(fixture.Request);
         Assert.True(result.IsSuccess, result.Message);
@@ -190,8 +210,12 @@ public sealed class WorkspaceTaskTestTests
             const capabilities = await ansight.capabilities.snapshot();
             expect(capabilities.executionMode, { id: 'capture-mode' }).toBe('device');
             """);
-        var result = await fixture.Service.RunAsync(fixture.Request with { CaptureTrace = true });
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            CaptureTrace = true
+        });
         Assert.True(result.IsSuccess, result.Message);
+
         var call = Assert.Single(result.TaskResult!.ToolCalls);
         Assert.NotNull(call.Arguments);
         Assert.NotNull(call.Result);
@@ -206,7 +230,11 @@ public sealed class WorkspaceTaskTestTests
     public async Task DisabledOrIncompatibleTaskDoesNotLaunch(string descriptor, string message, bool skipped)
     {
         using var fixture = new Fixture("expect(true).toBe(true);", descriptor);
-        var result = await fixture.Service.RunAsync(fixture.Request with { SessionId = null, Target = fixture.TargetRequest });
+        var result = await fixture.Service.RunAsync(fixture.Request with
+        {
+            SessionId = null,
+            Target = fixture.TargetRequest
+        });
         Assert.False(result.IsSuccess);
         Assert.Equal(skipped, result.IsSkipped);
         Assert.Contains(message, result.Message, StringComparison.OrdinalIgnoreCase);
@@ -234,6 +262,7 @@ public sealed class WorkspaceTaskTestTests
         Assert.Equal(RepositoryTaskRunStatus.TimedOut, result.TaskResult?.Status);
         Assert.False(result.IsSuccess);
         Assert.False(result.WasCancelled);
+
         using var claim = fixture.Service.ReserveSession(fixture.Session);
     }
 
@@ -245,6 +274,7 @@ public sealed class WorkspaceTaskTestTests
             return { batchRunId: run.batchRunId };
             """);
         fixture.Launcher.OwnApp = true;
+
         var batch = await fixture.Service.Batches.RunAllAsync(new WorkspaceTestBatchRequest(
             fixture.Workspace, Target: fixture.TargetRequest));
         Assert.True(batch.PassedCount == 1, string.Join("; ", batch.Results.Select(result => result.Message)));
@@ -252,6 +282,7 @@ public sealed class WorkspaceTaskTestTests
         Assert.Equal(1, fixture.Launcher.Stops);
         Assert.Equal(0, fixture.Gateway.Calls);
         Assert.Equal(batch.BatchRunId, batch.Results[0].TaskResult!.Output?["batchRunId"]?.GetValue<string>());
+
         var inspection = fixture.Service.History.Inspect(batch.BatchRunId!)!;
         var item = Assert.Single(inspection.Batch!.Audit.Tests);
         Assert.Null(item.AgentRunId);
@@ -267,7 +298,10 @@ public sealed class WorkspaceTaskTestTests
         using var cancellation = new CancellationTokenSource();
         var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
         {
-            if (value.Stage == "task.running") cancellation.CancelAfter(500);
+            if (value.Stage == "task.running")
+            {
+                cancellation.CancelAfter(500);
+            }
         });
         var result = await fixture.Service.RunAsync(fixture.Request, progress, cancellation.Token);
         Assert.True(result.WasCancelled, result.Message);
@@ -275,6 +309,7 @@ public sealed class WorkspaceTaskTestTests
         Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var session));
         Assert.Equal("cancelled", session!.CustomProperties!["ui-test"]!["status"]!.GetValue<string>());
         Assert.Equal(0, fixture.Gateway.Calls);
+
         using var claim = fixture.Service.ReserveSession(fixture.Session);
     }
 
@@ -282,12 +317,23 @@ public sealed class WorkspaceTaskTestTests
     public async Task ReusedSessionShowsLatestTestAndClearsPreviousBatchAndCompletion()
     {
         using var fixture = new Fixture("expect(true, { id: 'passed' }).toBe(true);");
-        var first = await fixture.Service.RunAsync(fixture.Request with { BatchRunId = "previous-batch", BatchIndex = 1, BatchCount = 1 });
+        var first = await fixture.Service.RunAsync(fixture.Request with
+        {
+            BatchRunId = "previous-batch",
+            BatchIndex = 1,
+            BatchCount = 1
+        });
         fixture.WriteTest("name: Updated test\ntaskId: example");
+
         var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
         {
-            if (value.Stage != "task.running") return;
+            if (value.Stage != "task.running")
+            {
+                return;
+            }
+
             fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var current);
+
             var properties = current!.CustomProperties!["ui-test"]!;
             Assert.Equal("Updated test", properties["testName"]!.GetValue<string>());
             Assert.Equal("running", properties["status"]!.GetValue<string>());
@@ -310,9 +356,13 @@ public sealed class WorkspaceTaskTestTests
         var recorder = new FakeTestVideoRecorder();
         using var fixture = new Fixture($"expect({passed.ToString().ToLowerInvariant()}, {{ id: 'outcome' }}).toBe(true);", videoRecorder: recorder);
         fixture.WriteTest($"taskId: example\nvideo:\n  retention: {retention}");
+
         var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
         {
-            if (value.Stage == "task.running") Assert.Equal(1, recorder.Starts);
+            if (value.Stage == "task.running")
+            {
+                Assert.Equal(1, recorder.Starts);
+            }
         });
         var result = await fixture.Service.RunAsync(fixture.Request, progress);
         Assert.Equal(passed, result.IsSuccess);
@@ -324,30 +374,39 @@ public sealed class WorkspaceTaskTestTests
         Assert.True(fixture.Runtime.Sessions.TryGetSnapshot(fixture.Session.SessionId, out var session));
         Assert.Equal(expectedStatus != "discarded", session!.VideoRecordings.Any());
         Assert.DoesNotContain(session.ArtifactSnapshots, item => item.Source == "test-video");
-        if (expectedStatus == "discarded") return;
+
+        if (expectedStatus == "discarded")
+        {
+            return;
+        }
+
         var video = Assert.Single(session.VideoRecordings);
         var archivePath = Path.Combine(fixture.Workspace, "recorded-replay.zip");
         var exported = await fixture.Runtime.SessionArchives.ExportSessionArchiveAsync(session.SessionId, archivePath,
             new SessionArchiveExportOptions { IncludeArtifacts = false });
         Assert.True(exported.IsSuccess, exported.Message);
+
         using (var archive = ZipFile.OpenRead(archivePath))
         {
             Assert.Equal(video.ByteSize, archive.GetEntry(video.EntryPath)!.Length);
             Assert.DoesNotContain(archive.Entries, entry => entry.FullName.StartsWith("artifacts/", StringComparison.Ordinal));
         }
+
         var imported = await fixture.Runtime.SessionArchives.ImportSessionArchiveAsync(archivePath);
         Assert.True(imported.IsSuccess, imported.Message);
         Assert.Equal(video, Assert.Single(imported.ImportedSession!.VideoRecordings));
+
         var store = new SessionCaptureStore(fixture.Runtime.ApplicationPaths);
         Assert.True(store.TryLoad(imported.ImportedSession.SessionId, out var loaded));
         Assert.Equal(video, Assert.Single(loaded!.VideoRecordings));
+
         var sanitizedPath = Path.Combine(fixture.Workspace, "sanitized-replay.zip");
         var sanitized = await fixture.Runtime.SessionArchives.ExportSessionArchiveAsync(session.SessionId, sanitizedPath,
             new SessionArchiveExportOptions { Sanitize = true });
         Assert.True(sanitized.IsSuccess, sanitized.Message);
+
         using var sanitizedArchive = ZipFile.OpenRead(sanitizedPath);
         Assert.DoesNotContain(sanitizedArchive.Entries, entry => entry.FullName.StartsWith("session-video/", StringComparison.Ordinal));
-
     }
 
     [Fact]
@@ -356,6 +415,7 @@ public sealed class WorkspaceTaskTestTests
         var recorder = new FakeTestVideoRecorder { StartError = new IOException("Encoder unavailable") };
         using var fixture = new Fixture("expect(true, { id: 'outcome' }).toBe(true);", videoRecorder: recorder);
         fixture.WriteTest("taskId: example\nvideo: { retention: always }");
+
         var result = await fixture.Service.RunAsync(fixture.Request);
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal("failed", result.Video?.Status);
@@ -368,10 +428,14 @@ public sealed class WorkspaceTaskTestTests
         var recorder = new FakeTestVideoRecorder();
         using var fixture = new Fixture("await new Promise(() => {});", videoRecorder: recorder);
         fixture.WriteTest("taskId: example\nvideo: { retention: on-failure }");
+
         using var cancellation = new CancellationTokenSource();
         var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
         {
-            if (value.Stage == "task.running") cancellation.CancelAfter(300);
+            if (value.Stage == "task.running")
+            {
+                cancellation.CancelAfter(300);
+            }
         });
         var result = await fixture.Service.RunAsync(fixture.Request, progress, cancellation.Token);
         Assert.True(result.WasCancelled, result.Message);
@@ -388,6 +452,7 @@ public sealed class WorkspaceTaskTestTests
         var recorder = new FakeTestVideoRecorder();
         using var fixture = new Fixture("expect(true, { id: 'outcome' }).toBe(true);", videoRecorder: recorder);
         fixture.WriteTest($"taskId: example\nvideo: {{ retention: {saved} }}");
+
         var result = await fixture.Service.RunAsync(fixture.Request with
         {
             Video = requested is null ? null : new TestVideoOptions(requested)
@@ -408,7 +473,9 @@ public sealed class WorkspaceTaskTestTests
         public WorkspaceTestService Service { get; }
         public string Workspace => environment.RootPath;
         public WorkspaceTestTargetRequest TargetRequest { get; } = new(Platform: "android", DeviceIdentifier: "task-phone")
-        { ExecutionMode = "device" };
+        {
+            ExecutionMode = "device"
+        };
         public WorkspaceTestRunRequest Request => new(Workspace, "example", Session.SessionId);
 
         public Fixture(string body, string descriptor = "", ITestVideoRecorder? videoRecorder = null)
@@ -417,13 +484,18 @@ public sealed class WorkspaceTaskTestTests
                 new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
             var state = composition.Get<IRuntimeState>();
             Runtime = composition.Get<RuntimeCoordinator>();
+
             var target = new WorkspaceTestTarget("android", "task-phone", "Phone", "test.tasks", false, false, false)
-            { ExecutionMode = "device", DeviceKind = DeviceKinds.Physical };
+            {
+                ExecutionMode = "device",
+                DeviceKind = DeviceKinds.Physical
+            };
             state.TryGetSessionSnapshot(state.CreateDeviceSession(target), out var session);
             Session = session!;
             Launcher = new Launcher(target, Session);
             Service = new WorkspaceTestService(Runtime, Runtime.SimulatorAgent, Launcher, Gateway, videoRecorder);
             WriteTest("taskId: example\ntaskInput: { count: 2 }");
+
             var tasks = Path.Combine(Workspace, "ansight", "tasks");
             Directory.CreateDirectory(tasks);
             File.WriteAllText(Path.Combine(tasks, "example.ts"), $$"""
@@ -443,24 +515,47 @@ public sealed class WorkspaceTaskTestTests
             File.WriteAllText(Path.Combine(tests, "example.yaml"), "appId: test.tasks\n" + fields);
         }
 
-        public void Dispose() { Runtime.Dispose(); environment.Dispose(); }
+        public void Dispose()
+        {
+            Runtime.Dispose();
+            environment.Dispose();
+        }
     }
 
-    private sealed class Launcher(WorkspaceTestTarget target, AppSessionSnapshot session) : IWorkspaceTestTargetLauncher
+    private sealed class Launcher : IWorkspaceTestTargetLauncher
     {
+        private readonly WorkspaceTestTarget target;
+        private readonly AppSessionSnapshot session;
+
+        public Launcher(WorkspaceTestTarget target, AppSessionSnapshot session)
+        {
+            this.target = target;
+            this.session = session;
+        }
+
         public int Launches { get; private set; }
         public int Stops { get; private set; }
         public bool OwnApp { get; set; }
+
         public Task<WorkspaceTestTargetLaunchResult> LaunchAsync(string appId, WorkspaceTestTargetRequest? request,
             IProgress<WorkspaceTestRunProgress>? progress, CancellationToken cancellationToken)
         {
             Launches++;
-            return Task.FromResult(WorkspaceTestTargetLaunchResult.Success(target with { ApplicationLaunched = OwnApp })
-                with { ExistingSession = session });
+
+            return Task.FromResult(WorkspaceTestTargetLaunchResult.Success(target with
+            {
+                ApplicationLaunched = OwnApp
+            })
+                with
+            {
+                ExistingSession = session
+            });
         }
+
         public Task<DeviceOperationResult> StopAsync(WorkspaceTestTarget target, CancellationToken cancellationToken)
         {
             Stops++;
+
             return Task.FromResult(DeviceOperationResult.Success("terminate-app", target.Platform, target.DeviceIdentifier, "Stopped."));
         }
     }
@@ -468,12 +563,14 @@ public sealed class WorkspaceTaskTestTests
     private sealed class RejectingGateway : IWorkspaceTestRunGateway
     {
         public int Calls { get; private set; }
+
         public Task<WorkspaceTestRunPreparation> PrepareAsync(WorkspaceTestRunPreparationRequest request, CancellationToken cancellationToken = default)
         {
             Calls++;
             throw new InvalidOperationException("Task-only tests must never prepare a model or meter AI usage.");
         }
+
         public Task<WorkspaceTestRunMeterResult> CompleteAsync(WorkspaceTestRunMeterCompletion completion, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("Task-only tests must never complete AI metering.");
+                    => throw new InvalidOperationException("Task-only tests must never complete AI metering.");
     }
 }

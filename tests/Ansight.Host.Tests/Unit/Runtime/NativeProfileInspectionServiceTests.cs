@@ -15,6 +15,7 @@ public sealed class NativeProfileInspectionServiceTests
         var tracePath = Path.Combine(capturePath, "raw", "capture.trace");
         Directory.CreateDirectory(tracePath);
         await File.WriteAllBytesAsync(Path.Combine(tracePath, "template.data"), [1, 2, 3]);
+
         var tocPath = Path.Combine(capturePath, "derived", "instruments-toc.xml");
         await File.WriteAllTextAsync(
             tocPath,
@@ -46,6 +47,7 @@ public sealed class NativeProfileInspectionServiceTests
                     InstrumentsProfileCaptureAdapter.TableOfContentsArtifactKind,
                     "derived/instruments-toc.xml")
             ]));
+
         var inspectionService = new NativeProfileInspectionService(
             store,
             new RecordingProcessRunner());
@@ -57,6 +59,7 @@ public sealed class NativeProfileInspectionServiceTests
         Assert.Equal(1, toc.RunCount);
         Assert.Equal(3, toc.TableCount);
         Assert.Equal(2, Assert.Single(toc.Schemas, schema => schema.Schema == "time-profile").Occurrences);
+
         var process = Assert.Single(toc.Processes);
         Assert.Equal("42", process.ProcessId);
         Assert.Equal("ExampleApp", process.Name);
@@ -75,6 +78,7 @@ public sealed class NativeProfileInspectionServiceTests
         var capturePath = store.CreateCaptureDirectory(captureId);
         var tracePath = Path.Combine(capturePath, "raw", "capture.perfetto-trace");
         await File.WriteAllBytesAsync(tracePath, [1, 2, 3, 4]);
+
         var configPath = Path.Combine(capturePath, "diagnostics", "perfetto-config.pbtxt");
         await File.WriteAllTextAsync(
             configPath,
@@ -96,8 +100,10 @@ public sealed class NativeProfileInspectionServiceTests
                     PerfettoProfileCaptureAdapter.ConfigArtifactKind,
                     "diagnostics/perfetto-config.pbtxt")
             ]));
+
         var toolPath = Path.Combine(environment.RootPath, "trace_processor_shell");
         await File.WriteAllTextAsync(toolPath, string.Empty);
+
         var runner = new RecordingProcessRunner();
         var inspectionService = new NativeProfileInspectionService(store, runner, toolPath);
 
@@ -108,6 +114,7 @@ public sealed class NativeProfileInspectionServiceTests
         Assert.Equal(30_000, perfetto.ConfiguredDurationMilliseconds);
         Assert.Equal(["android.packages_list", "linux.ftrace"], perfetto.DataSources);
         Assert.True(perfetto.Toolchain.IsAvailable);
+
         var overview = Assert.IsType<Ansight.Host.Runtime.NativeProfiling.PerfettoQueryInspection>(
             perfetto.TraceOverview);
         Assert.Contains("duration_ns", overview.Columns);
@@ -115,8 +122,8 @@ public sealed class NativeProfileInspectionServiceTests
         Assert.Contains(
             runner.Requests,
             request => request.Arguments.Count >= 3
-                       && request.Arguments[0] == "query"
-                       && request.Arguments[1] == tracePath);
+                && request.Arguments[0] == "query"
+                && request.Arguments[1] == tracePath);
     }
 
     [Fact]
@@ -137,8 +144,10 @@ public sealed class NativeProfileInspectionServiceTests
                 PerfettoProfileCaptureAdapter.TraceArtifactKind,
                 "raw/capture.perfetto-trace",
                 authoritative: true)]));
+
         var toolPath = Path.Combine(environment.RootPath, "trace_processor");
         await File.WriteAllTextAsync(toolPath, string.Empty);
+
         var runner = new RecordingProcessRunner(
             """
             "name",value
@@ -157,6 +166,7 @@ public sealed class NativeProfileInspectionServiceTests
         Assert.Equal(2, query.RowCount);
         Assert.True(query.WasTruncated);
         Assert.Equal("first, item", query.Rows[0][0]);
+
         var request = Assert.Single(runner.Requests, request => request.Arguments.FirstOrDefault() == "query");
         Assert.Contains("LIMIT 3", request.Arguments[2], StringComparison.Ordinal);
     }
@@ -248,7 +258,7 @@ public sealed class NativeProfileInspectionServiceTests
         public RecordingProcessRunner(string? queryOutput = null)
         {
             this.queryOutput = queryOutput
-                               ?? "start_ts,end_ts,duration_ns,process_count,thread_count,slice_count,counter_count,scheduling_slice_count\n1,101,100,2,3,4,5,6\n";
+                ?? "start_ts,end_ts,duration_ns,process_count,thread_count,slice_count,counter_count,scheduling_slice_count\n1,101,100,2,3,4,5,6\n";
         }
 
         public List<NativeProfilingProcessRequest> Requests { get; } = [];
@@ -259,6 +269,7 @@ public sealed class NativeProfileInspectionServiceTests
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
+
             return Task.FromResult(request.Arguments.SequenceEqual(["--version"])
                 ? new NativeProfilingProcessResult(0, "Perfetto v52.0", string.Empty, false)
                 : new NativeProfilingProcessResult(0, queryOutput, string.Empty, false));

@@ -44,6 +44,7 @@ public sealed class ArtifactFormatPreviewTests
         using var environment = new TestEnvironment();
         var path = Path.Combine(environment.RootPath, "artifact." + extension);
         await File.WriteAllTextAsync(path, source);
+
         var result = await new FileVisualizationService().InspectLocalFileAsync(path);
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal(expected, result.ViewerKind);
@@ -58,7 +59,12 @@ public sealed class ArtifactFormatPreviewTests
     {
         using var environment = new TestEnvironment();
         var path = Path.Combine(environment.RootPath, "artifact." + extension);
-        await using (var stream = File.Create(path)) stream.SetLength(11 * 1024 * 1024);
+
+        await using (var stream = File.Create(path))
+        {
+            stream.SetLength(11 * 1024 * 1024);
+        }
+
         var result = await new FileVisualizationService().InspectLocalFileAsync(path);
         Assert.True(result.IsSuccess, result.Message);
         Assert.Equal(expected, result.ViewerKind);
@@ -73,6 +79,7 @@ public sealed class ArtifactFormatPreviewTests
         using var environment = new TestEnvironment();
         var path = Path.Combine(environment.RootPath, "capture.nettrace");
         await File.WriteAllTextAsync(path, "trace bytes");
+
         var runner = new ProfileProcessRunner();
         var result = await FileVisualizationService.ConvertNetTraceAsync(path, "capture.nettrace", runner, "dotnet-trace", CancellationToken.None);
         Assert.True(result.IsSuccess, result.Message);
@@ -89,9 +96,11 @@ public sealed class ArtifactFormatPreviewTests
         using var environment = new TestEnvironment();
         var path = Path.Combine(environment.RootPath, "capture.nettrace");
         await File.WriteAllTextAsync(path, "trace bytes");
+
         var missing = await FileVisualizationService.ConvertNetTraceAsync(path, "capture.nettrace", new ProfileProcessRunner(), null, CancellationToken.None);
         Assert.False(missing.IsSuccess);
         Assert.Contains("Install", missing.Message);
+
         var timedOut = await FileVisualizationService.ConvertNetTraceAsync(path, "capture.nettrace", new ProfileProcessRunner { TimeOut = true }, "dotnet-trace", CancellationToken.None);
         Assert.False(timedOut.IsSuccess);
         Assert.Contains("60 seconds", timedOut.Message);
@@ -107,8 +116,14 @@ public sealed class ArtifactFormatPreviewTests
             Assert.Equal("convert", request.Arguments[0]);
             Assert.Equal("Speedscope", request.Arguments[3]);
             OutputDirectory = request.WorkingDirectory;
-            if (TimeOut) return new DotNetTraceProcessResult(1, "", "", true);
+
+            if (TimeOut)
+            {
+                return new DotNetTraceProcessResult(1, "", "", true);
+            }
+
             await File.WriteAllTextAsync(request.Arguments[5] + ".speedscope.json", "{\"shared\":{\"frames\":[]},\"profiles\":[]}", cancellationToken);
+
             return new DotNetTraceProcessResult(0, "", "", false);
         }
     }

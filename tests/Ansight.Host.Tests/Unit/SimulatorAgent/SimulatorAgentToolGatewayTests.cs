@@ -33,6 +33,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         dispatcher.ResponseFactory = (_, arguments) =>
         {
             Assert.Equal(captureTrace, arguments?["includeDiagnostics"]?.GetValue<bool>() == true);
+
             return RequestResult.ToolResult(new JsonObject
             {
                 ["tasks"] = new JsonArray(
@@ -56,6 +57,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             }, isError: false);
         };
+
         var gateway = new ToolGateway(dispatcher);
         var traces = new List<SimulatorAgentRepositoryTaskDiscoveryTrace>();
 
@@ -63,11 +65,14 @@ public sealed partial class SimulatorAgentToolGatewayTests
             "selected-session", instruction, CancellationToken.None, captureTrace ? traces.Add : null);
 
         Assert.Equal("load-weather", Assert.Single(shortcuts).TaskId);
+
         if (!captureTrace)
         {
             Assert.Empty(traces);
+
             return;
         }
+
         var first = traces[0];
         Assert.Equal(instruction, first.Query);
         Assert.Equal(7, first.AvailableTaskCount);
@@ -110,15 +115,16 @@ public sealed partial class SimulatorAgentToolGatewayTests
             ["tasks"] = new JsonArray((arguments?["query"]?.GetValue<string>() == "Download forecasts"
                 ? Enumerable.Range(5, 2)
                 : Enumerable.Range(1, 4)).Select(index => (JsonNode?)new JsonObject
-            {
-                ["taskId"] = $"weather-{index}",
-                ["title"] = $"Weather {index}",
-                ["description"] = "Open weather",
-                ["feature"] = "weather",
-                ["inputSchema"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject() },
-                ["match"] = new JsonObject { ["score"] = 90.0, ["coverage"] = 1.0 }
-            }).ToArray())
+                {
+                    ["taskId"] = $"weather-{index}",
+                    ["title"] = $"Weather {index}",
+                    ["description"] = "Open weather",
+                    ["feature"] = "weather",
+                    ["inputSchema"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject() },
+                    ["match"] = new JsonObject { ["score"] = 90.0, ["coverage"] = 1.0 }
+                }).ToArray())
         }, isError: false);
+
         var traces = new List<SimulatorAgentRepositoryTaskDiscoveryTrace>();
 
         var shortcuts = await new ToolGateway(dispatcher).GetRepositoryTaskShortcutsAsync(
@@ -149,6 +155,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ["match"] = new JsonObject { ["score"] = 50.8, ["coverage"] = 0.583 }
             })
         }, isError: false);
+
         var traces = new List<SimulatorAgentRepositoryTaskDiscoveryTrace>();
 
         var shortcuts = await new ToolGateway(dispatcher).GetRepositoryTaskShortcutsAsync(
@@ -232,12 +239,14 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     requestedAlias => string.Equals(requestedAlias, alias, StringComparison.OrdinalIgnoreCase)
                         ? "value"
                         : null));
+
             try
             {
                 if (Interlocked.Increment(ref readyCount) == 2)
                 {
                     release.TrySetResult();
                 }
+
                 await release.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
                 var definitions = gateway.BuildOpenAiToolDefinitions();
@@ -245,6 +254,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     definition["name"]?.GetValue<string>() == "ansight_type_secret");
                 var aliasValues = Assert.IsType<JsonArray>(
                     secretTool["parameters"]?["properties"]?["secretAlias"]?["enum"]);
+
                 return Assert.Single(aliasValues.GetValues<string>());
             }
             finally
@@ -273,6 +283,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             createdUtc.AddSeconds(2)));
         dispatcher.ConnectedSessionIds.Add("replacement-session");
         dispatcher.ConnectedSessionIds.Add("other-app-session");
+
         var gateway = new ToolGateway(dispatcher);
 
         var session = await gateway.WaitForConnectedSessionAsync(
@@ -305,6 +316,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
 
         var definition = Assert.Single(definitions.OfType<JsonObject>());
         Assert.Equal("ansight_launch_app", definition["name"]?.GetValue<string>());
+
         var properties = Assert.IsType<JsonObject>(definition["parameters"]?["properties"]);
         Assert.DoesNotContain("sessionId", properties);
         Assert.DoesNotContain("appId", properties);
@@ -331,10 +343,12 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ["captured"] = true
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var definition = Assert.Single(gateway.BuildOpenAiToolDefinitions().OfType<JsonObject>());
         Assert.Equal("ansight_take_screenshot", definition["name"]?.GetValue<string>());
+
         var properties = Assert.IsType<JsonObject>(definition["parameters"]?["properties"]);
         Assert.DoesNotContain("sessionId", properties);
         Assert.DoesNotContain("appId", properties);
@@ -387,9 +401,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                         {
                             ["type"] = "object",
                             ["properties"] = new JsonObject
-                            {
-                                ["targetArea"] = new JsonObject { ["type"] = "string" }
-                            },
+{                                ["targetArea"] = new JsonObject {["type"] = "string" }},
                             ["required"] = new JsonArray("targetArea"),
                             ["additionalProperties"] = false
                         },
@@ -409,6 +421,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ["status"] = "Passed"
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("selected-session", SecretAccess.Empty);
 
@@ -457,27 +470,30 @@ public sealed partial class SimulatorAgentToolGatewayTests
     public async Task RepositoryTaskShortcuts_PreloadOnlyRelevantFocusedWorkflowSegments()
     {
         const string instruction =
-            "Search for Siurana on the map and select it. Open its Details/AreaPage, use the AreaPage child search to find and select exactly El Pati, then open and verify the El Pati 3D guide. Use repository tasks for covered transitions. For the final transition, use open-current-area-3d-guide with targetArea El Pati.";
+                "Search for Siurana on the map and select it. Open its Details/AreaPage, use the AreaPage child search to find and select exactly El Pati, then open and verify the El Pati 3D guide. Use repository tasks for covered transitions. For the final transition, use open-current-area-3d-guide with targetArea El Pati.";
         var dispatcher = new RecordingOperationDispatcher(
             ToolDefinition("ansight_list_tasks", "List tasks", "sessionId", "query", "maxResults"));
         dispatcher.ResponseFactory = (toolName, arguments) =>
         {
             Assert.Equal("ansight_list_tasks", toolName);
+
             var query = arguments?["query"]?.GetValue<string>() ?? string.Empty;
+
             if (string.Equals(query, instruction, StringComparison.Ordinal))
             {
                 Assert.Equal(5, arguments?["maxResults"]?.GetValue<int>());
             }
+
             JsonObject[] tasks = query switch
             {
                 _ when string.Equals(query, instruction, StringComparison.Ordinal) =>
-                [
-                    RepositoryTaskMatch("open-selected-map-area-details", 71, 0.58),
-                    RepositoryTaskMatch("focus-map-search-area", 66, 0.5),
-                    RepositoryTaskMatch("fallback-one", 60, 0.48),
-                    RepositoryTaskMatch("fallback-two", 59, 0.47),
-                    RepositoryTaskMatch("fallback-three", 58, 0.46)
-                ],
+                            [
+                                RepositoryTaskMatch("open-selected-map-area-details", 71, 0.58),
+                            RepositoryTaskMatch("focus-map-search-area", 66, 0.5),
+                            RepositoryTaskMatch("fallback-one", 60, 0.48),
+                            RepositoryTaskMatch("fallback-two", 59, 0.47),
+                            RepositoryTaskMatch("fallback-three", 58, 0.46)
+                            ],
                 _ when query.StartsWith("Search for Siurana", StringComparison.OrdinalIgnoreCase) =>
                 [RepositoryTaskMatch("focus-map-search-area", 91, 0.88)],
                 _ when query.StartsWith("Open its Details", StringComparison.OrdinalIgnoreCase) =>
@@ -492,6 +508,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ],
                 _ => []
             };
+
             return RequestResult.ToolResult(
                 new JsonObject
                 {
@@ -499,6 +516,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 },
                 isError: false);
         };
+
         var gateway = new ToolGateway(dispatcher);
 
         var shortcuts = await gateway.GetRepositoryTaskShortcutsAsync(
@@ -551,6 +569,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         {
             var query = arguments?["query"]?.GetValue<string>();
             var tasks = new JsonArray();
+
             if (query == "Search for Kalymnos")
             {
                 tasks.Add(new JsonObject
@@ -567,8 +586,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     ["match"] = new JsonObject { ["score"] = 90.0, ["coverage"] = 0.8 }
                 });
             }
+
             return RequestResult.ToolResult(new JsonObject { ["tasks"] = tasks }, isError: false);
         };
+
         var gateway = new ToolGateway(dispatcher);
 
         var tasks = await gateway.GetRepositoryTaskShortcutsAsync("selected-session", instruction, CancellationToken.None);
@@ -582,7 +603,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
     public async Task RepositoryTaskShortcuts_HonorOnlyExactExplicitTaskExclusions()
     {
         const string instruction =
-            "Do not use open-area-3d-guide. Use open-current-area-3d-guide for El Pati.";
+                "Do not use open-area-3d-guide. Use open-current-area-3d-guide for El Pati.";
         var dispatcher = new RecordingOperationDispatcher(
             ToolDefinition("ansight_list_tasks", "List tasks", "sessionId", "query", "maxResults"));
         dispatcher.ResponseFactory = (_, _) => RequestResult.ToolResult(
@@ -593,6 +614,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     RepositoryTaskMatch("open-current-area-3d-guide"))
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var shortcuts = await gateway.GetRepositoryTaskShortcutsAsync(
@@ -642,6 +664,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         var definition = Assert.Single(gateway.BuildOpenAiToolDefinitions().OfType<JsonObject>());
 
         Assert.Contains("screenPosition", definition["description"]?.GetValue<string>(), StringComparison.Ordinal);
+
         var properties = Assert.IsType<JsonObject>(definition["parameters"]?["properties"]);
         Assert.DoesNotContain("sessionId", properties);
         Assert.Contains("automationId", properties);
@@ -685,6 +708,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.DoesNotContain("includeComputedStyles", properties);
         Assert.DoesNotContain("includeProps", properties);
         Assert.DoesNotContain("includeState", properties);
+
         var providerIds = Assert.IsType<JsonArray>(properties["toolId"]?["enum"]);
         Assert.Equal([VisualTreeContract.MauiToolId], providerIds.GetValues<string>());
         Assert.Contains("iOS with .NET MAUI", definition["description"]?.GetValue<string>());
@@ -716,6 +740,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.DoesNotContain("sessionId", properties);
         Assert.DoesNotContain("appId", properties);
         Assert.Contains("framework", properties);
+
         var frameworks = Assert.IsType<JsonArray>(properties["framework"]?["enum"]);
         Assert.Equal(["ios-uikit"], frameworks.GetValues<string>());
         Assert.Contains("ios-uikit", definition["description"]?.GetValue<string>());
@@ -883,8 +908,8 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     RuntimePlatform = "iOS",
                     Source = "sdk.touchCapture",
                     NodeCount = 1
-                }
-            ]));
+                }            ]));
+
         var gateway = new ToolGateway(dispatcher);
 
         var capabilities = await gateway.GetSessionCapabilitiesAsync(
@@ -966,6 +991,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             "selected-session",
             "correlation-observe",
             CancellationToken.None);
+
         var observationArguments = Assert.IsType<JsonObject>(dispatcher.LastArguments);
         Assert.Equal(2000, observationArguments["maxNodes"]?.GetValue<int>());
         Assert.Equal(32, observationArguments["maxDepth"]?.GetValue<int>());
@@ -978,6 +1004,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             "selected-session",
             "correlation-wait",
             CancellationToken.None);
+
         var waitArguments = Assert.IsType<JsonObject>(dispatcher.LastArguments);
         Assert.Equal(8_000, waitArguments["timeoutMs"]?.GetValue<int>());
     }
@@ -1048,6 +1075,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var result = await gateway.ExecuteAsync(
@@ -1058,6 +1086,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             CancellationToken.None);
 
         Assert.False(result.IsError);
+
         var evidence = Assert.IsType<JsonObject>(result.AccessibilityEvidence);
         Assert.Equal("device.accessibility", evidence["source"]?.GetValue<string>());
         Assert.Equal(2, evidence["nodeCount"]?.GetValue<int>());
@@ -1173,6 +1202,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var result = await gateway.ExecuteAsync(
@@ -1202,6 +1232,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 ["content"] = new string('x', 20_000)
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var result = await gateway.ExecuteAsync(
@@ -1240,6 +1271,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 [LiveUiOcrTraceEvidence.PayloadPropertyName] = traceEvidence
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var result = await gateway.ExecuteAsync(
@@ -1347,6 +1379,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("selected-session", SecretAccess.Empty);
 
@@ -1494,6 +1527,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             },
             isError: false);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("selected-session", SecretAccess.Empty);
 
@@ -1523,6 +1557,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
             "read",
             executable: true);
         queryTool["prerequisiteToolIds"] = new JsonArray("redpoint.mapbox.list_surfaces");
+
         var dispatcher = new RecordingOperationDispatcher();
         dispatcher.Responses["ansight_list_app_tools"] = RequestResult.ToolResult(
             new JsonObject
@@ -1557,6 +1592,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 }
             },
             isError: true);
+
         var gateway = new ToolGateway(dispatcher);
         gateway.BeginRun("selected-session", SecretAccess.Empty);
 
@@ -1590,6 +1626,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         params string[] propertyNames)
     {
         var properties = new JsonObject();
+
         foreach (var propertyName in propertyNames)
         {
             properties[propertyName] = new JsonObject { ["type"] = "string" };
@@ -1737,7 +1774,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
     private sealed class RecordingOperationDispatcher : IOperationDispatcher
     {
         public IAppInteractionContext CreateAppInteractionContext(string sessionId, string? repositoryRootPath = null)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
 
         private readonly JsonArray tools;
 
@@ -1747,15 +1784,11 @@ public sealed partial class SimulatorAgentToolGatewayTests
         }
 
         public string? ActiveSimulatorAgentSessionId { get; private set; }
-
         public string? LastToolName { get; private set; }
-
         public JsonObject? LastArguments { get; private set; }
-
         public Dictionary<string, RequestResult> Responses { get; } = new(StringComparer.Ordinal);
 
         public Func<string, JsonObject?, RequestResult>? ResponseFactory { get; set; }
-
         public List<RecordedOperationCall> Calls { get; } = [];
 
         public List<AppSessionSnapshot> SessionSnapshots { get; } = [];
@@ -1774,6 +1807,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 candidate.SessionId,
                 sessionId,
                 StringComparison.Ordinal));
+
             return snapshot is not null;
         }
 
@@ -1797,12 +1831,13 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 toolName,
                 arguments?.DeepClone().AsObject(),
                 correlationId));
+
             return Task.FromResult(ResponseFactory?.Invoke(toolName, arguments)
                 ?? (Responses.TryGetValue(toolName, out var response)
-                ? response
-                : RequestResult.ToolResult(
-                    new JsonObject { ["message"] = "ok" },
-                    isError: false)));
+                    ? response
+                    : RequestResult.ToolResult(
+                        new JsonObject { ["message"] = "ok" },
+                        isError: false)));
         }
 
         public OperationExecutionContext? LastOperationContext { get; private set; }
@@ -1810,10 +1845,13 @@ public sealed partial class SimulatorAgentToolGatewayTests
         public IDisposable BeginSimulatorAgentRun(string sessionId, string? targetDeviceIdentifier = null)
         {
             ActiveSimulatorAgentSessionId = sessionId;
+
             return new CallbackDisposable(() => ActiveSimulatorAgentSessionId = null);
         }
 
-        public void ConfigureAudioInjection(Ansight.Host.Audio.AudioInjectionEngine engine) { }
+        public void ConfigureAudioInjection(Ansight.Host.Audio.AudioInjectionEngine engine)
+        {
+        }
 
         public void ConfigureUiInputDriver(IUiInputDriver? driver)
         {
@@ -1863,9 +1901,14 @@ public sealed partial class SimulatorAgentToolGatewayTests
         {
         }
 
-        private sealed class CallbackDisposable(Action callback) : IDisposable
+        private sealed class CallbackDisposable : IDisposable
         {
-            private Action? callback = callback;
+            private Action? callback;
+
+            public CallbackDisposable(Action callback)
+            {
+                this.callback = callback;
+            }
 
             public void Dispose()
             {

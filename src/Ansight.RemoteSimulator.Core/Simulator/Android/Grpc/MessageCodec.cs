@@ -14,13 +14,16 @@ internal static class MessageCodec
         using var output = new MemoryStream();
         WriteVarintField(output, 3, (ulong)width);
         WriteVarintField(output, 4, (ulong)height);
+
         return output.ToArray();
     }
 
     public static byte[] EncodeTouchEvent(IReadOnlyList<AndroidEmulatorTouch> touches)
     {
         ArgumentNullException.ThrowIfNull(touches);
+
         using var output = new MemoryStream();
+
         foreach (var touch in touches)
         {
             using var encodedTouch = new MemoryStream();
@@ -38,14 +41,17 @@ internal static class MessageCodec
     public static byte[] DecodeImagePng(ReadOnlySpan<byte> message)
     {
         var offset = 0;
+
         while (offset < message.Length)
         {
             var tag = ReadVarint(message, ref offset);
             var fieldNumber = (int)(tag >> 3);
             var wireType = (int)(tag & 7);
+
             if (fieldNumber == 4 && wireType == 2)
             {
                 var length = checked((int)ReadVarint(message, ref offset));
+
                 if (length < 0 || offset + length > message.Length)
                 {
                     throw new InvalidOperationException("Android Emulator gRPC returned a truncated PNG payload.");
@@ -80,12 +86,14 @@ internal static class MessageCodec
             output.WriteByte((byte)((value & 0x7F) | 0x80));
             value >>= 7;
         }
+
         output.WriteByte((byte)value);
     }
 
     private static ulong ReadVarint(ReadOnlySpan<byte> message, ref int offset)
     {
         ulong value = 0;
+
         for (var shift = 0; shift < 64; shift += 7)
         {
             if (offset >= message.Length)
@@ -95,6 +103,7 @@ internal static class MessageCodec
 
             var current = message[offset++];
             value |= (ulong)(current & 0x7F) << shift;
+
             if ((current & 0x80) == 0)
             {
                 return value;

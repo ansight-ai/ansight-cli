@@ -5,7 +5,7 @@ using Ansight.Pairing;
 [Export(typeof(IPairingConfigService))]
 internal sealed class PairingConfigService : IPairingConfigService
 {
-    private static readonly TimeSpan GenericInviteLifetime = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan genericInviteLifetime = TimeSpan.FromMinutes(10);
     private static readonly Ansight.Infrastructure.Logging.ILogger log = Ansight.Infrastructure.Logging.Logger.Create();
     private readonly IApplicationPaths applicationPaths;
     private readonly IIdentityStore hostIdentityStore;
@@ -29,6 +29,7 @@ internal sealed class PairingConfigService : IPairingConfigService
 
         var result = WritePublicConfig(config);
         log.Info($"enrollment_invite_issued protocol=v2 transport=ws appId={appId} appName={appName} inviteId={config.ConfigId} duration={duration.Display} expiresAtUtc={config.ExpiresAt:O} desktopPath={result.DesktopPath}");
+
         return result;
     }
 
@@ -45,6 +46,7 @@ internal sealed class PairingConfigService : IPairingConfigService
             SourceKind = "workspace-test"
         });
         log.Info($"enrollment_invite_issued protocol=v2 transport=ws source=workspace-test appId={appId} appName={appName} inviteId={config.ConfigId} duration={duration.Display} expiresAtUtc={config.ExpiresAt:O}");
+
         return new PairingTransientIssueResult(config.ConfigId, config.ExpiresAt);
     }
 
@@ -57,7 +59,7 @@ internal sealed class PairingConfigService : IPairingConfigService
         var now = DateTimeOffset.UtcNow;
         var requestedExpiry = duration.Apply(now);
         var maximumInviteExpiry = PairingConfig.TargetsAnyApp(appId)
-            ? now.Add(GenericInviteLifetime)
+            ? now.Add(genericInviteLifetime)
             : now.AddHours(24);
         var expiresAt = requestedExpiry < maximumInviteExpiry
             ? requestedExpiry
@@ -130,6 +132,7 @@ internal sealed class PairingConfigService : IPairingConfigService
     private static string GetDesktopDirectory()
     {
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
         return string.IsNullOrWhiteSpace(desktop) ? AppContext.BaseDirectory : desktop;
     }
 }

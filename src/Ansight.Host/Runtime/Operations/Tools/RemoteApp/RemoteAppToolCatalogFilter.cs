@@ -42,6 +42,7 @@ internal static class RemoteAppToolCatalogFilter
             .ToArray();
         var boundedMatches = matches.Take(maxResults).ToArray();
         var prerequisiteToolIdsByToolId = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
         foreach (var tool in boundedMatches)
         {
             if (ReadString(tool, "id") is { } matchedToolId)
@@ -49,6 +50,7 @@ internal static class RemoteAppToolCatalogFilter
                 prerequisiteToolIdsByToolId[matchedToolId] = FindPrerequisiteToolIds(tool, availableTools);
             }
         }
+
         var matchedToolIds = boundedMatches
             .Select(tool => ReadString(tool, "id"))
             .Where(static toolId => toolId is not null)
@@ -58,9 +60,9 @@ internal static class RemoteAppToolCatalogFilter
             .ToHashSet(StringComparer.Ordinal);
         var prerequisiteTools = availableTools
             .Where(tool => ReadString(tool, "id") is { } toolId
-                           && prerequisiteToolIds.Contains(toolId)
-                           && !matchedToolIds.Contains(toolId)
-                           && MatchesPolicy(tool, policy: null, executableOnly: executableOnly))
+                && prerequisiteToolIds.Contains(toolId)
+                && !matchedToolIds.Contains(toolId)
+                && MatchesPolicy(tool, policy: null, executableOnly: executableOnly))
             .ToArray();
         var returnedTools = boundedMatches
             .Concat(prerequisiteTools)
@@ -86,6 +88,7 @@ internal static class RemoteAppToolCatalogFilter
             ["executableOnly"] = executableOnly,
             ["maxResults"] = maxResults
         };
+
         return result;
     }
 
@@ -105,17 +108,20 @@ internal static class RemoteAppToolCatalogFilter
         }
 
         var candidateToolId = ReadString(tool, "id");
+
         if (toolId is not null
             && !string.Equals(candidateToolId, toolId, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
+
         if (idPrefix is not null
             && (candidateToolId is null
                 || !candidateToolId.StartsWith(idPrefix, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
+
         if (category is not null
             && !string.Equals(ReadString(tool, "category"), category, StringComparison.OrdinalIgnoreCase))
         {
@@ -131,8 +137,9 @@ internal static class RemoteAppToolCatalogFilter
             ReadString(tool, "keywords"),
             tool["argumentsSchema"]?.ToJsonString(),
             tool["resultSchema"]?.ToJsonString()));
+
         return queryTerms.All(searchableText.Contains)
-               && featureTerms.All(searchableText.Contains);
+            && featureTerms.All(searchableText.Contains);
     }
 
     private static bool MatchesPolicy(JsonObject tool, string? policy, bool executableOnly)
@@ -144,8 +151,8 @@ internal static class RemoteAppToolCatalogFilter
         }
 
         return !executableOnly
-               || ReadBoolean(tool, "executable", fallback: true)
-               && tool["denial"] is not JsonObject;
+            || ReadBoolean(tool, "executable", fallback: true)
+                && tool["denial"] is not JsonObject;
     }
 
     private static IReadOnlyList<string> FindPrerequisiteToolIds(
@@ -163,17 +170,19 @@ internal static class RemoteAppToolCatalogFilter
         }
 
         var argumentsSchema = tool["argumentsSchema"]?.ToJsonString();
+
         if (string.IsNullOrWhiteSpace(argumentsSchema))
         {
             return [];
         }
 
         var toolId = ReadString(tool, "id");
+
         return availableTools
             .Select(candidate => ReadString(candidate, "id"))
             .Where(candidateId => candidateId is not null
-                                  && !string.Equals(candidateId, toolId, StringComparison.Ordinal)
-                                  && argumentsSchema.Contains(candidateId, StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(candidateId, toolId, StringComparison.Ordinal)
+                && argumentsSchema.Contains(candidateId, StringComparison.OrdinalIgnoreCase))
             .Select(static candidateId => candidateId!)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -185,6 +194,7 @@ internal static class RemoteAppToolCatalogFilter
     {
         var clone = tool.DeepClone().AsObject();
         var toolId = ReadString(tool, "id");
+
         if (toolId is not null
             && prerequisiteToolIdsByToolId.TryGetValue(toolId, out var prerequisiteToolIds)
             && prerequisiteToolIds.Count > 0)
@@ -210,35 +220,35 @@ internal static class RemoteAppToolCatalogFilter
         }
 
         return new string(value
-                .ToLowerInvariant()
-                .Select(static character => char.IsLetterOrDigit(character) ? character : ' ')
-                .ToArray())
+            .ToLowerInvariant()
+            .Select(static character => char.IsLetterOrDigit(character) ? character : ' ')
+            .ToArray())
             .Replace("  ", " ", StringComparison.Ordinal);
     }
 
     private static string? ReadString(JsonObject? value, string propertyName)
         => value?[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && property.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
     private static string? ReadString(JsonNode? value)
         => value is JsonValue property
-           && property.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && property.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
     private static int ReadInteger(JsonObject? value, string propertyName, int fallback)
         => value?[propertyName] is JsonValue property
-           && property.TryGetValue<int>(out var number)
+            && property.TryGetValue<int>(out var number)
             ? number
             : fallback;
 
     private static bool ReadBoolean(JsonObject? value, string propertyName, bool fallback)
         => value?[propertyName] is JsonValue property
-           && property.TryGetValue<bool>(out var result)
+            && property.TryGetValue<bool>(out var result)
             ? result
             : fallback;
 }

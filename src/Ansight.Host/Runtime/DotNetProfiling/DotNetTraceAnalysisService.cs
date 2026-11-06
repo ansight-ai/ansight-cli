@@ -30,9 +30,9 @@ internal sealed class DotNetTraceAnalysisService
         }
 
         if (!captureStore.TryResolveArtifactPath(
-                manifest,
-                DotNetProfilingEngine.NetTraceArtifactKind,
-                out var tracePath)
+            manifest,
+            DotNetProfilingEngine.NetTraceArtifactKind,
+            out var tracePath)
             || tracePath is null)
         {
             throw new InvalidOperationException(
@@ -42,6 +42,7 @@ internal sealed class DotNetTraceAnalysisService
         var artifact = manifest.Artifacts.First(item =>
             string.Equals(item.Kind, DotNetProfilingEngine.NetTraceArtifactKind, StringComparison.Ordinal));
         selection ??= TraceSelectionWindow.EntireTrace;
+
         var cacheKey = new AnalysisCacheKey(
             captureId,
             artifact.Sha256,
@@ -50,16 +51,17 @@ internal sealed class DotNetTraceAnalysisService
             Math.Clamp(callTreeDepth, 1, 256),
             Math.Clamp(callTreeChildLimit, 1, 1000));
         var analysis = cache.GetOrAdd(
-                cacheKey,
-                key => new Lazy<ParsedTraceAnalysis>(
-                    () => analyzer.Analyze(
-                        tracePath,
-                        key.Selection,
-                        key.HotspotLimit,
-                        key.CallTreeDepth,
-                        key.CallTreeChildLimit),
-                    LazyThreadSafetyMode.ExecutionAndPublication))
+            cacheKey,
+            key => new Lazy<ParsedTraceAnalysis>(
+                () => analyzer.Analyze(
+                    tracePath,
+                    key.Selection,
+                    key.HotspotLimit,
+                    key.CallTreeDepth,
+                    key.CallTreeChildLimit),
+                LazyThreadSafetyMode.ExecutionAndPublication))
             .Value;
+
         return new ParsedTraceAnalysisResult(manifest, artifact, selection, analysis);
     }
 

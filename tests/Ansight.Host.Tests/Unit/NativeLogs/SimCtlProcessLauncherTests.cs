@@ -12,7 +12,11 @@ public sealed class SimCtlProcessLauncherTests
     [InlineData(7)]
     public async Task RealPipeCleanup_AfterCallerClosesStdinPreservesExitCode(int exitCode)
     {
-        if (OperatingSystem.IsWindows()) return; // SimCtl's production launcher is a Unix adapter.
+        if (OperatingSystem.IsWindows())
+        {
+            return; // SimCtl's production launcher is a Unix adapter.
+        }
+
         await using var process = new DotNetProcessLauncher().Start(new(
             "/bin/sh", CreateResolution().DeveloperDirectory, ["-c", $"exit {exitCode}"]));
         process.StandardInput.Dispose();
@@ -26,9 +30,14 @@ public sealed class SimCtlProcessLauncherTests
     [InlineData(7)]
     public async Task ShowSimulatorAsync_RealPipeCleanupDoesNotMaskLaunchResult(int exitCode)
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         var launcher = new ShellProcessLauncher($"printf 'window-test-error' >&2; exit {exitCode}");
         var client = new SimCtlClient(CreateResolution(), new UnusedCommandRunner(), launcher);
+
         if (exitCode == 0)
         {
             await client.ShowSimulatorAsync(DeviceUdid);
@@ -40,12 +49,20 @@ public sealed class SimCtlProcessLauncherTests
         }
     }
 
-    private sealed class ShellProcessLauncher(string command) : ISimCtlProcessLauncher
+    private sealed class ShellProcessLauncher : ISimCtlProcessLauncher
     {
+        private readonly string command;
+
+        public ShellProcessLauncher(string command)
+        {
+            this.command = command;
+        }
+
         public ISimCtlProcess Start(SimCtlProcessStartRequest request)
         {
             Assert.Equal("/usr/bin/open", request.ExecutablePath);
             Assert.Equal(DeviceUdid, request.Arguments.Last());
+
             // Exercise real OS pipes and the actual adapter, without opening GUI apps in tests.
             return new DotNetProcessLauncher().Start(new(
                 "/bin/sh", request.DeveloperDirectory, ["-c", command]));
@@ -57,17 +74,27 @@ public sealed class SimCtlProcessLauncherTests
     [InlineData(true)]
     public async Task RealPipeCleanup_TerminatesRunningChildWithOpenOrClosedStdin(bool closeStdin)
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         await using var process = new DotNetProcessLauncher().Start(new(
             "/bin/sh", CreateResolution().DeveloperDirectory, ["-c", "printf ready; exec /bin/sleep 30"]));
         // Retain the exact test-owned process handle so a regression cannot leak it.
         using var child = System.Diagnostics.Process.GetProcessById(process.ProcessId);
+
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await process.StandardOutput.ReadExactlyAsync(new byte[5], timeout.Token);
             Assert.False(process.Completion.IsCompleted);
-            if (closeStdin) process.StandardInput.Dispose();
+
+            if (closeStdin)
+            {
+                process.StandardInput.Dispose();
+            }
+
             await process.DisposeAsync().AsTask().WaitAsync(timeout.Token);
             Assert.True(process.Completion.IsCompletedSuccessfully);
             Assert.True(child.HasExited);
@@ -75,7 +102,10 @@ public sealed class SimCtlProcessLauncherTests
         }
         finally
         {
-            if (!child.HasExited) child.Kill(entireProcessTree: true);
+            if (!child.HasExited)
+            {
+                child.Kill(entireProcessTree: true);
+            }
         }
     }
 
@@ -147,6 +177,7 @@ public sealed class SimCtlProcessLauncherTests
         Assert.Equal(
             [$"simctl boot {DeviceUdid}", $"simctl bootstatus {DeviceUdid} -b"],
             commandRunner.Commands);
+
         if (headless)
         {
             Assert.Null(processLauncher.LastRequest);
@@ -173,8 +204,15 @@ public sealed class SimCtlProcessLauncherTests
         Assert.Null(processLauncher.LastRequest);
     }
 
-    private sealed class RecordingCommandRunner(string? failedCommand = null) : ISimCtlCommandRunner
+    private sealed class RecordingCommandRunner : ISimCtlCommandRunner
     {
+        private readonly string? failedCommand;
+
+        public RecordingCommandRunner(string? failedCommand = null)
+        {
+            this.failedCommand = failedCommand;
+        }
+
         public List<string> Commands { get; } = [];
 
         public Task<SimCtlCommandResult> RunAsync(
@@ -183,6 +221,7 @@ public sealed class SimCtlProcessLauncherTests
             CancellationToken cancellationToken = default)
         {
             Commands.Add(string.Join(" ", arguments));
+
             return Task.FromResult(new SimCtlCommandResult(
                 arguments[1] == failedCommand ? 1 : 0, string.Empty, string.Empty));
         }
@@ -198,13 +237,13 @@ public sealed class SimCtlProcessLauncherTests
     private sealed class RecordingProcessLauncher : ISimCtlProcessLauncher
     {
         public SimCtlProcessStartRequest? LastRequest { get; private set; }
-
         public RecordingProcess? Process { get; private set; }
 
         public ISimCtlProcess Start(SimCtlProcessStartRequest request)
         {
             LastRequest = request;
             Process = new RecordingProcess();
+
             return Process;
         }
     }
@@ -234,6 +273,7 @@ public sealed class SimCtlProcessLauncherTests
             standardInput.Dispose();
             StandardOutput.Dispose();
             StandardError.Dispose();
+
             return ValueTask.CompletedTask;
         }
     }
@@ -255,6 +295,6 @@ public sealed class SimCtlProcessLauncherTests
             SimCtlToolResolution toolResolution,
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("The command runner should not be used by this test.");
+                => throw new InvalidOperationException("The command runner should not be used by this test.");
     }
 }

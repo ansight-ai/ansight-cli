@@ -131,11 +131,8 @@ internal sealed class ExternalPartComponentCatalog : ComposablePartCatalog, IExt
         public Func<TPart> PartFactory => partFactory;
 
         public string DisplayName { get; }
-
         public string ContractName { get; }
-
         public bool IsSingleton { get; }
-
         public override IEnumerable<ExportDefinition> ExportDefinitions => exportDefinitions;
 
         public override IEnumerable<ImportDefinition> ImportDefinitions => Enumerable.Empty<ImportDefinition>();

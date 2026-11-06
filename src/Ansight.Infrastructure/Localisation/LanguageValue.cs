@@ -9,7 +9,6 @@ public sealed class LanguageValue
     public string Description { get; set; } = string.Empty;
 
     public bool Parameterised { get; set; }
-
     public bool IsAppResource { get; set; } = true;
 
     public bool MachineTranslated { get; set; }

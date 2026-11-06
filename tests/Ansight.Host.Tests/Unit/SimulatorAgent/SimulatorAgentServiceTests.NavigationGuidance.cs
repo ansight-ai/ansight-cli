@@ -13,8 +13,9 @@ public sealed partial class SimulatorAgentServiceTests
             Result = NavigationObservation("maui")
         };
         AddToolLoadingDefinitions(gateway);
+
         var session = new FakeOpenAiSession([
-            CreateFunctionTurn("task", "ansight_run_task", new JsonObject { ["taskId"] = "inspect-domain" }),
+            CreateFunctionTurn("task", "ansight_run_task", new JsonObject {["taskId"] = "inspect-domain" }),
             CompleteWebSocketTurn()
         ]);
         using var service = CreateToolLoadingService(session, gateway);
@@ -34,12 +35,16 @@ public sealed partial class SimulatorAgentServiceTests
         gateway.Results.Enqueue(NavigationObservation("react-native"));
         gateway.Results.Enqueue(NavigationObservation("react-native"));
         AddToolLoadingDefinitions(gateway);
+
         var checkpoint = new JsonObject
         {
-            ["type"] = "compaction", ["id"] = "navigation-checkpoint", ["encrypted_content"] = "retained-state"
+            ["type"] = "compaction",
+            ["id"] = "navigation-checkpoint",
+            ["encrypted_content"] = "retained-state"
         };
         var afterCheckpoint = CreateFunctionTurn("second-tree", "ansight_get_live_visual_tree", new JsonObject());
         afterCheckpoint.Output.Insert(0, checkpoint.DeepClone());
+
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("first-tree", "ansight_get_live_visual_tree", new JsonObject()),
             afterCheckpoint,
@@ -58,6 +63,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Contains(NavigationGuidanceInputs(session.Requests[2].IncrementalInput!),
             text => text.Contains(NavigationGuidance.Read("react-native"), StringComparison.Ordinal));
         Assert.Empty(NavigationGuidanceInputs(session.Requests[3].IncrementalInput!));
+
         foreach (var request in session.Requests.Skip(2))
         {
             Assert.Equal(2, NavigationGuidanceInputs(request.Input).Count());
@@ -71,6 +77,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var gateway = new FakeToolGateway { InitialObservation = NavigationObservation("maui") };
         AddToolLoadingDefinitions(gateway);
+
         var session = new FakeOpenAiSession([CompleteWebSocketTurn(), CompleteWebSocketTurn()]);
         using var service = CreateToolLoadingService(session, gateway);
 
@@ -100,21 +107,28 @@ public sealed partial class SimulatorAgentServiceTests
             InitialObservation = NavigationObservation("maui"),
             Result = NavigationObservation("react-native")
         };
+
         for (var index = 0; index < actionCount - 1; index++)
         {
             gateway.Results.Enqueue(NavigationObservation("maui"));
         }
+
         AddToolLoadingDefinitions(gateway, "ansight_tap_ui");
+
         var actions = Enumerable.Range(0, actionCount).Select(index =>
             CreateFunctionTurn($"tap-{index}", "ansight_tap_ui", new JsonObject { ["automationId"] = $"control-{index}" }))
             .ToArray();
+
         if (withCheckpoint)
         {
             actions[0].Output.Insert(0, new JsonObject
             {
-                ["type"] = "compaction", ["id"] = "before-navigation-change", ["encrypted_content"] = "retained-state"
+                ["type"] = "compaction",
+                ["id"] = "before-navigation-change",
+                ["encrypted_content"] = "retained-state"
             });
         }
+
         var session = new FakeOpenAiSession(new[] { LoadManualToolsTurn("load") }.Concat(actions));
         var httpClient = new FakeOpenAiClient([CompleteWebSocketTurn()]);
         using var service = CreateToolLoadingService(
@@ -128,8 +142,10 @@ public sealed partial class SimulatorAgentServiceTests
         });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var replay = Assert.Single(httpClient.Inputs);
         Assert.True(replay.Count <= 120);
+
         var guidance = NavigationGuidanceInputs(replay).ToArray();
         Assert.Equal(2, guidance.Length);
         Assert.Single(guidance, text => text.Contains(NavigationGuidance.Read("maui"), StringComparison.Ordinal));
@@ -143,6 +159,7 @@ public sealed partial class SimulatorAgentServiceTests
         const int actionCount = 65;
         var gateway = new FakeToolGateway { InitialObservation = NavigationObservation("maui") };
         AddToolLoadingDefinitions(gateway, "ansight_tap_ui");
+
         var client = new FakeOpenAiClient(Enumerable.Range(0, actionCount).Select(index =>
             CreateFunctionTurn($"tap-{index}", "ansight_tap_ui", new JsonObject { ["automationId"] = $"control-{index}" }))
             .Append(CompleteWebSocketTurn()));

@@ -20,6 +20,7 @@ internal sealed class DotNetTraceProcessRunner : IDotNetTraceProcessRunner
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         foreach (var argument in request.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -59,12 +60,13 @@ internal sealed class DotNetTraceProcessRunner : IDotNetTraceProcessRunner
             : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCancellation.Token);
 
         var timedOut = false;
+
         try
         {
             await process.WaitForExitAsync(linkedCancellation.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested
-                                                 && timeoutCancellation?.IsCancellationRequested == true)
+            && timeoutCancellation?.IsCancellationRequested == true)
         {
             timedOut = true;
             TryKill(process);

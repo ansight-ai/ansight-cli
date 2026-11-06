@@ -21,12 +21,7 @@ public sealed class AndroidAudioEndpoint
 
     internal bool Matches(AndroidAudioEndpoint other)
         => Serial == other.Serial && ProcessId == other.ProcessId
-           && ProcessStartTicks == other.ProcessStartTicks && Port == other.Port && Token == other.Token;
+            && ProcessStartTicks == other.ProcessStartTicks && Port == other.Port && Token == other.Token;
 
     public override string ToString() => $"{Serial} (process {ProcessId}, port {Port})";
-}
-
-public sealed class AndroidAudioEndpointException(string code, string message) : Exception(message)
-{
-    public string Code { get; } = code;
 }

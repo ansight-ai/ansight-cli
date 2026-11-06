@@ -23,6 +23,7 @@ internal static class AppToolCallRecovery
 
         var normalizedToolId = toolId.Trim();
         var catalogArguments = CreateCatalogArguments(normalizedToolId);
+
         if (queryBeforeCall)
         {
             var catalogResponse = ValidateCatalogResponse(
@@ -32,6 +33,7 @@ internal static class AppToolCallRecovery
                     cancellationToken,
                     requestContext).ConfigureAwait(false),
                 normalizedToolId);
+
             if (!IsCallableCatalog(catalogResponse))
             {
                 return catalogResponse;
@@ -47,6 +49,7 @@ internal static class AppToolCallRecovery
             catalogArguments,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         if (!RequiresCatalogRecovery(response))
         {
             return response;
@@ -59,6 +62,7 @@ internal static class AppToolCallRecovery
                 cancellationToken,
                 requestContext).ConfigureAwait(false),
             normalizedToolId);
+
         if (!IsCallableCatalog(refreshedCatalogResponse))
         {
             return refreshedCatalogResponse;
@@ -92,6 +96,7 @@ internal static class AppToolCallRecovery
             after?.DeepClone().AsObject(),
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         if (!response.RequiresCatalogQuery)
         {
             return response;
@@ -104,6 +109,7 @@ internal static class AppToolCallRecovery
                 cancellationToken,
                 requestContext).ConfigureAwait(false),
             toolId);
+
         if (!IsCallableCatalog(catalogResponse))
         {
             return catalogResponse;
@@ -132,7 +138,8 @@ internal static class AppToolCallRecovery
         }
 
         var code = ReadString(payload["code"])
-                   ?? ReadString(payload["error"]?["code"]);
+            ?? ReadString(payload["error"]?["code"]);
+
         return code is ToolNotFoundErrorCode;
     }
 
@@ -155,17 +162,17 @@ internal static class AppToolCallRecovery
         }
 
         if (string.Equals(
-                response.Envelope.Type,
-                ToolProtocolMessageTypes.ErrorType,
-                StringComparison.Ordinal))
+            response.Envelope.Type,
+            ToolProtocolMessageTypes.ErrorType,
+            StringComparison.Ordinal))
         {
             return response;
         }
 
         if (!string.Equals(
-                response.Envelope.Type,
-                ToolProtocolMessageTypes.CatalogType,
-                StringComparison.Ordinal))
+            response.Envelope.Type,
+            ToolProtocolMessageTypes.CatalogType,
+            StringComparison.Ordinal))
         {
             return AppToolBridgeResponse.FromFailure(
                 $"The app session returned '{response.Envelope.Type}' instead of an authenticated tool catalog.");
@@ -184,6 +191,7 @@ internal static class AppToolCallRecovery
                 ReadString(candidate["id"]),
                 toolId,
                 StringComparison.Ordinal));
+
         if (tool is null)
         {
             return AppToolBridgeResponse.FromUnavailable(
@@ -197,23 +205,24 @@ internal static class AppToolCallRecovery
         }
 
         var denialReason = ReadString(tool["denial"]?["reason"])
-                           ?? ReadString(tool["runtime"]?["reason"])
-                           ?? $"Tool '{toolId}' is not executable in the current session.";
+            ?? ReadString(tool["runtime"]?["reason"])
+            ?? $"Tool '{toolId}' is not executable in the current session.";
+
         return AppToolBridgeResponse.FromUnavailable(denialReason);
     }
 
     private static bool IsCallableCatalog(AppToolBridgeResponse response)
         => response.Success
-           && response.Envelope is not null
-           && string.Equals(
-               response.Envelope.Type,
-               ToolProtocolMessageTypes.CatalogType,
-               StringComparison.Ordinal);
+            && response.Envelope is not null
+            && string.Equals(
+                response.Envelope.Type,
+                ToolProtocolMessageTypes.CatalogType,
+                StringComparison.Ordinal);
 
     private static string? ReadString(JsonNode? value)
         => value is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && jsonValue.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 

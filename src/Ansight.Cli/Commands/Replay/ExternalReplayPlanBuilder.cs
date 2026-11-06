@@ -18,21 +18,24 @@ internal static class ExternalReplayPlanBuilder
     {
         var normalizedProvider = NormalizeProvider(provider);
         var fullPath = Path.GetFullPath(filePath);
+
         if (!File.Exists(fullPath))
         {
             throw new CliUsageException($"Replay export file '{fullPath}' was not found.");
         }
 
         var fileInfo = new FileInfo(fullPath);
+
         if (fileInfo.Length > MaximumFileBytes)
         {
             throw new CliUsageException(
                 $"Replay export file '{fullPath}' is {fileInfo.Length:N0} bytes; "
-                + $"the maximum supported size is {MaximumFileBytes:N0} bytes.");
+                    + $"the maximum supported size is {MaximumFileBytes:N0} bytes.");
         }
 
         var content = await File.ReadAllTextAsync(fullPath, cancellationToken).ConfigureAwait(false);
         var root = ParseDocument(content, fullPath);
+
         return Build(normalizedProvider, Path.GetFileName(fullPath), appId, root);
     }
 
@@ -43,6 +46,7 @@ internal static class ExternalReplayPlanBuilder
         JsonNode root)
     {
         ArgumentNullException.ThrowIfNull(root);
+
         var normalizedProvider = NormalizeProvider(provider);
         var replayEvents = new List<ExternalReplayEvent>();
         CollectReplayEvents(root, replayEvents);
@@ -54,6 +58,7 @@ internal static class ExternalReplayPlanBuilder
         var fallbackActions = new List<ExternalReplayAction>();
         var scrollOffsets = new Dictionary<int, double>();
         string? initialRoute = null;
+
         foreach (var replayEvent in replayEvents)
         {
             switch (replayEvent.Type)
@@ -92,6 +97,7 @@ internal static class ExternalReplayPlanBuilder
         }
 
         var compactedActions = CompactActions(actions);
+
         if (initialRoute is not null)
         {
             compactedActions.Insert(
@@ -108,7 +114,7 @@ internal static class ExternalReplayPlanBuilder
         {
             diagnostics.Add(
                 $"The {normalizedProvider} export produced {compactedActions.Count:N0} replayable actions; "
-                + $"only the first {AnsightReplayPlanner.MaximumReplaySteps:N0} can be sent to one agent run.");
+                    + $"only the first {AnsightReplayPlanner.MaximumReplaySteps:N0} can be sent to one agent run.");
             compactedActions = compactedActions
                 .Take(AnsightReplayPlanner.MaximumReplaySteps)
                 .ToList();
@@ -133,6 +139,7 @@ internal static class ExternalReplayPlanBuilder
                 action.CapturedAtUtc,
                 action.Target))
             .ToArray();
+
         return new ReplayPlan(
             "ansight.replay-plan/v1",
             normalizedProvider,
@@ -148,22 +155,24 @@ internal static class ExternalReplayPlanBuilder
         try
         {
             return JsonNode.Parse(
-                       content,
-                       documentOptions: new JsonDocumentOptions
-                       {
-                           AllowTrailingCommas = true,
-                           CommentHandling = JsonCommentHandling.Skip
-                       })
-                   ?? throw new CliUsageException($"Replay export file '{sourcePath}' is empty.");
+                content,
+                documentOptions: new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip
+                })
+                ?? throw new CliUsageException($"Replay export file '{sourcePath}' is empty.");
         }
         catch (JsonException documentException)
         {
             var lines = new JsonArray();
+
             try
             {
                 foreach (var line in content.Split('\n'))
                 {
                     var normalizedLine = line.Trim();
+
                     if (normalizedLine.Length > 0)
                     {
                         lines.Add(JsonNode.Parse(normalizedLine));
@@ -194,6 +203,7 @@ internal static class ExternalReplayPlanBuilder
                 && value["data"] is JsonObject data)
             {
                 events.Add(new ExternalReplayEvent(type, timestampUtc, data));
+
                 return;
             }
 
@@ -280,6 +290,7 @@ internal static class ExternalReplayPlanBuilder
             foreach (var add in adds.OfType<JsonObject>())
             {
                 int? parentId = TryReadInteger(add, "parentId", out var value) ? value : null;
+
                 if (add["node"] is JsonObject addedNode)
                 {
                     AddNodeTree(addedNode, nodes, parentId);
@@ -295,13 +306,20 @@ internal static class ExternalReplayPlanBuilder
                     && nodes.TryGetValue(id, out var existing))
                 {
                     var nextText = NormalizeLabel(ReadString(text, "value"));
-                    nodes[id] = existing with { Text = nextText };
+                    nodes[id] = existing with
+                    {
+                        Text = nextText
+                    };
+
                     if (nextText is not null
                         && existing.ParentId.HasValue
                         && nodes.TryGetValue(existing.ParentId.Value, out var parent)
                         && parent.Text is null)
                     {
-                        nodes[parent.Id] = parent with { Text = nextText };
+                        nodes[parent.Id] = parent with
+                        {
+                            Text = nextText
+                        };
                     }
                 }
             }
@@ -322,7 +340,10 @@ internal static class ExternalReplayPlanBuilder
                     existing.Attributes,
                     StringComparer.OrdinalIgnoreCase);
                 AddAttributes(changedAttributes, mergedAttributes);
-                nodes[id] = existing with { Attributes = mergedAttributes };
+                nodes[id] = existing with
+                {
+                    Attributes = mergedAttributes
+                };
             }
         }
     }
@@ -342,6 +363,7 @@ internal static class ExternalReplayPlanBuilder
         var verb = interactionType == 4 ? "Double-tap" : "Tap";
         int? nodeId = TryReadInteger(replayEvent.Data, "id", out var value) ? value : null;
         ExternalReplayTarget? target = null;
+
         if (nodeId.HasValue
             && TryDescribeTarget(nodeId.Value, nodes, out target)
             && target is not null)
@@ -352,6 +374,7 @@ internal static class ExternalReplayPlanBuilder
                 replayEvent.TimestampUtc,
                 target.Label,
                 nodeId));
+
             return;
         }
 
@@ -382,14 +405,16 @@ internal static class ExternalReplayPlanBuilder
         var inputText = ReadRawString(replayEvent.Data, "text") ?? string.Empty;
         ExternalReplayTarget? describedTarget = null;
         var target = nodeId.HasValue
-                     && TryDescribeTarget(nodeId.Value, nodes, out describedTarget)
-                     && describedTarget is not null
+            && TryDescribeTarget(nodeId.Value, nodes, out describedTarget)
+            && describedTarget is not null
             ? describedTarget
             : new ExternalReplayTarget("the recorded input field", "input field");
         string instruction;
+
         if (TryReadBoolean(replayEvent.Data, "isChecked", out var isChecked))
         {
             var previousAction = actions.LastOrDefault();
+
             if (previousAction is not null
                 && previousAction.NodeId == nodeId
                 && previousAction.Kind is "tap" or "double-tap")
@@ -429,6 +454,7 @@ internal static class ExternalReplayPlanBuilder
     {
         var nodeId = TryReadInteger(replayEvent.Data, "id", out var value) ? value : 0;
         var nextY = ReadNumber(replayEvent.Data["y"]);
+
         if (!nextY.HasValue)
         {
             return;
@@ -438,6 +464,7 @@ internal static class ExternalReplayPlanBuilder
             ? previousValue
             : 0;
         scrollOffsets[nodeId] = nextY.Value;
+
         if (Math.Abs(nextY.Value - previousY) < 8)
         {
             return;
@@ -445,7 +472,7 @@ internal static class ExternalReplayPlanBuilder
 
         var direction = nextY.Value > previousY ? "down" : "up";
         var hasTarget = TryDescribeTarget(nodeId, nodes, out var describedTarget)
-                        && describedTarget is not null;
+            && describedTarget is not null;
         var target = hasTarget
             ? $" within {describedTarget!.Description}"
             : string.Empty;
@@ -462,6 +489,7 @@ internal static class ExternalReplayPlanBuilder
         ICollection<ExternalReplayAction> actions)
     {
         var tag = ReadString(replayEvent.Data, "tag");
+
         if (!string.Equals(tag, "breadcrumb", StringComparison.OrdinalIgnoreCase)
             || replayEvent.Data["payload"] is not JsonObject payload)
         {
@@ -470,6 +498,7 @@ internal static class ExternalReplayPlanBuilder
 
         var category = ReadString(payload, "category");
         var message = NormalizeLabel(ReadString(payload, "message"));
+
         if (category?.Contains("ui.click", StringComparison.OrdinalIgnoreCase) == true
             && message is not null)
         {
@@ -488,9 +517,11 @@ internal static class ExternalReplayPlanBuilder
     {
         var events = new List<JsonObject>();
         CollectNamedEvents(root, events);
+
         foreach (var value in events)
         {
             var eventName = ReadString(value, "event");
+
             if (value["properties"] is not JsonObject properties)
             {
                 continue;
@@ -499,11 +530,13 @@ internal static class ExternalReplayPlanBuilder
             var timestamp = TryReadTimestamp(value["timestamp"], out var capturedAtUtc)
                 ? capturedAtUtc
                 : (DateTimeOffset?)null;
+
             if (string.Equals(eventName, "$screen", StringComparison.OrdinalIgnoreCase))
             {
                 var screenName = NormalizeLabel(
                     ReadString(properties, "$screen_name")
-                    ?? ReadString(properties, "$screenName"));
+                        ?? ReadString(properties, "$screenName"));
+
                 if (screenName is not null)
                 {
                     actions.Add(new ExternalReplayAction(
@@ -515,14 +548,15 @@ internal static class ExternalReplayPlanBuilder
                 }
             }
             else if (string.Equals(eventName, "$autocapture", StringComparison.OrdinalIgnoreCase)
-                     && string.Equals(
-                         ReadString(properties, "$event_type"),
-                         "click",
-                         StringComparison.OrdinalIgnoreCase))
+                && string.Equals(
+                    ReadString(properties, "$event_type"),
+                    "click",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 var label = NormalizeLabel(
                     ReadString(properties, "$el_text")
-                    ?? ReadString(properties, "$element_text"));
+                        ?? ReadString(properties, "$element_text"));
+
                 if (label is not null)
                 {
                     actions.Add(new ExternalReplayAction(
@@ -563,6 +597,7 @@ internal static class ExternalReplayPlanBuilder
         IReadOnlyList<ExternalReplayAction> actions)
     {
         var result = new List<ExternalReplayAction>();
+
         foreach (var action in actions.OrderBy(static action => action.CapturedAtUtc))
         {
             if (result.Count > 0
@@ -588,6 +623,7 @@ internal static class ExternalReplayPlanBuilder
         var hasId = TryReadInteger(value, "id", out var id);
         var currentParentId = hasId ? id : parentId;
         var attributes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         if (value["attributes"] is JsonObject sourceAttributes)
         {
             AddAttributes(sourceAttributes, attributes);
@@ -595,12 +631,15 @@ internal static class ExternalReplayPlanBuilder
 
         var text = NormalizeLabel(ReadString(value, "textContent"));
         var childTexts = new List<string>();
+
         if (value["childNodes"] is JsonArray children)
         {
             foreach (var child in children.OfType<JsonObject>())
             {
                 AddNodeTree(child, nodes, currentParentId);
+
                 var childText = NormalizeLabel(ReadString(child, "textContent"));
+
                 if (childText is not null)
                 {
                     childTexts.Add(childText);
@@ -609,6 +648,7 @@ internal static class ExternalReplayPlanBuilder
         }
 
         text ??= NormalizeLabel(string.Join(' ', childTexts));
+
         if (hasId)
         {
             nodes[id] = new ExternalReplayNode(
@@ -640,21 +680,23 @@ internal static class ExternalReplayPlanBuilder
         out ExternalReplayTarget? target)
     {
         target = null;
+
         if (!nodes.TryGetValue(nodeId, out var node))
         {
             return false;
         }
 
         var label = ReadAttribute(node, "aria-label")
-                    ?? node.Text
-                    ?? ReadAttribute(node, "placeholder")
-                    ?? ReadAttribute(node, "title")
-                    ?? ReadAttribute(node, "alt")
-                    ?? ReadAttribute(node, "data-testid")
-                    ?? ReadAttribute(node, "data-test")
-                    ?? ReadAttribute(node, "name")
-                    ?? ReadAttribute(node, "id");
+            ?? node.Text
+            ?? ReadAttribute(node, "placeholder")
+            ?? ReadAttribute(node, "title")
+            ?? ReadAttribute(node, "alt")
+            ?? ReadAttribute(node, "data-testid")
+            ?? ReadAttribute(node, "data-test")
+            ?? ReadAttribute(node, "name")
+            ?? ReadAttribute(node, "id");
         label = NormalizeLabel(label);
+
         if (label is null && node.ParentId.HasValue)
         {
             return TryDescribeTarget(node.ParentId.Value, nodes, out target);
@@ -666,9 +708,9 @@ internal static class ExternalReplayPlanBuilder
         }
 
         var role = ReadAttribute(node, "role")
-                   ?? (node.TagName == "input" ? ReadAttribute(node, "type") : null)
-                   ?? node.TagName
-                   ?? "control";
+            ?? (node.TagName == "input" ? ReadAttribute(node, "type") : null)
+            ?? node.TagName
+            ?? "control";
         var description = role.ToLowerInvariant() switch
         {
             "input" or "textarea" or "textbox" => $"the {JsonSerializer.Serialize(label)} input field",
@@ -679,6 +721,7 @@ internal static class ExternalReplayPlanBuilder
             _ => $"the visible {role} labelled {JsonSerializer.Serialize(label)}"
         };
         target = new ExternalReplayTarget(description, label);
+
         return true;
     }
 
@@ -687,7 +730,7 @@ internal static class ExternalReplayPlanBuilder
 
     private static string? ReadRawString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
+            && jsonValue.TryGetValue<string>(out var text)
             ? text
             : null;
 
@@ -703,6 +746,7 @@ internal static class ExternalReplayPlanBuilder
     private static string? NormalizeRoute(string? value)
     {
         var normalized = NormalizeOptional(value);
+
         if (normalized is null)
         {
             return null;
@@ -719,6 +763,7 @@ internal static class ExternalReplayPlanBuilder
     private static bool IsMasked(string value)
     {
         var containsMaskCharacter = false;
+
         foreach (var character in value)
         {
             if (char.IsWhiteSpace(character))
@@ -740,7 +785,9 @@ internal static class ExternalReplayPlanBuilder
     private static bool TryReadTimestamp(JsonNode? value, out DateTimeOffset timestampUtc)
     {
         timestampUtc = default;
+
         var number = ReadNumber(value);
+
         if (number.HasValue && double.IsFinite(number.Value))
         {
             try
@@ -748,6 +795,7 @@ internal static class ExternalReplayPlanBuilder
                 timestampUtc = number.Value > 100_000_000_000
                     ? DateTimeOffset.FromUnixTimeMilliseconds((long)number.Value)
                     : DateTimeOffset.FromUnixTimeMilliseconds((long)(number.Value * 1000));
+
                 return true;
             }
             catch (ArgumentOutOfRangeException)
@@ -757,12 +805,12 @@ internal static class ExternalReplayPlanBuilder
         }
 
         return value is JsonValue jsonValue
-               && jsonValue.TryGetValue<string>(out var text)
-               && DateTimeOffset.TryParse(
-                   text,
-                   CultureInfo.InvariantCulture,
-                   DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                   out timestampUtc);
+            && jsonValue.TryGetValue<string>(out var text)
+            && DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out timestampUtc);
     }
 
     private static double? ReadNumber(JsonNode? value)
@@ -778,7 +826,7 @@ internal static class ExternalReplayPlanBuilder
         }
 
         return jsonValue.TryGetValue<string>(out var text)
-               && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
+            && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
             ? number
             : null;
     }
@@ -786,31 +834,34 @@ internal static class ExternalReplayPlanBuilder
     private static bool TryReadInteger(JsonObject value, string name, out int result)
     {
         result = default;
+
         return value[name] is JsonValue jsonValue
-               && (jsonValue.TryGetValue<int>(out result)
-                   || jsonValue.TryGetValue<long>(out var longValue)
-                   && longValue is >= int.MinValue and <= int.MaxValue
-                   && (result = (int)longValue) == longValue);
+            && (jsonValue.TryGetValue<int>(out result)
+                || jsonValue.TryGetValue<long>(out var longValue)
+                    && longValue is >= int.MinValue and <= int.MaxValue
+                    && (result = (int)longValue) == longValue);
     }
 
     private static string? ReadString(JsonObject value, string name)
         => value[name] is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
+            && jsonValue.TryGetValue<string>(out var text)
             ? text
             : null;
 
     private static bool TryReadBoolean(JsonObject value, string name, out bool result)
     {
         result = default;
+
         return value[name] is JsonValue jsonValue
-               && (jsonValue.TryGetValue<bool>(out result)
-                   || jsonValue.TryGetValue<string>(out var text)
-                   && bool.TryParse(text, out result));
+            && (jsonValue.TryGetValue<bool>(out result)
+                || jsonValue.TryGetValue<string>(out var text)
+                    && bool.TryParse(text, out result));
     }
 
     private static string? NormalizeLabel(string? value)
     {
         var normalized = NormalizeOptional(value);
+
         if (normalized is null)
         {
             return null;
@@ -819,6 +870,7 @@ internal static class ExternalReplayPlanBuilder
         normalized = string.Join(' ', normalized.Split(
             (char[]?)null,
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
         return normalized.Length <= MaximumLabelCharacters
             ? normalized
             : normalized[..MaximumLabelCharacters] + "…";

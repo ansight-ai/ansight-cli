@@ -3,15 +3,22 @@ using System.Text.Json;
 namespace Ansight.Host.Audio.Ios;
 
 /// <summary>Defers a confirmed stale route's restart until the user launches a fresh app run.</summary>
-internal sealed class IosAudioRouteRecovery(string applicationDataPath)
+internal sealed class IosAudioRouteRecovery
 {
-    private readonly string directory = Path.Combine(applicationDataPath, "ios-audio-route-recovery");
+    private readonly string directory;
+
+    public IosAudioRouteRecovery(string applicationDataPath)
+    {
+        this.directory = Path.Combine(applicationDataPath, "ios-audio-route-recovery");
+    }
 
     internal void Record(AudioTarget target)
     {
         var path = MarkerPath(target.DeviceId);
         Directory.CreateDirectory(directory);
+
         var temporary = path + "." + Guid.NewGuid().ToString("N");
+
         try
         {
             File.WriteAllText(temporary, JsonSerializer.Serialize(new PendingRestart(target.AppId, DateTimeOffset.UtcNow)));
@@ -31,13 +38,23 @@ internal sealed class IosAudioRouteRecovery(string applicationDataPath)
         CancellationToken cancellationToken)
     {
         var path = MarkerPath(deviceId);
-        if (!File.Exists(path)) return false;
+
+        if (!File.Exists(path))
+        {
+            return false;
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         using var lease = AudioRouteLease.Acquire("ios:simulator-audio-route");
-        if (!File.Exists(path)) return false;
+
+        if (!File.Exists(path))
+        {
+            return false;
+        }
 
         PendingRestart pending;
+
         try
         {
             pending = JsonSerializer.Deserialize<PendingRestart>(File.ReadAllText(path))
@@ -47,10 +64,15 @@ internal sealed class IosAudioRouteRecovery(string applicationDataPath)
         {
             throw new InvalidDataException("The pending Simulator audio recovery record is invalid; restart the simulator manually.", exception);
         }
-        if (!string.Equals(pending.AppId, appId, StringComparison.Ordinal)) return false;
+
+        if (!string.Equals(pending.AppId, appId, StringComparison.Ordinal))
+        {
+            return false;
+        }
 
         var bootedAt = await lastBoot(cancellationToken).ConfigureAwait(false);
         var restartRequired = !bootedAt.HasValue || bootedAt.Value <= pending.DetectedUtc;
+
         if (restartRequired)
         {
             await restart(cancellationToken).ConfigureAwait(false);
@@ -59,6 +81,7 @@ internal sealed class IosAudioRouteRecovery(string applicationDataPath)
         // A failed/cancelled restart keeps the marker for the next explicit launch.
         cancellationToken.ThrowIfCancellationRequested();
         File.Delete(path);
+
         return restartRequired;
     }
 

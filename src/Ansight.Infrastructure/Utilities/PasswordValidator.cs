@@ -10,10 +10,10 @@ public static class PasswordValidator
         }
 
         var isValid = password == confirmedPassword
-                      && password.Length >= 8
-                      && password.Any(char.IsLower)
-                      && password.Any(char.IsUpper)
-                      && password.Any(char.IsNumber);
+            && password.Length >= 8
+            && password.Any(char.IsLower)
+            && password.Any(char.IsUpper)
+            && password.Any(char.IsNumber);
 
         return isValid;
     }

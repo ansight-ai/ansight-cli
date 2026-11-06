@@ -79,10 +79,13 @@ public sealed class WorkspaceTrendsHistoryStoreTests
 
         using var connection = new SqliteConnection($"Data Source={store.DatabasePath}");
         connection.Open();
+
         using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA table_info(trends_metrics);";
+
         using var reader = command.ExecuteReader();
         var columns = new List<string>();
+
         while (reader.Read())
         {
             columns.Add(reader.GetString(1));
@@ -104,6 +107,7 @@ public sealed class WorkspaceTrendsHistoryStoreTests
         using (var connection = new SqliteConnection($"Data Source={store.DatabasePath}"))
         {
             connection.Open();
+
             using var command = connection.CreateCommand();
             command.CommandText = """
                 ALTER TABLE trends_metrics RENAME COLUMN span_group TO window_group;
@@ -120,8 +124,10 @@ public sealed class WorkspaceTrendsHistoryStoreTests
             "Secret Garden"));
 
         Assert.Equal("Secret Garden", metric.SpanGroup);
+
         using var migratedConnection = new SqliteConnection($"Data Source={store.DatabasePath}");
         migratedConnection.Open();
+
         using var versionCommand = migratedConnection.CreateCommand();
         versionCommand.CommandText = "PRAGMA user_version;";
         Assert.Equal(3L, versionCommand.ExecuteScalar());

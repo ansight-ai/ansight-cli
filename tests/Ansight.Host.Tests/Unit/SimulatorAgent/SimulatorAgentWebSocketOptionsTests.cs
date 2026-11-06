@@ -16,8 +16,10 @@ public sealed class SimulatorAgentWebSocketOptionsTests
             SimulatorAgentWebSocketOptions.WarmupEnvironmentVariable => "true",
             _ => null
         };
+
         Assert.Equal(new SimulatorAgentWebSocketOptions(64_000, true),
             SimulatorAgentWebSocketOptions.Resolve(null, ReadEnvironment));
+
         var configured = new SimulatorAgentWebSocketOptions(16_000, false);
         Assert.Equal(configured, SimulatorAgentWebSocketOptions.Resolve(configured, ReadEnvironment));
     }

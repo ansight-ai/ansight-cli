@@ -13,6 +13,7 @@ public sealed class ProductUsageTests
         ProductUsage.Record(directory.Path, "capture", outcome: "succeeded", durationSeconds: 12, hasEvidence: true);
         ProductUsage.Record(directory.Path, "capture", outcome: "succeeded", durationSeconds: 18);
         ProductUsage.Flush(directory.Path, true);
+
         var first = Assert.Single(Entries(directory.Path));
         var p = Properties(first);
         Assert.Equal(2, p["host_capture_count"]!.GetValue<int>());
@@ -37,11 +38,13 @@ public sealed class ProductUsageTests
         ProductUsage.Record(directory.Path, "capture", outcome: "secret failure");
         Assert.Empty(Entries(directory.Path));
         ProductUsage.Record(directory.Path, "capture", durationSeconds: double.PositiveInfinity);
+
         var file = Assert.Single(Directory.GetFiles(Path.Combine(directory.Path, "analytics", "usage"), "*.json"));
         var state = JsonNode.Parse(File.ReadAllText(file))!;
         state["values"]!["private/path/token"] = 77;
         File.WriteAllText(file, state.ToJsonString());
         ProductUsage.Flush(directory.Path, true);
+
         var body = File.ReadAllText(Assert.Single(Entries(directory.Path)).Path);
         Assert.DoesNotContain("private/path/token", body);
         Assert.DoesNotContain("Infinity", body);
@@ -55,6 +58,7 @@ public sealed class ProductUsageTests
         EnableSignedInDetails(directory.Path);
         ProductUsage.Record(directory.Path, "logs", "local_web");
         ProductUsage.Flush(directory.Path, true);
+
         var settings = new AnalyticsSettingsStore(directory.Path);
         settings.SetDetailedTrackingEnabled(false);
         Assert.Empty(Entries(directory.Path));
@@ -71,7 +75,12 @@ public sealed class ProductUsageTests
     {
         using var directory = TestDirectory.Create();
         EnableSignedInDetails(directory.Path);
-        for (var n = 0; n < 10; n++) ProductUsage.Record(directory.Path, "active_minute", "local_web");
+
+        for (var n = 0; n < 10; n++)
+        {
+            ProductUsage.Record(directory.Path, "active_minute", "local_web");
+        }
+
         ProductUsage.Flush(directory.Path, true);
         Assert.Equal(1, Properties(Assert.Single(Entries(directory.Path)))["local_web_active_minute_count"]!.GetValue<int>());
     }
@@ -80,9 +89,12 @@ public sealed class ProductUsageTests
     public async Task ObserversPreserveResultsExceptionsAndCancellationEvenWithUnwritableStorage()
     {
         using var directory = TestDirectory.Create();
-        var blocked = Path.Combine(directory.Path, "file"); File.WriteAllText(blocked, "not a directory");
+        var blocked = Path.Combine(directory.Path, "file");
+        File.WriteAllText(blocked, "not a directory");
+
         var value = new object();
         Assert.Same(value, await ProductUsage.ObserveAsync(blocked, "test", () => Task.FromResult(value), _ => "succeeded"));
+
         var failure = new InvalidOperationException("private failure text");
         Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => ProductUsage.ObserveAsync<object>(blocked, "test", () => Task.FromException<object>(failure), _ => "succeeded")));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ProductUsage.ObserveAsync<object>(blocked, "test", () => Task.FromCanceled<object>(new CancellationToken(true)), _ => "succeeded"));
@@ -103,7 +115,7 @@ public sealed class ProductUsageTests
     public void NestedOperationDistinguishesActionsWithoutSendingIdentifiers()
     {
         Assert.Equal("profile.dotnet.cpu", CliAnalytics.ResolveOperation(CliArguments.Parse(["profile", "dotnet", "cpu", "secret-capture-id"])));
-        Assert.Equal("profile.dotnet.start", CliAnalytics.ResolveOperation(CliArguments.Parse(["profile", "dotnet", "start", "/private/app"] )));
+        Assert.Equal("profile.dotnet.start", CliAnalytics.ResolveOperation(CliArguments.Parse(["profile", "dotnet", "start", "/private/app"])));
         Assert.Equal("session.show", CliAnalytics.ResolveOperation(CliArguments.Parse(["session", "show", "run"])));
     }
 
@@ -124,6 +136,7 @@ public sealed class ProductUsageTests
         settings.SetDetailedTrackingEnabled(true);
         ProductUsage.Record(directory.Path, "logs", "local_web");
         ProductUsage.Flush(directory.Path, true);
+
         var snapshots = Entries(directory.Path).Select(Properties).ToArray();
         Assert.Single(snapshots);
         Assert.Single(snapshots, p => p["account_id"]?.GetValue<string>() == second);
@@ -140,11 +153,17 @@ public sealed class ProductUsageTests
         using var directory = TestDirectory.Create();
         var initial = signedIn ? Guid.NewGuid().ToString("D") : null;
         AnalyticsAccount.Update(directory.Path, initial);
-        if (signedIn) new AnalyticsSettingsStore(directory.Path).SetDetailedTrackingEnabled(true);
+
+        if (signedIn)
+        {
+            new AnalyticsSettingsStore(directory.Path).SetDetailedTrackingEnabled(true);
+        }
+
         await ProductUsage.ObserveAsync(directory.Path, "test", async () =>
         {
             await Task.Yield();
             AnalyticsAccount.Update(directory.Path, Guid.NewGuid().ToString("D"));
+
             return true;
         }, _ => "succeeded");
         ProductUsage.Flush(directory.Path, true);
@@ -158,10 +177,12 @@ public sealed class ProductUsageTests
         var initial = Guid.NewGuid().ToString("D");
         AnalyticsAccount.Update(directory.Path, initial);
         new AnalyticsSettingsStore(directory.Path).SetDetailedTrackingEnabled(true);
+
         var cli = new CliAnalytics(directory.Path);
         AnalyticsAccount.Update(directory.Path, Guid.NewGuid().ToString("D"));
         await cli.TrackInvocationAsync(CliArguments.Parse(["session", "list"]));
         ProductUsage.Flush(directory.Path, true);
+
         var detailed = Entries(directory.Path).Where(e => e.Envelope.EventName is "cli_command_completed" or "product_usage_snapshot").ToArray();
         Assert.Empty(detailed);
         Assert.Contains(Entries(directory.Path), e => e.Envelope.EventName == "cli_daily_active");
@@ -172,13 +193,18 @@ public sealed class ProductUsageTests
     {
         using var directory = TestDirectory.Create();
         EnableSignedInDetails(directory.Path);
+
         for (var n = 0; n < 66; n++)
+        {
             ProductUsage.Record(directory.Path, "logs", "local_web");
+        }
+
         ProductUsage.Flush(directory.Path, true);
         Assert.Equal(66, Properties(Assert.Single(Entries(directory.Path)))["local_web_logs_count"]!.GetValue<int>());
     }
 
     private static IReadOnlyList<OutboxEntry> Entries(string path) => new EventOutbox(new AnalyticsSettingsStore(path).AnalyticsDirectoryPath).Load(100);
+
     private static JsonObject Properties(OutboxEntry entry) => JsonNode.Parse(File.ReadAllText(entry.Path))!["properties"]!.AsObject();
 
     private static void EnableSignedInDetails(string dataDirectory)

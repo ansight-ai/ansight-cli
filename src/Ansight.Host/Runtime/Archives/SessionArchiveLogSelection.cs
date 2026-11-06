@@ -7,6 +7,7 @@ internal static class SessionArchiveLogSelection
         bool includeNativeDeviceLogs)
     {
         var streams = SessionLogStreams.Normalize(snapshot.LogStreams, snapshot.Logs);
+
         return includeNativeDeviceLogs
             ? streams
             : streams.Where(stream => !IsNativeDeviceLog(stream)).ToArray();
@@ -17,12 +18,14 @@ internal static class SessionArchiveLogSelection
         IReadOnlyList<SessionLogStream> selectedStreams)
     {
         var allStreams = SessionLogStreams.Normalize(snapshot.LogStreams, snapshot.Logs);
+
         if (selectedStreams.Count == allStreams.Count)
         {
             return Math.Max(snapshot.TotalLogCount, snapshot.Logs.Count);
         }
 
         long count = 0;
+
         foreach (var stream in selectedStreams)
         {
             count += Math.Max(stream.TotalEntryCount, stream.Entries.Count);
@@ -33,7 +36,7 @@ internal static class SessionArchiveLogSelection
 
     private static bool IsNativeDeviceLog(SessionLogStream stream)
         => string.Equals(stream.StreamId, SessionLogStreamIds.AndroidLogcat, StringComparison.Ordinal)
-           || string.Equals(stream.StreamId, SessionLogStreamIds.AppleUnifiedLog, StringComparison.Ordinal)
-           || string.Equals(stream.Kind, SessionLogStreamKinds.AndroidLogcat, StringComparison.Ordinal)
-           || string.Equals(stream.Kind, SessionLogStreamKinds.AppleUnifiedLog, StringComparison.Ordinal);
+            || string.Equals(stream.StreamId, SessionLogStreamIds.AppleUnifiedLog, StringComparison.Ordinal)
+            || string.Equals(stream.Kind, SessionLogStreamKinds.AndroidLogcat, StringComparison.Ordinal)
+            || string.Equals(stream.Kind, SessionLogStreamKinds.AppleUnifiedLog, StringComparison.Ordinal);
 }

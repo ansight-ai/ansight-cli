@@ -22,11 +22,11 @@ internal sealed partial class LogReviewActions
     private static bool MatchesLogReviewFilters(LogEntry log, LogReviewFilters filters)
     {
         return PayloadJson.MatchesTimestamp(log.TimestampUtc, filters.StartUtc, filters.EndUtc)
-               && (!filters.MinimumVerbosity.HasValue || PayloadJson.MatchesMinimumVerbosity(log.Priority, filters.MinimumVerbosity.Value))
-               && (filters.StreamIds.Count == 0 || filters.StreamIds.Contains(log.StreamId, StringComparer.OrdinalIgnoreCase))
-               && (filters.Tags.Count == 0 || (!string.IsNullOrWhiteSpace(log.Tag) && filters.Tags.Contains(log.Tag.Trim(), StringComparer.OrdinalIgnoreCase)))
-               && (filters.Sources.Count == 0 || (!string.IsNullOrWhiteSpace(log.Source) && filters.Sources.Contains(log.Source.Trim(), StringComparer.OrdinalIgnoreCase)))
-               && (filters.Query is null || SessionLogInspection.MatchesLogQuery(log, filters.Query));
+            && (!filters.MinimumVerbosity.HasValue || PayloadJson.MatchesMinimumVerbosity(log.Priority, filters.MinimumVerbosity.Value))
+            && (filters.StreamIds.Count == 0 || filters.StreamIds.Contains(log.StreamId, StringComparer.OrdinalIgnoreCase))
+            && (filters.Tags.Count == 0 || (!string.IsNullOrWhiteSpace(log.Tag) && filters.Tags.Contains(log.Tag.Trim(), StringComparer.OrdinalIgnoreCase)))
+            && (filters.Sources.Count == 0 || (!string.IsNullOrWhiteSpace(log.Source) && filters.Sources.Contains(log.Source.Trim(), StringComparer.OrdinalIgnoreCase)))
+            && (filters.Query is null || SessionLogInspection.MatchesLogQuery(log, filters.Query));
     }
 
     private static IEnumerable<IndexedLogEntry> BuildIndexedLogs(AppSessionSnapshot snapshot)
@@ -47,12 +47,15 @@ internal sealed partial class LogReviewActions
         out string? errorMessage)
     {
         errorMessage = null;
+
         if (logIndex.HasValue)
         {
             targetSelector = "logIndex";
+
             if (logIndex.Value < 0 || logIndex.Value >= logs.Count)
             {
                 errorMessage = $"logIndex must be between 0 and {logs.Count - 1}.";
+
                 return null;
             }
 
@@ -62,9 +65,11 @@ internal sealed partial class LogReviewActions
         if (eventId is not null)
         {
             targetSelector = "eventId";
+
             var eventMatch = logs.FirstOrDefault(entry =>
                 !string.IsNullOrWhiteSpace(entry.Log.EventId)
-                && string.Equals(entry.Log.EventId, eventId, StringComparison.OrdinalIgnoreCase));
+                    && string.Equals(entry.Log.EventId, eventId, StringComparison.OrdinalIgnoreCase));
+
             if (eventMatch is null)
             {
                 errorMessage = $"No log with eventId '{eventId}' was found.";
@@ -74,7 +79,9 @@ internal sealed partial class LogReviewActions
         }
 
         targetSelector = "timestampUtc";
+
         var targetUtc = timestampUtc!.Value;
+
         return logs.FirstOrDefault(entry => entry.Log.TimestampUtc >= targetUtc) ?? logs[^1];
     }
 
@@ -172,9 +179,11 @@ internal sealed partial class LogReviewActions
     private static JsonArray BuildStringCountsArray(IEnumerable<string?> values, int limit)
     {
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var rawValue in values)
         {
             var value = NormalizeOptionalString(rawValue);
+
             if (value is null)
             {
                 continue;
@@ -229,19 +238,20 @@ internal sealed partial class LogReviewActions
             .ThenBy(group => group.Key, StringComparer.Ordinal)
             .Take(limit)
             .Select(group =>
-            {
-                var firstEntry = group.First();
-                return (JsonNode?)new JsonObject
                 {
-                    ["appId"] = group.Key,
-                    ["appName"] = firstEntry.Session.Snapshot.DeviceProfile?.App?.AppName,
-                    ["sessionCount"] = group
-                        .Select(entry => entry.Session.Snapshot.SessionId)
-                        .Distinct(StringComparer.Ordinal)
-                        .Count(),
-                    ["logCount"] = group.Count()
-                };
-            }));
+                    var firstEntry = group.First();
+
+                    return (JsonNode?)new JsonObject
+                    {
+                        ["appId"] = group.Key,
+                        ["appName"] = firstEntry.Session.Snapshot.DeviceProfile?.App?.AppName,
+                        ["sessionCount"] = group
+                            .Select(entry => entry.Session.Snapshot.SessionId)
+                            .Distinct(StringComparer.Ordinal)
+                            .Count(),
+                        ["logCount"] = group.Count()
+                    };
+                }));
     }
 
     private static JsonArray BuildPlatformFacetArray(IReadOnlyList<SessionLogReviewEntry> entries)
@@ -271,12 +281,13 @@ internal sealed partial class LogReviewActions
             .ThenByDescending(facet => facet.LastLogUtc)
             .Take(limit)
             .Select(facet =>
-            {
-                var payload = BuildLogReviewSessionPayload(facet.Session, facet.LogCount);
-                payload["firstLogUtc"] = facet.FirstLogUtc;
-                payload["lastLogUtc"] = facet.LastLogUtc;
-                return (JsonNode?)payload;
-            }));
+                {
+                    var payload = BuildLogReviewSessionPayload(facet.Session, facet.LogCount);
+                    payload["firstLogUtc"] = facet.FirstLogUtc;
+                    payload["lastLogUtc"] = facet.LastLogUtc;
+
+                    return (JsonNode?)payload;
+                }));
     }
 
     private static LogReviewRange ResolveTimelineRange(
@@ -285,17 +296,17 @@ internal sealed partial class LogReviewActions
         IReadOnlyList<SessionLogReviewEntry> entries)
     {
         var startUtc = filters.StartUtc
-                       ?? (entries.Count > 0
-                           ? entries[0].Log.TimestampUtc
-                           : sessions.Count > 0
-                               ? sessions.Min(session => session.Snapshot.CreatedUtc)
-                               : DateTimeOffset.UtcNow);
+            ?? (entries.Count > 0
+                ? entries[0].Log.TimestampUtc
+                : sessions.Count > 0
+                    ? sessions.Min(session => session.Snapshot.CreatedUtc)
+                    : DateTimeOffset.UtcNow);
         var endUtc = filters.EndUtc
-                     ?? (entries.Count > 0
-                         ? entries[^1].Log.TimestampUtc
-                         : sessions.Count > 0
-                             ? sessions.Max(session => session.Snapshot.LastUpdatedUtc)
-                             : startUtc);
+            ?? (entries.Count > 0
+                ? entries[^1].Log.TimestampUtc
+                : sessions.Count > 0
+                    ? sessions.Max(session => session.Snapshot.LastUpdatedUtc)
+                    : startUtc);
 
         if (endUtc <= startUtc)
         {
@@ -314,6 +325,7 @@ internal sealed partial class LogReviewActions
         var totalTicks = Math.Max(1L, endUtc.UtcTicks - startUtc.UtcTicks);
         var bucketTicks = Math.Max(1L, (long)Math.Ceiling(totalTicks / (double)bucketCount));
         var buckets = new List<List<SessionLogReviewEntry>>(bucketCount);
+
         for (var index = 0; index < bucketCount; index++)
         {
             buckets.Add(new List<SessionLogReviewEntry>());
@@ -327,12 +339,14 @@ internal sealed partial class LogReviewActions
         }
 
         var payloadBuckets = new JsonArray();
+
         for (var index = 0; index < bucketCount; index++)
         {
             var bucketStartOffsetTicks = Math.Min(totalTicks, bucketTicks * index);
             var bucketEndOffsetTicks = index == bucketCount - 1
                 ? totalTicks
                 : Math.Min(totalTicks, bucketTicks * (index + 1));
+
             if (bucketEndOffsetTicks < bucketStartOffsetTicks)
             {
                 bucketEndOffsetTicks = bucketStartOffsetTicks;
@@ -367,17 +381,17 @@ internal sealed partial class LogReviewActions
         IReadOnlyList<SessionLogReviewEntry> returnedEntries)
     {
         var startUtc = filters.StartUtc
-                       ?? (returnedEntries.Count > 0
-                           ? returnedEntries[0].Log.TimestampUtc
-                           : sessions.Count > 0
-                               ? sessions.Min(session => session.Snapshot.CreatedUtc)
-                               : DateTimeOffset.UtcNow);
+            ?? (returnedEntries.Count > 0
+                ? returnedEntries[0].Log.TimestampUtc
+                : sessions.Count > 0
+                    ? sessions.Min(session => session.Snapshot.CreatedUtc)
+                    : DateTimeOffset.UtcNow);
         var endUtc = filters.EndUtc
-                     ?? (returnedEntries.Count > 0
-                         ? returnedEntries[^1].Log.TimestampUtc
-                         : sessions.Count > 0
-                             ? sessions.Max(session => session.Snapshot.LastUpdatedUtc)
-                             : startUtc);
+            ?? (returnedEntries.Count > 0
+                ? returnedEntries[^1].Log.TimestampUtc
+                : sessions.Count > 0
+                    ? sessions.Max(session => session.Snapshot.LastUpdatedUtc)
+                    : startUtc);
 
         if (endUtc < startUtc)
         {
@@ -397,13 +411,14 @@ internal sealed partial class LogReviewActions
                 .Where(annotation => SessionAnnotationInspection.MatchesAnnotationTimeRange(annotation, startUtc, endUtc))
                 .OrderBy(annotation => annotation.StartUtc)
                 .Select(annotation =>
-                {
-                    var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
-                    payload["sessionId"] = session.Snapshot.SessionId;
-                    payload["appId"] = session.Snapshot.AppId;
-                    payload["platformKey"] = session.PlatformKey;
-                    return (JsonNode?)payload;
-                })));
+                    {
+                        var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
+                        payload["sessionId"] = session.Snapshot.SessionId;
+                        payload["appId"] = session.Snapshot.AppId;
+                        payload["platformKey"] = session.PlatformKey;
+
+                        return (JsonNode?)payload;
+                    })));
     }
 
     private static JsonArray BuildExportScreenshotsArray(
@@ -437,16 +452,19 @@ internal sealed partial class LogReviewActions
     {
         return PayloadJson.CreateJsonArray(sessions
             .SelectMany(session =>
-            {
-                var channelMap = session.Snapshot.MetricChannels.ToDictionary(channel => channel.ChannelId);
-                return session.Snapshot.Metrics
-                    .Where(sample => PayloadJson.MatchesTimestamp(sample.CapturedAtUtc, startUtc, endUtc))
-                    .GroupBy(sample => sample.ChannelId)
-                    .OrderBy(group => group.Key)
-                    .Select(group =>
+                {
+                    var channelMap = session.Snapshot.MetricChannels.ToDictionary(channel => channel.ChannelId);
+
+                    return session.Snapshot.Metrics
+                        .Where(sample => PayloadJson.MatchesTimestamp(sample.CapturedAtUtc, startUtc, endUtc))
+                        .GroupBy(sample => sample.ChannelId)
+                        .OrderBy(group => group.Key)
+                        .Select(group =>
                     {
                         channelMap.TryGetValue(group.Key, out var channel);
+
                         var samples = group.OrderBy(sample => sample.CapturedAtUtc).ToArray();
+
                         return (JsonNode?)new JsonObject
                         {
                             ["sessionId"] = session.Snapshot.SessionId,
@@ -467,7 +485,7 @@ internal sealed partial class LogReviewActions
                             ["lastValue"] = samples[^1].Value
                         };
                     });
-            }));
+                }));
     }
 
     private static string BuildMarkdownLogSlice(
@@ -492,6 +510,7 @@ internal sealed partial class LogReviewActions
         builder.AppendLine();
 
         builder.AppendLine("## Sessions");
+
         foreach (var session in sessions.OrderBy(session => session.Snapshot.AppId, StringComparer.Ordinal).ThenBy(session => session.Snapshot.SessionId, StringComparer.Ordinal))
         {
             builder.AppendLine($"- `{session.Snapshot.SessionId}` {session.Snapshot.AppId} {session.PlatformKey} {session.Snapshot.Status}");
@@ -501,6 +520,7 @@ internal sealed partial class LogReviewActions
         builder.AppendLine("## Logs");
         builder.AppendLine("| Time | Priority | Session | Source | Tag | Message |");
         builder.AppendLine("| --- | --- | --- | --- | --- | --- |");
+
         foreach (var entry in entries)
         {
             builder.AppendLine(
@@ -511,6 +531,7 @@ internal sealed partial class LogReviewActions
         {
             builder.AppendLine();
             builder.AppendLine("## Annotations");
+
             foreach (var node in annotations.OfType<JsonObject>())
             {
                 builder.AppendLine(
@@ -531,6 +552,7 @@ internal sealed partial class LogReviewActions
     {
         value = defaultValue;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -543,14 +565,17 @@ internal sealed partial class LogReviewActions
             if (parsedValue <= 0)
             {
                 errorMessage = $"'{propertyName}' must be greater than 0.";
+
                 return false;
             }
 
             value = Math.Min(parsedValue, maxValue);
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -564,6 +589,7 @@ internal sealed partial class LogReviewActions
     {
         value = defaultValue;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -576,14 +602,17 @@ internal sealed partial class LogReviewActions
             if (parsedValue < 0)
             {
                 errorMessage = $"'{propertyName}' must be 0 or greater.";
+
                 return false;
             }
 
             value = Math.Min(parsedValue, maxValue);
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -591,6 +620,7 @@ internal sealed partial class LogReviewActions
     {
         value = null;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -601,10 +631,12 @@ internal sealed partial class LogReviewActions
                 || int.TryParse(jsonValue.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedValue)))
         {
             value = parsedValue;
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -617,6 +649,7 @@ internal sealed partial class LogReviewActions
     {
         value = defaultValue;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -628,11 +661,13 @@ internal sealed partial class LogReviewActions
                 || bool.TryParse(jsonValue.ToString(), out parsedValue))
             {
                 value = parsedValue;
+
                 return true;
             }
         }
 
         errorMessage = $"'{propertyName}' must be true or false.";
+
         return false;
     }
 
@@ -640,7 +675,9 @@ internal sealed partial class LogReviewActions
     {
         format = "both";
         errorMessage = null;
+
         var rawFormat = NormalizeOptionalString(arguments?["format"]?.GetValue<string>());
+
         if (rawFormat is null)
         {
             return true;
@@ -651,10 +688,12 @@ internal sealed partial class LogReviewActions
             || string.Equals(rawFormat, "both", StringComparison.OrdinalIgnoreCase))
         {
             format = rawFormat.ToLowerInvariant();
+
             return true;
         }
 
         errorMessage = "format must be one of: json, markdown, both.";
+
         return false;
     }
 

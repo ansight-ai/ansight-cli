@@ -17,6 +17,7 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.Logs, 0, "Reading base session logs...");
+
         var appendFilePath = Path.Combine(
             Path.GetDirectoryName(filePath) ?? string.Empty,
             LogsAppendFileName);
@@ -41,11 +42,13 @@ internal static partial class SessionSnapshotReader
         if (segmentFilePaths.Length == 0 && !hasAppendFile)
         {
             ReportLoadProgress(progress, SessionLoadStage.Logs, 1, FormatLoadCount(baseLogs.Count, "log entry", "log entries"));
+
             return baseLogs;
         }
 
         var logs = new List<LogEntry>(baseLogs.Count);
         logs.AddRange(baseLogs);
+
         for (var index = 0; index < segmentFilePaths.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -55,7 +58,9 @@ internal static partial class SessionSnapshotReader
                 processedFileCount,
                 totalFileCount,
                 $"Reading log segment {index + 1:N0} of {segmentFilePaths.Length:N0}...");
+
             var segmentDocument = TryLoadDocument<SessionLogsBlobDocument>(segmentFilePaths[index], cancellationToken);
+
             if (segmentDocument is null
                 || segmentDocument.SavedAtUtc <= baseSavedAtUtc
                 || segmentDocument.Logs.Count == 0)
@@ -89,11 +94,13 @@ internal static partial class SessionSnapshotReader
                 processedFileCount,
                 totalFileCount,
                 "Reading appended session logs...");
+
             try
             {
                 foreach (var line in File.ReadLines(appendFilePath))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (string.IsNullOrWhiteSpace(line))
                     {
                         continue;
@@ -102,6 +109,7 @@ internal static partial class SessionSnapshotReader
                     try
                     {
                         var appendDocument = JsonSerializer.Deserialize<SessionLogsBlobDocument>(line, JsonUtil.Compact);
+
                         if (appendDocument is not null
                             && appendDocument.SavedAtUtc > baseSavedAtUtc
                             && appendDocument.Logs.Count > 0)
@@ -130,12 +138,14 @@ internal static partial class SessionSnapshotReader
         }
 
         IReadOnlyList<LogEntry> loadedLogs = logs.Count == baseLogs.Count ? baseLogs : logs;
+
         if (!IsTimestampOrdered(loadedLogs))
         {
             loadedLogs = loadedLogs.OrderBy(entry => entry.TimestampUtc).ToArray();
         }
 
         ReportLoadProgress(progress, SessionLoadStage.Logs, 1, FormatLoadCount(loadedLogs.Count, "log entry", "log entries"));
+
         return loadedLogs;
     }
 
@@ -158,6 +168,7 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         var descriptors = TryLoadDocument<SessionLogStreamsBlobDocument>(filePath, cancellationToken)?.Streams;
+
         if (descriptors is not { Count: > 0 })
         {
             return SessionLogStreams.Normalize(Array.Empty<SessionLogStream>(), logs);
@@ -169,6 +180,7 @@ internal static partial class SessionSnapshotReader
                 var entries = logs
                     .Where(log => string.Equals(log.StreamId, stream.StreamId, StringComparison.Ordinal))
                     .ToArray();
+
                 return new SessionLogStream
                 {
                     StreamId = stream.StreamId,
@@ -198,9 +210,11 @@ internal static partial class SessionSnapshotReader
         CancellationToken cancellationToken = default)
     {
         ReportLoadProgress(progress, SessionLoadStage.Telemetry, 0, "Reading telemetry samples...");
+
         if (!Directory.Exists(telemetryDirectoryPath))
         {
             ReportLoadProgress(progress, SessionLoadStage.Telemetry, 1, "No telemetry samples found.");
+
             return Array.Empty<SessionMetricSample>();
         }
 
@@ -215,6 +229,7 @@ internal static partial class SessionSnapshotReader
         var totalFileCount = channelFilePaths.Length + segmentFilePaths.Length + (hasAppendFile ? 1 : 0);
         var processedFileCount = 0;
         var metrics = new List<SessionMetricSample>();
+
         foreach (var filePath in channelFilePaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -224,6 +239,7 @@ internal static partial class SessionSnapshotReader
                 processedFileCount,
                 totalFileCount,
                 $"Reading telemetry channel {processedFileCount + 1:N0} of {totalFileCount:N0}...");
+
             if (!TryParseTelemetryChannelId(filePath, out var channelId))
             {
                 processedFileCount++;
@@ -231,6 +247,7 @@ internal static partial class SessionSnapshotReader
             }
 
             var document = TryLoadDocument<SessionTelemetryBlobDocument>(filePath, cancellationToken);
+
             if (document?.Metrics is null
                 || document.Metrics.Count == 0
                 || document.ChannelId != channelId)
@@ -264,6 +281,7 @@ internal static partial class SessionSnapshotReader
                 processedFileCount,
                 totalFileCount,
                 $"Reading telemetry segment {processedFileCount + 1:N0} of {totalFileCount:N0}...");
+
             if (!TryParseTelemetrySegmentChannelId(filePath, out var channelId))
             {
                 processedFileCount++;
@@ -271,6 +289,7 @@ internal static partial class SessionSnapshotReader
             }
 
             var document = TryLoadDocument<SessionTelemetryBlobDocument>(filePath, cancellationToken);
+
             if (document?.Metrics is null
                 || document.Metrics.Count == 0
                 || document.ChannelId != channelId)
@@ -304,11 +323,13 @@ internal static partial class SessionSnapshotReader
                 processedFileCount,
                 totalFileCount,
                 "Reading appended telemetry batches...");
+
             try
             {
                 foreach (var line in File.ReadLines(appendFilePath))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (string.IsNullOrWhiteSpace(line))
                     {
                         continue;
@@ -317,6 +338,7 @@ internal static partial class SessionSnapshotReader
                     try
                     {
                         var document = JsonSerializer.Deserialize<SessionTelemetryAppendDocument>(line, JsonUtil.Compact);
+
                         if (document is not null)
                         {
                             if (document.ReplaceAll)
@@ -359,6 +381,7 @@ internal static partial class SessionSnapshotReader
             .ThenBy(metric => metric.ChannelId)
             .ToArray();
         ReportLoadProgress(progress, SessionLoadStage.Telemetry, 1, FormatLoadCount(loadedMetrics.Length, "telemetry sample", "telemetry samples"));
+
         return loadedMetrics;
     }
 
@@ -373,8 +396,8 @@ internal static partial class SessionSnapshotReader
             return;
         }
 
-        var stageIndex = Array.IndexOf(FullSnapshotLoadStages, stage);
-        var totalStageCount = FullSnapshotLoadStages.Length;
+        var stageIndex = Array.IndexOf(fullSnapshotLoadStages, stage);
+        var totalStageCount = fullSnapshotLoadStages.Length;
         var normalizedStageProgress = Math.Clamp(stageProgress, 0, 1);
         var overallProgress = stage == SessionLoadStage.Complete || stageIndex < 0
             ? 1
@@ -416,8 +439,8 @@ internal static partial class SessionSnapshotReader
         }
 
         return processedFileCount <= 0
-               || processedFileCount >= totalFileCount
-               || processedFileCount % LoadProgressFileReportInterval == 0;
+            || processedFileCount >= totalFileCount
+            || processedFileCount % LoadProgressFileReportInterval == 0;
     }
 
     private static string ResolveLoadStageName(SessionLoadStage stage)
@@ -458,6 +481,7 @@ internal static partial class SessionSnapshotReader
     private static string FormatLoadCount(int count, string singular, string plural)
     {
         var label = count == 1 ? singular : plural;
+
         return $"Loaded {count:N0} {label}.";
     }
 
@@ -466,6 +490,7 @@ internal static partial class SessionSnapshotReader
         channelId = 0;
 
         var fileName = Path.GetFileName(filePath);
+
         if (!fileName.StartsWith("channel-", StringComparison.OrdinalIgnoreCase)
             || !fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {
@@ -473,6 +498,7 @@ internal static partial class SessionSnapshotReader
         }
 
         var channelText = fileName["channel-".Length..^".json".Length];
+
         return byte.TryParse(channelText, out channelId);
     }
 
@@ -482,6 +508,7 @@ internal static partial class SessionSnapshotReader
 
         var fileName = Path.GetFileName(filePath);
         const string marker = ".segment-";
+
         if (!fileName.StartsWith("channel-", StringComparison.OrdinalIgnoreCase)
             || !fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {
@@ -489,12 +516,14 @@ internal static partial class SessionSnapshotReader
         }
 
         var markerIndex = fileName.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+
         if (markerIndex <= "channel-".Length)
         {
             return false;
         }
 
         var channelText = fileName["channel-".Length..markerIndex];
+
         return byte.TryParse(channelText, out channelId);
     }
 
@@ -515,9 +544,11 @@ internal static partial class SessionSnapshotReader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             using var stream = File.OpenRead(filePath);
             var document = JsonSerializer.Deserialize<T>(stream, JsonUtil.Compact);
             cancellationToken.ThrowIfCancellationRequested();
+
             return document;
         }
         catch (OperationCanceledException)
@@ -585,9 +616,10 @@ internal static partial class SessionSnapshotReader
     public static SessionPathLayout GetSessionLayoutFromSummaryPath(string summaryFilePath)
     {
         var sessionDirectoryPath = Path.GetDirectoryName(summaryFilePath)
-                                   ?? throw new InvalidOperationException("Session summary path is invalid.");
+            ?? throw new InvalidOperationException("Session summary path is invalid.");
         var appDirectoryPath = Path.GetDirectoryName(sessionDirectoryPath)
-                               ?? throw new InvalidOperationException("Session summary path is invalid.");
+            ?? throw new InvalidOperationException("Session summary path is invalid.");
+
         return new SessionPathLayout(
             appDirectoryPath,
             sessionDirectoryPath,
@@ -614,35 +646,6 @@ internal static partial class SessionSnapshotReader
     private static string GetTouchesAppendFilePath(SessionPathLayout layout)
         => Path.Combine(layout.SessionDirectoryPath, TouchesAppendFileName);
 
-    private static long GetDirectorySize(string directoryPath)
-    {
-        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
-        {
-            return 0;
-        }
-
-        long size = 0;
-        try
-        {
-            foreach (var filePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
-            {
-                try
-                {
-                    size += new FileInfo(filePath).Length;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                }
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return size;
-        }
-
-        return size;
-    }
-
     private static string? NormalizeJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -653,6 +656,7 @@ internal static partial class SessionSnapshotReader
         try
         {
             using var document = JsonDocument.Parse(json);
+
             return JsonSerializer.Serialize(document.RootElement, JsonUtil.Compact);
         }
         catch

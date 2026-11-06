@@ -37,6 +37,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeDeviceLifecycleSource(), new FakeAnnotationSource(),
             deviceTestingSource: testingSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var response = await PostJsonAsync(client, Endpoint(server, "/api/device/testing"),
@@ -54,6 +55,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeDeviceLifecycleSource(), new FakeAnnotationSource(),
             deviceTestingSource: testingSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var unauthorized = await PostJsonAsync(client,
@@ -88,6 +90,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeDeviceLifecycleSource(),
             new FakeAnnotationSource());
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var response = await client.GetAsync(Endpoint(server, "/"));
@@ -104,6 +107,7 @@ public sealed class RemoteControlServerCompanionTests
         var annotationSource = new FakeAnnotationSource();
         await using var server = CreateServer(lifecycleSource, annotationSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         var state = await client.GetFromJsonAsync<CompanionStateResponse>(
@@ -111,9 +115,11 @@ public sealed class RemoteControlServerCompanionTests
 
         var stoppedDevice = Assert.Single(state!.BootableDevices);
         Assert.Equal("simulator-stopped", stoppedDevice.Identifier);
+
         var installedApplication = Assert.Single(state.InstalledApplications["simulator-stopped"]);
         Assert.Equal("Red-Point", installedApplication.Name);
         Assert.Equal("com.alphaoutdoors.redpoint", installedApplication.BundleIdentifier);
+
         var annotationSession = Assert.Single(state.AnnotationSessions);
         Assert.Equal("live-session", annotationSession.SessionId);
         Assert.Equal("simulator-active", annotationSession.DeviceUdid);
@@ -130,6 +136,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeAnnotationSource(),
             runtimeSource: runtimeSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         var state = await client.GetFromJsonAsync<CompanionStateResponse>(Endpoint(server, "/api/state"));
@@ -145,6 +152,7 @@ public sealed class RemoteControlServerCompanionTests
         var annotationSource = new FakeAnnotationSource();
         await using var server = CreateServer(lifecycleSource, annotationSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var startResponse = await PostJsonAsync(
@@ -215,6 +223,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeAnnotationSource(),
             deviceLocationSource: locationSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var setResponse = await PostJsonAsync(
@@ -247,6 +256,7 @@ public sealed class RemoteControlServerCompanionTests
             new FakeAnnotationSource(),
             deviceLocationSource: locationSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var response = await PostJsonAsync(
@@ -268,6 +278,7 @@ public sealed class RemoteControlServerCompanionTests
             annotationSource,
             agentChatSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var startResponse = await PostJsonAsync(
@@ -296,6 +307,7 @@ public sealed class RemoteControlServerCompanionTests
         Assert.True(startResponse.IsSuccessStatusCode, await startResponse.Content.ReadAsStringAsync());
         Assert.True(chatsResponse.IsSuccessStatusCode, await chatsResponse.Content.ReadAsStringAsync());
         Assert.True(tasksResponse.IsSuccessStatusCode, await tasksResponse.Content.ReadAsStringAsync());
+
         var taskHistory = await tasksResponse.Content.ReadFromJsonAsync<RemoteAgentTaskListResult>();
         var linkedTask = Assert.Single(taskHistory!.Tasks);
         Assert.Equal("thread-1", linkedTask.ProviderTaskId);
@@ -334,6 +346,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+
             return Task.FromResult(new RemoteDeviceTestingResult(true, "Delivered."));
         }
     }
@@ -348,6 +361,7 @@ public sealed class RemoteControlServerCompanionTests
     {
         var content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(value));
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
         return client.PostAsync(endpoint, content);
     }
 
@@ -356,15 +370,15 @@ public sealed class RemoteControlServerCompanionTests
         public string StartedIdentifier { get; private set; } = string.Empty;
 
         public int InventoryCalls { get; private set; }
-
         public int SeparateCalls { get; private set; }
 
         public Task<IReadOnlyList<RemoteBootableDevice>> ListBootableDevicesAsync(
             CancellationToken cancellationToken = default)
         {
             SeparateCalls++;
+
             return Task.FromResult<IReadOnlyList<RemoteBootableDevice>>(
-            [
+                [
                 new RemoteBootableDevice(
                     "simulator-stopped",
                     "iPhone 17 Pro",
@@ -377,6 +391,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             SeparateCalls++;
+
             return Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>>>(
                 new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>
                 {
@@ -392,6 +407,7 @@ public sealed class RemoteControlServerCompanionTests
         public Task<RemoteDeviceInventory> ListInventoryAsync(CancellationToken cancellationToken = default)
         {
             InventoryCalls++;
+
             return Task.FromResult(new RemoteDeviceInventory(
                 [new RemoteBootableDevice("simulator-stopped", "iPhone 17 Pro", "iOS 26.0", "ios")],
                 new Dictionary<string, IReadOnlyList<RemoteInstalledApplication>>
@@ -406,6 +422,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             StartedIdentifier = identifier;
+
             return Task.FromResult(new RemoteOperationResult(true, "Starting."));
         }
     }
@@ -413,17 +430,14 @@ public sealed class RemoteControlServerCompanionTests
     private sealed class FakeAnnotationSource : IRemoteAnnotationSource
     {
         public RemoteAnnotationRequest? LastRequest { get; private set; }
-
         public RemoteAnnotationBatchStartRequest? LastBatchRequest { get; private set; }
-
         public RemoteAnnotationUpdateRequest? LastUpdateRequest { get; private set; }
-
         public RemoteAnnotationDeleteRequest? LastDeleteRequest { get; private set; }
 
         public Task<IReadOnlyList<RemoteAnnotationSession>> ListLiveSessionsAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<RemoteAnnotationSession>>(
-            [
+                [
                 new RemoteAnnotationSession(
                     "simulator-active",
                     "live-session",
@@ -436,6 +450,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastRequest = request;
+
             return Task.FromResult(new RemoteAnnotationResult(
                 true,
                 "Saved.",
@@ -448,6 +463,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastBatchRequest = request;
+
             return Task.FromResult(new RemoteAnnotationBatchStartResult(
                 true,
                 "Started.",
@@ -462,6 +478,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastUpdateRequest = request;
+
             return Task.FromResult(new RemoteAnnotationResult(
                 true,
                 "Updated.",
@@ -477,6 +494,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastDeleteRequest = request;
+
             return Task.FromResult(new RemoteOperationResult(true, "Deleted."));
         }
     }
@@ -484,7 +502,6 @@ public sealed class RemoteControlServerCompanionTests
     private sealed class FakeDeviceLocationSource : IRemoteDeviceLocationSource
     {
         public RemoteDeviceLocationRequest? LastSetRequest { get; private set; }
-
         public RemoteDeviceLocationClearRequest? LastClearRequest { get; private set; }
 
         public Task<RemoteDeviceLocationResult> SetLocationAsync(
@@ -492,6 +509,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastSetRequest = request;
+
             return Task.FromResult(new RemoteDeviceLocationResult(
                 true,
                 "fake",
@@ -506,6 +524,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastClearRequest = request;
+
             return Task.FromResult(new RemoteDeviceLocationResult(
                 true,
                 "fake",
@@ -568,6 +587,7 @@ public sealed class RemoteControlServerCompanionTests
             CancellationToken cancellationToken = default)
         {
             LastSubmission = request;
+
             return Task.FromResult(new RemoteAnnotationBatchSubmissionResult(
                 true,
                 "Accepted.",
@@ -579,7 +599,6 @@ public sealed class RemoteControlServerCompanionTests
     private sealed class FakeRuntimeSource : IRefreshableRemoteRuntimeSource
     {
         public int RefreshCount { get; private set; }
-
         public RemoteRuntimeSnapshot Current { get; } = new(
             DateTimeOffset.UtcNow,
             [
@@ -596,6 +615,7 @@ public sealed class RemoteControlServerCompanionTests
         public Task<RemoteRuntimeSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
         {
             RefreshCount++;
+
             return Task.FromResult(Current);
         }
 

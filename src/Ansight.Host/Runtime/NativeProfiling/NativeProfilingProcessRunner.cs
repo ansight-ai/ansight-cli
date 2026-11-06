@@ -3,32 +3,6 @@ using System.Runtime.InteropServices;
 
 namespace Ansight.Host.Runtime.NativeProfiling;
 
-internal sealed record NativeProfilingProcessRequest(
-    string FileName,
-    IReadOnlyList<string> Arguments,
-    string WorkingDirectory,
-    TimeSpan? Timeout = null,
-    TimeSpan? InterruptAfter = null,
-    string? StandardInput = null);
-
-internal sealed record NativeProfilingProcessResult(
-    int ExitCode,
-    string StandardOutput,
-    string StandardError,
-    bool TimedOut,
-    bool WasInterrupted = false)
-{
-    public bool IsSuccess => ExitCode == 0 && !TimedOut;
-}
-
-internal interface INativeProfilingProcessRunner
-{
-    Task<NativeProfilingProcessResult> RunAsync(
-        NativeProfilingProcessRequest request,
-        Action<string>? outputReceived,
-        CancellationToken cancellationToken);
-}
-
 internal sealed class NativeProfilingProcessRunner : INativeProfilingProcessRunner
 {
     public async Task<NativeProfilingProcessResult> RunAsync(
@@ -48,6 +22,7 @@ internal sealed class NativeProfilingProcessRunner : INativeProfilingProcessRunn
             RedirectStandardInput = request.StandardInput is not null,
             CreateNoWindow = true
         };
+
         foreach (var argument in request.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -86,6 +61,7 @@ internal sealed class NativeProfilingProcessRunner : INativeProfilingProcessRunn
 
         var timedOut = false;
         var wasInterrupted = false;
+
         try
         {
             if (request.StandardInput is not null)
@@ -95,10 +71,12 @@ internal sealed class NativeProfilingProcessRunner : INativeProfilingProcessRunn
             }
 
             var exitTask = process.WaitForExitAsync(linkedCancellation.Token);
+
             if (request.InterruptAfter is not null)
             {
                 var interruptTask = Task.Delay(request.InterruptAfter.Value, linkedCancellation.Token);
                 var completedTask = await Task.WhenAny(exitTask, interruptTask).ConfigureAwait(false);
+
                 if (completedTask == interruptTask
                     && !interruptTask.IsCanceled
                     && !process.HasExited)
@@ -110,7 +88,7 @@ internal sealed class NativeProfilingProcessRunner : INativeProfilingProcessRunn
             await exitTask.ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested
-                                                 && timeoutCancellation?.IsCancellationRequested == true)
+            && timeoutCancellation?.IsCancellationRequested == true)
         {
             timedOut = true;
             TryKill(process);

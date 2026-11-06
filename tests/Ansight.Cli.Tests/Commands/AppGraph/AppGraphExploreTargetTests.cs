@@ -64,8 +64,9 @@ public sealed class AppGraphExploreTargetTests
         File.WriteAllText(
             Path.Combine(dataPath, "known-apps.json"),
             $$"""{"apps":[{"appId":"com.example.app","name":"Example","codebasePath":"{{workspacePath.Replace("\\", "\\\\", StringComparison.Ordinal)}}"}]}""");
+
         var arguments = CliArguments.Parse(
-        [
+            [
             "app-graph",
             "explore",
             "--workspace",
@@ -93,12 +94,14 @@ public sealed class AppGraphExploreTargetTests
         var dataPath = Path.Combine(directory.Path, "data");
         Directory.CreateDirectory(workspacePath);
         Directory.CreateDirectory(dataPath);
+
         var escapedWorkspacePath = workspacePath.Replace("\\", "\\\\", StringComparison.Ordinal);
         File.WriteAllText(
             Path.Combine(dataPath, "known-apps.json"),
             $$"""{"apps":[{"appId":"com.example.one","name":"One","codebasePath":"{{escapedWorkspacePath}}"},{"appId":"com.example.two","name":"Two","codebasePath":"{{escapedWorkspacePath}}"}]}""");
+
         var arguments = CliArguments.Parse(
-        [
+            [
             "app-graph",
             "explore",
             "--workspace",
@@ -131,8 +134,9 @@ public sealed class AppGraphExploreTargetTests
         File.WriteAllText(
             Path.Combine(dataPath, "known-apps.json"),
             $$"""{"apps":[{"appId":"com.example.app","name":"Example","codebasePath":"{{workspacePath.Replace("\\", "\\\\", StringComparison.Ordinal)}}"}]}""");
+
         var arguments = CliArguments.Parse(
-        [
+            [
             "app-graph",
             "explore",
             "--workspace",
@@ -166,8 +170,9 @@ public sealed class AppGraphExploreTargetTests
         File.WriteAllText(
             Path.Combine(dataPath, "known-apps.json"),
             $$"""{"apps":[{"appId":"com.example.app","name":"Example","codebasePath":"{{workspacePath.Replace("\\", "\\\\", StringComparison.Ordinal)}}"}]}""");
+
         var arguments = CliArguments.Parse(
-        [
+            [
             "app-graph",
             "explore",
             "--workspace",

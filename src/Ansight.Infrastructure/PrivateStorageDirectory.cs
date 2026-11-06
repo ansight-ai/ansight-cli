@@ -6,6 +6,7 @@ public static class PrivateStorageDirectory
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         Directory.CreateDirectory(path);
+
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(

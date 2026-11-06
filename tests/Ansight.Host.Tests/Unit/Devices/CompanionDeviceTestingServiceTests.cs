@@ -18,6 +18,7 @@ public sealed class CompanionDeviceTestingServiceTests
                 {
                     profiles.Add(arguments!["profile"]!["blocked"]!.GetValue<bool>());
                 }
+
                 return Task.FromResult(RequestResult.ToolResult(new JsonObject
                 {
                     ["leaseId"] = "follow-lease",
@@ -52,6 +53,7 @@ public sealed class CompanionDeviceTestingServiceTests
         var network = new NetworkConditioningService((_, arguments, _) =>
         {
             calls.Add(arguments!.DeepClone().AsObject());
+
             return Task.FromResult(RequestResult.ToolResult(
                 new JsonObject { ["leaseId"] = "companion-lease" }, isError: false));
         });
@@ -71,6 +73,7 @@ public sealed class CompanionDeviceTestingServiceTests
         Assert.False(otherLease.IsSuccess);
         Assert.False(otherTarget.IsSuccess);
         Assert.False(otherApp.IsSuccess);
+
         var arguments = Assert.Single(calls);
         Assert.Equal(120_000, arguments["durationMs"]!.GetValue<int>());
         Assert.Equal("sim-1", arguments["deviceId"]!.GetValue<string>());
@@ -79,6 +82,7 @@ public sealed class CompanionDeviceTestingServiceTests
         var reset = await service.ExecuteAsync(
             new RemoteDeviceTestingRequest("sim-1", "network-reset", "app.one", LeaseId: "companion-lease"));
         Assert.True(reset.IsSuccess);
+
         var retriedReset = await service.ExecuteAsync(
             new RemoteDeviceTestingRequest("sim-1", "network-reset", "app.one", LeaseId: "companion-lease"));
         Assert.True(retriedReset.IsSuccess);

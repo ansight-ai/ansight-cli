@@ -27,6 +27,7 @@ internal sealed class GetSessionPropertiesTool : Operation
         }
 
         var isLive = sessionResolver.GetLiveSessionIds().Contains(snapshot!.SessionId);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {

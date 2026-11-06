@@ -6,7 +6,7 @@ using System.Text;
 internal sealed class PairingConfigCache : IPairingConfigCache
 {
     private const string StorageKey = "device-registration-cache-v2";
-    private static readonly TimeSpan LocalRegistrationLifetime = TimeSpan.FromDays(90);
+    private static readonly TimeSpan localRegistrationLifetime = TimeSpan.FromDays(90);
 
     private readonly object gate = new();
     private readonly Ansight.Infrastructure.Security.IEncryptedStorage encryptedStorage;
@@ -59,6 +59,7 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             return document.Items.Select(Clone).ToArray();
         }
     }
@@ -73,8 +74,10 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             var item = document.Items.FirstOrDefault(candidate =>
                 string.Equals(candidate.Config.ConfigId, configId.Trim(), StringComparison.Ordinal));
+
             return item is null ? null : Clone(item);
         }
     }
@@ -87,11 +90,14 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         }
 
         var normalizedConfigId = configId.Trim();
+
         lock (gate)
         {
             ReloadDocument();
+
             var removed = document.Items.RemoveAll(item =>
                 string.Equals(item.Config.ConfigId, normalizedConfigId, StringComparison.Ordinal));
+
             if (removed == 0)
             {
                 return false;
@@ -101,6 +107,7 @@ internal sealed class PairingConfigCache : IPairingConfigCache
             document.ClientGrants.RemoveAll(grant =>
                 string.Equals(grant.ConfigId, normalizedConfigId, StringComparison.Ordinal));
             Persist();
+
             return true;
         }
     }
@@ -126,9 +133,11 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             var now = DateTimeOffset.UtcNow;
             var item = document.Items.FirstOrDefault(candidate =>
                 string.Equals(candidate.Config.ConfigId, attempt.InviteId, StringComparison.Ordinal));
+
             if (item?.Config.Enrollment is not { } enrollment
                 || !PairingProtocolPolicy.IsEnabled(item.Config)
                 || (!PairingConfig.TargetsAnyApp(item.Config.AppId)
@@ -141,8 +150,9 @@ internal sealed class PairingConfigCache : IPairingConfigCache
 
             var existingRegistration = document.ClientGrants.FirstOrDefault(grant =>
                 string.Equals(grant.ConfigId, item.Config.ConfigId, StringComparison.Ordinal)
-                && string.Equals(grant.AppId, attempt.AppId, StringComparison.Ordinal)
-                && string.Equals(grant.DeviceId, attempt.DeviceId, StringComparison.Ordinal));
+                    && string.Equals(grant.AppId, attempt.AppId, StringComparison.Ordinal)
+                    && string.Equals(grant.DeviceId, attempt.DeviceId, StringComparison.Ordinal));
+
             if (existingRegistration is not null)
             {
                 if (!existingRegistration.IsActive(now))
@@ -205,6 +215,7 @@ internal sealed class PairingConfigCache : IPairingConfigCache
             item.Config.Enrollment.Secret = string.Empty;
             document.ClientGrants.Add(Clone(registration));
             Persist();
+
             return DeviceConnectionAuthorization.Accept(
                 registration,
                 isNewRegistration: true);
@@ -231,13 +242,15 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             var now = DateTimeOffset.UtcNow;
             var appId = attempt.AppId.Trim();
             var deviceId = attempt.DeviceId.Trim();
             var existingRegistration = document.ClientGrants.FirstOrDefault(grant =>
                 string.Equals(grant.AppId, appId, StringComparison.Ordinal)
-                && string.Equals(grant.DeviceId, deviceId, StringComparison.Ordinal)
-                && grant.ConfigId.StartsWith("local:", StringComparison.Ordinal));
+                    && string.Equals(grant.DeviceId, deviceId, StringComparison.Ordinal)
+                    && grant.ConfigId.StartsWith("local:", StringComparison.Ordinal));
+
             if (existingRegistration is not null)
             {
                 if (existingRegistration.RevokedAt is not null)
@@ -280,11 +293,12 @@ internal sealed class PairingConfigCache : IPairingConfigCache
                 DeviceName = NormalizeDeviceName(attempt.DeviceName),
                 MaxToolPolicy = GetLocalDeveloperPolicy(),
                 IssuedAt = now,
-                ExpiresAt = now.Add(LocalRegistrationLifetime)
+                ExpiresAt = now.Add(localRegistrationLifetime)
             };
 
             document.ClientGrants.Add(Clone(registration));
             Persist();
+
             return DeviceConnectionAuthorization.Accept(
                 registration,
                 isNewRegistration: true);
@@ -301,11 +315,13 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             var now = DateTimeOffset.UtcNow;
+
             return document.ClientGrants.Any(grant =>
                 string.Equals(grant.ConfigId, configId, StringComparison.Ordinal)
-                && string.Equals(grant.AppId, appId, StringComparison.Ordinal)
-                && grant.IsActive(now));
+                    && string.Equals(grant.AppId, appId, StringComparison.Ordinal)
+                    && grant.IsActive(now));
         }
     }
 
@@ -319,8 +335,10 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         lock (gate)
         {
             ReloadDocument();
+
             var grant = document.ClientGrants.FirstOrDefault(candidate =>
                 string.Equals(candidate.GrantId, grantId.Trim(), StringComparison.Ordinal));
+
             if (grant is null || grant.RevokedAt is not null)
             {
                 return false;
@@ -331,6 +349,7 @@ internal sealed class PairingConfigCache : IPairingConfigCache
                 ? "Revoked by Ansight."
                 : reason.Trim();
             Persist();
+
             return true;
         }
     }
@@ -351,23 +370,27 @@ internal sealed class PairingConfigCache : IPairingConfigCache
     private bool TryLoadDocument(out PairingCacheDocument loadedDocument)
     {
         var json = encryptedStorage.Get(StorageKey);
+
         if (string.IsNullOrWhiteSpace(json))
         {
             loadedDocument = new PairingCacheDocument();
+
             return false;
         }
 
         try
         {
             loadedDocument =
-                JsonSerializer.Deserialize<PairingCacheDocument>(json, JsonUtil.Compact)
-                ?? new PairingCacheDocument();
+                        JsonSerializer.Deserialize<PairingCacheDocument>(json, JsonUtil.Compact)
+                            ?? new PairingCacheDocument();
             Normalize(loadedDocument);
+
             return true;
         }
         catch
         {
             loadedDocument = new PairingCacheDocument();
+
             return false;
         }
     }
@@ -386,9 +409,9 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         target.Items.RemoveAll(item => !IsValidCachedConfig(item));
         target.ClientGrants.RemoveAll(grant =>
             grant is null
-            || string.IsNullOrWhiteSpace(grant.GrantId)
-            || string.IsNullOrWhiteSpace(grant.SecretHash)
-            || string.IsNullOrWhiteSpace(grant.DeviceId));
+                || string.IsNullOrWhiteSpace(grant.GrantId)
+                || string.IsNullOrWhiteSpace(grant.SecretHash)
+                || string.IsNullOrWhiteSpace(grant.DeviceId));
         target.RemovedConfigIds = target.RemovedConfigIds
             .Where(configId => !string.IsNullOrWhiteSpace(configId))
             .Select(configId => configId.Trim())
@@ -401,10 +424,10 @@ internal sealed class PairingConfigCache : IPairingConfigCache
     private static bool IsValidCachedConfig(CachedPairingConfig? item)
     {
         return item?.Config is { } config
-               && string.Equals(config.Schema, PairingConfig.SchemaName, StringComparison.Ordinal)
-               && !string.IsNullOrWhiteSpace(config.ConfigId)
-               && config.Host is not null
-               && config.Enrollment is not null;
+            && string.Equals(config.Schema, PairingConfig.SchemaName, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(config.ConfigId)
+            && config.Host is not null
+            && config.Enrollment is not null;
     }
 
     private static void AddRemovedConfigId(PairingCacheDocument target, string configId)
@@ -418,12 +441,14 @@ internal sealed class PairingConfigCache : IPairingConfigCache
     private static bool ApplyLocalDeveloperPolicy(PairingClientGrant registration)
     {
         var maxToolPolicy = GetLocalDeveloperPolicy();
+
         if (string.Equals(registration.MaxToolPolicy, maxToolPolicy, StringComparison.Ordinal))
         {
             return false;
         }
 
         registration.MaxToolPolicy = maxToolPolicy;
+
         return true;
     }
 
@@ -433,12 +458,14 @@ internal sealed class PairingConfigCache : IPairingConfigCache
     private static string NormalizeDeviceName(string value)
     {
         var normalized = string.IsNullOrWhiteSpace(value) ? "Device" : value.Trim();
+
         return normalized.Length <= 120 ? normalized : normalized[..120];
     }
 
     private static string ComputeSecretHash(string value)
     {
         var bytes = Encoding.UTF8.GetBytes(value);
+
         try
         {
             return Convert.ToBase64String(SHA256.HashData(bytes));
@@ -455,6 +482,7 @@ internal sealed class PairingConfigCache : IPairingConfigCache
         {
             var expected = Convert.FromBase64String(encodedHash);
             var supplied = Convert.FromBase64String(ComputeSecretHash(suppliedSecret));
+
             try
             {
                 return CryptographicOperations.FixedTimeEquals(expected, supplied);
@@ -475,10 +503,11 @@ internal sealed class PairingConfigCache : IPairingConfigCache
     {
         var expectedBytes = Encoding.UTF8.GetBytes(expected);
         var actualBytes = Encoding.UTF8.GetBytes(actual);
+
         try
         {
             return expectedBytes.Length == actualBytes.Length
-                   && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
+                && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
         }
         finally
         {

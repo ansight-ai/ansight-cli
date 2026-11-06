@@ -181,6 +181,7 @@ public sealed class WorkspaceTrendsEvaluatorTests
         var result = new WorkspaceTrendsEvaluator().Evaluate(snapshot, trends);
 
         Assert.Equal(WorkspaceTrendsStatus.Passed, result.Status);
+
         var measurement = Assert.Single(result.Metrics);
         Assert.Equal("ios-memory", measurement.MetricId);
     }

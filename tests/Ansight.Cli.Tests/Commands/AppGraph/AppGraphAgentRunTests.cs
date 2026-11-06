@@ -5,7 +5,6 @@ namespace Ansight.Cli.Tests.Commands.AppGraph;
 
 public sealed class AppGraphAgentRunTests
 {
-
     [Fact]
     public async Task PrepareAppGraphAgentRunAsyncRejectsMissingCloudGateway()
     {
@@ -41,6 +40,7 @@ public sealed class AppGraphAgentRunTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             PreparationRequest = request;
+
             return Task.FromResult(preparation);
         }
 
@@ -49,6 +49,7 @@ public sealed class AppGraphAgentRunTests
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             return Task.FromResult(WorkspaceTestRunMeterResult.Success());
         }
     }

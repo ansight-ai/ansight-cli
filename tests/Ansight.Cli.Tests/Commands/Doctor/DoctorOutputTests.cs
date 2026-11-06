@@ -10,9 +10,8 @@ public sealed class DoctorOutputTests
     public void CompactOutputKeepsFailuresActionableAndHidesSuccessfulPaths()
     {
         var result = CreateResult([
-            CreateCheck("tool.node", true, false) with { Message = "Found at /private/developer/node", VersionAdvice = DependencyBaseline.Compare("node", "24.0.0") },
-            CreateCheck("tool.tesseract", false, false) with { Message = "OCR is unavailable." }
-        ]);
+                CreateCheck("tool.node", true, false) with {Message = "Found at /private/developer/node", VersionAdvice = DependencyBaseline.Compare("node", "24.0.0") },
+            CreateCheck("tool.tesseract", false, false) with {Message = "OCR is unavailable." }        ]);
         var compact = DoctorCommand.Render(result);
         Assert.Contains("tool.node 24.0.0", compact);
         Assert.DoesNotContain("/private/developer/node", compact);
@@ -25,13 +24,13 @@ public sealed class DoctorOutputTests
     public void VersionNoticeDoesNotFailARequiredCheckOrChangeItsSignal()
     {
         IList<DoctorCheck> checks =
-        [
-            CreateCheck("tool.scrcpy", true, false) with
-            {
-                VersionAdvice = DependencyBaseline.Compare("scrcpy", "0.1")
-            }
-        ];
+            [
+                CreateCheck("tool.scrcpy", true, false) with
+                {
+                    VersionAdvice = DependencyBaseline.Compare("scrcpy", "0.1")
+                }        ];
         DoctorCommand.RequireChecks(checks, ["tool.scrcpy"]);
+
         var result = CreateResult(checks.ToArray());
         Assert.True(result.IsHealthy);
         Assert.Equal("green", result.Signal);
@@ -40,8 +39,10 @@ public sealed class DoctorOutputTests
         Assert.Equal("available", checks[0].Status);
         Assert.Contains("[notice] scrcpy 0.1", DoctorCommand.Render(result));
         Assert.Contains("will likely still work", DoctorCommand.Render(result));
+
         using var output = new StringWriter();
         new CliOutput(true, output, TextWriter.Null).Write(result, () => DoctorCommand.Render(result));
+
         using var json = JsonDocument.Parse(output.ToString());
         Assert.True(json.RootElement.GetProperty("isHealthy").GetBoolean());
         Assert.Equal("below-minimum", json.RootElement.GetProperty("checks")[0].GetProperty("versionAdvice").GetProperty("status").GetString());
@@ -66,9 +67,9 @@ public sealed class DoctorOutputTests
     public void ResultSignal_IsAmberWhenOnlyOptionalChecksFail()
     {
         var result = CreateResult([
-            CreateCheck("required", true, true),
+                CreateCheck("required", true, true),
             CreateCheck("optional", false, false)
-        ]);
+            ]);
 
         Assert.Equal("amber", result.Signal);
         Assert.True(result.IsHealthy);
@@ -78,9 +79,9 @@ public sealed class DoctorOutputTests
     public void ResultSignal_IsRedWhenARequiredCheckFails()
     {
         var result = CreateResult([
-            CreateCheck("optional", false, false),
+                CreateCheck("optional", false, false),
             CreateCheck("required", false, true)
-        ]);
+            ]);
 
         Assert.Equal("red", result.Signal);
         Assert.False(result.IsHealthy);
@@ -101,9 +102,9 @@ public sealed class DoctorOutputTests
     public void Render_ShowsTrafficLightsAndAccessibleLabels()
     {
         var result = CreateResult([
-            CreateCheck("available", true, true),
+                CreateCheck("available", true, true),
             CreateCheck("warning", false, false)
-        ]);
+            ]);
 
         var rendered = DoctorCommand.Render(result);
 
@@ -116,9 +117,9 @@ public sealed class DoctorOutputTests
     public void JsonOutput_IncludesSignalsAndDependencyGuidance()
     {
         var result = CreateResult([
-            CreateCheck("tool.node", true, true),
+                CreateCheck("tool.node", true, true),
             CreateCheck("tool.tesseract", false, false)
-        ]);
+            ]);
         using var standardOutput = new StringWriter();
         var output = new CliOutput(true, standardOutput, TextWriter.Null);
 
@@ -127,6 +128,7 @@ public sealed class DoctorOutputTests
         using var document = JsonDocument.Parse(standardOutput.ToString());
         Assert.Equal("ansight.doctor/v1", document.RootElement.GetProperty("schema").GetString());
         Assert.Equal("amber", document.RootElement.GetProperty("signal").GetString());
+
         var checks = document.RootElement.GetProperty("checks");
         Assert.Equal("green", checks[0].GetProperty("signal").GetString());
         Assert.Equal("amber", checks[1].GetProperty("signal").GetString());
@@ -168,10 +170,10 @@ public sealed class DoctorOutputTests
     public void RequiredDoctorCheckBecomesReleaseBlocking()
     {
         IList<DoctorCheck> checks =
-        [
-            CreateCheck("device.ios", true, false),
+            [
+                CreateCheck("device.ios", true, false),
             CreateCheck("device.ios.simulator-hid", false, false)
-        ];
+            ];
 
         DoctorCommand.RequireChecks(checks, ["device.ios.simulator-hid"]);
 

@@ -63,6 +63,7 @@ public sealed class HostHealthService
             false,
             companion.Status,
             null));
+
         var webRtcControlUrl = runtime.LocalSimulatorControl?.LoopbackBaseUrl;
         var hasWebRtcControl = !string.IsNullOrWhiteSpace(webRtcControlUrl);
         checks.Add(new HostHealthCheck(
@@ -94,6 +95,7 @@ public sealed class HostHealthService
     internal static string ResolveHostVersion(Assembly? entryAssembly)
     {
         var entryAssemblyName = entryAssembly?.GetName().Name;
+
         if (entryAssembly is not null
             && (string.Equals(entryAssemblyName, "ansight", StringComparison.OrdinalIgnoreCase)
                 || entryAssemblyName?.StartsWith("Ansight.", StringComparison.OrdinalIgnoreCase) == true))
@@ -112,7 +114,8 @@ public sealed class HostHealthService
                 attribute.Key,
                 "AnsightCliVersion",
                 StringComparison.Ordinal))?
-            .Value;
+                .Value;
+
         if (!string.IsNullOrWhiteSpace(productVersion))
         {
             return productVersion;
@@ -121,6 +124,7 @@ public sealed class HostHealthService
         var informationalVersion = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion;
+
         if (!string.IsNullOrWhiteSpace(informationalVersion))
         {
             return informationalVersion.Split('+', 2)[0];
@@ -132,11 +136,13 @@ public sealed class HostHealthService
     private HostHealthCheck CheckDataDirectory()
     {
         var probePath = Path.Combine(runtime.BaseFolderPath, $".ansight-write-probe-{Guid.NewGuid():N}");
+
         try
         {
             Directory.CreateDirectory(runtime.BaseFolderPath);
             File.WriteAllText(probePath, string.Empty);
             File.Delete(probePath);
+
             return new HostHealthCheck(
                 "data-directory",
                 "available",
@@ -172,6 +178,7 @@ public sealed class HostHealthService
         try
         {
             using var data = SKData.CreateCopy([0]);
+
             return new HostHealthCheck(
                 "native.skia",
                 "available",
@@ -208,6 +215,7 @@ public sealed class HostHealthService
         try
         {
             var isGranted = probe();
+
             return new HostHealthCheck(
                 name,
                 isGranted ? "granted" : "not-granted",
@@ -233,6 +241,7 @@ public sealed class HostHealthService
     private static HostHealthCheck CheckExecutable(string executableName, bool required)
     {
         var path = FindExecutable(executableName);
+
         return new HostHealthCheck(
             $"tool.{executableName}",
             path is null ? "unavailable" : "available",
@@ -247,68 +256,22 @@ public sealed class HostHealthService
     private static string? FindExecutable(string executableName)
     {
         var effectiveName = OperatingSystem.IsWindows()
-                            && !executableName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            && !executableName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? executableName + ".exe"
             : executableName;
         var path = Environment.GetEnvironmentVariable("PATH");
+
         if (string.IsNullOrWhiteSpace(path))
         {
             return null;
         }
 
         return path.Split(
-                Path.PathSeparator,
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            Path.PathSeparator,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(directory => Path.Combine(directory.Trim('"'), effectiveName))
             .FirstOrDefault(File.Exists) is { } resolvedPath
             ? Path.GetFullPath(resolvedPath)
             : null;
     }
-}
-
-internal static class MacNativePermissions
-{
-    [DllImport(
-        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
-        EntryPoint = "CGPreflightScreenCaptureAccess")]
-    private static extern byte PreflightScreenCaptureAccess();
-
-    [DllImport(
-        "/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices",
-        EntryPoint = "AXIsProcessTrusted")]
-    private static extern byte IsProcessTrusted();
-
-    public static bool HasScreenRecordingAccess() => PreflightScreenCaptureAccess() != 0;
-
-    public static bool HasAccessibilityAccess() => IsProcessTrusted() != 0;
-}
-
-public sealed record HostHealthSnapshot(
-    string Schema,
-    string OperatingSystem,
-    string Architecture,
-    string DotNetVersion,
-    string HostVersion,
-    string DataDirectory,
-    string LogDirectory,
-    IReadOnlyList<HostHealthCheck> Checks,
-    bool IsHealthy,
-    DateTimeOffset GeneratedAtUtc)
-{
-    public string Signal => !IsHealthy
-        ? "red"
-        : Checks.All(static check => check.IsSuccess)
-            ? "green"
-            : "amber";
-}
-
-public sealed record HostHealthCheck(
-    string Name,
-    string Status,
-    bool IsSuccess,
-    bool IsRequired,
-    string Message,
-    string? Path)
-{
-    public string Signal => IsSuccess ? "green" : IsRequired ? "red" : "amber";
 }

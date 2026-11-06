@@ -18,28 +18,91 @@ internal static class SessionNetworkRequestSanitizer
 
     private static readonly HashSet<string> sensitiveQueryNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "access_token", "accesskey", "access_key", "api_key", "apikey", "auth", "authorization",
-        "client_secret", "code", "credential", "credentials", "id_token", "jwt", "key", "password",
-        "passwd", "refresh_token", "sas", "sastoken", "secret", "secret_key", "security_token",
-        "session_token", "sig", "signature", "token"
+        "access_token",
+        "accesskey",
+        "access_key",
+        "api_key",
+        "apikey",
+        "auth",
+        "authorization",
+        "client_secret",
+        "code",
+        "credential",
+        "credentials",
+        "id_token",
+        "jwt",
+        "key",
+        "password",
+        "passwd",
+        "refresh_token",
+        "sas",
+        "sastoken",
+        "secret",
+        "secret_key",
+        "security_token",
+        "session_token",
+        "sig",
+        "signature",
+        "token"
     };
     private static readonly HashSet<string> azureSasFingerprintNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "se", "skoid", "sp", "sr", "srt", "ss", "sv"
+        "se",
+        "skoid",
+        "sp",
+        "sr",
+        "srt",
+        "ss",
+        "sv"
     };
     private static readonly HashSet<string> azureSasQueryNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "epk", "erk", "rscc", "rscd", "rsce", "rscl", "rsct", "saoid", "scid", "se",
-        "sig", "si", "sip", "ske", "skoid", "sks", "skt", "sktid", "skv", "snapshot",
-        "sp", "spk", "spr", "sr", "srk", "srt", "ss", "st", "suoid", "tn", "versionid", "sv"
+        "epk",
+        "erk",
+        "rscc",
+        "rscd",
+        "rsce",
+        "rscl",
+        "rsct",
+        "saoid",
+        "scid",
+        "se",
+        "sig",
+        "si",
+        "sip",
+        "ske",
+        "skoid",
+        "sks",
+        "skt",
+        "sktid",
+        "skv",
+        "snapshot",
+        "sp",
+        "spk",
+        "spr",
+        "sr",
+        "srk",
+        "srt",
+        "ss",
+        "st",
+        "suoid",
+        "tn",
+        "versionid",
+        "sv"
     };
     private static readonly HashSet<string> cloudFrontQueryNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "signature", "key-pair-id", "policy", "expires", "hash-algorithm"
+        "signature",
+        "key-pair-id",
+        "policy",
+        "expires",
+        "hash-algorithm"
     };
     private static readonly HashSet<string> legacyGoogleQueryNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "signature", "googleaccessid", "expires"
+        "signature",
+        "googleaccessid",
+        "expires"
     };
     private static readonly UTF8Encoding strictUtf8Encoding = new(false, true);
     private static readonly Regex sensitiveAssignmentPattern = new(
@@ -62,6 +125,7 @@ internal static class SessionNetworkRequestSanitizer
 
         var startedAtUtc = request.StartedAtUtc.ToUniversalTime();
         var completedAtUtc = request.CompletedAtUtc.ToUniversalTime();
+
         if (completedAtUtc < startedAtUtc)
         {
             completedAtUtc = startedAtUtc;
@@ -118,10 +182,11 @@ internal static class SessionNetworkRequestSanitizer
         bool redactSensitiveData)
         => headers?
             .Where(header => header is not null && !string.IsNullOrWhiteSpace(header.Name))
-            .Take(128)
-            .Select(header =>
+                .Take(128)
+                .Select(header =>
             {
                 var name = Truncate(header.Name.Trim(), 256);
+
                 return new SessionNetworkHeader
                 {
                     Name = name,
@@ -130,7 +195,7 @@ internal static class SessionNetworkRequestSanitizer
                         : Truncate(header.Value?.Trim() ?? string.Empty, 4096)
                 };
             })
-            .ToArray() ?? Array.Empty<SessionNetworkHeader>();
+                .ToArray() ?? Array.Empty<SessionNetworkHeader>();
 
     private static bool IsSensitiveHeader(string name)
     {
@@ -140,14 +205,16 @@ internal static class SessionNetworkRequestSanitizer
         }
 
         var compact = name.Replace("-", string.Empty, StringComparison.Ordinal);
+
         return compact.Contains("token", StringComparison.OrdinalIgnoreCase)
-               || compact.Contains("secret", StringComparison.OrdinalIgnoreCase)
-               || compact.Contains("apikey", StringComparison.OrdinalIgnoreCase);
+            || compact.Contains("secret", StringComparison.OrdinalIgnoreCase)
+            || compact.Contains("apikey", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SanitizeUrl(string value)
     {
         var normalized = Truncate(value.Trim(), 16_384);
+
         if (!Uri.TryCreate(normalized, UriKind.RelativeOrAbsolute, out var uri) || !uri.IsAbsoluteUri)
         {
             return SanitizeRelativeUrl(normalized);
@@ -161,6 +228,7 @@ internal static class SessionNetworkRequestSanitizer
                 Password = string.Empty,
                 Query = SanitizeQuery(uri.Query)
             };
+
             return Truncate(builder.Uri.AbsoluteUri, 16_384);
         }
         catch
@@ -172,6 +240,7 @@ internal static class SessionNetworkRequestSanitizer
     private static string SanitizeRelativeUrl(string value)
     {
         var queryIndex = value.IndexOf('?');
+
         if (queryIndex < 0)
         {
             return value;
@@ -180,6 +249,7 @@ internal static class SessionNetworkRequestSanitizer
         var fragmentIndex = value.IndexOf('#', queryIndex);
         var query = fragmentIndex < 0 ? value[(queryIndex + 1)..] : value[(queryIndex + 1)..fragmentIndex];
         var fragment = fragmentIndex < 0 ? string.Empty : value[fragmentIndex..];
+
         return Truncate($"{value[..queryIndex]}?{SanitizeQuery(query)}{fragment}", 16_384);
     }
 
@@ -191,26 +261,28 @@ internal static class SessionNetworkRequestSanitizer
         var hasAwsSignature = names.Contains("x-amz-signature");
         var hasGoogleSignature = names.Contains("x-goog-signature");
         var hasCloudFrontSignature = names.Contains("signature")
-                                     && (names.Contains("key-pair-id")
-                                         || names.Contains("policy")
-                                         || names.Contains("expires"));
+            && (names.Contains("key-pair-id")
+                || names.Contains("policy")
+                || names.Contains("expires"));
         var hasLegacyGoogleSignature = names.Contains("signature") && names.Contains("googleaccessid");
         var hasAlibabaSignature = names.Contains("signature") && names.Contains("ossaccesskeyid")
-                                  || names.Contains("x-oss-signature");
+            || names.Contains("x-oss-signature");
+
         return string.Join("&", pairs.Select(pair =>
         {
             var equalsIndex = pair.IndexOf('=');
             var encodedName = equalsIndex < 0 ? pair : pair[..equalsIndex];
             var name = GetDecodedQueryName(pair);
             var providerSensitive = hasAzureSas && azureSasQueryNames.Contains(name)
-                                    || hasAwsSignature && name.StartsWith("x-amz-", StringComparison.OrdinalIgnoreCase)
-                                    || hasGoogleSignature && name.StartsWith("x-goog-", StringComparison.OrdinalIgnoreCase)
-                                    || hasCloudFrontSignature && cloudFrontQueryNames.Contains(name)
-                                    || hasLegacyGoogleSignature && legacyGoogleQueryNames.Contains(name)
-                                    || hasAlibabaSignature && (name.StartsWith("x-oss-", StringComparison.OrdinalIgnoreCase)
-                                                               || name.Equals("signature", StringComparison.OrdinalIgnoreCase)
-                                                               || name.Equals("ossaccesskeyid", StringComparison.OrdinalIgnoreCase)
-                                                               || name.Equals("security-token", StringComparison.OrdinalIgnoreCase));
+                || hasAwsSignature && name.StartsWith("x-amz-", StringComparison.OrdinalIgnoreCase)
+                || hasGoogleSignature && name.StartsWith("x-goog-", StringComparison.OrdinalIgnoreCase)
+                || hasCloudFrontSignature && cloudFrontQueryNames.Contains(name)
+                || hasLegacyGoogleSignature && legacyGoogleQueryNames.Contains(name)
+                || hasAlibabaSignature && (name.StartsWith("x-oss-", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("signature", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("ossaccesskeyid", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("security-token", StringComparison.OrdinalIgnoreCase));
+
             return providerSensitive || sensitiveQueryNames.Contains(name)
                 ? $"{encodedName}={Uri.EscapeDataString(RedactedValue)}"
                 : pair;
@@ -221,6 +293,7 @@ internal static class SessionNetworkRequestSanitizer
     {
         var equalsIndex = pair.IndexOf('=');
         var encodedName = equalsIndex < 0 ? pair : pair[..equalsIndex];
+
         try
         {
             return Uri.UnescapeDataString(encodedName.Replace("+", " "));
@@ -242,6 +315,7 @@ internal static class SessionNetworkRequestSanitizer
 
         var encoding = body.Encoding.Trim().ToLowerInvariant();
         byte[] decoded;
+
         try
         {
             decoded = encoding switch
@@ -256,18 +330,21 @@ internal static class SessionNetworkRequestSanitizer
         {
             return null;
         }
+
         if (encoding is not ("utf8" or "base64"))
         {
             return null;
         }
 
         var originalLength = decoded.Length;
+
         if (encoding == "utf8")
         {
             decoded = EnsureCompleteUtf8(decoded);
         }
 
         var totalBytes = body.TotalBytes is >= 0 ? body.TotalBytes : null;
+
         return new SessionNetworkBody
         {
             ContentType = NormalizeOptional(body.ContentType, 512),
@@ -276,8 +353,8 @@ internal static class SessionNetworkRequestSanitizer
             CapturedBytes = decoded.Length,
             TotalBytes = totalBytes,
             Truncated = body.Truncated
-                        || originalLength > decoded.Length
-                        || totalBytes is not null && totalBytes.Value > decoded.Length
+                || originalLength > decoded.Length
+                || totalBytes is not null && totalBytes.Value > decoded.Length
         };
     }
 
@@ -286,17 +363,20 @@ internal static class SessionNetworkRequestSanitizer
         var assignments = sensitiveAssignmentPattern.Replace(
             value,
             match => $"{match.Groups["name"].Value}{match.Groups["separator"].Value}{RedactedValue}");
+
         return absoluteUrlPattern.Replace(assignments, match => SanitizeUrl(match.Value));
     }
 
     private static byte[] EnsureCompleteUtf8(byte[] bytes)
     {
         var length = bytes.Length;
+
         while (length > 0)
         {
             try
             {
                 _ = strictUtf8Encoding.GetString(bytes, 0, length);
+
                 return length == bytes.Length ? bytes : bytes[..length];
             }
             catch (DecoderFallbackException)
@@ -304,6 +384,7 @@ internal static class SessionNetworkRequestSanitizer
                 length--;
             }
         }
+
         return Array.Empty<byte>();
     }
 
@@ -313,10 +394,12 @@ internal static class SessionNetworkRequestSanitizer
     private static string? SanitizeErrorMessage(string? value, bool redactSensitiveData)
     {
         var normalized = NormalizeOptional(value, 4096);
+
         if (normalized is null)
         {
             return null;
         }
+
         if (!redactSensitiveData)
         {
             return normalized;
@@ -328,6 +411,7 @@ internal static class SessionNetworkRequestSanitizer
         var urlsRedacted = absoluteUrlPattern.Replace(
             assignmentsRedacted,
             match => SanitizeUrl(match.Value));
+
         return Truncate(urlsRedacted, 4096);
     }
 

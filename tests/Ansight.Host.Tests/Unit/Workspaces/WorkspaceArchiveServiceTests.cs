@@ -21,6 +21,7 @@ public sealed class WorkspaceArchiveServiceTests
         Write(source, "ansight/tasks/helpers/data.bin", [0, 1, 255, 27]);
         Write(source, "ansight/trends/startup.json", Encoding.UTF8.GetBytes("{}"));
         Directory.CreateDirectory(Path.Combine(source, "ansight", "fixtures", "empty"));
+
         var expected = Directory.GetFiles(Path.Combine(source, "ansight"), "*", SearchOption.AllDirectories)
             .ToDictionary(path => Path.GetRelativePath(source, path), File.ReadAllBytes);
         Write(source, "app.cs", [1]);
@@ -39,8 +40,14 @@ public sealed class WorkspaceArchiveServiceTests
         Assert.Equal(expected.Values.Sum(bytes => (long)bytes.Length), imported.ExpandedBytes);
         Assert.Equal(exported.ExpandedBytes, imported.ExpandedBytes);
         Assert.Equal(expected.Count, Directory.GetFiles(destination, "*", SearchOption.AllDirectories).Length);
-        foreach (var item in expected) Assert.Equal(item.Value, File.ReadAllBytes(Path.Combine(destination, item.Key)));
+
+        foreach (var item in expected)
+        {
+            Assert.Equal(item.Value, File.ReadAllBytes(Path.Combine(destination, item.Key)));
+        }
+
         Assert.True(Directory.Exists(Path.Combine(destination, "ansight", "fixtures", "empty")));
+
         using var archive = ZipFile.OpenRead(zip);
         Assert.All(archive.Entries, entry => Assert.StartsWith("ansight/", entry.FullName));
     }
@@ -53,6 +60,7 @@ public sealed class WorkspaceArchiveServiceTests
         var destination = Path.Combine(directory.RootPath, "destination");
         Write(destination, "ansight/existing.txt", Encoding.UTF8.GetBytes("original"));
         Write(destination, "ansight/keep.txt", [42]);
+
         var service = new WorkspaceArchiveService();
 
         var refused = service.Import(zip, destination);
@@ -61,6 +69,7 @@ public sealed class WorkspaceArchiveServiceTests
         Assert.Contains("--force", refused.Message);
         Assert.False(File.Exists(Path.Combine(destination, "ansight", "new.txt")));
         Assert.Equal("original", File.ReadAllText(Path.Combine(destination, "ansight", "existing.txt")));
+
         var imported = service.Import(zip, destination, overwrite: true);
         Assert.True(imported.IsSuccess, imported.Message);
         Assert.Equal("contents", File.ReadAllText(Path.Combine(destination, "ansight", "existing.txt")));
@@ -72,14 +81,17 @@ public sealed class WorkspaceArchiveServiceTests
     {
         using var directory = new TemporaryDirectory();
         Write(directory.RootPath, "ansight/file.txt", Encoding.UTF8.GetBytes("contents"));
+
         var zip = Path.Combine(directory.RootPath, "workspace.zip");
         File.WriteAllText(zip, "original");
         Assert.False(new WorkspaceArchiveService().Export(directory.RootPath, zip).IsSuccess);
         Assert.Equal("original", File.ReadAllText(zip));
+
         var failed = new WorkspaceArchiveService(100, 2).Export(directory.RootPath, zip, overwrite: true);
         Assert.False(failed.IsSuccess);
         Assert.Equal("original", File.ReadAllText(zip));
         Assert.True(new WorkspaceArchiveService().Export(directory.RootPath, zip, overwrite: true).IsSuccess);
+
         using var archive = ZipFile.OpenRead(zip);
         Assert.NotNull(archive.GetEntry("ansight/file.txt"));
         Assert.Empty(Directory.GetFiles(directory.RootPath, ".ansight-export-*"));
@@ -134,8 +146,12 @@ public sealed class WorkspaceArchiveServiceTests
     {
         using var directory = new TemporaryDirectory();
         var zip = CreateArchive(directory.RootPath, "ansight/link");
+
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
+        {
             archive.Entries[0].ExternalAttributes = unchecked((int)attributes);
+        }
+
         var destination = Path.Combine(directory.RootPath, "destination");
         Assert.False(new WorkspaceArchiveService().Import(zip, destination).IsSuccess);
         Assert.False(Directory.Exists(destination));
@@ -151,6 +167,7 @@ public sealed class WorkspaceArchiveServiceTests
         Assert.True(offset >= 0);
         bytes[offset] ^= 0x01;
         File.WriteAllBytes(zip, bytes);
+
         var destination = Path.Combine(directory.RootPath, "destination");
         Write(destination, "ansight/good.txt", [42]);
 
@@ -181,7 +198,11 @@ public sealed class WorkspaceArchiveServiceTests
     [Fact]
     public void ImportAndExport_RejectFilesystemLinksIncludingDanglingLinks()
     {
-        if (OperatingSystem.IsWindows()) return; // Creating links can require elevation on Windows.
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Creating links can require elevation on Windows.
+        }
+
         using var directory = new TemporaryDirectory();
         var source = Path.Combine(directory.RootPath, "source");
         var destination = Path.Combine(directory.RootPath, "destination");
@@ -189,10 +210,12 @@ public sealed class WorkspaceArchiveServiceTests
         Directory.CreateDirectory(outside);
         Write(source, "ansight/file.txt", [42]);
         File.CreateSymbolicLink(Path.Combine(source, "ansight", "link.txt"), Path.Combine(outside, "missing.txt"));
+
         var service = new WorkspaceArchiveService();
         Assert.False(service.Export(source, Path.Combine(directory.RootPath, "export.zip")).IsSuccess);
         Directory.CreateDirectory(destination);
         Directory.CreateSymbolicLink(Path.Combine(destination, "ansight"), outside);
+
         var zip = CreateArchive(directory.RootPath, "ansight/file.txt");
         Assert.False(service.Import(zip, destination, overwrite: true).IsSuccess);
         Assert.Empty(Directory.GetFiles(outside));
@@ -212,6 +235,7 @@ public sealed class WorkspaceArchiveServiceTests
         Assert.False(service.Export(directory.RootPath, zip).IsSuccess);
         Directory.CreateDirectory(Path.Combine(directory.RootPath, "ansight"));
         Assert.False(service.Export(directory.RootPath, Path.Combine(directory.RootPath, "ansight", "workspace.zip")).IsSuccess);
+
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(() => service.Export(directory.RootPath, zip, cancellationToken: cancellation.Token));
@@ -224,17 +248,27 @@ public sealed class WorkspaceArchiveServiceTests
     [Fact]
     public void ExportImport_PreservesUnixFilePermissionsWithoutSpecialBits()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var directory = new TemporaryDirectory();
         Write(directory.RootPath, "ansight/tools/run.sh", Encoding.UTF8.GetBytes("#!/bin/sh\nexit 0\n"));
+
         var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute;
         File.SetUnixFileMode(Path.Combine(directory.RootPath, "ansight/tools/run.sh"), mode);
+
         var zip = Path.Combine(directory.RootPath, "workspace.zip");
         var destination = Path.Combine(directory.RootPath, "destination");
         var service = new WorkspaceArchiveService();
         Assert.True(service.Export(directory.RootPath, zip).IsSuccess);
+
         using (var archive = ZipFile.Open(zip, ZipArchiveMode.Update))
+        {
             archive.GetEntry("ansight/tools/run.sh")!.ExternalAttributes |= 0x0E00 << 16;
+        }
+
         Assert.True(service.Import(zip, destination).IsSuccess);
         Assert.Equal(mode, File.GetUnixFileMode(Path.Combine(destination, "ansight/tools/run.sh")));
     }
@@ -242,34 +276,51 @@ public sealed class WorkspaceArchiveServiceTests
     [Fact]
     public void Import_RollsBackFilesAndNewDirectoriesWhenMergeFails()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var directory = new TemporaryDirectory();
         var zip = CreateArchive(directory.RootPath, "ansight/a.txt", "ansight/new/item.txt", "ansight/blocked/file.txt");
         var destination = Path.Combine(directory.RootPath, "destination");
         Write(destination, "ansight/a.txt", Encoding.UTF8.GetBytes("original"));
+
         var blocked = Path.Combine(destination, "ansight/blocked");
         Directory.CreateDirectory(blocked);
+
         var mode = File.GetUnixFileMode(blocked);
+
         try
         {
             File.SetUnixFileMode(blocked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
             var result = new WorkspaceArchiveService().Import(zip, destination, overwrite: true);
             Assert.False(result.IsSuccess);
             Assert.Equal("original", File.ReadAllText(Path.Combine(destination, "ansight/a.txt")));
             Assert.False(Directory.Exists(Path.Combine(destination, "ansight/new")));
             Assert.Empty(Directory.GetFiles(blocked));
         }
-        finally { File.SetUnixFileMode(blocked, mode); }
+        finally
+        {
+            File.SetUnixFileMode(blocked, mode);
+        }
     }
 
     [Fact]
     public void Export_RejectsOutputInsideWorkspaceThroughDirectoryAlias()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var directory = new TemporaryDirectory();
         Write(directory.RootPath, "ansight/file.txt", [42]);
+
         var alias = Path.Combine(directory.RootPath, "alias");
         Directory.CreateSymbolicLink(alias, Path.Combine(directory.RootPath, "ansight"));
+
         var result = new WorkspaceArchiveService().Export(directory.RootPath, Path.Combine(alias, "workspace.zip"));
         Assert.False(result.IsSuccess);
         Assert.Contains("outside", result.Message);
@@ -287,13 +338,20 @@ public sealed class WorkspaceArchiveServiceTests
     {
         var path = Path.Combine(root, "workspace.zip");
         using var archive = ZipFile.Open(path, ZipArchiveMode.Create);
+
         foreach (var entryPath in paths)
         {
             var entry = archive.CreateEntry(entryPath, CompressionLevel.NoCompression);
-            if (entryPath.EndsWith('/')) continue;
+
+            if (entryPath.EndsWith('/'))
+            {
+                continue;
+            }
+
             using var writer = new StreamWriter(entry.Open());
             writer.Write("contents");
         }
+
         return path;
     }
 }

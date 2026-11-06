@@ -8,6 +8,7 @@ public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSour
     {
         ArgumentNullException.ThrowIfNull(sources);
         this.sources = sources.ToArray();
+
         if (this.sources.Count == 0)
         {
             throw new ArgumentException("At least one remote runtime source is required.", nameof(sources));
@@ -19,6 +20,7 @@ public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSour
         get
         {
             var snapshots = sources.Select(static source => source.Current).ToArray();
+
             return new RemoteRuntimeSnapshot(
                 snapshots.Max(static snapshot => snapshot.CapturedAtUtc),
                 snapshots
@@ -36,6 +38,7 @@ public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSour
     {
         await Task.WhenAll(sources.OfType<IRefreshableRemoteRuntimeSource>()
             .Select(source => source.RefreshIfStaleAsync(cancellationToken))).ConfigureAwait(false);
+
         return Current;
     }
 
@@ -43,6 +46,7 @@ public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSour
     {
         await Task.WhenAll(sources.OfType<IRefreshableRemoteRuntimeSource>()
             .Select(source => source.RefreshAsync(cancellationToken))).ConfigureAwait(false);
+
         return Current;
     }
 
@@ -53,6 +57,7 @@ public sealed class CompositeRemoteRuntimeSource : IRefreshableRemoteRuntimeSour
             .Where(static error => !string.IsNullOrWhiteSpace(error))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+
         return errors.Length == 0 ? null : string.Join(" ", errors);
     }
 }

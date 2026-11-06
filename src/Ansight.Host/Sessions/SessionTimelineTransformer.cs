@@ -1,3 +1,4 @@
+using static Ansight.Host.Runtime.State.SessionLogStreamFactory;
 namespace Ansight.Host.Sessions;
 
 using Ansight.Host;
@@ -17,6 +18,7 @@ internal static class SessionTimelineTransformer
         SessionAnnotation? sourceAnnotation)
     {
         var logStreams = SessionLogStreams.Normalize(sourceSnapshot.LogStreams, sourceSnapshot.Logs);
+
         return new AppSessionSnapshot
         {
             SessionId = extractedSessionId,
@@ -53,7 +55,7 @@ internal static class SessionTimelineTransformer
             Touches = sourceSnapshot.Touches.ToArray(),
             NetworkRequests = sourceSnapshot.NetworkRequests
                 .Where(request => request.StartedAtUtc <= rangeEndUtc
-                                  && request.CompletedAtUtc >= rangeStartUtc)
+                    && request.CompletedAtUtc >= rangeStartUtc)
                 .ToArray(),
             VisualTreeSnapshots = sourceSnapshot.VisualTreeSnapshots.ToArray(),
             ArtifactSnapshots = sourceSnapshot.ArtifactSnapshots.ToArray(),
@@ -78,6 +80,7 @@ internal static class SessionTimelineTransformer
         var detail = sourceAnnotation is null
             ? $"Source session {sourceSnapshot.SessionId}, range {FormatExtractionTimestamp(rangeStartUtc)} to {FormatExtractionTimestamp(rangeEndUtc)}."
             : $"Source session {sourceSnapshot.SessionId}, annotation {sourceAnnotation.AnnotationId}, range {FormatExtractionTimestamp(rangeStartUtc)} to {FormatExtractionTimestamp(rangeEndUtc)}.";
+
         return new SessionReplaySource
         {
             Kind = "extract",
@@ -97,6 +100,7 @@ internal static class SessionTimelineTransformer
         var sourceDescription = sourceAnnotation is null
             ? "slice"
             : $"annotation {NormalizeSessionName(sourceAnnotation.Label) ?? sourceAnnotation.AnnotationId}";
+
         return $"{sourceName} {sourceDescription} {FormatExtractionTimeOfDay(rangeStartUtc)}-{FormatExtractionTimeOfDay(rangeEndUtc)}";
     }
 
@@ -113,9 +117,11 @@ internal static class SessionTimelineTransformer
     {
         rangeStartUtc = annotation.StartUtc.ToUniversalTime();
         rangeEndUtc = (annotation.EndUtc ?? annotation.StartUtc).ToUniversalTime();
+
         foreach (var geometry in annotation.Geometry)
         {
             var capturedAtUtc = geometry.CapturedAtUtc.ToUniversalTime();
+
             if (capturedAtUtc < rangeStartUtc)
             {
                 rangeStartUtc = capturedAtUtc;
@@ -143,6 +149,7 @@ internal static class SessionTimelineTransformer
     {
         rangeStartUtc = startUtc.ToUniversalTime();
         rangeEndUtc = endUtc.ToUniversalTime();
+
         if (rangeEndUtc < rangeStartUtc)
         {
             (rangeStartUtc, rangeEndUtc) = (rangeEndUtc, rangeStartUtc);
@@ -164,6 +171,7 @@ internal static class SessionTimelineTransformer
     {
         var recordingStartUtc = session.CreatedUtc.ToUniversalTime();
         var recordingEndUtc = session.LastUpdatedUtc.ToUniversalTime();
+
         if (recordingEndUtc < recordingStartUtc)
         {
             recordingEndUtc = recordingStartUtc;
@@ -178,23 +186,33 @@ internal static class SessionTimelineTransformer
         changed |= TrimNetworkRequests(session.NetworkRequests, rangeStartUtc, rangeEndUtc, mode, report);
         changed |= TrimTimestampedItems(session.VisualTreeSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering visual trees…", report);
         changed |= TrimTimestampedItems(session.ArtifactSnapshots, snapshot => snapshot.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering artifacts…", report);
+
         var connectivityBoundary = Ansight.Host.Connectivity.SessionConnectivity.Read(session.ApplicationEvents)
             .LastOrDefault(record => mode == SessionTimelineTrimMode.CutSelection ? record.CapturedAtUtc <= rangeEndUtc : record.CapturedAtUtc < rangeStartUtc);
         changed |= TrimTimestampedItems(session.ApplicationEvents, appEvent => appEvent.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering application events…", report);
+
         if (connectivityBoundary is not null && (mode != SessionTimelineTrimMode.CutSelection || rangeEndUtc < recordingEndUtc))
         {
             if (mode == SessionTimelineTrimMode.CutSelection)
             {
-                connectivityBoundary = connectivityBoundary with { Id = Guid.NewGuid().ToString(), Kind = "snapshot", PreviousSnapshot = null,
+                connectivityBoundary = connectivityBoundary with
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Kind = "snapshot",
+                    PreviousSnapshot = null,
                     OriginalCapturedAtUtc = connectivityBoundary.OriginalCapturedAtUtc ?? connectivityBoundary.CapturedAtUtc,
-                    CapturedAtUtc = rangeEndUtc.AddTicks(1), Reason = "cut-boundary" };
+                    CapturedAtUtc = rangeEndUtc.AddTicks(1),
+                    Reason = "cut-boundary"
+                };
             }
+
             if (!session.ApplicationEvents.Any(value => value.EventId == connectivityBoundary.Id))
             {
                 session.ApplicationEvents.Add(Ansight.Host.Connectivity.SessionConnectivity.ToEvent(connectivityBoundary));
                 changed = true;
             }
         }
+
         changed |= TrimTimestampedItems(session.Metrics, sample => sample.CapturedAtUtc, rangeStartUtc, rangeEndUtc, mode, "Filtering telemetry…", report);
         report?.Invoke(new("Updating annotations and timeline bounds…"));
         changed |= TrimAnnotations(session.Annotations, rangeStartUtc, rangeEndUtc, mode);
@@ -224,6 +242,7 @@ internal static class SessionTimelineTransformer
         DateTimeOffset rangeEndUtc)
     {
         var changed = false;
+
         if (session.CreatedUtc.ToUniversalTime() != rangeStartUtc)
         {
             session.CreatedUtc = rangeStartUtc;
@@ -248,6 +267,7 @@ internal static class SessionTimelineTransformer
     {
         var effectiveStartUtc = MaxTimestamp(recordingStartUtc, rangeStartUtc);
         var effectiveEndUtc = MinTimestamp(recordingEndUtc, rangeEndUtc);
+
         if (effectiveEndUtc <= effectiveStartUtc)
         {
             return false;
@@ -258,6 +278,7 @@ internal static class SessionTimelineTransformer
         var compactedEndUtc = recordingEndUtc > rangeEndUtc
             ? recordingEndUtc - removedDuration
             : effectiveStartUtc;
+
         if (compactedEndUtc < recordingStartUtc)
         {
             compactedEndUtc = recordingStartUtc;
@@ -302,7 +323,7 @@ internal static class SessionTimelineTransformer
                 Height = frame.Height,
                 Quality = frame.Quality,
                 Geometry = frame.Geometry?.DeepClone().AsObject(),
-                    ByteCount = frame.ByteCount
+                ByteCount = frame.ByteCount
             },
             cutoffUtc,
             offset);
@@ -402,7 +423,9 @@ internal static class SessionTimelineTransformer
             cutoffUtc,
             offset);
         changed |= ShiftAnnotationsAfterCut(session.Annotations, cutoffUtc, offset);
+
         var shiftedAppStateChangedUtc = ShiftTimestampAfterCut(session.AppStateChangedUtc, cutoffUtc, offset);
+
         if (shiftedAppStateChangedUtc != session.AppStateChangedUtc?.ToUniversalTime())
         {
             session.AppStateChangedUtc = shiftedAppStateChangedUtc;
@@ -430,12 +453,14 @@ internal static class SessionTimelineTransformer
         var shouldRemove = mode == SessionTimelineTrimMode.CutSelection
             ? isInRange
             : !isInRange;
+
         if (!shouldRemove)
         {
             return false;
         }
 
         session.AppStateChangedUtc = null;
+
         return true;
     }
 
@@ -447,9 +472,11 @@ internal static class SessionTimelineTransformer
         TimeSpan offset)
     {
         var changed = false;
+
         for (var index = 0; index < items.Count; index++)
         {
             var timestampUtc = timestampSelector(items[index]).ToUniversalTime();
+
             if (timestampUtc <= cutoffUtc)
             {
                 continue;
@@ -468,9 +495,11 @@ internal static class SessionTimelineTransformer
         TimeSpan offset)
     {
         var changed = false;
+
         for (var index = 0; index < requests.Count; index++)
         {
             var request = requests[index];
+
             if (request.StartedAtUtc.ToUniversalTime() <= cutoffUtc)
             {
                 continue;
@@ -493,11 +522,13 @@ internal static class SessionTimelineTransformer
         TimeSpan offset)
     {
         var changed = false;
+
         for (var index = 0; index < annotations.Count; index++)
         {
             var annotation = annotations[index];
             var shiftedStartUtc = ShiftTimestampAfterCut(annotation.StartUtc, cutoffUtc, offset);
             var shiftedEndUtc = ShiftTimestampAfterCut(annotation.EndUtc, cutoffUtc, offset);
+
             if (shiftedStartUtc == annotation.StartUtc.ToUniversalTime()
                 && shiftedEndUtc == annotation.EndUtc?.ToUniversalTime()
                 && annotation.Geometry.All(geometry => ShiftTimestampAfterCut(geometry.CapturedAtUtc, cutoffUtc, offset) == geometry.CapturedAtUtc.ToUniversalTime()))
@@ -549,6 +580,7 @@ internal static class SessionTimelineTransformer
         TimeSpan offset)
     {
         var normalizedTimestampUtc = timestampUtc.ToUniversalTime();
+
         return normalizedTimestampUtc > cutoffUtc
             ? normalizedTimestampUtc - offset
             : normalizedTimestampUtc;
@@ -589,16 +621,20 @@ internal static class SessionTimelineTransformer
         items.RemoveAll(item =>
         {
             processed++;
+
             if (processed % 10_000 == 0)
             {
                 report?.Invoke(new(message, processed, beforeCount));
             }
+
             var isInRange = IsInTimelineTrimRange(timestampSelector(item), rangeStartUtc, rangeEndUtc);
+
             return mode == SessionTimelineTrimMode.CutSelection
                 ? isInRange
                 : !isInRange;
         });
         report?.Invoke(new(message, beforeCount, beforeCount));
+
         return items.Count != beforeCount;
     }
 
@@ -612,13 +648,16 @@ internal static class SessionTimelineTransformer
         const string message = "Filtering network requests…";
         var beforeCount = requests.Count;
         report?.Invoke(new(message, 0, beforeCount));
+
         var changed = false;
+
         for (var index = requests.Count - 1; index >= 0; index--)
         {
             var request = requests[index];
             var startedAtUtc = request.StartedAtUtc.ToUniversalTime();
             var completedAtUtc = request.CompletedAtUtc.ToUniversalTime();
             var overlapsRange = startedAtUtc <= rangeEndUtc && completedAtUtc >= rangeStartUtc;
+
             if (mode == SessionTimelineTrimMode.CutSelection ? overlapsRange : !overlapsRange)
             {
                 requests.RemoveAt(index);
@@ -630,6 +669,7 @@ internal static class SessionTimelineTransformer
             {
                 var clippedStartUtc = MaxTimestamp(startedAtUtc, rangeStartUtc);
                 var clippedEndUtc = MinTimestamp(completedAtUtc, rangeEndUtc);
+
                 if (clippedStartUtc != startedAtUtc || clippedEndUtc != completedAtUtc)
                 {
                     requests[index] = CopyNetworkRequestWithTimeline(
@@ -643,6 +683,7 @@ internal static class SessionTimelineTransformer
         }
 
         report?.Invoke(new(message, beforeCount, beforeCount));
+
         return changed;
     }
 
@@ -696,6 +737,7 @@ internal static class SessionTimelineTransformer
                 .ToArray();
 
         Array.Sort(trimmedAnnotations, CompareAnnotations);
+
         if (AnnotationListsEqual(annotations, trimmedAnnotations))
         {
             return false;
@@ -703,6 +745,7 @@ internal static class SessionTimelineTransformer
 
         annotations.Clear();
         annotations.AddRange(trimmedAnnotations);
+
         return true;
     }
 
@@ -718,6 +761,7 @@ internal static class SessionTimelineTransformer
 
         var annotationStartUtc = annotation.StartUtc.ToUniversalTime();
         var annotationEndUtc = (annotation.EndUtc ?? annotation.StartUtc).ToUniversalTime();
+
         if (annotationEndUtc < annotationStartUtc)
         {
             (annotationStartUtc, annotationEndUtc) = (annotationEndUtc, annotationStartUtc);
@@ -769,6 +813,7 @@ internal static class SessionTimelineTransformer
     {
         var annotationStartUtc = annotation.StartUtc.ToUniversalTime();
         var annotationEndUtc = (annotation.EndUtc ?? annotation.StartUtc).ToUniversalTime();
+
         if (annotationEndUtc < annotationStartUtc)
         {
             (annotationStartUtc, annotationEndUtc) = (annotationEndUtc, annotationStartUtc);
@@ -783,6 +828,7 @@ internal static class SessionTimelineTransformer
         DateTimeOffset rangeEndUtc)
     {
         var normalizedTimestampUtc = timestampUtc.ToUniversalTime();
+
         return normalizedTimestampUtc >= rangeStartUtc && normalizedTimestampUtc <= rangeEndUtc;
     }
 
@@ -809,6 +855,7 @@ internal static class SessionTimelineTransformer
     private static void RebuildTimelineDeduplicationState(SessionState session)
     {
         session.SeenEventIdsByStream.Clear();
+
         foreach (var stream in session.LogStreams.Values)
         {
             stream.Entries.Clear();
@@ -820,10 +867,12 @@ internal static class SessionTimelineTransformer
             var stream = GetOrCreateLogStream(session, streamGroup.Key);
             stream.Entries.AddRange(streamGroup);
             stream.TotalEntryCount = stream.Entries.Count;
+
             var seenEventIds = session.GetSeenEventIds(streamGroup.Key);
+
             foreach (var eventId in streamGroup
-                         .Select(log => log.EventId)
-                         .Where(eventId => !string.IsNullOrWhiteSpace(eventId)))
+                .Select(log => log.EventId)
+                .Where(eventId => !string.IsNullOrWhiteSpace(eventId)))
             {
                 seenEventIds.Add(eventId!);
             }
@@ -832,31 +881,35 @@ internal static class SessionTimelineTransformer
         session.TotalLogCount = session.Logs.Count;
 
         session.SeenMetricKeys.Clear();
+
         foreach (var metric in session.Metrics)
         {
             session.SeenMetricKeys.Add(new MetricDeduplicationKey(metric.ChannelId, metric.Value, metric.CapturedAtUtc));
         }
 
         session.SeenTouchIds.Clear();
+
         foreach (var touchId in session.Touches
-                     .Select(touch => touch.Id)
-                     .Where(touchId => !string.IsNullOrWhiteSpace(touchId)))
+            .Select(touch => touch.Id)
+            .Where(touchId => !string.IsNullOrWhiteSpace(touchId)))
         {
             session.SeenTouchIds.Add(touchId);
         }
 
         session.SeenNetworkRequestIds.Clear();
+
         foreach (var requestId in session.NetworkRequests
-                     .Select(request => request.Id)
-                     .Where(requestId => !string.IsNullOrWhiteSpace(requestId)))
+            .Select(request => request.Id)
+            .Where(requestId => !string.IsNullOrWhiteSpace(requestId)))
         {
             session.SeenNetworkRequestIds.Add(requestId);
         }
 
         var seenApplicationEventIds = session.GetSeenEventIds("application-events");
+
         foreach (var eventId in session.ApplicationEvents
-                     .Select(static appEvent => appEvent.EventId)
-                     .Where(static eventId => !string.IsNullOrWhiteSpace(eventId)))
+            .Select(static appEvent => appEvent.EventId)
+            .Where(static eventId => !string.IsNullOrWhiteSpace(eventId)))
         {
             seenApplicationEventIds.Add(eventId);
         }
@@ -864,34 +917,4 @@ internal static class SessionTimelineTransformer
 
     private static string? NormalizeSessionName(string? name)
         => string.IsNullOrWhiteSpace(name) ? null : name.Trim();
-
-    private static SessionLogStreamState GetOrCreateLogStream(SessionState session, string streamId)
-    {
-        if (session.LogStreams.TryGetValue(streamId, out var stream))
-        {
-            return stream;
-        }
-
-        stream = new SessionLogStreamState
-        {
-            StreamId = streamId,
-            Kind = streamId switch
-            {
-                SessionLogStreamIds.AnsightSdk => SessionLogStreamKinds.AnsightSdk,
-                SessionLogStreamIds.AndroidLogcat => SessionLogStreamKinds.AndroidLogcat,
-                SessionLogStreamIds.AppleUnifiedLog => SessionLogStreamKinds.AppleUnifiedLog,
-                _ => SessionLogStreamKinds.Imported
-            },
-            DisplayName = streamId switch
-            {
-                SessionLogStreamIds.AnsightSdk => "Ansight SDK",
-                SessionLogStreamIds.AndroidLogcat => "Android Logcat",
-                SessionLogStreamIds.AppleUnifiedLog => "Apple Unified Log",
-                _ => streamId
-            },
-            Status = SessionLogStreamStatuses.Pending
-        };
-        session.LogStreams[streamId] = stream;
-        return stream;
-    }
 }

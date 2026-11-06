@@ -59,7 +59,7 @@ public sealed class HostMemorySpikeTelemetryAnalysisTests
         Assert.Equal(274317600, target.DeltaBytes);
         Assert.DoesNotContain(windows, window =>
             window.StartUtc <= Timestamp("2026-05-21T12:12:03+00:00")
-            && window.EndUtc >= Timestamp("2026-05-21T12:12:19+00:00"));
+                && window.EndUtc >= Timestamp("2026-05-21T12:12:19+00:00"));
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class HostMemorySpikeTelemetryAnalysisTests
         var startUtc = Timestamp("2026-06-05T00:00:00+00:00");
         var metrics = new[]
         {
-            new SessionMetricSample { ChannelId = 5, Value = 100, CapturedAtUtc = startUtc },
-            new SessionMetricSample { ChannelId = 5, Value = 512 * 1024 * 1024, CapturedAtUtc = startUtc.AddSeconds(1) }
+            new SessionMetricSample {ChannelId = 5, Value = 100, CapturedAtUtc = startUtc },
+            new SessionMetricSample {ChannelId = 5, Value = 512 * 1024 * 1024, CapturedAtUtc = startUtc.AddSeconds(1) }
         };
         var chart = new MetricChartState(
             metrics,

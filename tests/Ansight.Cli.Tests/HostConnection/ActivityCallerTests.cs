@@ -19,8 +19,14 @@ public sealed class ActivityCallerTests
     {
         var caller = new ActivityCaller
         {
-            Kind = "agent", Name = "codex", Ingress = "mcp", ClientName = "external-client", WorkId = "chat-id",
-            PrincipalId = "forged", PrincipalAttribution = "authenticated", ExecutorAttribution = "host-generated"
+            Kind = "agent",
+            Name = "codex",
+            Ingress = "mcp",
+            ClientName = "external-client",
+            WorkId = "chat-id",
+            PrincipalId = "forged",
+            PrincipalAttribution = "authenticated",
+            ExecutorAttribution = "host-generated"
         };
         var original = new ControlRequest(ControlProtocol.RequestSchema, ["session", "show", "id"], null, Caller: caller);
         var request = JsonSerializer.Deserialize<ControlRequest>(JsonSerializer.Serialize(original))!;

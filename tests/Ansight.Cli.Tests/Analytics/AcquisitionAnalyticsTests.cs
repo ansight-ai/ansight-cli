@@ -1,4 +1,4 @@
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 
 namespace Ansight.Cli.Tests.Analytics;
 
@@ -25,6 +25,7 @@ public sealed class AcquisitionAnalyticsTests
         AnalyticsAccount.Update(directory.Path, signedInAccount);
         settings.SetDetailedTrackingEnabled(true);
         AcquisitionAnalytics.Track(directory.Path, "cli_auth_failed", "state-secret", "user@example.com", "token=secret");
+
         var entry = Assert.Single(new EventOutbox(settings.AnalyticsDirectoryPath).Load(100));
         Assert.Equal(signedInAccount, entry.Envelope.Properties["account_id"]?.ToString());
         Assert.False(entry.Envelope.Properties.ContainsKey("auth_attempt_id"));
@@ -44,12 +45,15 @@ public sealed class AcquisitionAnalyticsTests
         AnalyticsAccount.Update(directory.Path, account);
         settings.SetDetailedTrackingEnabled(true);
         AcquisitionAnalytics.Track(directory.Path, "cli_auth_completed", attempt, account, "succeeded");
+
         var entries = new EventOutbox(settings.AnalyticsDirectoryPath).Load(100);
         Assert.Equal(2, entries.Count);
+
         var acquisition = entries.Where(item => item.Envelope.EventName != "cli_account_linked").ToArray();
         Assert.Single(acquisition.Select(item => item.Envelope.DistinctId).Distinct());
         Assert.All(acquisition, item => Assert.Equal(attempt, item.Envelope.Properties["auth_attempt_id"]?.ToString()));
         Assert.Equal(account, acquisition.Single(item => item.Envelope.EventName == "cli_auth_completed").Envelope.Properties["account_id"]?.ToString());
+
         var identity = entries.Single(item => item.Envelope.EventName == "cli_account_linked").Envelope;
         Assert.Equal(AnalyticsIdentity.LoadOrCreate(settings.AnalyticsDirectoryPath), identity.DistinctId);
         Assert.Equal(acquisition[0].Envelope.DistinctId, identity.Properties["installation_id"]?.ToString());
@@ -63,6 +67,7 @@ public sealed class AcquisitionAnalyticsTests
         var account = Guid.NewGuid().ToString("D");
         AnalyticsAccount.Update(directory.Path, account);
         new AnalyticsSettingsStore(directory.Path).SetDetailedTrackingEnabled(true);
+
         var analytics = new ProductAnalytics(directory.Path);
 
         AcquisitionAnalytics.IdentifyAccount(directory.Path, account, "secret-surface");
@@ -82,10 +87,13 @@ public sealed class AcquisitionAnalyticsTests
     {
         using var directory = TestDirectory.Create();
         AnalyticsAccount.Update(directory.Path, Guid.NewGuid().ToString("D"));
+
         var settings = new AnalyticsSettingsStore(directory.Path);
         settings.SetDetailedTrackingEnabled(true);
+
         var outbox = new EventOutbox(settings.AnalyticsDirectoryPath);
         AcquisitionAnalytics.Track(directory.Path, "cli_first_app_connected", once: true);
+
         var queued = Assert.Single(outbox.Load(100));
         outbox.Remove(queued.Path);
         AcquisitionAnalytics.Track(directory.Path, "cli_first_app_connected", once: true);

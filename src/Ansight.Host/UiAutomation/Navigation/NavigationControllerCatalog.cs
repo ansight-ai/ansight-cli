@@ -106,11 +106,13 @@ internal static class NavigationControllerCatalog
         string? toolId)
     {
         ArgumentNullException.ThrowIfNull(visualTree);
+
         if (!string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal))
         {
             var exact = All.FirstOrDefault(controller => controller.VisualTreeToolIds.Contains(
                 toolId ?? string.Empty,
                 StringComparer.Ordinal));
+
             return exact is null ? [] : [exact];
         }
 
@@ -128,13 +130,13 @@ internal static class NavigationControllerCatalog
 
         var hasSwiftUi = ContainsAny(evidence, "swiftui", "uihostingcontroller", "uihostingview", "nshostingcontroller", "nshostingview");
         var hasUIKit = source == "uikit"
-                       || ContainsAny(evidence, "apple.uikit", "ios.uikit", "uiwindow", "uiviewcontroller", "uinavigationcontroller", "uitabbarcontroller");
+            || ContainsAny(evidence, "apple.uikit", "ios.uikit", "uiwindow", "uiviewcontroller", "uinavigationcontroller", "uitabbarcontroller");
         var hasAppKit = source == "appkit"
-                        || ContainsAny(evidence, "apple.appkit", "macos.appkit", "nswindow", "nsviewcontroller", "nstabviewcontroller");
+            || ContainsAny(evidence, "apple.appkit", "macos.appkit", "nswindow", "nsviewcontroller", "nstabviewcontroller");
         var hasCompose = source is "compose" or "jetpack-compose"
-                         || ContainsAny(evidence, "android.compose", "androidx.compose", "composeview", "androidcomposeview", "semanticsnode");
+            || ContainsAny(evidence, "android.compose", "androidx.compose", "composeview", "androidcomposeview", "semanticsnode");
         var hasAndroidViews = source is "views" or "android-views"
-                              || ContainsAny(evidence, "android.views", "android.view.", "android.widget.", "androidx.fragment", "bottomnavigationview");
+            || ContainsAny(evidence, "android.views", "android.view.", "android.widget.", "androidx.fragment", "bottomnavigationview");
         var isNativeSource = source.Length == 0 || source is "native" or "ui";
 
         if (platform == VisualTreeContract.IosRuntimePlatform)
@@ -143,6 +145,7 @@ internal static class NavigationControllerCatalog
             {
                 AddUnique(results, iosUIKit);
             }
+
             if (hasSwiftUi)
             {
                 AddUnique(results, iosSwiftUi);
@@ -154,6 +157,7 @@ internal static class NavigationControllerCatalog
             {
                 AddUnique(results, macCatalystUIKit);
             }
+
             if (hasSwiftUi)
             {
                 AddUnique(results, macCatalystSwiftUi);
@@ -165,6 +169,7 @@ internal static class NavigationControllerCatalog
             {
                 AddUnique(results, macOsAppKit);
             }
+
             if (hasSwiftUi)
             {
                 AddUnique(results, macOsSwiftUi);
@@ -176,6 +181,7 @@ internal static class NavigationControllerCatalog
             {
                 AddUnique(results, androidViews);
             }
+
             if (hasCompose)
             {
                 AddUnique(results, androidCompose);
@@ -184,6 +190,7 @@ internal static class NavigationControllerCatalog
         else if (hasUIKit)
         {
             AddUnique(results, iosUIKit);
+
             if (hasSwiftUi)
             {
                 AddUnique(results, iosSwiftUi);
@@ -192,6 +199,7 @@ internal static class NavigationControllerCatalog
         else if (hasAppKit)
         {
             AddUnique(results, macOsAppKit);
+
             if (hasSwiftUi)
             {
                 AddUnique(results, macOsSwiftUi);
@@ -203,6 +211,7 @@ internal static class NavigationControllerCatalog
             {
                 AddUnique(results, androidViews);
             }
+
             if (hasCompose)
             {
                 AddUnique(results, androidCompose);
@@ -217,6 +226,7 @@ internal static class NavigationControllerCatalog
         {
             results.Add(genericNative);
         }
+
         return results;
     }
 
@@ -225,9 +235,9 @@ internal static class NavigationControllerCatalog
         NavigationController controller)
     {
         if (!controllers.Any(candidate => string.Equals(
-                candidate.Framework,
-                controller.Framework,
-                StringComparison.Ordinal)))
+            candidate.Framework,
+            controller.Framework,
+            StringComparison.Ordinal)))
         {
             controllers.Add(controller);
         }
@@ -238,7 +248,7 @@ internal static class NavigationControllerCatalog
 
     private static string? ReadString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue stringValue
-           && stringValue.TryGetValue<string>(out var text)
+            && stringValue.TryGetValue<string>(out var text)
             ? text
             : null;
 

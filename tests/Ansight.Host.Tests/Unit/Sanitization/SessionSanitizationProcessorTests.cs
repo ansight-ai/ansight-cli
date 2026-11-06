@@ -18,14 +18,17 @@ public sealed class SessionSanitizationProcessorTests
         Assert.Equal("[REDACTED]", result.Snapshot.ClientName);
         Assert.Equal("Contact [REDACTED] from [REDACTED].", Assert.Single(result.Snapshot.Logs).Message);
         Assert.Equal("[REDACTED]", result.Snapshot.CustomProperties?["password"]?.GetValue<string>());
+
         var networkRequest = Assert.Single(result.Snapshot.NetworkRequests);
         Assert.Contains("[REDACTED]", networkRequest.Url, StringComparison.Ordinal);
         Assert.Equal("[REDACTED]", networkRequest.ResponseHeaders[0].Value);
+
         var visualTree = Assert.Single(result.Snapshot.VisualTreeSnapshots);
         Assert.Equal(
             "[REDACTED]",
             visualTree.Payload["root"]?["children"]?[0]?["text"]?.GetValue<string>());
         Assert.True(result.ScreenshotRegionsByFrameId.TryGetValue("frame-1", out var regions));
+
         var region = Assert.Single(regions);
         Assert.Equal(10, region.X);
         Assert.Equal(20, region.Y);
@@ -56,9 +59,11 @@ public sealed class SessionSanitizationProcessorTests
     {
         using var directory = new TemporaryDirectory();
         var sourcePath = Path.Combine(directory.RootPath, "source.png");
+
         using (var bitmap = new SKBitmap(40, 40))
         {
             bitmap.Erase(SKColors.White);
+
             using var image = SKImage.FromBitmap(bitmap);
             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
             using var output = File.Create(sourcePath);
@@ -67,24 +72,27 @@ public sealed class SessionSanitizationProcessorTests
 
         var archivePath = Path.Combine(directory.RootPath, "sanitized.zip");
         var processor = new SessionSanitizationProcessor(CreateSensitiveRegionPolicy());
+
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            Assert.True(processor.TryWriteScreenshot(
-                sourcePath,
-                new SessionImageFrame
-                {
-                    FrameId = "frame-1",
-                    CapturedAtUtc = DateTimeOffset.UtcNow,
-                    Format = "png",
-                    Width = 40,
-                    Height = 40,
-                    Quality = 100,
-                    ByteCount = new FileInfo(sourcePath).Length
-                },
-                archive,
-                "screenshots/frame-1.png",
-                [new SessionSanitizationRegion(10, 10, 10, 10)]));
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+            {
+                Assert.True(processor.TryWriteScreenshot(
+                    sourcePath,
+                    new SessionImageFrame
+                    {
+                        FrameId = "frame-1",
+                        CapturedAtUtc = DateTimeOffset.UtcNow,
+                        Format = "png",
+                        Width = 40,
+                        Height = 40,
+                        Quality = 100,
+                        ByteCount = new FileInfo(sourcePath).Length
+                    },
+                    archive,
+                    "screenshots/frame-1.png",
+                    [new SessionSanitizationRegion(10, 10, 10, 10)]));
+            }
         }
 
         using var readStream = File.OpenRead(archivePath);
@@ -154,10 +162,12 @@ public sealed class SessionSanitizationProcessorTests
         var sourcePath = Path.Combine(rootPath, "source.png");
         using var bitmap = new SKBitmap(40, 40);
         bitmap.Erase(SKColors.White);
+
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         using var output = File.Create(sourcePath);
         data.SaveTo(output);
+
         return sourcePath;
     }
 
@@ -186,19 +196,23 @@ public sealed class SessionSanitizationProcessorTests
         Directory.CreateDirectory(artifactsPath);
         File.WriteAllText(Path.Combine(artifactsPath, "request.txt"), "Contact person@example.com.");
         File.WriteAllBytes(Path.Combine(artifactsPath, "capture.bin"), [1, 2, 3]);
+
         var archivePath = Path.Combine(directory.RootPath, "artifacts.zip");
         var processor = new SessionSanitizationProcessor(SessionSanitizationPolicy.PiiSafeDefault);
 
         using (var stream = File.Create(archivePath))
-        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
-            processor.WriteArtifacts(artifactsPath, archive, relativePath => $"artifacts/{relativePath}");
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+            {
+                processor.WriteArtifacts(artifactsPath, archive, relativePath => $"artifacts/{relativePath}");
+            }
         }
 
         using var readStream = File.OpenRead(archivePath);
         using var readArchive = new ZipArchive(readStream, ZipArchiveMode.Read);
         var entry = Assert.Single(readArchive.Entries);
         Assert.Equal("artifacts/request.txt", entry.FullName);
+
         using var reader = new StreamReader(entry.Open());
         Assert.Equal("Contact [REDACTED].", reader.ReadToEnd());
     }
@@ -207,6 +221,7 @@ public sealed class SessionSanitizationProcessorTests
     public void ScriptedSanitizer_DispatchesKindsAndUsesOcrBounds()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -222,6 +237,7 @@ public sealed class SessionSanitizationProcessorTests
             frame);
         Directory.CreateDirectory(Path.GetDirectoryName(screenshotPath)!);
         File.WriteAllBytes(screenshotPath, [0]);
+
         var modulePath = Path.Combine(directory.RootPath, "sanitizer.ts");
         File.WriteAllText(
             modulePath,
@@ -245,6 +261,7 @@ public sealed class SessionSanitizationProcessorTests
               return image.redact(scan.blocks.filter(block => pii.matches(block.text)).map(block => block.bounds));
             }
             """);
+
         using var processor = new ScriptedSessionSanitizationProcessor(
             modulePath,
             runtime.ExecutablePath,
@@ -257,10 +274,12 @@ public sealed class SessionSanitizationProcessorTests
 
         Assert.Equal(snapshot.SessionId, result.Snapshot.SessionId);
         Assert.Equal("Contact [REDACTED] from [REDACTED].", Assert.Single(result.Snapshot.Logs).Message);
+
         var networkRequest = Assert.Single(result.Snapshot.NetworkRequests);
         Assert.Equal("network-1", networkRequest.Id);
         Assert.Equal("https://safe.example.test/?token=%3Credacted%3E", networkRequest.Url);
         Assert.Equal("<redacted>", Assert.Single(networkRequest.RequestHeaders).Value);
+
         var region = Assert.Single(result.ScreenshotRegionsByFrameId[frame.FrameId]);
         Assert.Equal(new SessionSanitizationRegion(4, 8, 60, 16), region);
     }
@@ -269,6 +288,7 @@ public sealed class SessionSanitizationProcessorTests
     public void ScriptedSanitizer_SanitizesLargeLogStreamsEntryByEntry()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -280,9 +300,9 @@ public sealed class SessionSanitizationProcessorTests
             .Select(index => new LogEntry(
                 capturedAtUtc.AddMilliseconds(index),
                 $"person@example.com {new string('x', 8_192)}")
-                {
-                    StreamId = SessionLogStreamIds.AppleUnifiedLog
-                })
+            {
+                StreamId = SessionLogStreamIds.AppleUnifiedLog
+            })
             .ToArray();
         var snapshot = CreateSnapshot(
             logStreams:
@@ -294,8 +314,7 @@ public sealed class SessionSanitizationProcessorTests
                     DisplayName = "Apple Unified Log",
                     Entries = entries,
                     TotalEntryCount = entries.Length
-                }
-            ]);
+                }            ]);
         var modulePath = Path.Combine(directory.RootPath, "sanitizer.ts");
         File.WriteAllText(
             modulePath,
@@ -308,6 +327,7 @@ public sealed class SessionSanitizationProcessorTests
               return { ...log, message: pii.redact(log.message) };
             }
             """);
+
         var progress = new List<SessionOptimizationProgress>();
         using var processor = new ScriptedSessionSanitizationProcessor(
             modulePath,
@@ -332,6 +352,7 @@ public sealed class SessionSanitizationProcessorTests
     public void ScriptedSanitizer_FailureIdentifiesLogStreamAndEntry()
     {
         var runtime = JavaScriptRuntimeResolver.Resolve("node");
+
         if (!runtime.IsAvailable)
         {
             return;
@@ -349,12 +370,10 @@ public sealed class SessionSanitizationProcessorTests
                     DisplayName = "Apple Unified Log",
                     Entries =
                     [
-                        new LogEntry(capturedAtUtc, "first") { StreamId = SessionLogStreamIds.AppleUnifiedLog },
-                        new LogEntry(capturedAtUtc.AddSeconds(1), "second") { StreamId = SessionLogStreamIds.AppleUnifiedLog }
-                    ],
+                        new LogEntry(capturedAtUtc, "first") {StreamId = SessionLogStreamIds.AppleUnifiedLog },
+                        new LogEntry(capturedAtUtc.AddSeconds(1), "second") {StreamId = SessionLogStreamIds.AppleUnifiedLog }                    ],
                     TotalEntryCount = 2
-                }
-            ]);
+                }            ]);
         var modulePath = Path.Combine(directory.RootPath, "sanitizer.ts");
         File.WriteAllText(
             modulePath,
@@ -365,6 +384,7 @@ public sealed class SessionSanitizationProcessorTests
               return log;
             }
             """);
+
         using var processor = new ScriptedSessionSanitizationProcessor(
             modulePath,
             runtime.ExecutablePath,
@@ -388,6 +408,7 @@ public sealed class SessionSanitizationProcessorTests
         IReadOnlyList<SessionLogStream>? logStreams = null)
     {
         var capturedAtUtc = DateTimeOffset.Parse("2026-08-20T01:02:03Z");
+
         return new AppSessionSnapshot
         {
             SessionId = "session-1",
@@ -421,15 +442,12 @@ public sealed class SessionSanitizationProcessorTests
                     Url = "https://example.test/customer?email=person@example.com",
                     RequestHeaders =
                     [
-                        new SessionNetworkHeader { Name = "Accept", Value = "application/json" }
-                    ],
+                        new SessionNetworkHeader {Name = "Accept", Value = "application/json" }                    ],
                     ResponseHeaders =
                     [
-                        new SessionNetworkHeader { Name = "X-Customer", Value = "person@example.com" }
-                    ],
+                        new SessionNetworkHeader {Name = "X-Customer", Value = "person@example.com" }                    ],
                     StatusCode = 200
-                }
-            ],
+                }            ],
             Images =
             [
                 new SessionImageFrame
@@ -441,8 +459,7 @@ public sealed class SessionSanitizationProcessorTests
                     Height = 200,
                     Quality = 100,
                     ByteCount = 1
-                }
-            ],
+                }            ],
             VisualTreeSnapshots =
             [
                 new SessionVisualTreeSnapshot
@@ -486,8 +503,7 @@ public sealed class SessionSanitizationProcessorTests
                             }
                         }
                     }
-                }
-            ],
+                }            ],
             MetricChannels = [],
             Metrics = []
         };

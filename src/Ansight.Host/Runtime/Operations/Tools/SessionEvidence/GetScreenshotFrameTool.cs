@@ -42,12 +42,14 @@ internal sealed class GetScreenshotFrameTool : Operation
         var resolvedSnapshot = snapshot!;
         var frameId = NormalizeOptionalString(arguments?["frameId"]?.GetValue<string>());
         var frame = ResolveFrame(resolvedSnapshot, frameId, timestampUtc?.ToUniversalTime());
+
         if (frame is null)
         {
             return Task.FromResult(ToolError($"Session '{resolvedSnapshot.SessionId}' has no matching screenshot frame."));
         }
 
         var imagePath = SessionFileLocator.ResolveScreenshotPath(applicationPaths, resolvedSnapshot, frame);
+
         if (!File.Exists(imagePath))
         {
             return Task.FromResult(ToolError($"Screenshot frame '{frame.FrameId}' metadata exists, but the image file was not found."));

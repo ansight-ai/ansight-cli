@@ -16,21 +16,13 @@ internal sealed record OpenAiRequest(
     int MaximumOutputTokens)
 {
     public JsonArray? IncrementalInput { get; init; }
-
     public bool StartNewConversation { get; init; }
-
     public int? CompactThresholdTokens { get; init; }
-
     public bool UsePromptCacheBreakpoint { get; init; }
-
     public string? ReplayReason { get; init; }
-
     public bool CompletionOnly { get; init; }
-
     public int ContextGeneration { get; init; }
-
     public bool CaptureWireDiagnostics { get; init; }
-
     public IModelExecutionTransport? Transport { get; init; }
 
     internal async ValueTask<string> ResolveApiKeyAsync(CancellationToken cancellationToken)

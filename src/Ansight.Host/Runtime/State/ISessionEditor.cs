@@ -14,8 +14,11 @@ internal interface ISessionEditor
         string? name = null);
 
     OperationResult UpsertSessionAnnotation(string sessionId, SessionAnnotation annotation);
+
     OperationResult UpsertSessionAgentTaskLink(string sessionId, SessionAgentTaskLink taskLink);
+
     OperationResult DeleteSessionAnnotation(string sessionId, string annotationId);
+
     OperationResult DeleteSessionAnalysis(string sessionId, string analysisId);
 
     OperationResult TrimSessionTimeline(
@@ -26,9 +29,11 @@ internal interface ISessionEditor
         Action<SessionTimelineTrimProgress>? report = null);
 
     SessionNormalizationResult NormalizeSession(string sessionId);
+
     SessionNormalizationResult NormalizeSession(string sessionId, SessionOptimizationOptions options, Action<SessionOptimizationProgress>? report = null, CancellationToken cancellationToken = default);
 
     SessionOptimizationResult OptimizeSession(string sessionId, Action<SessionOptimizationProgress>? report = null, CancellationToken cancellationToken = default);
+
     SessionOptimizationResult OptimizeSession(string sessionId, SessionOptimizationOptions options, Action<SessionOptimizationProgress>? report = null, CancellationToken cancellationToken = default);
 
     SessionExtractionResult ExtractSessionTimelineRange(

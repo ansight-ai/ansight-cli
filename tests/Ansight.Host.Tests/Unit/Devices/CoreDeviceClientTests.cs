@@ -22,6 +22,7 @@ public sealed class CoreDeviceClientTests
             "com.example.target", "file:///private/var/containers/Bundle/Application/ONE/Target.app"));
         Assert.Null(CoreDeviceClient.ParseRunningApplicationProcessIdentity(document.RootElement,
             "com.example.missing", "/private/var/containers/Bundle/Application/THREE/Missing.app"));
+
         using var ambiguous = JsonDocument.Parse(
             """
             {"result":{"runningProcesses":[

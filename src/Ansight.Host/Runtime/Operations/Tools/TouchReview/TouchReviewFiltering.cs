@@ -21,9 +21,10 @@ internal static class TouchReviewFiltering
     public static TouchTimeRange ResolveTouchRange(AppSessionSnapshot snapshot, TouchFilters filters, IReadOnlyList<SessionTouchInputRecord> touches)
     {
         var startUtc = filters.StartUtc
-                       ?? (touches.Count > 0 ? touches[0].CapturedAtUtc : snapshot.CreatedUtc).ToUniversalTime();
+            ?? (touches.Count > 0 ? touches[0].CapturedAtUtc : snapshot.CreatedUtc).ToUniversalTime();
         var endUtc = filters.EndUtc
-                     ?? (touches.Count > 0 ? touches[^1].CapturedAtUtc : snapshot.LastUpdatedUtc).ToUniversalTime();
+            ?? (touches.Count > 0 ? touches[^1].CapturedAtUtc : snapshot.LastUpdatedUtc).ToUniversalTime();
+
         if (endUtc < startUtc)
         {
             (startUtc, endUtc) = (endUtc, startUtc);

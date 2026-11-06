@@ -4,23 +4,6 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
-internal enum LiveUiSequenceActionKind
-{
-    Tap,
-    LongPress,
-    Swipe,
-    Pinch,
-    Back
-}
-
-internal sealed record LiveUiSequenceAction(
-    LiveUiSequenceActionKind Kind,
-    LiveUiScreenPoint? TapPoint,
-    LiveUiSwipePath? SwipePath,
-    LiveUiPinchPath? PinchPath,
-    int PauseAfterMilliseconds,
-    int? HoldDurationMilliseconds = null);
-
 internal sealed class LiveUiSequenceTool : RemoteAppOperation
 {
     private const int MaximumActions = 32;
@@ -86,6 +69,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         var deviceIdentifier = uiInputRouter.ResolveDeviceIdentifier(
             snapshot!.SessionId,
             DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot));
+
         if (deviceIdentifier is null)
         {
             return ToolError(
@@ -93,6 +77,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         }
 
         var availability = uiInputRouter.GetAvailability(deviceIdentifier);
+
         if (!availability.IsAvailable)
         {
             return ToolError(availability.Message);
@@ -101,6 +86,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         var preflightResult = await uiInputRouter.PrepareForInputAsync(
             new UiInputPreflightRequest(snapshot.SessionId, deviceIdentifier, snapshot.AppId),
             ToolExecutionCancellation.Current);
+
         if (!preflightResult.IsSuccess)
         {
             return ToolError(preflightResult.Message);
@@ -113,6 +99,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             Name,
             correlationId,
             ToolExecutionCancellation.Current);
+
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -120,6 +107,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
 
         var capture = captureResult.Capture;
         var viewport = capture.Viewport;
+
         if (viewport is null || viewport.Width <= 0 || viewport.Height <= 0)
         {
             return ToolError("The visual tree does not expose usable screen-space bounds for host input.");
@@ -160,6 +148,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             LogPriority.Information);
 
         using var inputScope = uiInputRouter.BeginEvidenceScope(sequenceId);
+
         for (var index = 0; index < actions.Count; index++)
         {
             var action = actions[index];
@@ -170,6 +159,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 ToolExecutionCancellation.Current);
             completedCount++;
             finalBackend = result.Backend;
+
             if (!result.IsSuccess)
             {
                 failureCount++;
@@ -251,6 +241,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 ["after"] = LiveUiActionEvidence.ToJson(afterCapture.Evidence)
             }
         };
+
         return LiveUiActionResponse.Build(
             structuredContent,
             afterCapture.Evidence,
@@ -335,16 +326,19 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
         {
             actions = [];
             error = $"actions must contain between 1 and {MaximumActions} entries.";
+
             return false;
         }
 
         var parsed = new List<LiveUiSequenceAction>(source.Count);
+
         for (var index = 0; index < source.Count; index++)
         {
             if (source[index] is not JsonObject action)
             {
                 actions = [];
                 error = $"actions[{index}] must be an object.";
+
                 return false;
             }
 
@@ -352,6 +346,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             {
                 actions = [];
                 error = $"actions[{index}]: {actionError}";
+
                 return false;
             }
 
@@ -360,6 +355,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
 
         actions = parsed;
         error = string.Empty;
+
         return true;
     }
 
@@ -374,6 +370,7 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
             0,
             5_000);
         var kind = LiveUiToolSchemas.ReadString(action, "kind")?.Trim().ToLowerInvariant();
+
         switch (kind)
         {
             case "tap":
@@ -389,13 +386,14 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 {
                     parsed = null;
                     error = $"{kind} requires finite normalizedX and normalizedY values from 0 through 1.";
+
                     return false;
                 }
-
                 var holdDuration = UiLongPressRequest.DefaultDurationMilliseconds;
                 if (kind == "longpress" && !UiLongPressRequest.TryReadDuration(action, out holdDuration, out error))
                 {
                     parsed = null;
+
                     return false;
                 }
                 parsed = new LiveUiSequenceAction(
@@ -406,17 +404,17 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 return true;
             case "swipe":
                 if (!LiveUiActionTool.TryResolveSwipePath(
-                        action,
-                        viewport,
-                        viewport,
-                        reverseOrientation: false,
-                        out var swipePath,
-                        out error))
+                    action,
+                    viewport,
+                    viewport,
+                    reverseOrientation: false,
+                    out var swipePath,
+                    out error))
                 {
                     parsed = null;
+
                     return false;
                 }
-
                 parsed = new LiveUiSequenceAction(
                     LiveUiSequenceActionKind.Swipe,
                     null,
@@ -426,16 +424,16 @@ internal sealed class LiveUiSequenceTool : RemoteAppOperation
                 return true;
             case "pinch":
                 if (!LiveUiActionTool.TryResolvePinchPath(
-                        action,
-                        viewport,
-                        viewport,
-                        out var pinchPath,
-                        out error))
+                    action,
+                    viewport,
+                    viewport,
+                    out var pinchPath,
+                    out error))
                 {
                     parsed = null;
+
                     return false;
                 }
-
                 parsed = new LiveUiSequenceAction(
                     LiveUiSequenceActionKind.Pinch,
                     null,

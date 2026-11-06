@@ -21,6 +21,7 @@ public sealed class WebRtcInputDispatcherTests
             async message =>
             {
                 var input = Deserialize(message);
+
                 lock (deliveredInputs)
                 {
                     deliveredInputs.Add(input);
@@ -39,6 +40,7 @@ public sealed class WebRtcInputDispatcherTests
             (delay, _) =>
             {
                 replayDelays.Add(delay);
+
                 return Task.CompletedTask;
             });
 
@@ -77,6 +79,7 @@ public sealed class WebRtcInputDispatcherTests
             async message =>
             {
                 var input = Deserialize(message);
+
                 lock (deliveredInputs)
                 {
                     deliveredInputs.Add(input);
@@ -96,10 +99,12 @@ public sealed class WebRtcInputDispatcherTests
 
         dispatcher.Enqueue(CreateMessage("down", 0));
         await firstDeliveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
         for (var index = 1; index <= 20; index++)
         {
             dispatcher.Enqueue(CreateMessage("move", index / 100d));
         }
+
         dispatcher.Enqueue(CreateMessage("up", 0.2));
 
         releaseFirstDelivery.TrySetResult();
@@ -128,6 +133,7 @@ public sealed class WebRtcInputDispatcherTests
             {
                 var input = Deserialize(message);
                 deliveredInputs.Add(input);
+
                 if (input == new DeliveredInput("down", 0.1))
                 {
                     firstDeliveryStarted.TrySetResult();
@@ -179,6 +185,7 @@ public sealed class WebRtcInputDispatcherTests
     private static DeliveredInput Deserialize(string message)
     {
         using var document = JsonDocument.Parse(message);
+
         return new DeliveredInput(
             document.RootElement.GetProperty("phase").GetString()!,
             document.RootElement.GetProperty("x").GetDouble());

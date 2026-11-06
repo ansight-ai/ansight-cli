@@ -12,13 +12,16 @@ internal static class AndroidTextInput
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(text);
+
         foreach (var operation in TextInputEncoder.Encode(text))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var verb = operation.Kind == TextInputOperationKind.Text ? "text" : "keyevent";
             var command = "input '" + verb + "' '" + operation.Value.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'\n";
             // Send the shell-quoted payload over stdin, never in host process arguments.
             AdbCommandResult result;
+
             try
             {
                 result = await execute(["-s", deviceIdentifier, "shell", "-T"], command, cancellationToken)
@@ -32,8 +35,11 @@ internal static class AndroidTextInput
             {
                 throw new InvalidOperationException("Android text input failed.");
             }
+
             if (!result.IsSuccess)
+            {
                 throw new InvalidOperationException($"Android text input failed with exit code {result.ExitCode}.");
+            }
         }
     }
 }

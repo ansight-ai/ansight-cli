@@ -13,6 +13,7 @@ internal static class SessionArchiveExporter
             applicationPaths.ApplicationDataPath,
             SessionEvidenceDefaults.SessionExportsDirectoryName);
         var fileName = $"{FileNameUtil.Sanitize(snapshot.AppId)}-{FileNameUtil.Sanitize(snapshot.SessionId)}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip";
+
         return Path.Combine(directoryPath, fileName);
     }
 
@@ -23,12 +24,14 @@ internal static class SessionArchiveExporter
         SessionBundleExportOptions options)
     {
         var directoryPath = Path.GetDirectoryName(archiveFilePath);
+
         if (string.IsNullOrWhiteSpace(directoryPath))
         {
             throw new InvalidDataException("Archive destination must include a directory.");
         }
 
         Directory.CreateDirectory(directoryPath);
+
         if (File.Exists(archiveFilePath))
         {
             File.Delete(archiveFilePath);
@@ -104,6 +107,7 @@ internal static class SessionArchiveExporter
         foreach (var frame in snapshot.Images.OrderBy(frame => frame.CapturedAtUtc))
         {
             var filePath = SessionFileLocator.ResolveScreenshotPath(applicationPaths, snapshot, frame);
+
             if (!File.Exists(filePath))
             {
                 continue;
@@ -122,6 +126,7 @@ internal static class SessionArchiveExporter
         ZipArchive archive)
     {
         var artifactsRootPath = SessionFileLocator.ResolveArtifactsRootPath(applicationPaths, snapshot);
+
         if (!Directory.Exists(artifactsRootPath))
         {
             return;

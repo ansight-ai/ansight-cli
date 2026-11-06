@@ -7,7 +7,7 @@ public sealed class ExternalH264RtcSession : IDisposable
 {
     private const int ErrorBufferSize = 4096;
     private const int AnswerBufferSize = 256 * 1024;
-    private static readonly NativeMethods.InputCallback InputCallback = HandleNativeInput;
+    private static readonly NativeMethods.InputCallback inputCallback = HandleNativeInput;
     private readonly GCHandle callbackHandle;
     private IntPtr handle;
     private bool disposed;
@@ -15,6 +15,7 @@ public sealed class ExternalH264RtcSession : IDisposable
     public ExternalH264RtcSession(string deviceIdentifier, int framesPerSecond = 30)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceIdentifier);
+
         if (framesPerSecond is < 1 or > 60)
         {
             throw new ArgumentOutOfRangeException(nameof(framesPerSecond));
@@ -22,14 +23,16 @@ public sealed class ExternalH264RtcSession : IDisposable
 
         DeviceIdentifier = deviceIdentifier;
         callbackHandle = GCHandle.Alloc(this);
+
         var errorBuffer = new byte[ErrorBufferSize];
         handle = NativeMethods.ExternalH264SessionCreate(
             deviceIdentifier,
             framesPerSecond,
-            InputCallback,
+            inputCallback,
             GCHandle.ToIntPtr(callbackHandle),
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (handle == IntPtr.Zero)
         {
             callbackHandle.Free();
@@ -47,17 +50,21 @@ public sealed class ExternalH264RtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ApplyOffer(offer);
+
         var answerBuffer = new byte[AnswerBufferSize];
         var errorBuffer = new byte[ErrorBufferSize];
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var result = NativeMethods.SessionCopyAnswer(
                 handle,
                 answerBuffer,
                 (nuint)answerBuffer.Length,
                 errorBuffer,
                 (nuint)errorBuffer.Length);
+
             if (result > 0)
             {
                 return new SimulatorRtcDescription("answer", ReadBuffer(answerBuffer, string.Empty));
@@ -76,18 +83,21 @@ public sealed class ExternalH264RtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(offer);
+
         if (!string.Equals(offer.Type, "offer", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("The remote description must be a WebRTC offer.", nameof(offer));
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(offer.Sdp);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.SessionSetOffer(
-                handle,
-                offer.Sdp,
-                errorBuffer,
-                (nuint)errorBuffer.Length))
+            handle,
+            offer.Sdp,
+            errorBuffer,
+            (nuint)errorBuffer.Length))
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not apply the external WebRTC offer."));
         }
@@ -100,6 +110,7 @@ public sealed class ExternalH264RtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentNullException.ThrowIfNull(accessUnit);
+
         if (accessUnit.Length == 0)
         {
             throw new ArgumentException("An H.264 access unit is required.", nameof(accessUnit));
@@ -114,6 +125,7 @@ public sealed class ExternalH264RtcSession : IDisposable
             isKeyFrame,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (result < 0)
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not send an external H.264 frame."));
@@ -126,6 +138,7 @@ public sealed class ExternalH264RtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
         var data = Encoding.UTF8.GetBytes(message);
         var errorBuffer = new byte[ErrorBufferSize];
         var result = NativeMethods.SessionSendMessage(
@@ -134,10 +147,12 @@ public sealed class ExternalH264RtcSession : IDisposable
             data.Length,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (result < 0)
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not send a WebRTC data-channel message."));
         }
+
         return result > 0;
     }
 
@@ -149,7 +164,9 @@ public sealed class ExternalH264RtcSession : IDisposable
         }
 
         disposed = true;
+
         var activeHandle = Interlocked.Exchange(ref handle, IntPtr.Zero);
+
         if (activeHandle != IntPtr.Zero)
         {
             NativeMethods.SessionDestroy(activeHandle);
@@ -171,12 +188,14 @@ public sealed class ExternalH264RtcSession : IDisposable
         try
         {
             var session = GCHandle.FromIntPtr(context).Target as ExternalH264RtcSession;
+
             if (session is null || session.disposed)
             {
                 return;
             }
 
             var payload = Marshal.PtrToStringUTF8(message, size);
+
             if (!string.IsNullOrWhiteSpace(payload))
             {
                 session.InputReceived?.Invoke(session, new SimulatorRtcInputEventArgs(payload));
@@ -191,12 +210,14 @@ public sealed class ExternalH264RtcSession : IDisposable
     private static string ReadBuffer(byte[] buffer, string fallback)
     {
         var length = Array.IndexOf(buffer, (byte)0);
+
         if (length < 0)
         {
             length = buffer.Length;
         }
 
         var message = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
 }

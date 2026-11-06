@@ -12,6 +12,7 @@ public sealed class WorkspacePromptReferenceTests
         var test = WorkspaceTestCatalog.Parse("ansight/tests", $"ansight/tests/copy.{extension}", source);
         Assert.Empty(test.Validation.Assertions);
         Assert.Empty(test.Validation.Prompt);
+
         var runner = test.BuildRunnerPrompt();
         Assert.Contains("Tap Copy and verify the confirmation appears.", runner);
         Assert.Contains("Capture a requested transient check when it occurs.", runner);
@@ -42,6 +43,7 @@ public sealed class WorkspacePromptReferenceTests
                 - Verify @selector/profile-title is visible after @task/map.open.
             """);
         Assert.Equal(["map.open"], test.GetReferencedTaskIds());
+
         var runner = test.BuildRunnerPrompt();
         Assert.Contains("Run repository task \"map.open\" with location \"Eagle Rock\".", runner);
         Assert.Contains("{\"automationId\":\"com.example:id/copy\",\"matchMode\":\"exact\"}.", runner);
@@ -56,6 +58,7 @@ public sealed class WorkspacePromptReferenceTests
     {
         var text = @"Literal \@task/abc and someone@task/abc; use `@selector/copy`.";
         Assert.Equal("copy", Assert.Single(WorkspacePromptReferences.Read(text)).Id);
+
         var test = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/copy.yaml", """
             # @task/missing
             appId: demo

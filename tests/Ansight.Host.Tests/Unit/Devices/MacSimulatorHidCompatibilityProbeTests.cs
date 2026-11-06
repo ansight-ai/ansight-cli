@@ -66,6 +66,7 @@ public sealed class MacSimulatorHidCompatibilityProbeTests
             _ =>
             {
                 factoryCalled = true;
+
                 return null;
             });
 
@@ -73,5 +74,4 @@ public sealed class MacSimulatorHidCompatibilityProbeTests
         Assert.Equal("unsupported-platform", result.Status);
         Assert.False(factoryCalled);
     }
-
 }

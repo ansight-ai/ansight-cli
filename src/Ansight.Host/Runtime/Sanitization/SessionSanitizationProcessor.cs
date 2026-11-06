@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using SkiaSharp;
+using static Ansight.Host.Runtime.Sanitization.SanitizationJson;
 
 namespace Ansight.Host.Runtime.Sanitization;
 
@@ -92,12 +93,14 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         ArgumentNullException.ThrowIfNull(snapshot);
         framesWithVisualTrees.Clear();
         reportProgress?.Invoke(new SessionOptimizationProgress("Scanning session content for sensitive data…", 0, 1));
+
         var regionsByFrameId = FindSensitiveScreenshotRegions(snapshot);
         var node = JsonSerializer.SerializeToNode(snapshot, snapshotJsonOptions)
-                   ?? throw new InvalidDataException("The session snapshot could not be prepared for sanitization.");
+            ?? throw new InvalidDataException("The session snapshot could not be prepared for sanitization.");
         SanitizeNode(node, null, sensitiveContentContext: false);
+
         var sanitized = node.Deserialize<AppSessionSnapshot>(snapshotJsonOptions)
-                        ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
 
         if (policy.Screenshots.Mode == SessionScreenshotSanitizationMode.Remove)
         {
@@ -105,7 +108,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
             sanitized = CloneWithImages(sanitized, []);
         }
         else if (policy.Screenshots.Mode == SessionScreenshotSanitizationMode.SensitiveRegions
-                 && policy.Screenshots.Fallback == SessionScreenshotSanitizationFallback.Remove)
+            && policy.Screenshots.Fallback == SessionScreenshotSanitizationFallback.Remove)
         {
             report.ScreenshotsRemoved += sanitized.Images.Count(
                 frame => !regionsByFrameId.ContainsKey(frame.FrameId));
@@ -120,6 +123,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         }
 
         reportProgress?.Invoke(new SessionOptimizationProgress("Scanned session content for sensitive data.", 1, 1));
+
         return new SessionSanitizedCapture(sanitized, policy, report, regionsByFrameId);
     }
 
@@ -131,27 +135,40 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         IReadOnlyList<SessionSanitizationRegion> sensitiveRegions)
     {
         var mode = policy.Screenshots.Mode;
+
         if (mode == SessionScreenshotSanitizationMode.Remove)
         {
             report.ScreenshotsRemoved++;
+
             return false;
         }
 
         if (mode == SessionScreenshotSanitizationMode.Keep)
         {
             archive.CreateEntryFromFile(sourceFilePath, entryName, CompressionLevel.NoCompression);
+
             return true;
         }
 
         var redactAll = mode == SessionScreenshotSanitizationMode.RedactAll;
         var regionsToRedact = sensitiveRegions.ToList();
         var inspected = framesWithVisualTrees.Contains(frame.FrameId);
+
         if (mode == SessionScreenshotSanitizationMode.SensitiveRegions)
         {
             SessionScreenshotOcrResult scan;
-            try { scan = ocrScanner.Scan(sourceFilePath); }
-            catch (Exception exception) { scan = SessionScreenshotOcrResult.Unavailable(exception.Message); }
+
+            try
+            {
+                scan = ocrScanner.Scan(sourceFilePath);
+            }
+            catch (Exception exception)
+            {
+                scan = SessionScreenshotOcrResult.Unavailable(exception.Message);
+            }
+
             inspected |= scan.Available;
+
             if (scan.Available)
             {
                 regionsToRedact.AddRange(scan.Blocks
@@ -182,40 +199,45 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         if (!redactAll && regionsToRedact.Count == 0)
         {
             archive.CreateEntryFromFile(sourceFilePath, entryName, CompressionLevel.NoCompression);
+
             return true;
         }
 
         using var bitmap = SKBitmap.Decode(sourceFilePath)
-                           ?? throw new InvalidDataException($"Screenshot '{sourceFilePath}' could not be decoded.");
-        using (var canvas = new SKCanvas(bitmap))
-        using (var paint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill, IsAntialias = false })
-        {
-            if (redactAll)
-            {
-                canvas.Clear(SKColors.Black);
-                report.ScreenshotRegionsRedacted++;
-            }
-            else
-            {
-                foreach (var region in regionsToRedact)
-                {
-                    var padding = policy.Screenshots.PaddingPixels;
-                    var rectangle = new SKRect(
-                        Math.Max(0, (float)region.X - padding),
-                        Math.Max(0, (float)region.Y - padding),
-                        Math.Min(bitmap.Width, (float)(region.X + region.Width) + padding),
-                        Math.Min(bitmap.Height, (float)(region.Y + region.Height) + padding));
-                    if (rectangle.Width <= 0 || rectangle.Height <= 0)
-                    {
-                        continue;
-                    }
+            ?? throw new InvalidDataException($"Screenshot '{sourceFilePath}' could not be decoded.");
 
-                    canvas.DrawRect(rectangle, paint);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            using (var paint = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Fill, IsAntialias = false })
+            {
+                if (redactAll)
+                {
+                    canvas.Clear(SKColors.Black);
                     report.ScreenshotRegionsRedacted++;
                 }
-            }
+                else
+                {
+                    foreach (var region in regionsToRedact)
+                    {
+                        var padding = policy.Screenshots.PaddingPixels;
+                        var rectangle = new SKRect(
+                            Math.Max(0, (float)region.X - padding),
+                            Math.Max(0, (float)region.Y - padding),
+                            Math.Min(bitmap.Width, (float)(region.X + region.Width) + padding),
+                            Math.Min(bitmap.Height, (float)(region.Y + region.Height) + padding));
 
-            canvas.Flush();
+                        if (rectangle.Width <= 0 || rectangle.Height <= 0)
+                        {
+                            continue;
+                        }
+
+                        canvas.DrawRect(rectangle, paint);
+                        report.ScreenshotRegionsRedacted++;
+                    }
+                }
+
+                canvas.Flush();
+            }
         }
 
         var entry = archive.CreateEntry(entryName, CompressionLevel.NoCompression);
@@ -226,6 +248,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         using var output = entry.Open();
         encoded.SaveTo(output);
         report.ScreenshotsRedacted++;
+
         return true;
     }
 
@@ -236,6 +259,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         IReadOnlyDictionary<string, string>? sanitizedRelativePaths = null)
     {
         var writtenPaths = new HashSet<string>(StringComparer.Ordinal);
+
         if (!Directory.Exists(artifactsDirectoryPath))
         {
             return writtenPaths;
@@ -244,9 +268,11 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         var files = Directory.EnumerateFiles(artifactsDirectoryPath, "*", SearchOption.AllDirectories)
             .OrderBy(static path => path, StringComparer.Ordinal)
             .ToArray();
+
         if (policy.Artifacts.Mode == SessionArtifactSanitizationMode.Exclude)
         {
             report.ArtifactsExcluded += files.Length;
+
             return writtenPaths;
         }
 
@@ -270,8 +296,10 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
                 $"Sanitizing artifact '{Path.GetFileName(filePath)}'…",
                 fileIndex,
                 files.Length));
+
             var fileInfo = new FileInfo(filePath);
             var extension = Path.GetExtension(filePath);
+
             if (!textArtifactExtensions.Contains(extension)
                 || fileInfo.Length > policy.Artifacts.MaximumTextBytes)
             {
@@ -305,6 +333,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         IReadOnlyDictionary<string, string>? sanitizedRelativePaths)
     {
         var normalized = NormalizeArtifactRelativePath(path);
+
         return sanitizedRelativePaths?.GetValueOrDefault(normalized) ?? normalized;
     }
 
@@ -322,9 +351,11 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
                 if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
                 {
                     var node = JsonNode.Parse(source);
+
                     if (node is not null)
                     {
                         SanitizeNode(node, null, sensitiveContentContext: false);
+
                         return node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
                     }
                 }
@@ -354,12 +385,14 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         try
         {
             var node = JsonNode.Parse(line);
+
             if (node is null)
             {
                 return line;
             }
 
             SanitizeNode(node, null, sensitiveContentContext: false);
+
             return node.ToJsonString();
         }
         catch (JsonException)
@@ -373,6 +406,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         if (node is JsonObject jsonObject)
         {
             var objectIsSensitiveInput = IsSensitiveInputObject(jsonObject);
+
             foreach (var property in jsonObject.ToArray())
             {
                 if (property.Value is null || IsProtectedProperty(property.Key))
@@ -383,9 +417,10 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
                 var normalizedPropertyName = NormalizePropertyName(property.Key);
                 var propertyIsSensitive = sensitiveProperties.Contains(normalizedPropertyName);
                 var childSensitiveContext = sensitiveContentContext
-                                            || propertyIsSensitive
-                                            || objectIsSensitiveInput
-                                               && sensitiveContentProperties.Contains(normalizedPropertyName);
+                    || propertyIsSensitive
+                    || objectIsSensitiveInput
+                        && sensitiveContentProperties.Contains(normalizedPropertyName);
+
                 if (property.Value is JsonValue value && value.TryGetValue<string>(out var text))
                 {
                     if (!propertyIsSensitive
@@ -431,6 +466,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
     private string SanitizeText(string value, string? propertyName, bool forceReplacement)
     {
         report.StringsScanned++;
+
         if (string.IsNullOrEmpty(value))
         {
             return value;
@@ -448,6 +484,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         }
 
         var result = value;
+
         foreach (var rule in rules)
         {
             var replacement = rule.Replacement ?? policy.Replacement;
@@ -460,8 +497,10 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
                 }
 
                 matchCount++;
+
                 return replacement;
             });
+
             if (matchCount > 0)
             {
                 report.RecordRedaction(rule.Id, matchCount);
@@ -474,7 +513,9 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
     private bool TrySanitizeEmbeddedJson(string source, out string sanitized)
     {
         sanitized = source;
+
         var trimmed = source.Trim();
+
         if (trimmed.Length < 2
             || trimmed[0] is not ('{' or '[')
             || trimmed[^1] is not ('}' or ']'))
@@ -485,6 +526,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         try
         {
             var node = JsonNode.Parse(trimmed);
+
             if (node is not (JsonObject or JsonArray))
             {
                 return false;
@@ -492,6 +534,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
 
             SanitizeNode(node, null, sensitiveContentContext: false);
             sanitized = node.ToJsonString();
+
             return true;
         }
         catch (JsonException)
@@ -504,12 +547,14 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         AppSessionSnapshot snapshot)
     {
         var result = new Dictionary<string, IReadOnlyList<SessionSanitizationRegion>>(StringComparer.Ordinal);
+
         foreach (var frame in snapshot.Images)
         {
             var visualTrees = snapshot.VisualTreeSnapshots
                 .Where(tree => string.Equals(tree.ScreenshotFrameId, frame.FrameId, StringComparison.Ordinal))
                 .OrderByDescending(static tree => tree.CapturedAtUtc)
                 .ToArray();
+
             if (visualTrees.Length == 0)
             {
                 continue;
@@ -518,6 +563,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
             framesWithVisualTrees.Add(frame.FrameId);
 
             var regions = FindSensitiveRegions(visualTrees[0].Payload, frame.Width, frame.Height);
+
             if (regions.Count > 0)
             {
                 result[frame.FrameId] = regions;
@@ -533,8 +579,8 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         int imageHeight)
     {
         var coordinateSpace = ReadCoordinateSpace(payload)
-                              ?? ReadBounds(payload["root"] as JsonObject)
-                              ?? new SessionSanitizationRegion(0, 0, imageWidth, imageHeight);
+            ?? ReadBounds(payload["root"] as JsonObject)
+            ?? new SessionSanitizationRegion(0, 0, imageWidth, imageHeight);
         var regions = new List<SessionSanitizationRegion>();
         VisitObjects(payload, candidate =>
         {
@@ -556,6 +602,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
                 bounds.Width * scaleX,
                 bounds.Height * scaleY));
         });
+
         return regions;
     }
 
@@ -589,6 +636,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         foreach (var property in candidate)
         {
             var normalizedName = NormalizePropertyName(property.Key);
+
             if (normalizedName is "ispassword" or "issecure" or "securetextentry"
                 && property.Value is JsonValue booleanValue
                 && booleanValue.TryGetValue<bool>(out var enabled)
@@ -608,6 +656,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
             }
 
             var marker = NormalizePropertyName(text);
+
             if (!string.Equals(marker, "iphone", StringComparison.Ordinal)
                 && sensitiveContextMarkers.Any(marker.Contains))
             {
@@ -648,6 +697,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         foreach (var rule in policy.Rules)
         {
             var options = RegexOptions.CultureInvariant;
+
             if (rule.IgnoreCase)
             {
                 options |= RegexOptions.IgnoreCase;
@@ -682,12 +732,14 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
     private static bool IsLikelyPhoneNumber(Match match)
     {
         var digitCount = match.Value.Count(char.IsDigit);
+
         return digitCount is >= 9 and <= 15;
     }
 
     private static bool IsValidCreditCardNumber(Match match)
     {
         var digits = match.Value.Where(char.IsDigit).Select(static character => character - '0').ToArray();
+
         if (digits.Length is < 13 or > 19 || digits.All(digit => digit == digits[0]))
         {
             return false;
@@ -695,12 +747,15 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
 
         var sum = 0;
         var doubleDigit = false;
+
         for (var index = digits.Length - 1; index >= 0; index--)
         {
             var digit = digits[index];
+
             if (doubleDigit)
             {
                 digit *= 2;
+
                 if (digit > 9)
                 {
                     digit -= 9;
@@ -714,84 +769,8 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         return sum % 10 == 0;
     }
 
-    private static void VisitObjects(JsonNode node, Action<JsonObject> visitor)
-    {
-        if (node is JsonObject jsonObject)
-        {
-            visitor(jsonObject);
-            foreach (var child in jsonObject.Select(static property => property.Value).OfType<JsonNode>())
-            {
-                VisitObjects(child, visitor);
-            }
-        }
-        else if (node is JsonArray jsonArray)
-        {
-            foreach (var child in jsonArray.OfType<JsonNode>())
-            {
-                VisitObjects(child, visitor);
-            }
-        }
-    }
-
     private static SessionSanitizationRegion? ReadCoordinateSpace(JsonObject payload)
         => ReadBounds(payload["coordinateSpace"] as JsonObject);
-
-    private static SessionSanitizationRegion? ReadBounds(JsonObject? node)
-    {
-        if (node is null)
-        {
-            return null;
-        }
-
-        if (node["bounds"] is JsonArray array)
-        {
-            var offset = array.Count >= 8 ? 4 : 0;
-            return TryReadDouble(array, offset, out var arrayX)
-                   && TryReadDouble(array, offset + 1, out var arrayY)
-                   && TryReadDouble(array, offset + 2, out var arrayWidth)
-                   && TryReadDouble(array, offset + 3, out var arrayHeight)
-                ? new SessionSanitizationRegion(arrayX, arrayY, arrayWidth, arrayHeight)
-                : null;
-        }
-
-        var bounds = node["bounds"] as JsonObject ?? node;
-        var absolute = bounds["absoluteX"] is not null;
-        return TryReadDouble(bounds, absolute ? "absoluteX" : "x", out var x)
-               && TryReadDouble(bounds, absolute ? "absoluteY" : "y", out var y)
-               && TryReadDouble(bounds, absolute ? "absoluteWidth" : "width", out var width)
-               && TryReadDouble(bounds, absolute ? "absoluteHeight" : "height", out var height)
-            ? new SessionSanitizationRegion(x, y, width, height)
-            : null;
-    }
-
-    private static bool TryReadDouble(JsonObject node, string propertyName, out double result)
-    {
-        result = 0;
-        return node[propertyName] is JsonValue value && TryReadDouble(value, out result);
-    }
-
-    private static bool TryReadDouble(JsonArray array, int index, out double result)
-    {
-        result = 0;
-        return index >= 0 && index < array.Count && array[index] is JsonValue value && TryReadDouble(value, out result);
-    }
-
-    private static bool TryReadDouble(JsonValue value, out double result)
-    {
-        if (value.TryGetValue<double>(out result))
-        {
-            return true;
-        }
-
-        if (value.TryGetValue<int>(out var integer))
-        {
-            result = integer;
-            return true;
-        }
-
-        result = 0;
-        return false;
-    }
 
     private static string NormalizePropertyName(string value)
         => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
@@ -799,6 +778,7 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
     private static SKEncodedImageFormat ResolveImageFormat(string? format, string filePath)
     {
         var normalized = (format ?? Path.GetExtension(filePath)).Trim().TrimStart('.').ToLowerInvariant();
+
         return normalized switch
         {
             "jpg" or "jpeg" => SKEncodedImageFormat.Jpeg,
@@ -817,10 +797,11 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         IReadOnlyList<SessionArtifactSnapshot> artifactSnapshots)
     {
         var node = JsonSerializer.SerializeToNode(snapshot, snapshotJsonOptions)?.AsObject()
-                   ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
         node["artifactSnapshots"] = JsonSerializer.SerializeToNode(artifactSnapshots, snapshotJsonOptions);
+
         return node.Deserialize<AppSessionSnapshot>(snapshotJsonOptions)
-               ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
     }
 
     private static AppSessionSnapshot CloneWithImages(
@@ -828,97 +809,10 @@ internal sealed class SessionSanitizationProcessor : ISessionArchiveSanitizer
         IReadOnlyList<SessionImageFrame> images)
     {
         var node = JsonSerializer.SerializeToNode(snapshot, snapshotJsonOptions)?.AsObject()
-                   ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
         node["images"] = JsonSerializer.SerializeToNode(images, snapshotJsonOptions);
+
         return node.Deserialize<AppSessionSnapshot>(snapshotJsonOptions)
-               ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
-    }
-}
-
-internal interface ISessionArchiveSanitizer : IDisposable
-{
-    SessionSanitizedCapture Sanitize(AppSessionSnapshot snapshot);
-
-    bool TryWriteScreenshot(
-        string sourceFilePath,
-        SessionImageFrame frame,
-        ZipArchive archive,
-        string entryName,
-        IReadOnlyList<SessionSanitizationRegion> sensitiveRegions);
-
-    IReadOnlySet<string> WriteArtifacts(
-        string artifactsDirectoryPath,
-        ZipArchive archive,
-        Func<string, string> buildEntryName,
-        IReadOnlyDictionary<string, string>? sanitizedRelativePaths = null);
-}
-
-internal sealed record SessionSanitizationCompiledRule(
-    string Id,
-    Regex Pattern,
-    string? Replacement,
-    Func<Match, bool>? ShouldRedact = null);
-
-internal sealed record SessionSanitizedCapture(
-    AppSessionSnapshot Snapshot,
-    SessionSanitizationPolicy Policy,
-    SessionSanitizationReportBuilder Report,
-    IReadOnlyDictionary<string, IReadOnlyList<SessionSanitizationRegion>> ScreenshotRegionsByFrameId);
-
-internal readonly record struct SessionSanitizationRegion(
-    double X,
-    double Y,
-    double Width,
-    double Height);
-
-internal sealed class SessionSanitizationReportBuilder
-{
-    private readonly Dictionary<string, int> redactionsByRule = new(StringComparer.Ordinal);
-
-    public SessionSanitizationReportBuilder(string policyId)
-    {
-        PolicyId = policyId;
-    }
-
-    public string PolicyId { get; }
-
-    public int StringsScanned { get; set; }
-
-    public int RedactedStrings { get; private set; }
-
-    public int SensitivePropertiesRedacted { get; set; }
-
-    public int ScreenshotsRedacted { get; set; }
-
-    public int ScreenshotsRemoved { get; set; }
-
-    public int ScreenshotRegionsRedacted { get; set; }
-
-    public int ArtifactsSanitized { get; set; }
-
-    public int ArtifactsExcluded { get; set; }
-
-    public void RecordRedaction(string ruleId, int count = 1)
-    {
-        RedactedStrings++;
-        redactionsByRule[ruleId] = redactionsByRule.GetValueOrDefault(ruleId) + count;
-    }
-
-    public SessionSanitizationReport Build()
-    {
-        return new SessionSanitizationReport
-        {
-            PolicyId = PolicyId,
-            SanitizedAtUtc = DateTimeOffset.UtcNow,
-            StringsScanned = StringsScanned,
-            RedactedStrings = RedactedStrings,
-            SensitivePropertiesRedacted = SensitivePropertiesRedacted,
-            ScreenshotsRedacted = ScreenshotsRedacted,
-            ScreenshotsRemoved = ScreenshotsRemoved,
-            ScreenshotRegionsRedacted = ScreenshotRegionsRedacted,
-            ArtifactsSanitized = ArtifactsSanitized,
-            ArtifactsExcluded = ArtifactsExcluded,
-            RedactionsByRule = new Dictionary<string, int>(redactionsByRule, StringComparer.Ordinal)
-        };
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
     }
 }

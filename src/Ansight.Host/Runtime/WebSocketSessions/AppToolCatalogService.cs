@@ -42,13 +42,14 @@ internal sealed class AppToolCatalogService
             ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             : null;
         captureCancellation?.CancelAfter(initialCaptureTimeout);
+
         try
         {
             return await QueryCoreAsync(sessionId, filterArguments, callerRevision,
                 captureCancellation?.Token ?? cancellationToken, requestContext, forceRefresh, includeDefinitions).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (captureCancellation?.IsCancellationRequested == true
-                                                  && !cancellationToken.IsCancellationRequested)
+            && !cancellationToken.IsCancellationRequested)
         {
             return AppToolBridgeResponse.FromFailure("Initial app tool catalog capture timed out; execution can retry discovery.");
         }
@@ -70,19 +71,21 @@ internal sealed class AppToolCatalogService
 
         var observedUpdateVersion = cache!.GetSnapshot().UpdateVersion;
         await connection!.ToolCatalogQueryLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (!ReferenceEquals(connections.Get(sessionId.Trim()), connection))
             {
                 return AppToolBridgeResponse.FromFailure("The app connection changed during catalog discovery; retry on the current connection.");
             }
+
             if (forceRefresh)
             {
                 connection.InvalidateToolCatalog();
             }
             else if (cache.GetSnapshot().UpdateVersion != observedUpdateVersion
-                     && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
-                     && cache.BuildCatalog(filterArguments, includeDefinitions) is { } coalescedCatalog)
+                && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
+                && cache.BuildCatalog(filterArguments, includeDefinitions) is { } coalescedCatalog)
             {
                 return CreateCoalescedResponse(
                     sessionId,
@@ -91,8 +94,8 @@ internal sealed class AppToolCatalogService
                     coalescedCatalog);
             }
             else if (cache.TryTakeInitialCaptureReuse()
-                     && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
-                     && cache.BuildCatalog(filterArguments, includeDefinitions) is { } initialCatalog)
+                && HasRequiredDefinitions(cache, filterArguments, includeDefinitions)
+                && cache.BuildCatalog(filterArguments, includeDefinitions) is { } initialCatalog)
             {
                 return CreateCoalescedResponse(
                     sessionId,
@@ -102,15 +105,16 @@ internal sealed class AppToolCatalogService
             }
 
             var response = await QueryLockedAsync(
-                    sessionId,
-                    filterArguments,
-                    callerRevision,
-                    connection,
-                    cache!,
-                    includeDefinitions,
-                    cancellationToken,
-                    requestContext)
+                sessionId,
+                filterArguments,
+                callerRevision,
+                connection,
+                cache!,
+                includeDefinitions,
+                cancellationToken,
+                requestContext)
                 .ConfigureAwait(false);
+
             if (string.Equals(requestContext?.Source, "session-capture", StringComparison.Ordinal)
                 && response.Success)
             {
@@ -127,7 +131,7 @@ internal sealed class AppToolCatalogService
 
     private static bool HasRequiredDefinitions(AppToolCatalogCache cache, JsonObject? arguments, bool includeDefinitions)
         => !includeDefinitions || string.Equals(ReadString(arguments?["detail"]), "summary", StringComparison.OrdinalIgnoreCase)
-           || cache.GetMissingDefinitionIds(cache.GetSelectedToolIds(arguments)).Count == 0;
+            || cache.GetMissingDefinitionIds(cache.GetSelectedToolIds(arguments)).Count == 0;
 
     private static AppToolBridgeResponse CreateCoalescedResponse(
         string sessionId,
@@ -136,14 +140,14 @@ internal sealed class AppToolCatalogService
         JsonObject catalog)
     {
         var payload = !string.IsNullOrWhiteSpace(callerRevision)
-                      && string.Equals(callerRevision.Trim(), snapshot.Revision, StringComparison.Ordinal)
+            && string.Equals(callerRevision.Trim(), snapshot.Revision, StringComparison.Ordinal)
             ? new JsonObject
             {
                 ["schema"] = "ansight.tool-catalog.v3",
                 ["revision"] = snapshot.Revision,
                 ["unchanged"] = true
-            }
-            : catalog;
+            } : catalog;
+
         return AppToolBridgeResponse.FromSuccess(
             $"Reused the concurrent app tool catalog query for session '{sessionId}'.",
             new ToolProtocolEnvelope
@@ -171,6 +175,7 @@ internal sealed class AppToolCatalogService
         {
             ["detail"] = "index"
         };
+
         if (!string.IsNullOrWhiteSpace(snapshot.Revision))
         {
             indexRequestPayload["ifRevision"] = snapshot.Revision;
@@ -186,6 +191,7 @@ internal sealed class AppToolCatalogService
             indexRequestPayload,
             cancellationToken,
             requestContext).ConfigureAwait(false);
+
         if (!indexResponse.Success
             || indexResponse.Envelope is null
             || string.Equals(indexResponse.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal))
@@ -200,6 +206,7 @@ internal sealed class AppToolCatalogService
 
         snapshot = cache.GetSnapshot();
         ApplyCachedCatalog(connection, snapshot.IndexCatalog);
+
         if (!string.IsNullOrWhiteSpace(callerRevision)
             && string.Equals(callerRevision.Trim(), snapshot.Revision, StringComparison.Ordinal))
         {
@@ -220,9 +227,11 @@ internal sealed class AppToolCatalogService
             ReadString(filterArguments?["detail"]),
             "summary",
             StringComparison.OrdinalIgnoreCase);
+
         var missingDefinitionIds = includeDefinitions
             ? cache.GetMissingDefinitionIds(selectedToolIds)
             : Array.Empty<string>();
+
         if (missingDefinitionIds.Count > 0)
         {
             var definitionsResponse = await SendCatalogQueryAsync(
@@ -235,6 +244,7 @@ internal sealed class AppToolCatalogService
                 },
                 cancellationToken,
                 requestContext).ConfigureAwait(false);
+
             if (!definitionsResponse.Success
                 || definitionsResponse.Envelope is null
                 || string.Equals(definitionsResponse.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal))
@@ -252,6 +262,7 @@ internal sealed class AppToolCatalogService
         }
 
         var catalog = cache.BuildCatalog(filterArguments, includeDefinitions);
+
         if (catalog is null)
         {
             return AppToolBridgeResponse.FromFailure(
@@ -277,6 +288,7 @@ internal sealed class AppToolCatalogService
             Capability = ToolProtocolMessageTypes.Capability,
             Payload = payload
         };
+
         return requestSender(sessionId, envelope, cancellationToken, requestContext);
     }
 
@@ -288,9 +300,11 @@ internal sealed class AppToolCatalogService
     {
         connection = null;
         cache = null;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             error = "Session ID is required.";
+
             return false;
         }
 
@@ -300,12 +314,14 @@ internal sealed class AppToolCatalogService
         if (connection is null)
         {
             error = $"Session '{normalizedSessionId}' is not currently connected.";
+
             return false;
         }
 
         cache = connection.ToolCatalogCache;
 
         error = string.Empty;
+
         return true;
     }
 
@@ -338,8 +354,8 @@ internal sealed class AppToolCatalogService
 
     private static string? ReadString(JsonNode? value)
         => value is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && jsonValue.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 }

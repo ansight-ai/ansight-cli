@@ -15,14 +15,9 @@ internal sealed record ToolCallResult(
     string Message)
 {
     public string? ModelOutput { get; init; }
-
     public IReadOnlyList<RepositoryTaskToolCall>? TaskCalls { get; init; }
-
     public IReadOnlyList<RepositoryTaskAssertion>? TaskAssertions { get; init; }
-
     public RepositoryTaskSourceTrace? TaskSource { get; init; }
-
     public JsonObject? TraceEvidence { get; init; }
-
     public JsonObject? AccessibilityEvidence { get; init; }
 }

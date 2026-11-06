@@ -37,9 +37,11 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         {
             return ToolError(resolutionError);
         }
+
         var session = snapshot!;
 
         var selector = LiveUiSelector.Parse(arguments, exactByDefault: false);
+
         if (!selector.HasCriteria)
         {
             return ToolError("At least one UI selector is required.");
@@ -55,6 +57,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             ToolExecutionCancellation.Current);
         var attemptedSources = accessibilityResult.AttemptedToolIds.ToList();
         var selectedCapture = accessibilityResult.Capture;
+
         if (selectedCapture is not null)
         {
             PersistTimelineTree(selectedCapture);
@@ -66,6 +69,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             : FindSemanticMatches(selectedCapture.Root, selectedCapture.TypeRegistry, selector);
         var evidenceSource = ResolveEvidenceSource(selectedCapture);
         var ocrResult = LiveUiOcrSearchResult.NotAttempted;
+
         if (semanticSelection.ResolutionMatches.Count == 0
             && selector.CanUseOcr
             && RunRequestContext.AllowsScreenshotOcr(correlationId))
@@ -82,6 +86,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 "find-ui-ocr",
                 correlationId,
                 ToolExecutionCancellation.Current, externalScreenshots: externalScreenshots);
+
             if (ocrResult.Matches.Count > 0)
             {
                 evidenceSource = "ocr";
@@ -91,6 +96,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         if (semanticSelection.ResolutionMatches.Count == 0 && ocrResult.Matches.Count == 0)
         {
             attemptedSources.Add("visualTree");
+
             var visualTreeResult = await LiveUiTreeCapture.CaptureNativeForSelectorAsync(
                 session,
                 appToolBridge,
@@ -99,6 +105,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 correlationId,
                 selector,
                 ToolExecutionCancellation.Current);
+
             if (visualTreeResult.Capture is { } visualTreeCapture)
             {
                 PersistTimelineTree(visualTreeCapture);
@@ -117,6 +124,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         }
 
         var viewport = selectedCapture?.Viewport;
+
         if (selectedCapture is not null)
         {
             semanticSelection = OrderSelection(
@@ -125,6 +133,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 viewport,
                 selector);
         }
+
         var resolution = ocrResult.Matches.Count > 0
             ? "visible"
             : ResolveSemanticResolution(semanticSelection.ResolutionMatches, viewport);
@@ -135,10 +144,12 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 result["tapHint"] = selectedCapture is null
                     ? null
                     : BuildTapHint(selectedCapture.Root, match, viewport, selector, selectedCapture.Payload, selectedCapture.ToolId);
+
                 if (semanticSelection.StrictMatches.Count > 1 && selectedCapture is not null)
                 {
                     result["nearbyText"] = LiveUiTapTarget.NearbyText(selectedCapture.Root, match, viewport);
                 }
+
                 return result;
             })
             .ToArray();
@@ -164,6 +175,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             .Select(static match => match.DeepClone())
             .ToArray());
         var recoveryHint = ResolveRecoveryHint(resolution, selector.Text);
+
         return RequestResult.ToolResult(
             new JsonObject
             {
@@ -191,7 +203,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 ["diagnosticCount"] = diagnosticMatches.Count,
                 ["totalDiagnosticMatches"] = allDiagnosticMatches.Count,
                 ["diagnosticTruncated"] = !selector.IndexSpecified
-                                            && allDiagnosticMatches.Count > diagnosticMatches.Count
+                    && allDiagnosticMatches.Count > diagnosticMatches.Count
             },
             isError: false);
     }
@@ -221,6 +233,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             "String matching mode. exact requires equality, contains uses case-insensitive substring matching by default, and fuzzy performs conservative normalized typo/token discovery with scored results. Defaults to contains. Fuzzy matching never relaxes nodeId and must not be used directly for actions.",
             enumValues: ["exact", "contains", "fuzzy"],
             nullable: true);
+
         return properties;
     }
 
@@ -243,7 +256,8 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         result["source"] = evidenceSource;
         result["viewportRelation"] = relation;
         result["onScreen"] = (relation is "inside" or "partial" or "unknown")
-                             && LiveUiNodeQuery.IsEffectivelyVisible(match);
+            && LiveUiNodeQuery.IsEffectivelyVisible(match);
+
         if (selector.MatchMode == LiveUiStringMatchMode.Fuzzy)
         {
             var evaluation = selector.Evaluate(match);
@@ -251,6 +265,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             result["matchScore"] = evaluation.Score;
             result["matchReason"] = evaluation.Reason;
         }
+
         return result;
     }
 
@@ -260,6 +275,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         LiveUiSelector selector)
     {
         var matches = LiveUiNodeQuery.Find(root, selector, typeRegistry);
+
         if (matches.Count > 0 || selector.Visible != true)
         {
             return new SemanticSelection(matches, matches, false);
@@ -269,6 +285,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             root,
             selector.WithoutVisibility(),
             typeRegistry);
+
         return new SemanticSelection(relaxedMatches, matches, relaxedMatches.Count > 0);
     }
 
@@ -284,12 +301,14 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         var structuralContainer = !actions.Any(action => action is "tap" or "typeText")
             && LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry)
                 is "view" or "scrollview" or "list" or "window" or "application" or "dialog" or "group";
+
         if (structuralContainer)
         {
             return null;
         }
 
         var bounds = LiveUiNodeQuery.ReadBounds(match.Node);
+
         if (bounds is null)
         {
             return null;
@@ -300,6 +319,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
             && LiveUiNodeQuery.IsEffectivelyVisible(match)
             && LiveUiNodeQuery.IsEffectivelyEnabled(match)
             && ResolveViewportRelation(bounds, viewport) is "inside" or "partial";
+
         if (!usableTarget)
         {
             return null;
@@ -308,12 +328,17 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         var candidates = new List<JsonObject>();
         var ancestorId = originalSelector.AncestorAutomationId ?? match.Ancestors.Reverse()
             .Select(LiveUiNodeQuery.ReadAutomationId).FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+
         if (LiveUiNodeQuery.ReadAutomationId(match.Node) is { Length: > 0 } automationId)
         {
             candidates.Add(new JsonObject { ["automationId"] = automationId });
+
             if (ancestorId is not null)
+            {
                 candidates.Add(new JsonObject { ["automationId"] = automationId, ["ancestorAutomationId"] = ancestorId });
+            }
         }
+
         if (LiveUiNodeQuery.ReadText(match.Node) is { Length: > 0 } text)
         {
             candidates.Add(new JsonObject
@@ -322,6 +347,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 ["role"] = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry),
                 ["type"] = match.TypeRegistry.Resolve(match.Node)
             });
+
             if (ancestorId is not null)
             {
                 var scopedText = candidates[^1].DeepClone().AsObject();
@@ -329,18 +355,28 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 candidates.Add(scopedText);
             }
         }
+
         // Native IDs can change between captures while the visible control stays put.
+
         // Prefer a stable selector, including a guarded index, before this last resort.
         if (LiveUiNodeQuery.ReadString(match.Node, "id") is { Length: > 0 } nodeId)
+        {
             candidates.Add(new JsonObject { ["nodeId"] = nodeId });
+        }
 
         JsonObject? indexedSelector = null;
+
         foreach (var selector in candidates)
         {
-            if (selector.ContainsKey("nodeId") && indexedSelector is not null) return TapHint(indexedSelector);
+            if (selector.ContainsKey("nodeId") && indexedSelector is not null)
+            {
+                return TapHint(indexedSelector);
+            }
+
             selector["exact"] = true;
             selector["visible"] = true;
             selector["enabled"] = true;
+
             if (originalSelector.AncestorAutomationId is not null)
             {
                 selector["ancestorAutomationId"] = originalSelector.AncestorAutomationId;
@@ -352,14 +388,25 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 LiveUiNodeQuery.Find(root, LiveUiSelector.Parse(selector), match.TypeRegistry),
                 payload ?? root, viewport);
             var index = resolved.ToList().FindIndex(candidate => ReferenceEquals(candidate.Node, match.Node));
-            if (index < 0) continue;
-            if (resolved.Count == 1) return TapHint(selector);
+
+            if (index < 0)
+            {
+                continue;
+            }
+
+            if (resolved.Count == 1)
+            {
+                return TapHint(selector);
+            }
 
             // Coincident labels may describe the same rendered element. Do not turn those
             // into separate positional choices without evidence of distinct visible targets.
             if (resolved.Where((_, otherIndex) => otherIndex != index).Any(other =>
                     LiveUiNodeQuery.ReadBounds(other.Node) is { } otherBounds
-                    && LiveUiBounds.Intersection(bounds, otherBounds) is not null)) continue;
+                        && LiveUiBounds.Intersection(bounds, otherBounds) is not null))
+            {
+                continue;
+            }
 
             selector["index"] = index;
             selector["targetFingerprint"] = LiveUiTapTarget.Fingerprint(root, match, viewport!);
@@ -375,12 +422,14 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
                 selector["targetSource"] = targetSource;
                 selector["targetFingerprint"] = LiveUiTapTarget.Fingerprint(root, match, viewport!);
             }
+
             if (ResolveViewportRelation(bounds, viewport) == "partial"
                 && LiveUiBounds.Intersection(bounds, viewport!) is { } visibleBounds)
             {
                 selector["screenX"] = visibleBounds.CenterX;
                 selector["screenY"] = visibleBounds.CenterY;
             }
+
             return new JsonObject { ["tool"] = "ansight_tap_ui", ["selector"] = selector };
         }
     }
@@ -410,6 +459,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         LiveUiSelector selector)
     {
         var visualOrder = LiveUiNodeQuery.OrderMatchesForSelection(matches, payload, viewport);
+
         if (selector.MatchMode != LiveUiStringMatchMode.Fuzzy)
         {
             return visualOrder;
@@ -437,7 +487,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
 
         if (matches.Any(match =>
                 LiveUiNodeQuery.IsEffectivelyVisible(match)
-                && (ResolveViewportRelation(LiveUiNodeQuery.ReadBounds(match.Node), viewport)
+                    && (ResolveViewportRelation(LiveUiNodeQuery.ReadBounds(match.Node), viewport)
                     is "inside" or "partial" or "unknown")))
         {
             return "visible";
@@ -466,27 +516,32 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         var boundsBottom = bounds.Y + bounds.Height;
         var viewportRight = viewport.X + viewport.Width;
         var viewportBottom = viewport.Y + viewport.Height;
+
         if (boundsBottom <= viewport.Y)
         {
             return "above";
         }
+
         if (bounds.Y >= viewportBottom)
         {
             return "below";
         }
+
         if (boundsRight <= viewport.X)
         {
             return "left";
         }
+
         if (bounds.X >= viewportRight)
         {
             return "right";
         }
 
         var fullyInside = bounds.X >= viewport.X
-                          && bounds.Y >= viewport.Y
-                          && boundsRight <= viewportRight
-                          && boundsBottom <= viewportBottom;
+            && bounds.Y >= viewport.Y
+            && boundsRight <= viewportRight
+            && boundsBottom <= viewportBottom;
+
         return fullyInside ? "inside" : "partial";
     }
 
@@ -495,6 +550,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         var target = string.IsNullOrWhiteSpace(requestedText)
             ? "the exact target"
             : $"'{requestedText}'";
+
         return resolution switch
         {
             "offscreen" => $"{target} exists outside the current viewport. Scroll the nearest stable scroll container toward the reported viewportRelation, then retry the same selector.",

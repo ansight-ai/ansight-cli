@@ -8,6 +8,7 @@ internal static class CliSessionVideoEncoderFactory
     {
 #if WINDOWS
         return new WindowsSessionVideoFrameExtractor();
+
 #else
         return OperatingSystem.IsMacOS() ? new MacSessionVideoFrameExtractor() : new FfmpegSessionVideoFrameExtractor();
 #endif
@@ -17,6 +18,7 @@ internal static class CliSessionVideoEncoderFactory
     {
 #if WINDOWS
         return new WindowsSessionVideoEncoder();
+
 #else
         return OperatingSystem.IsMacOS()
             ? new MacSessionVideoEncoder()

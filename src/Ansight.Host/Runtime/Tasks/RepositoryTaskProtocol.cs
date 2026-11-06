@@ -27,8 +27,8 @@ internal static class RepositoryTaskProtocol
             : null;
         var rankedMatches = loadResult.Tasks
             .Where(task => feature is null
-                           || string.Equals(task.Feature, feature, StringComparison.OrdinalIgnoreCase)
-                           || task.Feature?.Contains(feature, StringComparison.OrdinalIgnoreCase) == true)
+                || string.Equals(task.Feature, feature, StringComparison.OrdinalIgnoreCase)
+                || task.Feature?.Contains(feature, StringComparison.OrdinalIgnoreCase) == true)
             .Select(task => evaluations is null ? RepositoryTaskSearchMatcher.Match(task, query) : evaluations[task.TaskId])
             .OfType<RepositoryTaskSearchMatch>()
             .Where(match => match.ExclusionReason is null)
@@ -48,6 +48,7 @@ internal static class RepositoryTaskProtocol
             ["tasks"] = SerializeTaskMatches(taskMatches),
             ["warnings"] = new JsonArray(loadResult.Warnings.Select(warning => (JsonNode?)warning).ToArray())
         };
+
         if (includeDiagnostics)
         {
             var returnedTaskIds = taskMatches.Select(match => match.Task.TaskId).ToHashSet(StringComparer.Ordinal);
@@ -63,6 +64,7 @@ internal static class RepositoryTaskProtocol
                     var featureMatches = feature is null
                         || string.Equals(task.Feature, feature, StringComparison.OrdinalIgnoreCase)
                         || task.Feature?.Contains(feature, StringComparison.OrdinalIgnoreCase) == true;
+
                     return (JsonNode?)new JsonObject
                     {
                         ["taskId"] = task.TaskId,
@@ -70,20 +72,22 @@ internal static class RepositoryTaskProtocol
                         ["coverage"] = match.Coverage,
                         ["reason"] = !featureMatches ? "feature-filter"
                             : match.ExclusionReason is { } exclusionReason ? exclusionReason
-                            : returnedTaskIds.Contains(task.TaskId) ? "returned"
-                            : "discovery-result-limit",
+                                : returnedTaskIds.Contains(task.TaskId) ? "returned"
+                                    : "discovery-result-limit",
                         ["matchedQueryTerms"] = new JsonArray(match.MatchedQueryTerms.Select(term => (JsonNode?)JsonValue.Create(term)).ToArray()),
                         ["unmatchedQueryTerms"] = new JsonArray(match.UnmatchedQueryTerms.Select(term => (JsonNode?)JsonValue.Create(term)).ToArray())
                     };
                 }).ToArray())
             };
         }
+
         return result;
     }
 
     public static JsonObject BuildRunResult(RepositoryTaskRunResult result, bool includeCallTrace = true)
     {
         ArgumentNullException.ThrowIfNull(result);
+
         var payload = new JsonObject
         {
             ["runId"] = result.RunId,
@@ -99,11 +103,11 @@ internal static class RepositoryTaskProtocol
             ["assertions"] = includeCallTrace
                 ? JsonSerializer.SerializeToNode(result.Assertions.Select(RepositoryTaskCallTrace.CaptureAssertion), JsonUtil.Compact)
                 : new JsonArray(result.Assertions.Select(assertion => (JsonNode?)new JsonObject
-            {
-                ["assertionId"] = assertion.AssertionId,
-                ["passed"] = assertion.Passed,
-                ["message"] = assertion.Message
-            }).ToArray()),
+                {
+                    ["assertionId"] = assertion.AssertionId,
+                    ["passed"] = assertion.Passed,
+                    ["message"] = assertion.Message
+                }).ToArray()),
             ["toolCalls"] = JsonSerializer.SerializeToNode(
                 includeCallTrace
                     ? result.ToolCalls
@@ -117,10 +121,12 @@ internal static class RepositoryTaskProtocol
                     }).ToArray(),
                 JsonUtil.Compact)
         };
+
         if (includeCallTrace && result.SourceTrace is not null)
         {
             payload["sourceTrace"] = JsonSerializer.SerializeToNode(result.SourceTrace, JsonUtil.Compact);
         }
+
         if (!string.IsNullOrWhiteSpace(result.StandardError))
         {
             payload["standardError"] = result.StandardError.Length <= 2_000
@@ -139,6 +145,7 @@ internal static class RepositoryTaskProtocol
         var task = JsonSerializer.SerializeToNode(match.Task.ToPublicDefinition(), JsonUtil.Compact)!.AsObject();
         task["behavioralSynonyms"] = new JsonArray(
             match.BehavioralSynonyms.Select(synonym => (JsonNode?)synonym).ToArray());
+
         if (match.MatchedQueryTerms.Count == 0 && match.UnmatchedQueryTerms.Count == 0)
         {
             return task;
@@ -161,6 +168,7 @@ internal static class RepositoryTaskProtocol
                 .Select(evidence => (JsonNode?)$"{evidence.QueryTerm} -> {evidence.IndexedTerm} ({evidence.EditDistance} edits)")
                 .ToArray())
         };
+
         return task;
     }
 }

@@ -23,6 +23,7 @@ public sealed class SessionHostMetadataTests
         Assert.Equal("two", updated.CustomProperties!["app"]!["revision"]!.GetValue<string>());
 
         store.Save(updated);
+
         var reopened = new SessionCaptureStore(environment.ApplicationPaths);
         Assert.True(reopened.TryLoad(id, out var loaded));
         Assert.Equal(original.HostMetadata.CapturedAtUtc, loaded!.HostMetadata!.CapturedAtUtc);
@@ -46,6 +47,7 @@ public sealed class SessionHostMetadataTests
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var collector = new ControlledCollector();
         state.ConfigureHostMetadataCollector(collector);
+
         var id = state.CreateSession("example.metadata", "Metadata", IPAddress.Loopback, null, null);
         await collector.GeneralStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -71,6 +73,7 @@ public sealed class SessionHostMetadataTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         state.ConfigureHostMetadataCollector(new FailingCollector());
+
         var id = state.CreateSession("example.metadata", "Metadata", IPAddress.Loopback, null, null);
 
         await WaitForMetadataAsync(state, id, "partial");
@@ -125,6 +128,7 @@ public sealed class SessionHostMetadataTests
     private static async Task WaitForMetadataAsync(RuntimeState state, string id, string status)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
         while (!timeout.IsCancellationRequested)
         {
             if (state.TryGetSessionSnapshot(id, out var session) && session!.HostMetadata!.Status == status)
@@ -170,13 +174,19 @@ public sealed class SessionHostMetadataTests
         {
             var isGeneral = snapshot.TargetPlatform is null;
             (isGeneral ? GeneralStarted : PlatformStarted).TrySetResult();
+
             var result = await (isGeneral ? GeneralResult.Task : PlatformResult.Task);
+
             if (isGeneral)
             {
                 GeneralCompleted.TrySetResult();
             }
 
-            return snapshot with { Status = "complete", Tools = [result] };
+            return snapshot with
+            {
+                Status = "complete",
+                Tools = [result]
+            };
         }
     }
 

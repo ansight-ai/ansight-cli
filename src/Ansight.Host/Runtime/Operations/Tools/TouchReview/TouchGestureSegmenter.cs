@@ -7,6 +7,7 @@ internal static class TouchGestureSegmenter
         TimeSpan gestureGap)
     {
         var segments = new List<TouchGestureSegment>();
+
         foreach (var pointerGroup in touches.GroupBy(touch => touch.PointerId).OrderBy(group => group.Key))
         {
             var pointerTouches = pointerGroup
@@ -21,11 +22,12 @@ internal static class TouchGestureSegmenter
                 // A stationary hold need not emit moves. Keep an explicit down paired with
                 // its release even when the quiet period exceeds the gesture grouping gap.
                 var pointerIsDown = currentTouches.Count > 0
-                                    && TouchReviewGeometry.IsTouchDown(currentTouches[0].Action);
+                    && TouchReviewGeometry.IsTouchDown(currentTouches[0].Action);
                 var shouldStartNewSegment = currentTouches.Count == 0
-                                            || TouchReviewGeometry.IsTouchDown(touch.Action)
-                                            || (!pointerIsDown && lastTouchUtc.HasValue
-                                                && touch.CapturedAtUtc - lastTouchUtc.Value > gestureGap);
+                    || TouchReviewGeometry.IsTouchDown(touch.Action)
+                    || (!pointerIsDown && lastTouchUtc.HasValue
+                        && touch.CapturedAtUtc - lastTouchUtc.Value > gestureGap);
+
                 if (shouldStartNewSegment && currentTouches.Count > 0)
                 {
                     segments.Add(CreateGestureSegment(currentTouches));
@@ -34,6 +36,7 @@ internal static class TouchGestureSegmenter
 
                 currentTouches.Add(touch);
                 lastTouchUtc = touch.CapturedAtUtc;
+
                 if (TouchReviewGeometry.IsTouchEnd(touch.Action))
                 {
                     segments.Add(CreateGestureSegment(currentTouches));
@@ -82,6 +85,7 @@ internal static class TouchGestureSegmenter
         var isComplete = TouchReviewGeometry.IsTouchEnd(endTouch.Action);
         var durationMs = Math.Max(0, (long)Math.Round((endTouch.CapturedAtUtc - startTouch.CapturedAtUtc).TotalMilliseconds));
         var kind = ClassifyGesture(orderedTouches, durationMs, distance, maxDistance, isComplete);
+
         return new TouchGestureSegment(
             string.Empty,
             kind,
@@ -113,6 +117,7 @@ internal static class TouchGestureSegmenter
         }
 
         var resolvedMaxDistance = maxDistance ?? distance ?? 0d;
+
         if (resolvedMaxDistance <= TouchReviewDefaults.TapMaximumNormalizedDistance)
         {
             return durationMilliseconds >= TouchReviewDefaults.LongPressMinimumMilliseconds ? "longPress" : "tap";

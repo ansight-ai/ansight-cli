@@ -14,6 +14,7 @@ internal static partial class FormFactorDetector
         string? densityOutput)
     {
         var normalizedCharacteristics = characteristics?.Trim() ?? string.Empty;
+
         if (ContainsAnyToken(normalizedCharacteristics, "watch", "tv", "automotive", "embedded", "desktop"))
         {
             return AndroidDeviceFormFactor.Unknown;
@@ -26,6 +27,7 @@ internal static partial class FormFactorDetector
 
         var sizeMatch = PhysicalSizePattern().Match(sizeOutput ?? string.Empty);
         var densityMatch = PhysicalDensityPattern().Match(densityOutput ?? string.Empty);
+
         if (sizeMatch.Success
             && densityMatch.Success
             && TryParsePositive(sizeMatch.Groups[1].Value, out var widthPixels)
@@ -48,6 +50,7 @@ internal static partial class FormFactorDetector
         string? density)
     {
         var profile = $"{deviceName},{tagId}";
+
         if (ContainsAnyToken(profile, "wear", "watch", "tv", "automotive", "desktop"))
         {
             return AndroidDeviceFormFactor.Unknown;
@@ -69,6 +72,7 @@ internal static partial class FormFactorDetector
         int densityDpi)
     {
         var smallestWidthDp = Math.Min(widthPixels, heightPixels) * 160d / densityDpi;
+
         return smallestWidthDp >= TabletSmallestWidthDp
             ? AndroidDeviceFormFactor.Tablet
             : AndroidDeviceFormFactor.Phone;
@@ -79,13 +83,13 @@ internal static partial class FormFactorDetector
 
     private static bool ContainsToken(string value, string token)
         => value.Split(
-                [',', ';', ':', '_', '-', ' '],
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            [',', ';', ':', '_', '-', ' '],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Contains(token, StringComparer.OrdinalIgnoreCase);
 
     private static bool TryParsePositive(string? value, out int parsed)
         => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out parsed)
-           && parsed > 0;
+            && parsed > 0;
 
     [GeneratedRegex(@"Physical size:\s*(\d+)x(\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PhysicalSizePattern();

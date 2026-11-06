@@ -12,7 +12,6 @@ public sealed record WorkspaceAppSessionLaunchResult(
 
     [JsonIgnore]
     internal IDisposable? SessionClaim { get; init; }
-
     [JsonIgnore]
     internal DeviceRunSession? DeviceSession { get; init; }
 
@@ -21,7 +20,10 @@ public sealed record WorkspaceAppSessionLaunchResult(
     {
         try
         {
-            if (DeviceSession is not null) await DeviceSession.DisposeAsync().ConfigureAwait(false);
+            if (DeviceSession is not null)
+            {
+                await DeviceSession.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {

@@ -9,13 +9,16 @@ internal static class AccountCommands
     public static Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
     {
         if (CliCommandHelp.IsRequested(arguments))
+        {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp()));
+        }
 
         return Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("AccountCommands.RunAsync", [arguments, output, cancellationToken]);
     }
 
     internal static int OpenPortal(CliArguments arguments, CliOutput output, Func<Uri, string?> openBrowser)
         => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<int>("AccountCommands.OpenPortal", [arguments, output, openBrowser]);
+
     private static string BuildHelp()
         => """
            Open the Ansight web account portal, inspect cloud grants, or manage CLI authentication.

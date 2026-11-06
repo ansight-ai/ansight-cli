@@ -12,7 +12,9 @@ public static class DeviceLocationRouteParser
     public static DeviceLocationRoute Parse(string filePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
         using var stream = File.OpenRead(filePath);
+
         return Parse(Path.GetFileName(filePath), stream);
     }
 
@@ -44,6 +46,7 @@ public static class DeviceLocationRouteParser
         }
 
         var distanceMeters = 0d;
+
         for (var index = 1; index < points.Count; index++)
         {
             distanceMeters += DeviceLocationMath.DistanceMeters(points[index - 1], points[index]);
@@ -53,6 +56,7 @@ public static class DeviceLocationRouteParser
         TimeSpan? recordedDuration = hasRecordedTiming
             ? points[^1].Timestamp!.Value - points[0].Timestamp!.Value
             : null;
+
         return new DeviceLocationRoute(
             sourceFileName,
             points,
@@ -67,6 +71,7 @@ public static class DeviceLocationRouteParser
             .Descendants()
             .Where(element => element.Name.LocalName == "trkpt")
             .ToArray();
+
         if (pointElements.Length == 0)
         {
             pointElements = document
@@ -74,6 +79,7 @@ public static class DeviceLocationRouteParser
                 .Where(element => element.Name.LocalName == "rtept")
                 .ToArray();
         }
+
         if (pointElements.Length == 0)
         {
             pointElements = document
@@ -83,6 +89,7 @@ public static class DeviceLocationRouteParser
         }
 
         EnsurePointLimit(pointElements.Length);
+
         return pointElements.Select(ParseGpxPoint).ToArray();
     }
 
@@ -92,15 +99,18 @@ public static class DeviceLocationRouteParser
         var longitude = ParseCoordinateAttribute(element, "lon", -180d, 180d);
         var altitude = ParseOptionalDouble(element.Elements().FirstOrDefault(child => child.Name.LocalName == "ele")?.Value);
         var timestamp = ParseOptionalTimestamp(element.Elements().FirstOrDefault(child => child.Name.LocalName == "time")?.Value);
+
         return new DeviceLocationPoint(latitude, longitude, altitude, timestamp);
     }
 
     private static IReadOnlyList<DeviceLocationPoint> ParseKml(XDocument document)
     {
         var tracks = document.Descendants().Where(element => element.Name.LocalName == "Track").ToArray();
+
         if (tracks.Length > 0)
         {
             var trackPoints = new List<DeviceLocationPoint>();
+
             foreach (var track in tracks)
             {
                 var coordinateValues = track.Elements()
@@ -111,6 +121,7 @@ public static class DeviceLocationRouteParser
                     .Where(element => element.Name.LocalName == "when")
                     .Select(element => ParseOptionalTimestamp(element.Value))
                     .ToArray();
+
                 for (var index = 0; index < coordinateValues.Length; index++)
                 {
                     var timestamp = index < timestamps.Length ? timestamps[index] : null;
@@ -118,6 +129,7 @@ public static class DeviceLocationRouteParser
                     EnsurePointLimit(trackPoints.Count);
                 }
             }
+
             return trackPoints;
         }
 
@@ -130,6 +142,7 @@ public static class DeviceLocationRouteParser
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .ToArray();
         EnsurePointLimit(values.Length);
+
         return values.Select(value => ParseKmlCoordinate(value, null, splitOnWhitespace: false)).ToArray();
     }
 
@@ -141,6 +154,7 @@ public static class DeviceLocationRouteParser
         var components = value.Split(
             splitOnWhitespace ? (char[]?)null : [','],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
         if (components.Length < 2
             || !TryParseCoordinate(components[0], -180d, 180d, out var longitude)
             || !TryParseCoordinate(components[1], -90d, 90d, out var latitude))
@@ -149,6 +163,7 @@ public static class DeviceLocationRouteParser
         }
 
         var altitude = components.Length > 2 ? ParseOptionalDouble(components[2]) : null;
+
         return new DeviceLocationPoint(latitude, longitude, altitude, timestamp);
     }
 
@@ -159,10 +174,12 @@ public static class DeviceLocationRouteParser
         double maximum)
     {
         var value = element.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == attributeName)?.Value;
+
         if (!TryParseCoordinate(value, minimum, maximum, out var coordinate))
         {
             throw new InvalidDataException($"The GPX route contains an invalid {attributeName} coordinate.");
         }
+
         return coordinate;
     }
 
@@ -172,13 +189,13 @@ public static class DeviceLocationRouteParser
         double maximum,
         out double coordinate)
         => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out coordinate)
-           && double.IsFinite(coordinate)
-           && coordinate >= minimum
-           && coordinate <= maximum;
+            && double.IsFinite(coordinate)
+            && coordinate >= minimum
+            && coordinate <= maximum;
 
     private static double? ParseOptionalDouble(string? value)
         => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result)
-           && double.IsFinite(result)
+            && double.IsFinite(result)
             ? result
             : null;
 
@@ -201,6 +218,7 @@ public static class DeviceLocationRouteParser
                 return false;
             }
         }
+
         return true;
     }
 

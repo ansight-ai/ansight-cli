@@ -2,12 +2,6 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Runtime.Automation;
 
-internal enum RepositoryAutomationActionKind
-{
-    TypeScript,
-    AppTool
-}
-
 internal sealed record RepositoryAutomationRegistration(
     string RepositoryRootPath,
     string AutomationId,
@@ -29,9 +23,9 @@ internal sealed record RepositoryAutomationRegistration(
     public string ActionTarget => ActionKind switch
     {
         RepositoryAutomationActionKind.TypeScript => EntrypointPath
-                                                     ?? throw new InvalidOperationException("TypeScript entrypoint is missing."),
+            ?? throw new InvalidOperationException("TypeScript entrypoint is missing."),
         RepositoryAutomationActionKind.AppTool => AppToolId
-                                                  ?? throw new InvalidOperationException("App tool id is missing."),
+            ?? throw new InvalidOperationException("App tool id is missing."),
         _ => throw new InvalidOperationException($"Unsupported repository automation action kind '{ActionKind}'.")
     };
 }

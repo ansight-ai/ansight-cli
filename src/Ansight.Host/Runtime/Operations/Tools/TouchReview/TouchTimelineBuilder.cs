@@ -12,11 +12,12 @@ internal static class TouchTimelineBuilder
     {
         var buckets = Enumerable.Range(0, bucketCount)
             .Select(index =>
-            {
-                var bucketStartUtc = AddRangeFraction(startUtc, endUtc, index / (double)bucketCount);
-                var bucketEndUtc = AddRangeFraction(startUtc, endUtc, (index + 1) / (double)bucketCount);
-                return new TouchTimelineBucket(index, bucketStartUtc, bucketEndUtc);
-            })
+                {
+                    var bucketStartUtc = AddRangeFraction(startUtc, endUtc, index / (double)bucketCount);
+                    var bucketEndUtc = AddRangeFraction(startUtc, endUtc, (index + 1) / (double)bucketCount);
+
+                    return new TouchTimelineBucket(index, bucketStartUtc, bucketEndUtc);
+                })
             .ToArray();
 
         foreach (var touch in touches)
@@ -36,6 +37,7 @@ internal static class TouchTimelineBuilder
         }
 
         var ratio = (timestampUtc - startUtc).TotalMilliseconds / (endUtc - startUtc).TotalMilliseconds;
+
         return Math.Clamp((int)Math.Floor(ratio * bucketCount), 0, bucketCount - 1);
     }
 

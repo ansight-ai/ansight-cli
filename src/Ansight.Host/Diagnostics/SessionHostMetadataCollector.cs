@@ -5,11 +5,6 @@ using Ansight.SimCtl;
 
 namespace Ansight.Host.Diagnostics;
 
-internal interface ISessionHostMetadataCollector
-{
-    Task<SessionHostMetadata> CollectAsync(SessionHostMetadata snapshot);
-}
-
 internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollector
 {
     private readonly RuntimeOptions options;
@@ -39,7 +34,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
             ProcessorCount = Environment.ProcessorCount,
             OsType = OperatingSystem.IsMacOS() ? "macos"
                 : OperatingSystem.IsWindows() ? "windows"
-                : OperatingSystem.IsLinux() ? "linux" : "other",
+                    : OperatingSystem.IsLinux() ? "linux" : "other",
             OsVersion = Environment.OSVersion.Version.ToString(),
             OsDescription = RuntimeInformation.OSDescription,
             OsArchitecture = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
@@ -63,6 +58,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(options.FeatureLifetime);
         timeout.CancelAfter(TimeSpan.FromSeconds(12));
+
         var token = timeout.Token;
         var probes = new List<Task<SessionHostToolMetadata>>
         {
@@ -88,11 +84,15 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
             var adb = AdbToolLocator.Resolve(options.AdbPath);
             var emulator = AndroidEmulatorToolLocator.Resolve(adb.IsFound ? adb.AdbPath : options.AdbPath);
             probes.Add(GuardAsync("adb", async () => adb.IsFound
-                ? (await InspectAsync("adb", adb.AdbPath, ["version"], token)) with { SelectedVia = adb.Source }
-                : new SessionHostToolMetadata("adb", "missing")));
+                ? (await InspectAsync("adb", adb.AdbPath, ["version"], token)) with
+                {
+                    SelectedVia = adb.Source
+                } : new SessionHostToolMetadata("adb", "missing")));
             probes.Add(GuardAsync("android-emulator", async () => emulator.IsFound
-                ? (await InspectAsync("android-emulator", emulator.EmulatorPath, ["-version"], token)) with { SelectedVia = emulator.Source }
-                : new SessionHostToolMetadata("android-emulator", "missing")));
+                ? (await InspectAsync("android-emulator", emulator.EmulatorPath, ["-version"], token)) with
+                {
+                    SelectedVia = emulator.Source
+                } : new SessionHostToolMetadata("android-emulator", "missing")));
             probes.Add(GuardAsync("scrcpy", () => InspectScrcpyAsync(token)));
             probes.Add(GuardAsync("java", () => InspectAsync("java", null, ["-version"], token)));
             probes.Add(GuardAsync("android-studio", () => Task.FromResult(InspectAndroidStudio())));
@@ -122,12 +122,14 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
         var version = await GuardAsync("macos", async () =>
         {
             var result = await DiagnosticProcess.RunAsync("/usr/bin/sw_vers", ["-productVersion"], token);
+
             return new SessionHostToolMetadata("macos", result.Status,
                 result.Status == "available" ? result.Output : null);
         });
         var build = await GuardAsync("macos-build", async () =>
         {
             var result = await DiagnosticProcess.RunAsync("/usr/bin/sw_vers", ["-buildVersion"], token);
+
             return new SessionHostToolMetadata("macos-build", result.Status,
                 result.Status == "available" ? result.Output : null);
         });
@@ -162,12 +164,14 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
     {
         var tool = await DiagnosticProcess.InspectAsync(name, path, "Capture tooling", token, arguments);
         var status = tool.Status == "available" && tool.Version is null ? "not-checked" : tool.Status;
+
         return new SessionHostToolMetadata(name, status, tool.Version, Path: tool.Path, SelectedVia: tool.SelectedVia);
     }
 
     private static async Task<SessionHostToolMetadata> InspectOcrAsync(CancellationToken token)
     {
         var path = TesseractSessionScreenshotOcrScanner.ResolveExecutablePath(null);
+
         if (path is null)
         {
             return new SessionHostToolMetadata("tesseract", "missing");
@@ -176,12 +180,17 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
         var tool = await InspectAsync("tesseract", path, ["--version"], token);
         var selectedVia = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_TESSERACT_PATH"))
             ? "PATH" : "ANSIGHT_TESSERACT_PATH";
-        return tool with { SelectedVia = selectedVia };
+
+        return tool with
+        {
+            SelectedVia = selectedVia
+        };
     }
 
     private async Task<SessionHostToolMetadata> InspectXcodeAsync(CancellationToken token)
     {
         var xcode = await SimCtlToolLocator.ResolveAsync(options.XcodePath, token);
+
         if (!xcode.IsFound)
         {
             return new SessionHostToolMetadata("xcode", "missing");
@@ -201,6 +210,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
     private async Task<SessionHostToolMetadata> InspectAxeAsync(CancellationToken token)
     {
         var path = IosSimulatorAccessibilityClient.ResolveExecutablePath(options.IosSimulatorAxePath);
+
         if (path is null)
         {
             return new SessionHostToolMetadata("axe", "missing");
@@ -209,8 +219,12 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
         var tool = await InspectAsync("axe", path, ["--version"], token);
         var selectedVia = !string.IsNullOrWhiteSpace(options.IosSimulatorAxePath) ? "configured"
             : !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANSIGHT_AXE_PATH")) ? "ANSIGHT_AXE_PATH"
-            : "discovery";
-        return tool with { SelectedVia = selectedVia };
+                : "discovery";
+
+        return tool with
+        {
+            SelectedVia = selectedVia
+        };
     }
 
     private static async Task<SessionHostToolMetadata> InspectPlistAsync(string name, string path, CancellationToken token)
@@ -221,6 +235,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
         }
 
         var result = await DiagnosticProcess.RunAsync("/usr/bin/plutil", ["-extract", "CFBundleVersion", "raw", "-o", "-", path], token);
+
         return new SessionHostToolMetadata(name, result.Status,
             result.Status == "available" ? result.Output : null, Path: path);
     }
@@ -228,6 +243,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
     private static async Task<SessionHostToolMetadata> InspectScrcpyAsync(CancellationToken token)
     {
         var tool = await ScrcpyToolLocator.ResolveAsync(cancellationToken: token);
+
         return tool.IsFound
             ? new SessionHostToolMetadata("scrcpy", "available", tool.Version, Path: tool.ExecutablePath, SelectedVia: tool.Source)
             : new SessionHostToolMetadata("scrcpy", "unavailable");
@@ -238,6 +254,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
         var product = JsonNode.Parse(File.ReadAllText(path));
         var version = product?["version"]?.GetValue<string>();
         var build = product?["buildNumber"]?.GetValue<string>();
+
         return new SessionHostToolMetadata("android-studio", string.IsNullOrWhiteSpace(version) ? "not-checked" : "available",
             version, build, path, "installation");
     }
@@ -259,6 +276,7 @@ internal sealed class SessionHostMetadataCollector : ISessionHostMetadataCollect
             foreach (var relative in new[] { "product-info.json", "Contents/Resources/product-info.json" })
             {
                 var path = Path.Combine(root!, relative);
+
                 if (File.Exists(path))
                 {
                     return ReadAndroidStudioProduct(path);

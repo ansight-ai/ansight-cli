@@ -29,18 +29,18 @@ internal sealed class JsonLinesSessionBuilder
     }
 
     public bool HasAnyEvidence => snapshot is not null
-                                  || !string.IsNullOrWhiteSpace(SessionId)
-                                  || !string.IsNullOrWhiteSpace(AppId)
-                                  || logs.Count > 0
-                                  || metricChannels.Count > 0
-                                  || metrics.Count > 0
-                                  || applicationEvents.Count > 0
-                                  || touches.Count > 0
-                                  || networkRequests.Count > 0
-                                  || images.Count > 0
-                                  || annotations.Count > 0
-                                  || visualTreeSnapshots.Count > 0
-                                  || artifactSnapshots.Count > 0;
+        || !string.IsNullOrWhiteSpace(SessionId)
+        || !string.IsNullOrWhiteSpace(AppId)
+        || logs.Count > 0
+        || metricChannels.Count > 0
+        || metrics.Count > 0
+        || applicationEvents.Count > 0
+        || touches.Count > 0
+        || networkRequests.Count > 0
+        || images.Count > 0
+        || annotations.Count > 0
+        || visualTreeSnapshots.Count > 0
+        || artifactSnapshots.Count > 0;
 
     public bool HasLogs => logs.Count > 0;
     public bool HasMetricChannels => metricChannels.Count > 0;
@@ -96,7 +96,6 @@ internal sealed class JsonLinesSessionBuilder
     public string? ProcessSessionId { get; set; }
     public string? Status { get; set; }
     public string? CaptureSource { get; set; }
-
     public string? SdkVersion { get; set; }
     public string? Notes { get; set; }
     public DateTimeOffset? CreatedUtc { get; set; }
@@ -145,6 +144,7 @@ internal sealed class JsonLinesSessionBuilder
     public void AddNetworkRequest(SessionNetworkRequest request)
     {
         var normalized = SessionNetworkRequestSanitizer.Normalize(request);
+
         if (normalized is not null)
         {
             networkRequests.Add(normalized);
@@ -167,6 +167,7 @@ internal sealed class JsonLinesSessionBuilder
     public void AddAnnotatedFeedback(AnnotatedFeedbackBundleContent content)
     {
         var screenshotFrame = content.CreateScreenshotFrame();
+
         if (screenshotFrame is not null && content.Screenshot is not null)
         {
             AddImage(screenshotFrame, content.Screenshot.Bytes);
@@ -183,6 +184,7 @@ internal sealed class JsonLinesSessionBuilder
         }
 
         var artifactSnapshot = content.CreateArtifactSnapshot();
+
         if (artifactSnapshot is null)
         {
             return;
@@ -190,6 +192,7 @@ internal sealed class JsonLinesSessionBuilder
 
         artifactSnapshots.RemoveAll(snapshot => string.Equals(snapshot.SnapshotId, artifactSnapshot.SnapshotId, StringComparison.Ordinal));
         artifactSnapshots.Add(artifactSnapshot);
+
         foreach (var artifact in content.Artifacts.Where(artifact => artifact.Bytes is { Length: > 0 }))
         {
             artifactBytesByRelativePath[$"{artifactSnapshot.ArtifactDirectoryName}/{artifact.FileName}"] = artifact.Bytes!;
@@ -202,24 +205,24 @@ internal sealed class JsonLinesSessionBuilder
         var evidenceEndUtc = LatestEvidenceUtc();
         var now = DateTimeOffset.UtcNow;
         var createdUtc = CreatedUtc
-                         ?? snapshot?.CreatedUtc
-                         ?? evidenceStartUtc
-                         ?? now;
+            ?? snapshot?.CreatedUtc
+            ?? evidenceStartUtc
+            ?? now;
         var lastUpdatedUtc = LastUpdatedUtc
-                             ?? snapshot?.LastUpdatedUtc
-                             ?? evidenceEndUtc
-                             ?? createdUtc;
+            ?? snapshot?.LastUpdatedUtc
+            ?? evidenceEndUtc
+            ?? createdUtc;
 
         var resolvedSessionId = NormalizeIdentifier(
             SessionId
-            ?? snapshot?.SessionId
-            ?? sourceName
-            ?? fallbackSessionName,
+                ?? snapshot?.SessionId
+                ?? sourceName
+                ?? fallbackSessionName,
             $"offline-{now:yyyyMMddHHmmss}");
         var resolvedAppId = NormalizeIdentifier(
             AppId
-            ?? snapshot?.AppId
-            ?? "offline.capture",
+                ?? snapshot?.AppId
+                ?? "offline.capture",
             "offline.capture");
 
         var builtLogs = HasLogs ? Logs : snapshot?.Logs ?? Array.Empty<LogEntry>();
@@ -318,6 +321,7 @@ internal sealed class JsonLinesSessionBuilder
             .Where(timestamp => timestamp != default)
             .OrderBy(timestamp => timestamp)
             .ToArray();
+
         return timestamps.Length == 0 ? null : timestamps[0];
     }
 
@@ -335,6 +339,7 @@ internal sealed class JsonLinesSessionBuilder
             .Where(timestamp => timestamp != default)
             .OrderByDescending(timestamp => timestamp)
             .ToArray();
+
         return timestamps.Length == 0 ? null : timestamps[0];
     }
 

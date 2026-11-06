@@ -13,6 +13,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
         var transferId = Guid.NewGuid();
         var envelope = CreateJsonArtifactResponse(sessionId, transferId);
         var registered = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", envelope));
+
         try
         {
             CompleteJsonTransfer(manager, sessionId, transferId);
@@ -21,6 +22,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
             // Reproduces the fast JSON path: the receiver processed every frame before
             // SendToolRequestAsync had a chance to look up the completion registration.
             Assert.Empty(manager.TryGetCompletions("a-different-session", envelope));
+
             var claimed = Assert.Single(manager.TryGetCompletions(sessionId, envelope));
             Assert.True(claimed.CaptureSessionArtifactSnapshot);
             Assert.Equal("run-result", claimed.ArtifactId);
@@ -42,6 +44,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
         var transferId = Guid.NewGuid();
         var envelope = CreateJsonArtifactResponse(sessionId, transferId);
         var registered = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", envelope));
+
         try
         {
             var claimed = Assert.Single(manager.TryGetCompletions(sessionId, envelope));
@@ -65,10 +68,12 @@ public sealed class BinaryToolArtifactTransferManagerTests
         var transferId = Guid.NewGuid();
         var envelope = CreateJsonArtifactResponse(sessionId, transferId);
         var registered = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", envelope));
+
         try
         {
             Assert.True(manager.TryHandleBinaryMessage(sessionId,
                 CreateFrame(transferId, BinaryFileTransferFrameType.Error, 0, 0, Encoding.UTF8.GetBytes("transfer rejected"))));
+
             var claimed = Assert.Single(manager.TryGetCompletions(sessionId, envelope));
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => claimed.Completion);
             Assert.Equal("transfer rejected", error.Message);
@@ -91,11 +96,17 @@ public sealed class BinaryToolArtifactTransferManagerTests
         var transferId = Guid.NewGuid();
         var envelope = CreateJsonArtifactResponse(sessionId, transferId);
         var registered = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", envelope));
+
         try
         {
-            if (completed) CompleteJsonTransfer(manager, sessionId, transferId);
+            if (completed)
+            {
+                CompleteJsonTransfer(manager, sessionId, transferId);
+            }
+
             manager.CancelResponse(sessionId, envelope, "request cancelled");
             Assert.Empty(manager.TryGetCompletions(sessionId, envelope));
+
             if (completed)
             {
                 await registered.Completion;
@@ -130,6 +141,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
         var completed = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", completedResponse));
         var active = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", activeResponse));
         var other = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(otherSessionId, "app_1", otherResponse));
+
         try
         {
             CompleteJsonTransfer(manager, sessionId, completedId);
@@ -231,6 +243,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
             if (registration is not null)
             {
                 var directoryPath = Path.GetDirectoryName(registration.ArtifactPath);
+
                 if (!string.IsNullOrWhiteSpace(directoryPath) && Directory.Exists(directoryPath))
                 {
                     Directory.Delete(directoryPath, recursive: true);
@@ -313,6 +326,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
             if (registration is not null)
             {
                 var directoryPath = Path.GetDirectoryName(registration.ArtifactPath);
+
                 if (!string.IsNullOrWhiteSpace(directoryPath) && Directory.Exists(directoryPath))
                 {
                     Directory.Delete(directoryPath, recursive: true);
@@ -345,6 +359,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
         };
 
         var registrations = manager.TryRegisterAll("sess_1", "app_1", envelope);
+
         try
         {
             Assert.Equal(2, registrations.Count);
@@ -356,10 +371,11 @@ public sealed class BinaryToolArtifactTransferManagerTests
         finally
         {
             manager.Dispose();
+
             foreach (var directoryPath in registrations
-                         .Select(static registration => Path.GetDirectoryName(registration.ArtifactPath))
-                         .Where(static path => !string.IsNullOrWhiteSpace(path))
-                         .Distinct(StringComparer.Ordinal))
+                .Select(static registration => Path.GetDirectoryName(registration.ArtifactPath))
+                .Where(static path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.Ordinal))
             {
                 if (Directory.Exists(directoryPath))
                 {
@@ -451,7 +467,11 @@ public sealed class BinaryToolArtifactTransferManagerTests
     private static void DeleteArtifactDirectory(BinaryToolArtifactTransferRegistration registration)
     {
         var directory = Path.GetDirectoryName(registration.ArtifactPath);
-        if (directory is not null && Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+
+        if (directory is not null && Directory.Exists(directory))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static JsonObject CreateEvidenceResult(string callId, Guid transferId)
@@ -501,6 +521,7 @@ public sealed class BinaryToolArtifactTransferManagerTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44, 8), offsetBytes);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52, 4), payload.Length);
         payload.CopyTo(frame, BinaryFileTransferProtocol.HeaderSize);
+
         return frame;
     }
 }

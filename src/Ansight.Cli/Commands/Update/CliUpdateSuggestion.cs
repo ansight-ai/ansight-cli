@@ -4,9 +4,9 @@ namespace Ansight.Cli.Commands.Update;
 
 internal static class CliUpdateSuggestion
 {
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
+    private static readonly TimeSpan checkInterval = TimeSpan.FromHours(24);
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
@@ -15,6 +15,7 @@ internal static class CliUpdateSuggestion
     public static async System.Threading.Tasks.Task TryWriteAsync(CliOutput output, CancellationToken cancellationToken)
     {
         var installationState = CliInstallationReceiptStore.Load();
+
         if (installationState.Receipt is null)
         {
             return;
@@ -23,6 +24,7 @@ internal static class CliUpdateSuggestion
         var cachePath = Path.Combine(
             Path.GetDirectoryName(installationState.ReceiptPath)!,
             "update-check.json");
+
         if (TryReadRecentCache(cachePath, DateTimeOffset.UtcNow) is not null)
         {
             return;
@@ -32,18 +34,20 @@ internal static class CliUpdateSuggestion
         {
             using var httpClient = UpdateCommands.CreateHttpClient();
             httpClient.Timeout = TimeSpan.FromSeconds(3);
+
             var service = new CliUpdateService(
                 httpClient,
                 CliReleaseIdentity.Current,
                 installationState,
                 CliRuntimeIdentifier.Current);
             var status = await service.CheckAsync(
-                    requestedChannel: null,
-                    requestedVersion: null,
-                    requestedBuildNumber: null,
-                    cancellationToken)
+                requestedChannel: null,
+                requestedVersion: null,
+                requestedBuildNumber: null,
+                cancellationToken)
                 .ConfigureAwait(false);
             SaveCache(cachePath, status, DateTimeOffset.UtcNow);
+
             if (status.IsUpdateAvailable)
             {
                 output.WriteProgress(
@@ -60,6 +64,7 @@ internal static class CliUpdateSuggestion
     public static async Task<bool> IsUpdateAvailableAsync(CancellationToken cancellationToken)
     {
         var installationState = CliInstallationReceiptStore.Load();
+
         if (installationState.Receipt is null)
         {
             return false;
@@ -68,6 +73,7 @@ internal static class CliUpdateSuggestion
         var cachePath = Path.Combine(
             Path.GetDirectoryName(installationState.ReceiptPath)!,
             "update-check.json");
+
         if (TryReadRecentCache(cachePath, DateTimeOffset.UtcNow) is { } recentCache)
         {
             return recentCache.IsUpdateAvailable;
@@ -77,23 +83,26 @@ internal static class CliUpdateSuggestion
         {
             using var httpClient = UpdateCommands.CreateHttpClient();
             httpClient.Timeout = TimeSpan.FromSeconds(3);
+
             var service = new CliUpdateService(
                 httpClient,
                 CliReleaseIdentity.Current,
                 installationState,
                 CliRuntimeIdentifier.Current);
             var status = await service.CheckAsync(
-                    requestedChannel: null,
-                    requestedVersion: null,
-                    requestedBuildNumber: null,
-                    cancellationToken)
+                requestedChannel: null,
+                requestedVersion: null,
+                requestedBuildNumber: null,
+                cancellationToken)
                 .ConfigureAwait(false);
             SaveCache(cachePath, status, DateTimeOffset.UtcNow);
+
             return status.IsUpdateAvailable;
         }
         catch (Exception)
         {
             SaveFailedCheck(cachePath, installationState.Receipt, DateTimeOffset.UtcNow);
+
             return false;
         }
     }
@@ -111,8 +120,9 @@ internal static class CliUpdateSuggestion
         {
             var cache = JsonSerializer.Deserialize<CliUpdateSuggestionCache>(
                 File.ReadAllText(cachePath),
-                JsonOptions);
-            return cache is not null && now - cache.CheckedAtUtc < CheckInterval
+                jsonOptions);
+
+            return cache is not null && now - cache.CheckedAtUtc < checkInterval
                 ? cache
                 : null;
         }
@@ -140,7 +150,7 @@ internal static class CliUpdateSuggestion
                 status.IsUpdateAvailable);
             File.WriteAllText(
                 cachePath,
-                JsonSerializer.Serialize(cache, JsonOptions) + Environment.NewLine);
+                JsonSerializer.Serialize(cache, jsonOptions) + Environment.NewLine);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -166,7 +176,7 @@ internal static class CliUpdateSuggestion
                 false);
             File.WriteAllText(
                 cachePath,
-                JsonSerializer.Serialize(cache, JsonOptions) + Environment.NewLine);
+                JsonSerializer.Serialize(cache, jsonOptions) + Environment.NewLine);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -174,13 +184,3 @@ internal static class CliUpdateSuggestion
         }
     }
 }
-
-internal sealed record CliUpdateSuggestionCache(
-    string Schema,
-    DateTimeOffset CheckedAtUtc,
-    string CurrentVersion,
-    long CurrentBuildNumber,
-    string LatestVersion,
-    long LatestBuildNumber,
-    string Channel,
-    bool IsUpdateAvailable);

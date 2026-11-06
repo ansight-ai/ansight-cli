@@ -8,6 +8,7 @@ internal sealed partial class AppGraphLiveRunStore
         IReadOnlyDictionary<string, SimulatorAgentAppGraphLiveNode> nodes, string destinationId, string ancestorId)
     {
         var visited = new HashSet<string>(StringComparer.Ordinal);
+
         while (visited.Add(destinationId) && nodes.TryGetValue(destinationId, out var node))
         {
             if (destinationId == ancestorId)
@@ -29,6 +30,7 @@ internal sealed partial class AppGraphLiveRunStore
     private static string? ValidateNewDestinationIdentity(JsonObject destination, MutableRun run)
     {
         var id = ReadString(destination, "id");
+
         if (id is null || run.Nodes.ContainsKey(id))
         {
             return null;
@@ -38,6 +40,7 @@ internal sealed partial class AppGraphLiveRunStore
         var kind = ReadString(destination, "kind");
         var matches = run.Nodes.Values.Where(node => node.Kind == kind
             && string.Equals(NormalizeIdentity(node.Name), NormalizeIdentity(name), StringComparison.Ordinal)).ToArray();
+
         if (matches.Length == 0 || NormalizeOptional(ReadString(destination, "identityEvidence")) is not null)
         {
             return null;
@@ -69,6 +72,7 @@ internal sealed partial class AppGraphLiveRunStore
                 || !run.Nodes.ContainsKey(sourceId)
                 || !run.Nodes.ContainsKey(targetId)
                 || NormalizeOptional(ReadString(alias, "evidence")) is null;
+
             if (invalid)
             {
                 return "A destination alias needs two distinct retained IDs and observed evidence that they represent the same visual state.";
@@ -76,18 +80,24 @@ internal sealed partial class AppGraphLiveRunStore
 
             var source = run.Nodes[sourceId!];
             var target = run.Nodes[targetId!];
+
             if (source.Kind != target.Kind || target.ParentScreen == sourceId)
             {
                 return "Destination aliases cannot merge different kinds or a parent into its child.";
             }
 
             string Redirect(string id) => id == sourceId ? targetId! : id;
+
             run.Nodes.Remove(sourceId!);
+
             foreach (var node in run.Nodes.Values.ToArray())
             {
                 if (node.ParentScreen == sourceId)
                 {
-                    run.Nodes[node.Id] = node with { ParentScreen = targetId };
+                    run.Nodes[node.Id] = node with
+                    {
+                        ParentScreen = targetId
+                    };
                 }
             }
 
@@ -98,7 +108,10 @@ internal sealed partial class AppGraphLiveRunStore
                     From = Redirect(edge.From),
                     To = Redirect(edge.To),
                     NavigationContext = edge.NavigationContext is { } context
-                        ? context with { ReturnDestinationId = Redirect(context.ReturnDestinationId) } : null
+                        ? context with
+                        {
+                            ReturnDestinationId = Redirect(context.ReturnDestinationId)
+                        } : null
                 };
             }
 
@@ -138,7 +151,10 @@ internal sealed partial class AppGraphLiveRunStore
 
             if (run.PendingOutcome is { } pending)
             {
-                run.PendingOutcome = pending with { FromDestinationId = Redirect(pending.FromDestinationId) };
+                run.PendingOutcome = pending with
+                {
+                    FromDestinationId = Redirect(pending.FromDestinationId)
+                };
             }
         }
 

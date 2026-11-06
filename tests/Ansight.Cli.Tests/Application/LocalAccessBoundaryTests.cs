@@ -92,12 +92,14 @@ public sealed class LocalAccessBoundaryTests
     public void ForwardedCredentialsClassifySummaryAsRunnerOnlyForTheirRequest()
     {
         var prior = Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current;
+
         using (Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Push(new("request-key", Guid.NewGuid().ToString())))
         {
             Assert.True(CliCommandAccessPolicy.HasRunnerCredentials);
             Assert.Equal(CliAccessClass.Runner, CliCommandAccessPolicy.Classify(
                 CliArguments.Parse(["session", "summary", "capture", "--local"]), CliCommandAccessPolicy.HasRunnerCredentials));
         }
+
         Assert.Same(prior, Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current);
     }
 }

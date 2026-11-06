@@ -71,6 +71,7 @@ public sealed class SessionArchiveService
 
         var trimmedSessionId = sessionId.Trim();
         var trimmedArchivePath = archiveFilePath.Trim();
+
         if (!sessionReader.TryGetSessionSnapshotForExport(trimmedSessionId, out var snapshot) || snapshot is null)
         {
             return Task.FromResult(OperationResult.Failure($"Session '{trimmedSessionId}' was not found."));
@@ -90,12 +91,17 @@ public sealed class SessionArchiveService
         ArgumentException.ThrowIfNullOrWhiteSpace(archiveFilePath);
 
         var trimmedArchivePath = archiveFilePath.Trim();
+
         return SessionActivityService.For(applicationPaths).RecordAsync("session.import", "session", null,
             () => Task.Run(() =>
             {
                 var result = ImportSessionArchive(trimmedArchivePath, replaySource, password);
+
                 if (result.IsSuccess && result.ImportedSession is { } imported)
+                {
                     SessionActivityOperation.Current?.SetTarget(imported.SessionId, imported.AppId);
+                }
+
                 return result;
             }, cancellationToken), result => result.IsSuccess ? "succeeded" : "failed");
     }
@@ -128,6 +134,7 @@ public sealed class SessionArchiveService
                 operationContext: sanitizationContext,
                 report: report);
         report?.Invoke(new SessionOptimizationProgress("Sanitizing upload metadata…"));
+
         return SessionSnapshotCloner.WithoutVideoRecordings(sanitizer.Sanitize(sanitizationSnapshot).Snapshot);
     }
 
@@ -152,9 +159,11 @@ public sealed class SessionArchiveService
         Action<SessionOptimizationProgress>? report)
     {
         ISessionArchiveSanitizer? sanitizer = null;
+
         try
         {
             var directoryPath = Path.GetDirectoryName(archiveFilePath);
+
             if (string.IsNullOrWhiteSpace(directoryPath))
             {
                 return OperationResult.Failure("Choose a valid archive destination.");
@@ -177,6 +186,7 @@ public sealed class SessionArchiveService
             var sessionCapturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(applicationPaths);
             var appIcon = snapshot.AppIcon;
             string? sourceAppIconPath = null;
+
             if (appIcon is not null)
             {
                 sourceAppIconPath = SessionAppIconArtifactPath.ResolveSessionIconPath(
@@ -184,6 +194,7 @@ public sealed class SessionArchiveService
                     snapshot.AppId,
                     snapshot.SessionId,
                     appIcon);
+
                 if (!File.Exists(sourceAppIconPath))
                 {
                     appIcon = null;
@@ -200,6 +211,7 @@ public sealed class SessionArchiveService
                 includedVisualTreeTypes: options.IncludedVisualTreeTypes);
             var sourceArtifactSnapshots = exportSnapshot.ArtifactSnapshots;
             SessionSanitizedCapture? sanitizedCapture = null;
+
             if (!string.IsNullOrWhiteSpace(options.SanitizerModulePath))
             {
                 sanitizer = new ScriptedSessionSanitizationProcessor(
@@ -229,9 +241,11 @@ public sealed class SessionArchiveService
                     snapshot.SessionId),
                 ArtifactsArchiveDirectoryName);
             var artifactsWritten = false;
+
             if (options.IncludeArtifacts && sanitizer is not null && Directory.Exists(artifactsDirectoryPath))
             {
                 report?.Invoke(new SessionOptimizationProgress("Sanitizing captured artifacts…"));
+
                 var writtenArtifactPaths = sanitizer.WriteArtifacts(
                     artifactsDirectoryPath,
                     archive,
@@ -243,6 +257,7 @@ public sealed class SessionArchiveService
 
             report?.Invoke(new SessionOptimizationProgress("Writing session data…"));
             SessionVideoArchive.Write(archive, sessionCapturesRootPath, snapshot, exportSnapshot.VideoRecordings);
+
             var exportLogStreams = SessionLogStreams.Normalize(exportSnapshot.LogStreams, exportSnapshot.Logs);
             var sessionDocumentSnapshot = CreateExportSessionDocumentSnapshot(exportSnapshot);
             var savedAtUtc = DateTimeOffset.UtcNow;
@@ -250,8 +265,9 @@ public sealed class SessionArchiveService
                 archive,
                 exportSnapshot.VisualTreeSnapshots,
                 savedAtUtc,
-                SessionArchiveJsonOptions);
+                sessionArchiveJsonOptions);
             var sessionEntry = archive.CreateEntry("session.json", CompressionLevel.Optimal);
+
             using (var writer = new StreamWriter(sessionEntry.Open()))
             {
                 writer.Write(JsonSerializer.Serialize(
@@ -262,7 +278,7 @@ public sealed class SessionArchiveService
                         Session = sessionDocumentSnapshot,
                         VisualTreeSnapshotIndex = visualTreeSnapshotIndex
                     },
-                    SessionArchiveJsonOptions));
+                    sessionArchiveJsonOptions));
             }
 
             WriteArchiveJsonEntry(
@@ -277,7 +293,7 @@ public sealed class SessionArchiveService
                 archive,
                 exportLogStreams,
                 DateTimeOffset.UtcNow,
-                SessionArchiveJsonOptions);
+                sessionArchiveJsonOptions);
             WriteArchiveJsonEntry(
                 archive,
                 SessionTelemetryArchiveEntryPath,
@@ -300,9 +316,10 @@ public sealed class SessionArchiveService
             Ansight.Host.Connectivity.SessionConnectivityArchive.WriteZip(archive, Ansight.Host.Connectivity.SessionConnectivity.Read(exportSnapshot.ApplicationEvents));
 
             var networkRequests = exportSnapshot.NetworkRequests
-                         .OrderBy(static request => request.StartedAtUtc)
-                         .ThenBy(static request => request.Id, StringComparer.Ordinal)
-                         .ToArray();
+                .OrderBy(static request => request.StartedAtUtc)
+                .ThenBy(static request => request.Id, StringComparer.Ordinal)
+                .ToArray();
+
             for (var requestIndex = 0; requestIndex < networkRequests.Length; requestIndex++)
             {
                 var request = networkRequests[requestIndex];
@@ -327,6 +344,7 @@ public sealed class SessionArchiveService
             }
 
             var imageFrames = exportSnapshot.Images.OrderBy(frame => frame.CapturedAtUtc).ToArray();
+
             for (var imageIndex = 0; imageIndex < imageFrames.Length; imageIndex++)
             {
                 var frame = imageFrames[imageIndex];
@@ -335,12 +353,14 @@ public sealed class SessionArchiveService
                     snapshot.AppId,
                     snapshot.SessionId,
                     frame);
+
                 if (!File.Exists(sourceImagePath))
                 {
                     continue;
                 }
 
                 var entryName = BuildImageEntryPath(frame);
+
                 if (sanitizer is null || sanitizedCapture is null)
                 {
                     var imageEntry = archive.CreateEntry(entryName, CompressionLevel.NoCompression);
@@ -360,7 +380,7 @@ public sealed class SessionArchiveService
                     archive,
                     entryName,
                     sanitizedCapture.ScreenshotRegionsByFrameId.GetValueOrDefault(frame.FrameId)
-                    ?? Array.Empty<SessionSanitizationRegion>());
+                        ?? Array.Empty<SessionSanitizationRegion>());
                 report?.Invoke(new SessionOptimizationProgress(
                     "Writing screenshots…",
                     imageIndex + 1,
@@ -370,7 +390,9 @@ public sealed class SessionArchiveService
             if (options.IncludeArtifacts && !artifactsWritten && Directory.Exists(artifactsDirectoryPath))
             {
                 report?.Invoke(new SessionOptimizationProgress("Writing captured artifacts…"));
+
                 var artifactFilePaths = Directory.EnumerateFiles(artifactsDirectoryPath, "*", SearchOption.AllDirectories).ToArray();
+
                 for (var artifactIndex = 0; artifactIndex < artifactFilePaths.Length; artifactIndex++)
                 {
                     var artifactFilePath = artifactFilePaths[artifactIndex];
@@ -396,7 +418,9 @@ public sealed class SessionArchiveService
             }
 
             report?.Invoke(new SessionOptimizationProgress("Finalizing the session archive…", 1, 1));
+
             var sanitizedMessage = sanitizedCapture is null ? string.Empty : " with sanitization";
+
             return OperationResult.Success(
                 $"Session '{snapshot.SessionId}' exported{sanitizedMessage} to '{archiveFilePath}'.");
         }
@@ -433,6 +457,7 @@ public sealed class SessionArchiveService
     {
         var hasEncryptedEntries = false;
         var videoImportDirectory = Path.Combine(Path.GetTempPath(), "ansight-video-import-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             if (!File.Exists(archiveFilePath))
@@ -460,6 +485,7 @@ public sealed class SessionArchiveService
 
             using var archive = new SharpZipSessionArchiveReader(archiveFilePath, password);
             hasEncryptedEntries = archive.HasEncryptedEntries;
+
             if (hasEncryptedEntries && string.IsNullOrEmpty(password))
             {
                 return SessionImportResult.Failure(
@@ -468,6 +494,7 @@ public sealed class SessionArchiveService
             }
 
             var sessionEntry = archive.GetEntry("session.json");
+
             if (sessionEntry is null)
             {
                 return SessionArchiveExternalPayloadReader.TryReadJsonLinesArchive(
@@ -486,9 +513,10 @@ public sealed class SessionArchiveService
             }
 
             SessionCaptureDocument? document;
+
             using (var entryStream = sessionEntry.Open())
             {
-                document = JsonSerializer.Deserialize<SessionCaptureDocument>(entryStream, SessionArchiveJsonOptions);
+                document = JsonSerializer.Deserialize<SessionCaptureDocument>(entryStream, sessionArchiveJsonOptions);
             }
 
             if (document?.Session is null)
@@ -515,6 +543,7 @@ public sealed class SessionArchiveService
             if (archiveSession.AppIcon is not null)
             {
                 var appIconEntry = archive.GetEntry(SessionAppIconArtifactPath.ResolveArchiveEntryPath(archiveSession.AppIcon));
+
                 if (appIconEntry is null)
                 {
                     return SessionImportResult.Failure("The session archive is missing app icon data.");
@@ -529,6 +558,7 @@ public sealed class SessionArchiveService
             foreach (var frame in archiveSession.Images)
             {
                 var imageEntry = archive.GetEntry(BuildImageEntryPath(frame));
+
                 if (imageEntry is null)
                 {
                     return SessionImportResult.Failure($"The session archive is missing image data for frame '{frame.FrameId}'.");
@@ -549,6 +579,7 @@ public sealed class SessionArchiveService
                 }
 
                 var relativePath = entry.FullName[(ArtifactsArchiveDirectoryName.Length + 1)..];
+
                 if (string.IsNullOrWhiteSpace(relativePath))
                 {
                     continue;
@@ -561,18 +592,28 @@ public sealed class SessionArchiveService
             }
 
             var videoFilesById = new Dictionary<string, string>(StringComparer.Ordinal);
+
             foreach (var recording in archiveSession.VideoRecordings)
             {
                 recording.Validate();
+
                 var entry = archive.GetEntry(recording.EntryPath)
                     ?? throw new InvalidDataException($"The archive is missing video '{recording.RecordingId}'.");
                 Directory.CreateDirectory(videoImportDirectory);
+
                 var path = Path.Combine(videoImportDirectory, recording.RecordingId + ".mp4");
+
                 using (var input = entry.Open())
-                using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                    input.CopyTo(output);
+                {
+                    using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    {
+                        input.CopyTo(output);
+                    }
+                }
+
                 videoFilesById.Add(recording.RecordingId, path);
             }
+
             var activityRecords = SessionActivityArchive.Read(archive, archiveSession.SessionId);
             var result = sessionLifecycle.ImportSessionSnapshot(
                 archiveSession,
@@ -580,8 +621,12 @@ public sealed class SessionArchiveService
                 appIconBytes,
                 artifactBytesByRelativePath,
                 replaySource, videoFilesById);
+
             if (result.IsSuccess && result.ImportedSession is { } imported)
+            {
                 SessionActivityArchive.Import(activityRecords, SessionActivityService.For(applicationPaths), imported.SessionId);
+            }
+
             return result;
         }
         catch (ICSharpCode.SharpZipLib.Zip.ZipException) when (hasEncryptedEntries)
@@ -600,7 +645,10 @@ public sealed class SessionArchiveService
         }
         finally
         {
-            if (Directory.Exists(videoImportDirectory)) Directory.Delete(videoImportDirectory, recursive: true);
+            if (Directory.Exists(videoImportDirectory))
+            {
+                Directory.Delete(videoImportDirectory, recursive: true);
+            }
         }
     }
 
@@ -617,6 +665,7 @@ public sealed class SessionArchiveService
         var logs = includeNativeDeviceLogs
             ? snapshot.Logs.ToArray()
             : SessionLogStreams.Flatten(logStreams);
+
         return new AppSessionSnapshot
         {
             SessionId = snapshot.SessionId,
@@ -702,7 +751,7 @@ public sealed class SessionArchiveService
             NetworkRequests = includeNetworkRequests ? snapshot.NetworkRequests.ToArray() : [],
             VisualTreeSnapshots = snapshot.VisualTreeSnapshots
                 .Where(item => includedVisualTreeTypes is null
-                               || includedVisualTreeTypes.Any(selection => selection.Matches(item)))
+                    || includedVisualTreeTypes.Any(selection => selection.Matches(item)))
                 .Select(SessionSnapshotCloner.CloneVisualTreeSnapshot)
                 .ToArray(),
             ArtifactSnapshots = (includeArtifacts ? snapshot.ArtifactSnapshots : [])
@@ -796,7 +845,7 @@ public sealed class SessionArchiveService
     {
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
         using var writer = new StreamWriter(entry.Open());
-        writer.Write(JsonSerializer.Serialize(document, options ?? SessionArchiveJsonOptions));
+        writer.Write(JsonSerializer.Serialize(document, options ?? sessionArchiveJsonOptions));
     }
 
     private static string BuildImageEntryPath(SessionImageFrame frame)
@@ -807,6 +856,7 @@ public sealed class SessionArchiveService
     private static string BuildArtifactArchiveEntryPath(string relativePath)
     {
         var normalizedRelativePath = relativePath.Replace('\\', '/').Trim('/');
+
         return $"{ArtifactsArchiveDirectoryName}/{normalizedRelativePath}";
     }
 
@@ -816,43 +866,45 @@ public sealed class SessionArchiveService
     {
         var artifactSnapshots = snapshot.ArtifactSnapshots
             .Select(artifactSnapshot =>
-            {
-                var entries = artifactSnapshot.Entries
-                    .Where(entry => includedArtifactPaths.Contains(NormalizeArtifactRelativePath(
-                        $"{artifactSnapshot.ArtifactDirectoryName}/{entry.ArchiveRelativePath}")))
-                    .Select(SessionSnapshotCloner.CloneArtifactEntry)
-                    .ToArray();
-                if (entries.Length == 0)
                 {
-                    return null;
-                }
+                    var entries = artifactSnapshot.Entries
+                        .Where(entry => includedArtifactPaths.Contains(NormalizeArtifactRelativePath(
+                            $"{artifactSnapshot.ArtifactDirectoryName}/{entry.ArchiveRelativePath}")))
+                        .Select(SessionSnapshotCloner.CloneArtifactEntry)
+                        .ToArray();
 
-                return new SessionArtifactSnapshot
-                {
-                    SnapshotId = artifactSnapshot.SnapshotId,
-                    CapturedAtUtc = artifactSnapshot.CapturedAtUtc,
-                    Source = artifactSnapshot.Source,
-                    RootAlias = artifactSnapshot.RootAlias,
-                    RootPath = artifactSnapshot.RootPath,
-                    RelativePath = artifactSnapshot.RelativePath,
-                    Name = artifactSnapshot.Name,
-                    Kind = artifactSnapshot.Kind,
-                    ArtifactDirectoryName = artifactSnapshot.ArtifactDirectoryName,
-                    DirectoryCount = entries.Count(static entry => string.Equals(entry.Kind, "directory", StringComparison.OrdinalIgnoreCase)),
-                    FileCount = entries.Count(static entry => !string.Equals(entry.Kind, "directory", StringComparison.OrdinalIgnoreCase)),
-                    ByteCount = entries.Sum(static entry => entry.SizeBytes),
-                    Truncated = artifactSnapshot.Truncated,
-                    Entries = entries
-                };
-            })
+                    if (entries.Length == 0)
+                    {
+                        return null;
+                    }
+
+                    return new SessionArtifactSnapshot
+                    {
+                        SnapshotId = artifactSnapshot.SnapshotId,
+                        CapturedAtUtc = artifactSnapshot.CapturedAtUtc,
+                        Source = artifactSnapshot.Source,
+                        RootAlias = artifactSnapshot.RootAlias,
+                        RootPath = artifactSnapshot.RootPath,
+                        RelativePath = artifactSnapshot.RelativePath,
+                        Name = artifactSnapshot.Name,
+                        Kind = artifactSnapshot.Kind,
+                        ArtifactDirectoryName = artifactSnapshot.ArtifactDirectoryName,
+                        DirectoryCount = entries.Count(static entry => string.Equals(entry.Kind, "directory", StringComparison.OrdinalIgnoreCase)),
+                        FileCount = entries.Count(static entry => !string.Equals(entry.Kind, "directory", StringComparison.OrdinalIgnoreCase)),
+                        ByteCount = entries.Sum(static entry => entry.SizeBytes),
+                        Truncated = artifactSnapshot.Truncated,
+                        Entries = entries
+                    };
+                })
             .Where(static artifactSnapshot => artifactSnapshot is not null)
             .Cast<SessionArtifactSnapshot>()
             .ToArray();
-        var node = JsonSerializer.SerializeToNode(snapshot, SessionArchiveJsonOptions)?.AsObject()
-                   ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
-        node["artifactSnapshots"] = JsonSerializer.SerializeToNode(artifactSnapshots, SessionArchiveJsonOptions);
-        return node.Deserialize<AppSessionSnapshot>(SessionArchiveJsonOptions)
-               ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
+        var node = JsonSerializer.SerializeToNode(snapshot, sessionArchiveJsonOptions)?.AsObject()
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be updated.");
+        node["artifactSnapshots"] = JsonSerializer.SerializeToNode(artifactSnapshots, sessionArchiveJsonOptions);
+
+        return node.Deserialize<AppSessionSnapshot>(sessionArchiveJsonOptions)
+            ?? throw new InvalidDataException("The sanitized session snapshot could not be reconstructed.");
     }
 
     private static string NormalizeArtifactRelativePath(string path)
@@ -867,9 +919,11 @@ public sealed class SessionArchiveService
             .GroupBy(static snapshot => snapshot.SnapshotId, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.First(), StringComparer.Ordinal);
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
         for (var snapshotIndex = 0; snapshotIndex < sourceSnapshots.Count; snapshotIndex++)
         {
             var sourceSnapshot = sourceSnapshots[snapshotIndex];
+
             if (!sanitizedById.TryGetValue(sourceSnapshot.SnapshotId, out var sanitizedSnapshot))
             {
                 if (sourceSnapshots.Count != sanitizedSnapshots.Count)
@@ -922,7 +976,7 @@ public sealed class SessionArchiveService
         public List<SessionTouchPackedBatch> Batches { get; init; } = [];
     }
 
-    private static readonly JsonSerializerOptions SessionArchiveJsonOptions = new()
+    private static readonly JsonSerializerOptions sessionArchiveJsonOptions = new()
     {
         MaxDepth = JsonUtil.MaximumDepth,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

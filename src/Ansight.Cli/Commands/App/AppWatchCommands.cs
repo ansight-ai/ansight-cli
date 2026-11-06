@@ -39,6 +39,7 @@ internal static class AppWatchCommands
         var action = arguments.RequirePositional(2, "watch action").ToLowerInvariant();
         var service = runtime.AppWatches;
         string? affectedId = null;
+
         switch (action)
         {
             case "list":
@@ -74,18 +75,26 @@ internal static class AppWatchCommands
             default:
                 throw new CliUsageException("Expected app watch add, configure, list, enable, disable, or remove.");
         }
+
         var watches = service.List();
-        output.Write(new { Schema = "ansight.app-watches/v1", Operation = action, WatchId = affectedId,
-            HostRunning = service.IsRunning, Watches = watches }, () =>
-            (service.IsRunning ? "App watcher is running." : "Configuration saved. Start the resident host with: ansight host run")
-            + Environment.NewLine + (watches.Count == 0 ? "No app watches configured." : string.Join(Environment.NewLine,
-                watches.Select(status => $"{status.Watch.Id}\t{status.Watch.AppId}\t{status.Watch.Platform ?? "ios+android"}:{status.Watch.DeviceId ?? "all virtual devices"}"
-                    + $"\t{status.State}"
-                    + $"\tscreenshot-interval={status.Watch.ScreenshotIntervalMilliseconds}ms"
-                    + (status.Message is null ? "" : $"\t{status.Message}")
-                    + string.Concat(status.Devices.Select(device => Environment.NewLine
-                        + $"  {device.Platform}:{device.DeviceName}\t{device.State}\tsession={device.SessionId ?? device.LastSessionId ?? "-"}"
-                        + (device.Message is null ? "" : $"\t{device.Message}")))))));
+        output.Write(new
+        {
+            Schema = "ansight.app-watches/v1",
+            Operation = action,
+            WatchId = affectedId,
+            HostRunning = service.IsRunning,
+            Watches = watches
+        }, () =>
+                    (service.IsRunning ? "App watcher is running." : "Configuration saved. Start the resident host with: ansight host run")
+                        + Environment.NewLine + (watches.Count == 0 ? "No app watches configured." : string.Join(Environment.NewLine,
+                            watches.Select(status => $"{status.Watch.Id}\t{status.Watch.AppId}\t{status.Watch.Platform ?? "ios+android"}:{status.Watch.DeviceId ?? "all virtual devices"}"
+                                + $"\t{status.State}"
+                                + $"\tscreenshot-interval={status.Watch.ScreenshotIntervalMilliseconds}ms"
+                                + (status.Message is null ? "" : $"\t{status.Message}")
+                                + string.Concat(status.Devices.Select(device => Environment.NewLine
+                                    + $"  {device.Platform}:{device.DeviceName}\t{device.State}\tsession={device.SessionId ?? device.LastSessionId ?? "-"}"
+                                    + (device.Message is null ? "" : $"\t{device.Message}")))))));
+
         return CliExitCodes.Success;
     }
 
@@ -94,18 +103,31 @@ internal static class AppWatchCommands
         foreach (var name in new[] { "platform", "device-id" })
         {
             if (arguments.HasFlag(name) && string.IsNullOrWhiteSpace(arguments.GetOption(name)))
+            {
                 throw new CliUsageException($"--{name} requires a value when supplied.");
+            }
+
             if (arguments.GetOptions(name).Count > 1)
+            {
                 throw new CliUsageException($"Use at most one --{name}; omit it to discover all matching virtual devices.");
+            }
         }
     }
 
     internal static int? ReadScreenshotInterval(CliArguments arguments)
     {
         const string option = "screenshot-interval-ms";
-        if (!arguments.HasFlag(option)) return null;
+
+        if (!arguments.HasFlag(option))
+        {
+            return null;
+        }
+
         if (arguments.GetOptions(option).Count > 1)
+        {
             throw new CliUsageException($"Use at most one --{option}.");
+        }
+
         return arguments.GetRequiredIntOption(option,
             AppWatchDefinition.MinimumScreenshotIntervalMilliseconds,
             AppWatchDefinition.MaximumScreenshotIntervalMilliseconds);

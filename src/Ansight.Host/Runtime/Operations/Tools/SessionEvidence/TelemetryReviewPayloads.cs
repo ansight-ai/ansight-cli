@@ -13,6 +13,7 @@ internal static class TelemetryReviewPayloads
         HashSet<string> channelNames)
     {
         var channelMap = snapshot.MetricChannels.ToDictionary(channel => channel.ChannelId);
+
         return snapshot.Metrics
             .Where(sample => PayloadJson.MatchesTimestamp(sample.CapturedAtUtc, startUtc, endUtc))
             .Where(sample => channelIds.Count == 0 || channelIds.Contains(sample.ChannelId))
@@ -25,7 +26,7 @@ internal static class TelemetryReviewPayloads
                 }
 
                 return channelMap.TryGetValue(sample.ChannelId, out var channel)
-                       && channelNames.Contains(channel.Name);
+                    && channelNames.Contains(channel.Name);
             })
             .OrderBy(sample => sample.CapturedAtUtc)
             .ThenBy(sample => sample.ChannelId)
@@ -51,11 +52,12 @@ internal static class TelemetryReviewPayloads
     {
         var buckets = Enumerable.Range(0, bucketCount)
             .Select(index =>
-            {
-                var bucketStartUtc = AddRangeFraction(startUtc, endUtc, index / (double)bucketCount);
-                var bucketEndUtc = AddRangeFraction(startUtc, endUtc, (index + 1) / (double)bucketCount);
-                return new TelemetryTimelineBucket(index, bucketStartUtc, bucketEndUtc);
-            })
+                {
+                    var bucketStartUtc = AddRangeFraction(startUtc, endUtc, index / (double)bucketCount);
+                    var bucketEndUtc = AddRangeFraction(startUtc, endUtc, (index + 1) / (double)bucketCount);
+
+                    return new TelemetryTimelineBucket(index, bucketStartUtc, bucketEndUtc);
+                })
             .ToArray();
 
         foreach (var sample in samples)
@@ -73,10 +75,12 @@ internal static class TelemetryReviewPayloads
         IReadOnlyDictionary<byte, SessionMetricChannel> channelMap)
     {
         channelMap.TryGetValue(channelId, out var channel);
+
         var orderedSamples = samples
             .OrderBy(sample => sample.CapturedAtUtc)
             .ToArray();
         var values = orderedSamples.Select(sample => sample.Value).ToArray();
+
         return new JsonObject
         {
             ["channelId"] = channelId,
@@ -102,6 +106,7 @@ internal static class TelemetryReviewPayloads
     public static DateTimeOffset ResolveEndUtc(AppSessionSnapshot snapshot, DateTimeOffset? endUtc, IReadOnlyList<SessionMetricSample> samples)
     {
         var resolved = endUtc ?? (samples.Count > 0 ? samples[^1].CapturedAtUtc : snapshot.LastUpdatedUtc).ToUniversalTime();
+
         return resolved;
     }
 
@@ -113,6 +118,7 @@ internal static class TelemetryReviewPayloads
         }
 
         var ratio = (timestampUtc - startUtc).TotalMilliseconds / (endUtc - startUtc).TotalMilliseconds;
+
         return Math.Clamp((int)Math.Floor(ratio * bucketCount), 0, bucketCount - 1);
     }
 

@@ -48,9 +48,11 @@ internal sealed class FindTapTargetsTool : Operation
             .Where(gesture => gesture.Kind is "tap" or "longPress")
             .ToArray();
         var matches = new List<JsonObject>();
+
         foreach (var gesture in gestures)
         {
             var point = TouchReviewGeometry.ResolveGesturePoint(gesture);
+
             if (point is null)
             {
                 if (includeUntargeted)
@@ -62,6 +64,7 @@ internal sealed class FindTapTargetsTool : Operation
             }
 
             var targetCandidates = TapTargetMatcher.FindTapTargetCandidates(snapshot!, gesture, point.Value, TimeSpan.FromMilliseconds(windowMs)).ToArray();
+
             if (targetCandidates.Length > 0 || includeUntargeted)
             {
                 matches.Add(TapTargetMatcher.BuildTapTargetMatchPayload(gesture, point, targetCandidates));
@@ -69,6 +72,7 @@ internal sealed class FindTapTargetsTool : Operation
         }
 
         var returnedMatches = matches.Take(limit).ToArray();
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -88,6 +92,7 @@ internal sealed class FindTapTargetsTool : Operation
         properties["windowMs"] = ToolSchema.Integer("Milliseconds around each gesture to search annotations and visual tree snapshots. Defaults to 1500, max 10000.", nullable: true);
         properties["includeUntargeted"] = ToolSchema.Boolean("Include taps with no matched target candidates. Defaults to true.", nullable: true);
         properties["limit"] = ToolSchema.Integer("Maximum number of tap matches to return. Defaults to 500, max 5000.", nullable: true);
+
         return properties;
     }
 }

@@ -59,6 +59,7 @@ public sealed class PublicApiNamesTests
     public void PublishedTitleResourceKeyUsesCurrentProductName()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"ansight-public-api-{Guid.NewGuid():N}");
+
         try
         {
             var preferences = new UserPreferences(new FilePreferencesStore(Path.Combine(directory, "preferences.json")));

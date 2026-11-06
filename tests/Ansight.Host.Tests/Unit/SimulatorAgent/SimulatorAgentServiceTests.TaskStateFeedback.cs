@@ -12,10 +12,10 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts =
-            [
-                CreateRepositoryTaskShortcut("ansight_task_copy", "copy-gps-location", "Copy GPS location"),
+                [
+                    CreateRepositoryTaskShortcut("ansight_task_copy", "copy-gps-location", "Copy GPS location"),
                 CreateRepositoryTaskShortcut("ansight_task_weather", "load-weather", "Load weather")
-            ],
+                ],
             InitialObservation = new ToolCallResult(false,
                 """{"result":{"capability":"ui.observe","root":{"text":"Eagle Rock","type":"AreaPage","visible":true}}}""",
                 "Eagle Rock detail page is visible."),
@@ -24,9 +24,9 @@ public sealed partial class SimulatorAgentServiceTests
                 "Task passed its clipboard assertion.")
         };
         AddToolLoadingDefinitions(gateway);
+
         var arguments = toolName == "ansight_run_task"
-            ? new JsonObject { ["taskId"] = "copy-gps-location", ["input"] = new JsonObject() }
-            : new JsonObject();
+            ? new JsonObject { ["taskId"] = "copy-gps-location", ["input"] = new JsonObject() } : new JsonObject();
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("copy", toolName, arguments),
             CompleteWebSocketTurn()
@@ -39,14 +39,16 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(2, session.Requests.Count);
         Assert.Equal("ansight_run_task", Assert.Single(gateway.Calls).ToolName);
+
         var afterTask = session.Requests[1].IncrementalInput!;
         AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(afterTask)), ["load-weather"], [], [], true);
+
         var feedback = afterTask.ToJsonString();
         Assert.Contains("The repository task passed.", feedback, StringComparison.Ordinal);
         Assert.Contains("call complete_instruction now", feedback, StringComparison.Ordinal);
         Assert.Contains("specific requested action or check that remains unproven", feedback, StringComparison.Ordinal);
         Assert.True(feedback.IndexOf("The repository task passed.", StringComparison.Ordinal)
-                    > feedback.IndexOf("Repository task state:", StringComparison.Ordinal));
+            > feedback.IndexOf("Repository task state:", StringComparison.Ordinal));
         Assert.Contains("Eagle Rock", session.Requests[1].Input.ToJsonString(), StringComparison.Ordinal);
     }
 
@@ -58,6 +60,7 @@ public sealed partial class SimulatorAgentServiceTests
             Result = new ToolCallResult(false, "{\"matches\":[]}", "No matches.")
         };
         AddToolLoadingDefinitions(gateway);
+
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("observe", "ansight_get_live_visual_tree", new JsonObject()),
             CompleteWebSocketTurn()
@@ -76,13 +79,14 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts =
-            [
-                CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account"),
+                [
+                    CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account"),
                 CreateRepositoryTaskShortcut("ansight_task_profile", "open-profile", "Open profile")
-            ],
+                ],
             Result = new ToolCallResult(false, "{\"status\":\"Passed\"}", "Task passed.")
         };
         AddToolLoadingDefinitions(gateway);
+
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("first", "ansight_task_account", new JsonObject()),
             CreateFunctionTurn("repeat", "ansight_task_account", new JsonObject()),
@@ -116,13 +120,14 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts =
-            [CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account")]
+                [CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account")]
         };
         gateway.Results.Enqueue(new ToolCallResult(true,
             "{\"isError\":true,\"message\":\"Account visibility assertion failed.\"}",
             "Account visibility assertion failed."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"status\":\"Passed\"}", "Account is visible."));
         AddToolLoadingDefinitions(gateway);
+
         var session = new FakeOpenAiSession([
             CreateFunctionTurn("failed", "ansight_task_account", new JsonObject()),
             CreateFunctionTurn("retry", "ansight_task_account", new JsonObject()),
@@ -133,10 +138,12 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(ToolLoadingRequest("Open account."));
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
+
         var afterFailure = session.Requests[1].IncrementalInput!;
         AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(afterFailure)), [], ["open-account"], [], true);
         Assert.Contains("The repository task did not complete successfully.", afterFailure.ToJsonString(), StringComparison.Ordinal);
         Assert.DoesNotContain("The repository task passed.", afterFailure.ToJsonString(), StringComparison.Ordinal);
+
         var failureOutput = Assert.Single(afterFailure.OfType<JsonObject>(), item =>
             item["type"]?.GetValue<string>() == "function_call_output" && item["call_id"]?.GetValue<string>() == "failed");
         Assert.Contains("Account visibility assertion failed.", failureOutput["output"]!.GetValue<string>(), StringComparison.Ordinal);
@@ -154,18 +161,19 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts =
-            [
-                CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account"),
+                [
+                    CreateRepositoryTaskShortcut("ansight_task_account", "open-account", "Open account"),
                 CreateRepositoryTaskShortcut("ansight_task_export", "export-account-data", "Export account data")
-            ]
+                ]
         };
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"status\":\"Passed\"}", "Task passed."));
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"performed\":true}", "Overlay dismissed."));
         AddToolLoadingDefinitions(gateway, "ansight_tap_ui");
+
         var session = new FakeOpenAiSession([
             LoadManualToolsTurn("load"),
             CreateFunctionTurn("first", "ansight_task_account", new JsonObject()),
-            CreateFunctionTurn("blocked", "ansight_tap_ui", new JsonObject { ["automationId"] = "dismiss-overlay" }),
+            CreateFunctionTurn("blocked", "ansight_tap_ui", new JsonObject {["automationId"] = "dismiss-overlay" }),
             CreateFunctionTurn("exclude", "ansight_declare_uncovered_step", new JsonObject
             {
                 ["uncoveredStep"] = "Dismiss the welcome overlay.",
@@ -174,7 +182,7 @@ public sealed partial class SimulatorAgentServiceTests
                 ["evidence"] = "The instruction only opens account and dismisses the overlay; exporting data exceeds its scope.",
                 ["consideredTaskIds"] = new JsonArray("export-account-data")
             }),
-            CreateFunctionTurn("allowed", "ansight_tap_ui", new JsonObject { ["automationId"] = "dismiss-overlay" }),
+            CreateFunctionTurn("allowed", "ansight_tap_ui", new JsonObject {["automationId"] = "dismiss-overlay" }),
             CompleteWebSocketTurn()
         ]);
         using var service = CreateToolLoadingService(session, gateway);
@@ -184,6 +192,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         AssertRepositoryTaskState(Assert.Single(RepositoryTaskStates(session.Requests[2].IncrementalInput!)),
             ["export-account-data"], [], [], true);
+
         var blocked = Assert.Single(result.Audit.ToolCalls, call => call.CallId == "blocked");
         Assert.True(blocked.IsError);
         Assert.Contains("reassessment is required", blocked.Message, StringComparison.Ordinal);
@@ -202,12 +211,14 @@ public sealed partial class SimulatorAgentServiceTests
     private static IEnumerable<JsonObject> RepositoryTaskStates(JsonArray input)
     {
         const string prefix = "Repository task state: ";
+
         foreach (var item in input.OfType<JsonObject>())
         {
             if (item["role"]?.GetValue<string>() != "user" || item["content"] is not JsonArray content)
             {
                 continue;
             }
+
             foreach (var part in content.OfType<JsonObject>())
             {
                 if (part["text"]?.GetValue<string>() is { } text && text.StartsWith(prefix, StringComparison.Ordinal))

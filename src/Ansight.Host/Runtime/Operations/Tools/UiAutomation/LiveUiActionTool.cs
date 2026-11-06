@@ -4,41 +4,6 @@ using Ansight.Tools;
 
 namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
-internal enum LiveUiActionKind
-{
-    Tap,
-    LongPress,
-    TypeText,
-    Swipe,
-    Scroll,
-    Pinch,
-    Back,
-    KeyboardOpen,
-    KeyboardDismiss,
-    KeyboardPress,
-    KeyboardSubmit
-}
-
-internal readonly record struct LiveUiScreenPoint(double X, double Y);
-
-internal readonly record struct LiveUiSwipePath(
-    double StartX,
-    double StartY,
-    double EndX,
-    double EndY,
-    int DurationMilliseconds);
-
-internal readonly record struct LiveUiPinchPath(
-    double PrimaryStartX,
-    double PrimaryStartY,
-    double SecondaryStartX,
-    double SecondaryStartY,
-    double PrimaryEndX,
-    double PrimaryEndY,
-    double SecondaryEndX,
-    double SecondaryEndY,
-    int DurationMilliseconds);
-
 internal sealed class LiveUiActionTool : RemoteAppOperation
 {
     private readonly LiveUiActionKind actionKind;
@@ -114,10 +79,16 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     public override async Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         if (actionKind == LiveUiActionKind.KeyboardPress && arguments?["key"]?.GetValue<string>() != "Enter")
+        {
             return ToolError("keyboard.press requires key: 'Enter'.");
+        }
+
         if (actionKind == LiveUiActionKind.LongPress
             && !UiLongPressRequest.TryReadDuration(arguments, out _, out var durationError))
+        {
             return ToolError(durationError);
+        }
+
         if (!sessionResolver.TryResolveLiveSession(arguments, out var snapshot, out var resolutionError))
         {
             return ToolError(resolutionError);
@@ -126,6 +97,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var deviceIdentifier = uiInputRouter.ResolveDeviceIdentifier(
             snapshot!.SessionId,
             DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot));
+
         if (deviceIdentifier is null)
         {
             return ToolError(
@@ -133,6 +105,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         var availability = uiInputRouter.GetAvailability(deviceIdentifier);
+
         if (!availability.IsAvailable)
         {
             return ToolError(availability.Message);
@@ -141,6 +114,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var preflightResult = await uiInputRouter.PrepareForInputAsync(
             new UiInputPreflightRequest(snapshot.SessionId, deviceIdentifier, snapshot.AppId),
             ToolExecutionCancellation.Current);
+
         if (!preflightResult.IsSuccess)
         {
             return ToolError(preflightResult.Message);
@@ -165,6 +139,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 ToolExecutionCancellation.Current,
                 allowCached: false,
                 targetSource: arguments?["targetSource"]?.GetValue<string>());
+
         if (!captureResult.IsSuccess || captureResult.Capture is null)
         {
             return ToolError(captureResult.Message);
@@ -172,6 +147,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
 
         var capture = captureResult.Capture;
         var includeScreenshot = arguments?["includeScreenshot"]?.GetValue<bool>() ?? true;
+
         return actionKind is LiveUiActionKind.Back or LiveUiActionKind.KeyboardDismiss or LiveUiActionKind.KeyboardPress or LiveUiActionKind.KeyboardSubmit
             ? await ExecuteBackAsync(capture, deviceIdentifier, includeScreenshot, correlationId)
             : await ExecuteTargetedActionAsync(
@@ -192,10 +168,11 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         string? correlationId)
     {
         var hasRecordedTapPoint = (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
-                                  && (arguments?["normalizedX"] is not null
-                                      || arguments?["normalizedY"] is not null);
+            && (arguments?["normalizedX"] is not null
+                || arguments?["normalizedY"] is not null);
         var requiresTarget = actionKind is LiveUiActionKind.TypeText or LiveUiActionKind.KeyboardOpen
-                             || ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && !hasRecordedTapPoint);
+            || ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && !hasRecordedTapPoint);
+
         if (requiresTarget && !selector.HasCriteria)
         {
             return ToolError(
@@ -207,12 +184,14 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var hasTextValue = LiveUiToolSchemas.TryReadRawString(arguments, "value", out var textValue);
         var replaceExisting = actionKind == LiveUiActionKind.TypeText
             && (arguments?["replaceExisting"]?.GetValue<bool>() ?? true);
+
         if (actionKind == LiveUiActionKind.TypeText && !hasTextValue)
         {
             return ToolError("value is required for text input.");
         }
 
         var viewport = capture.Viewport;
+
         if (viewport is null || viewport.Width <= 0 || viewport.Height <= 0)
         {
             return ToolError("The visual tree does not expose usable screen-space bounds for host input.");
@@ -222,18 +201,22 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         LiveUiScreenPoint? ocrNormalizedPoint = null;
         JsonObject? ocrTarget = null;
         JsonObject? ocrTraceEvidence = null;
+
         if (selector.HasCriteria)
         {
             selector = LiveUiTapTarget.RefreshTransientNodeId(capture.Root, capture.TypeRegistry,
                 viewport, selector, capture.ToolId, arguments);
+
             var matches = LiveUiNodeQuery.PrioritizeActionTargets(
                 LiveUiNodeQuery.Find(capture.Root, selector, capture.TypeRegistry),
                 capture.Payload,
                 viewport);
+
             if (matches.Count == 0)
             {
                 var canUseOcr = arguments?["targetFingerprint"] is null && selector.CanUseOcr
-                                && RunRequestContext.AllowsScreenshotOcr(correlationId);
+                    && RunRequestContext.AllowsScreenshotOcr(correlationId);
+
                 if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && canUseOcr)
                 {
                     var ocrResult = await LiveUiOcrSearch.FindAsync(
@@ -248,11 +231,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         correlationId,
                         ToolExecutionCancellation.Current, externalScreenshots: externalScreenshots);
                     ocrTraceEvidence = ocrResult.TraceEvidence;
+
                     if (ocrResult.TryGetTapPoint(
-                            selector.Index,
-                            selector.IndexSpecified,
-                            out var ocrPoint,
-                            out ocrTarget))
+                        selector.Index,
+                        selector.IndexSpecified,
+                        out var ocrPoint,
+                        out ocrTarget))
                     {
                         ocrNormalizedPoint = ocrPoint;
                     }
@@ -295,18 +279,20 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 return BuildSelectorError(
                     $"The selector matched {matches.Count} node(s), but index {selector.Index} was requested. "
-                    + "Indexes apply after all selector filters. Reuse the exact tapHint from a fresh find result.",
+                        + "Indexes apply after all selector filters. Reuse the exact tapHint from a fresh find result.",
                     selector, ocrTraceEvidence);
             }
 
             if (matches.Count > 0)
             {
                 target = matches[selector.Index];
+
                 if (!LiveUiNodeQuery.IsEffectivelyVisible(target)
                     || !LiveUiNodeQuery.IsEffectivelyEnabled(target))
                 {
                     return BuildSelectorError("The selected UI node is not visible and enabled.", selector, ocrTraceEvidence);
                 }
+
                 if (actionKind == LiveUiActionKind.KeyboardOpen
                     && !string.Equals(
                         LiveUiNodeQuery.ReadRole(target.Node, target.TypeRegistry),
@@ -314,7 +300,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         StringComparison.OrdinalIgnoreCase)
                     && !LiveUiNodeQuery.ReadSupportedActions(target.Node, target.TypeRegistry)
                         .Any(action => string.Equals(action, "focus", StringComparison.OrdinalIgnoreCase)
-                                       || string.Equals(action, "typeText", StringComparison.OrdinalIgnoreCase)))
+                            || string.Equals(action, "typeText", StringComparison.OrdinalIgnoreCase)))
                 {
                     return BuildSelectorError(
                         "The selected UI node is not reported as a text input that can receive focus.", selector, ocrTraceEvidence);
@@ -331,7 +317,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 return BuildSelectorError(
                     "The discovered target or its nearby content changed. No input was delivered. "
-                    + "Run ansight_find_ui again and use the selected result's complete fresh tapHint.", selector, ocrTraceEvidence);
+                        + "Run ansight_find_ui again and use the selected result's complete fresh tapHint.", selector, ocrTraceEvidence);
             }
         }
 
@@ -342,6 +328,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 uiInputRouter,
                 cancellationToken: ToolExecutionCancellation.Current,
                 allowCached: false).ConfigureAwait(false);
+
             if (!keyboardStateCapture.IsSuccess
                 || !LiveKeyboardState.TryRead(keyboardStateCapture.Capture, out _))
             {
@@ -351,6 +338,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         var targetBounds = target is null ? viewport : LiveUiNodeQuery.ReadBounds(target.Node);
+
         if (targetBounds is null
             || targetBounds.Width <= 0
             || targetBounds.Height <= 0
@@ -367,10 +355,11 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             return ToolError(
                 "The selector resolved to a non-actionable semantic container covering nearly the whole viewport. "
-                + "No input was delivered. Use a focused actionable selector or an exact rendered-text tap hint.");
+                    + "No input was delivered. Use a focused actionable selector or an exact rendered-text tap hint.");
         }
 
         var inputPoint = new LiveUiScreenPoint(targetBounds.CenterX, targetBounds.CenterY);
+
         if ((actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress) && ocrNormalizedPoint is { } normalizedOcrPoint)
         {
             inputPoint = new LiveUiScreenPoint(
@@ -386,6 +375,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         if (target is not null && actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
         {
             var unobstructed = LiveUiUnobstructedPoint.Resolve(capture, target, inputPoint, HasExplicitTapPoint(arguments));
+
             if (unobstructed is null)
             {
                 return ToolError("The tap point overlaps another actionable control and no unoccluded point was established. "
@@ -417,8 +407,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             actionId,
             $"Starting {Capability} through Ansight host input.",
             LogPriority.Information);
+
         using var inputScope = uiInputRouter.BeginEvidenceScope(actionId);
         UiInputResult inputResult;
+
         switch (actionKind)
         {
             case LiveUiActionKind.Tap:
@@ -461,6 +453,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         actionId,
                         $"{Capability} failed while focusing the target: {focusResult.Message}",
                         LogPriority.Error);
+
                     return BuildActionResult(
                         capture,
                         actionId,
@@ -471,7 +464,6 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                         failedFocusEvidence.Evidence,
                         includeScreenshot);
                 }
-
                 inputResult = await uiInputRouter.TypeTextAsync(
                     new UiTextRequest(
                         capture.Session.SessionId,
@@ -513,6 +505,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             scrollEvidence?.Selector);
         bool? keyboardOpen = null;
         string? postconditionError = null;
+
         if (actionKind == LiveUiActionKind.Scroll
             && inputResult.IsSuccess
             && afterCapture.Capture is not null)
@@ -528,29 +521,32 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             if (!LiveKeyboardState.TryRead(afterCapture.Capture, out var observedKeyboardOpen))
             {
                 postconditionError =
-                    "The text input was focused, but fresh device accessibility could not confirm whether the software keyboard opened.";
+                                "The text input was focused, but fresh device accessibility could not confirm whether the software keyboard opened.";
             }
             else
             {
                 keyboardOpen = observedKeyboardOpen;
+
                 if (!observedKeyboardOpen)
                 {
                     postconditionError =
-                        "The text input was focused, but the software keyboard did not open.";
+                                        "The text input was focused, but the software keyboard did not open.";
                 }
             }
         }
+
         RecordActionLog(
             capture.Session.SessionId,
             actionId,
             postconditionError is not null
                 ? postconditionError
                 : inputResult.IsSuccess
-                ? $"Completed {Capability} through {inputResult.Backend}."
-                : $"{Capability} failed: {inputResult.Message}",
+                    ? $"Completed {Capability} through {inputResult.Backend}."
+                    : $"{Capability} failed: {inputResult.Message}",
             inputResult.IsSuccess && postconditionError is null
                 ? LogPriority.Information
                 : LogPriority.Error);
+
         return BuildActionResult(
             capture,
             actionId,
@@ -577,6 +573,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         string action = "tap")
     {
         var intersection = LiveUiBounds.Intersection(targetBounds, viewport);
+
         if (intersection is null || viewport.Width <= 0 || viewport.Height <= 0)
         {
             return false;
@@ -585,18 +582,19 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var viewportArea = viewport.Width * viewport.Height;
         var targetArea = intersection.Width * intersection.Height;
         var supportedActions = LiveUiNodeQuery.ReadSupportedActions(target.Node, target.TypeRegistry);
+
         return targetArea / viewportArea >= 0.9
-               && !supportedActions.Contains(action, StringComparer.OrdinalIgnoreCase)
-               && LiveUiNodeQuery.ReadRole(target.Node, target.TypeRegistry) is "view" or "application";
+            && !supportedActions.Contains(action, StringComparer.OrdinalIgnoreCase)
+            && LiveUiNodeQuery.ReadRole(target.Node, target.TypeRegistry) is "view" or "application";
     }
 
     private static bool HasExplicitTapPoint(JsonObject? arguments)
         => arguments?["normalizedX"] is not null
-           || arguments?["normalizedY"] is not null
-           || arguments?["screenX"] is not null
-           || arguments?["screenY"] is not null
-           || arguments?["targetX"] is not null
-           || arguments?["targetY"] is not null;
+            || arguments?["normalizedY"] is not null
+            || arguments?["screenX"] is not null
+            || arguments?["screenY"] is not null
+            || arguments?["targetX"] is not null
+            || arguments?["targetY"] is not null;
 
     private async Task<UiInputResult> ExecuteSwipeAsync(
         LiveUiTreeCapture capture,
@@ -613,13 +611,14 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             target,
             targetBounds,
             viewport);
+
         if (!TryResolveSwipePath(
-                arguments,
-                gestureBounds,
-                viewport,
-                actionKind == LiveUiActionKind.Scroll,
-                out var path,
-                out var error))
+            arguments,
+            gestureBounds,
+            viewport,
+            actionKind == LiveUiActionKind.Scroll,
+            out var path,
+            out var error))
         {
             return UiInputResult.Failure(error);
         }
@@ -652,6 +651,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             target,
             targetBounds,
             viewport);
+
         if (!TryResolvePinchPath(arguments, gestureBounds, viewport, out var path, out var error))
         {
             return UiInputResult.Failure(error);
@@ -682,6 +682,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     {
         var isKeyboardDismiss = actionKind == LiveUiActionKind.KeyboardDismiss;
         bool? keyboardOpenBefore = null;
+
         if (isKeyboardDismiss)
         {
             if (!LiveKeyboardState.TryRead(capture, out var observedKeyboardOpen))
@@ -710,6 +711,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             actionId,
             $"Starting {Capability} through Ansight host input.",
             LogPriority.Information);
+
         using var inputScope = uiInputRouter.BeginEvidenceScope(actionId);
         var result = keyboardOpenBefore == false
             ? new UiInputResult(
@@ -721,10 +723,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 : actionKind == LiveUiActionKind.KeyboardSubmit
                     ? await uiInputRouter.RecordInputAsync(capture.Session.SessionId, "keyboard.submit",
                         () => SubmitKeyboardAsync(capture.Session.SessionId, correlationId))
-                : await uiInputRouter.PressButtonAsync(
-                    new UiButtonRequest(capture.Session.SessionId, deviceIdentifier,
-                        actionKind == LiveUiActionKind.KeyboardPress ? "enter" : "back", capture.Session.AppId),
-                    ToolExecutionCancellation.Current);
+                    : await uiInputRouter.PressButtonAsync(
+                        new UiButtonRequest(capture.Session.SessionId, deviceIdentifier,
+                            actionKind == LiveUiActionKind.KeyboardPress ? "enter" : "back", capture.Session.AppId),
+                        ToolExecutionCancellation.Current);
         var afterCapture = await CaptureAfterEvidenceAsync(
             capture,
             actionId,
@@ -733,16 +735,18 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             includeScreenshot);
         bool? keyboardOpenAfter = null;
         string? postconditionError = null;
+
         if (isKeyboardDismiss && result.IsSuccess)
         {
             if (!LiveKeyboardState.TryRead(afterCapture.Capture, out var observedKeyboardOpen))
             {
                 postconditionError =
-                    "The dismiss input completed, but fresh device accessibility could not confirm whether the software keyboard closed.";
+                                "The dismiss input completed, but fresh device accessibility could not confirm whether the software keyboard closed.";
             }
             else
             {
                 keyboardOpenAfter = observedKeyboardOpen;
+
                 if (observedKeyboardOpen)
                 {
                     postconditionError = "The software keyboard remained open after the dismiss input.";
@@ -756,11 +760,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             postconditionError is not null
                 ? postconditionError
                 : result.IsSuccess
-                ? $"Completed {Capability} through {result.Backend}."
-                : $"{Capability} failed: {result.Message}",
+                    ? $"Completed {Capability} through {result.Backend}."
+                    : $"{Capability} failed: {result.Message}",
             result.IsSuccess && postconditionError is null
                 ? LogPriority.Information
                 : LogPriority.Error);
+
         return BuildActionResult(
             capture,
             actionId,
@@ -781,7 +786,9 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(sessionId, toolId, new JsonObject(), null,
             ToolExecutionCancellation.Current, new AppToolBridgeRequestContext("host-ui", Name, correlationId));
         uiInputRouter.InvalidateAccessibility(sessionId);
+
         var payload = response.Envelope?.Payload;
+
         return response.Success && response.Envelope?.Type == ToolProtocolMessageTypes.ResultType
             && payload?["success"]?.GetValue<bool>() == true && payload?["result"]?["performed"]?.GetValue<bool>() == true
             ? new UiInputResult(true, "app-input-method", "Invoked the focused input's submit action.")
@@ -793,17 +800,22 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
     {
         var context = new AppToolBridgeRequestContext("host-ui", Name, correlationId);
         var catalog = await appToolBridge.QueryToolsAsync(sessionId, ToolExecutionCancellation.Current, context);
+
         if (!catalog.Success || !RemoteAppToolCatalog.HasTool(catalog.Envelope?.Payload, RemoteAppToolIds.UiDismissKeyboard))
+        {
             return UiInputResult.Failure(
                 "Safe keyboard dismissal requires the app tool ui.dismiss_keyboard. Update the SDK and enable its UI tools. No Back key was sent.");
+        }
 
         var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
             sessionId, RemoteAppToolIds.UiDismissKeyboard, new JsonObject(), after: null,
             ToolExecutionCancellation.Current, context);
         uiInputRouter.InvalidateAccessibility(sessionId);
+
         var payload = response.Envelope?.Payload;
+
         return response.Success && response.Envelope?.Type == ToolProtocolMessageTypes.ResultType
-                                && payload?["success"]?.GetValue<bool>() == true
+            && payload?["success"]?.GetValue<bool>() == true
             ? new UiInputResult(true, "app-input-method", "Requested keyboard dismissal through the app input method.")
             : UiInputResult.Failure(payload?["message"]?.GetValue<string>() ?? response.Message);
     }
@@ -866,25 +878,29 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                     ["message"] = postconditionError
                 },
             ["target"] = screenTarget?.DeepClone()
-                         ?? (target is null ? null : LiveUiNodeQuery.ToResultJson(target)),
+                ?? (target is null ? null : LiveUiNodeQuery.ToResultJson(target)),
             ["evidence"] = new JsonObject
             {
                 ["before"] = LiveUiActionEvidence.ToJson(beforeEvidence),
                 ["after"] = LiveUiActionEvidence.ToJson(afterEvidence)
             }
         };
+
         if (ocrTraceEvidence is not null)
         {
             structuredContent[LiveUiOcrTraceEvidence.PayloadPropertyName] = ocrTraceEvidence.DeepClone();
         }
+
         if (keyboardOpen.HasValue)
         {
             structuredContent["isOpen"] = keyboardOpen.Value;
         }
+
         if (scrollObservation is not null)
         {
             structuredContent["scrollObservation"] = scrollObservation;
         }
+
         return LiveUiActionResponse.Build(
             structuredContent,
             afterEvidence,
@@ -916,6 +932,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             ["appId"] = ToolSchema.String("App id to target when exactly one live session exists for that app.", nullable: true),
             ["includeScreenshot"] = ToolSchema.Boolean("Include the final screenshot as image content. Defaults to true.", nullable: true)
         };
+
         if (actionKind is LiveUiActionKind.KeyboardOpen or LiveUiActionKind.KeyboardDismiss or LiveUiActionKind.KeyboardPress or LiveUiActionKind.KeyboardSubmit)
         {
             properties["deviceId"] = ToolSchema.String(
@@ -929,7 +946,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         if (actionKind == LiveUiActionKind.KeyboardPress)
+        {
             properties["key"] = ToolSchema.String("Key to press.", enumValues: ["Enter"]);
+        }
+
         if (actionKind == LiveUiActionKind.TypeText)
         {
             properties["value"] = ToolSchema.String("Text to type after focusing the target.");
@@ -948,6 +968,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 "Copy this opaque freshness value from tapHint.selector when supplied. The host rechecks the target and nearby text before acting; rediscover if it changed.",
                 nullable: true);
         }
+
         if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress)
         {
             properties["normalizedX"] = ToolSchema.Number(
@@ -971,8 +992,10 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         }
 
         if (actionKind == LiveUiActionKind.LongPress)
+        {
             properties["durationMs"] = ToolSchema.Integer(
                 "Hold duration from 500 through 10000 milliseconds. Defaults to 800.", nullable: true);
+        }
 
         if (actionKind is LiveUiActionKind.Swipe or LiveUiActionKind.Scroll)
         {
@@ -1056,10 +1079,12 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var hasTargetY = LiveUiToolSchemas.TryReadDouble(arguments, "targetY", out var targetY);
         var hasNormalizedX = LiveUiToolSchemas.TryReadDouble(arguments, "normalizedX", out var normalizedX);
         var hasNormalizedY = LiveUiToolSchemas.TryReadDouble(arguments, "normalizedY", out var normalizedY);
+
         if (hasScreenX != hasScreenY)
         {
             point = default;
             error = "screenX and screenY must be supplied together.";
+
             return false;
         }
 
@@ -1067,6 +1092,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             point = default;
             error = "targetX and targetY must be supplied together.";
+
             return false;
         }
 
@@ -1074,16 +1100,19 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             point = default;
             error = "normalizedX and normalizedY must be supplied together.";
+
             return false;
         }
 
         var coordinateSpaceCount = (hasScreenX ? 1 : 0)
-                                   + (hasTargetX ? 1 : 0)
-                                   + (hasNormalizedX ? 1 : 0);
+            + (hasTargetX ? 1 : 0)
+            + (hasNormalizedX ? 1 : 0);
+
         if (coordinateSpaceCount > 1)
         {
             point = default;
             error = "Use either normalizedX/normalizedY, screenX/screenY, or targetX/targetY, not multiple coordinate spaces.";
+
             return false;
         }
 
@@ -1091,6 +1120,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             point = new LiveUiScreenPoint(targetBounds.CenterX, targetBounds.CenterY);
             error = string.Empty;
+
             return true;
         }
 
@@ -1100,6 +1130,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 point = default;
                 error = "targetX and targetY must be finite numbers.";
+
                 return false;
             }
 
@@ -1118,6 +1149,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 point = default;
                 error = "normalizedX and normalizedY must be finite numbers from 0 through 1.";
+
                 return false;
             }
 
@@ -1129,6 +1161,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             point = default;
             error = "screenX and screenY must be finite numbers.";
+
             return false;
         }
 
@@ -1136,15 +1169,18 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var maximumX = Math.Min(targetBounds.X + targetBounds.Width, viewport.X + viewport.Width);
         var minimumY = Math.Max(targetBounds.Y, viewport.Y);
         var maximumY = Math.Min(targetBounds.Y + targetBounds.Height, viewport.Y + viewport.Height);
+
         if (screenX < minimumX || screenX > maximumX || screenY < minimumY || screenY > maximumY)
         {
             point = default;
             error = "The requested screen point is outside the visible intersection of the selected target and live viewport.";
+
             return false;
         }
 
         point = new LiveUiScreenPoint(screenX, screenY);
         error = string.Empty;
+
         return true;
     }
 
@@ -1169,12 +1205,14 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             LiveUiToolSchemas.ReadInteger(arguments, "durationMs", 250),
             50,
             2_000);
+
         if (suppliedExactCoordinateCount > 0)
         {
             if (suppliedExactCoordinateCount != exactCoordinateNames.Length)
             {
                 path = default;
                 error = "startNormalizedX, startNormalizedY, endNormalizedX, and endNormalizedY must be supplied together.";
+
                 return false;
             }
 
@@ -1189,6 +1227,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             {
                 path = default;
                 error = "Recorded swipe coordinates must be finite numbers from 0 through 1.";
+
                 return false;
             }
 
@@ -1199,16 +1238,19 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
                 recordedEndY,
                 durationMilliseconds);
             error = string.Empty;
+
             return true;
         }
 
         var orientation = LiveUiToolSchemas.ReadString(arguments, "orientation")
-                          ?? LiveUiToolSchemas.ReadString(arguments, "direction")
-                          ?? "up";
+            ?? LiveUiToolSchemas.ReadString(arguments, "direction")
+            ?? "up";
+
         if (!LiveUiSwipeOrientation.TryParse(orientation, out var vector))
         {
             path = default;
             error = "orientation must be a compass direction or path such as N, NE, E to W, NE to SW, S to N, up, down, left, or right.";
+
             return false;
         }
 
@@ -1250,6 +1292,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             endY,
             durationMilliseconds);
         error = string.Empty;
+
         return true;
     }
 
@@ -1267,15 +1310,18 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             path = default;
             error = "scale is required and must be a finite number from 0.1 through 4.";
+
             return false;
         }
 
         var hasCenterX = LiveUiToolSchemas.TryReadDouble(arguments, "centerNormalizedX", out var centerX);
         var hasCenterY = LiveUiToolSchemas.TryReadDouble(arguments, "centerNormalizedY", out var centerY);
+
         if (hasCenterX != hasCenterY)
         {
             path = default;
             error = "centerNormalizedX and centerNormalizedY must be supplied together.";
+
             return false;
         }
 
@@ -1292,6 +1338,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
             50,
             2_000);
         var endDistance = startDistance * scale;
+
         if (!IsNormalizedCoordinate(centerX)
             || !IsNormalizedCoordinate(centerY)
             || !double.IsFinite(startDistance)
@@ -1304,6 +1351,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         {
             path = default;
             error = "Pinch center, startDistance, scale, and angle must produce finite in-viewport contacts; startDistance accepts 0.05 through 0.8 and final distance accepts 0.02 through 0.9.";
+
             return false;
         }
 
@@ -1327,14 +1375,17 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         var maximumX = Math.Clamp(NormalizeX(gestureBounds.X + gestureBounds.Width, viewport), 0, 1);
         var minimumY = Math.Clamp(NormalizeY(gestureBounds.Y, viewport), 0, 1);
         var maximumY = Math.Clamp(NormalizeY(gestureBounds.Y + gestureBounds.Height, viewport), 0, 1);
+
         if (!ContainsPinchPath(path, minimumX, maximumX, minimumY, maximumY))
         {
             path = default;
             error = "The requested pinch contacts extend outside the selected target or live viewport. Move the center inward or reduce startDistance/scale.";
+
             return false;
         }
 
         error = string.Empty;
+
         return true;
     }
 
@@ -1345,9 +1396,9 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         double minimumY,
         double maximumY)
         => ContainsPoint(path.PrimaryStartX, path.PrimaryStartY, minimumX, maximumX, minimumY, maximumY)
-           && ContainsPoint(path.SecondaryStartX, path.SecondaryStartY, minimumX, maximumX, minimumY, maximumY)
-           && ContainsPoint(path.PrimaryEndX, path.PrimaryEndY, minimumX, maximumX, minimumY, maximumY)
-           && ContainsPoint(path.SecondaryEndX, path.SecondaryEndY, minimumX, maximumX, minimumY, maximumY);
+            && ContainsPoint(path.SecondaryStartX, path.SecondaryStartY, minimumX, maximumX, minimumY, maximumY)
+            && ContainsPoint(path.PrimaryEndX, path.PrimaryEndY, minimumX, maximumX, minimumY, maximumY)
+            && ContainsPoint(path.SecondaryEndX, path.SecondaryEndY, minimumX, maximumX, minimumY, maximumY);
 
     private static bool ContainsPoint(
         double x,

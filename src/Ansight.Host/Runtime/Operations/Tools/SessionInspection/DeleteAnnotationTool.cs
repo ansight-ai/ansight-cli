@@ -36,6 +36,7 @@ internal sealed class DeleteAnnotationTool : Operation
         }
 
         var annotationId = NormalizeOptionalString(arguments?["annotationId"]?.GetValue<string>());
+
         if (annotationId is null)
         {
             return Task.FromResult(ToolError("annotationId is required."));
@@ -43,18 +44,21 @@ internal sealed class DeleteAnnotationTool : Operation
 
         var existingAnnotation = snapshot!.Annotations.FirstOrDefault(annotation =>
             string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
+
         if (existingAnnotation is null)
         {
             return Task.FromResult(ToolError($"Annotation '{annotationId}' was not found for session '{snapshot.SessionId}'."));
         }
 
         var expectedSource = NormalizeOptionalString(arguments?["expectedSource"]?.GetValue<string>());
+
         if (expectedSource is not null && !string.Equals(existingAnnotation.Source, expectedSource, StringComparison.Ordinal))
         {
             return Task.FromResult(ToolError($"Annotation '{annotationId}' source is '{existingAnnotation.Source}', not '{expectedSource}'."));
         }
 
         var result = runtimeState.DeleteSessionAnnotation(snapshot.SessionId, annotationId);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));

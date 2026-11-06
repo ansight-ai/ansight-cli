@@ -10,6 +10,7 @@ public static class PairingConfigCompactJsonExport
     public static string Serialize(PairingConfig pairingConfig)
     {
         ArgumentNullException.ThrowIfNull(pairingConfig);
+
         return PublicPairingConfigJson.Serialize(pairingConfig, indented: true);
     }
 
@@ -19,6 +20,7 @@ public static class PairingConfigCompactJsonExport
         out string json)
     {
         json = string.Empty;
+
         if (string.IsNullOrWhiteSpace(compactCode)
             || string.IsNullOrWhiteSpace(expectedConfigId))
         {
@@ -26,6 +28,7 @@ public static class PairingConfigCompactJsonExport
         }
 
         var separator = compactCode.IndexOf(':');
+
         if (separator <= 0
             || !string.Equals(compactCode[..separator], EnrollmentCodePrefix, StringComparison.OrdinalIgnoreCase))
         {
@@ -39,8 +42,10 @@ public static class PairingConfigCompactJsonExport
             using var gzip = new GZipStream(input, CompressionMode.Decompress);
             using var output = new MemoryStream();
             gzip.CopyTo(output);
+
             var payload = Encoding.UTF8.GetString(output.ToArray());
             var invite = PublicPairingConfigJson.TryDeserialize(payload);
+
             if (invite is null
                 || !string.Equals(invite.ConfigId, expectedConfigId, StringComparison.Ordinal))
             {
@@ -48,6 +53,7 @@ public static class PairingConfigCompactJsonExport
             }
 
             json = Serialize(invite);
+
             return true;
         }
         catch

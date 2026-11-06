@@ -10,7 +10,11 @@ public sealed class SdkIosInstrumentsCaptureManagerTests
     [Fact]
     public void IosSdkSessionWithoutProcessIdRemainsAvailableAndExplainsMissingTrace()
     {
-        if (!OperatingSystem.IsMacOS()) return;
+        if (!OperatingSystem.IsMacOS())
+        {
+            return;
+        }
+
         using var environment = new TestEnvironment();
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));

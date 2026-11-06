@@ -15,6 +15,7 @@ public sealed class SecretTextInputTests
         var store = new SecretStore(new MemoryStorage(), _ => null);
         store.Set("com.example.app", "login.password", value);
         store.Set("com.other.app", "login.password", "wrong-app-password");
+
         var supplied = new JsonObject { ["appId"] = "com.example.app", ["secretAlias"] = "login.password", ["automationId"] = "Password" };
         var result = await SecretTextInput.TypeUiAsync(supplied,
             _ => new SecretTextInput.Target("session-1", "com.example.app"),
@@ -27,6 +28,7 @@ public sealed class SecretTextInputTests
                 Assert.False(input.ContainsKey("appId"));
                 Assert.False(input.ContainsKey("secretAlias"));
                 Assert.False(input["includeScreenshot"]!.GetValue<bool>());
+
                 return Task.FromResult(new UiAutomationResult(operation, true, value,
                     new JsonObject { ["target"] = new JsonObject { ["value"] = value } }));
             }, CancellationToken.None);
@@ -63,7 +65,12 @@ public sealed class SecretTextInputTests
             _ => invalidTarget ? throw new InvalidOperationException("Ambiguous target")
                 : new SecretTextInput.Target("session-1", "com.example.app"),
             (_, _) => throw new InvalidOperationException("Missing secret"),
-            (_, _, _) => { called = true; throw new InvalidOperationException("Must not type"); },
+            (_, _, _) =>
+            {
+                called = true;
+                throw new InvalidOperationException("Must not type");
+            }
+,
             CancellationToken.None));
         Assert.False(called);
     }
@@ -81,9 +88,23 @@ public sealed class SecretTextInputTests
     private sealed class MemoryStorage : IEncryptedStorage
     {
         private readonly Dictionary<string, string> values = [];
+
         public string? Get(string key) => values.GetValueOrDefault(key);
-        public void Set(string key, string? value) { if (value is null) values.Remove(key); else values[key] = value; }
+
+        public void Set(string key, string? value)
+        {
+            if (value is null)
+            {
+                values.Remove(key);
+            }
+            else
+            {
+                values[key] = value;
+            }
+        }
+
         public void Remove(string key) => values.Remove(key);
+
         public void Clear() => values.Clear();
     }
 }

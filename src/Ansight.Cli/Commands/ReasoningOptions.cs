@@ -5,8 +5,10 @@ internal static class ReasoningOptions
     public static void ValidateForCommand(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         var command = arguments.Positionals.ElementAtOrDefault(0)?.ToLowerInvariant();
         var action = arguments.Positionals.ElementAtOrDefault(1)?.ToLowerInvariant();
+
         if (command == "replay"
             || command == "app" && action is "execute" or "learn"
             || command is "test" or "tests" && action is "run" or "run-all" or "run-inline"
@@ -20,6 +22,7 @@ internal static class ReasoningOptions
     public static string Resolve(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (!arguments.HasFlag("reasoning"))
         {
             return AgentReasoningModes.Fast;
@@ -31,6 +34,7 @@ internal static class ReasoningOptions
         }
 
         var value = arguments.GetOption("reasoning");
+
         if (!string.IsNullOrWhiteSpace(value))
         {
             try
@@ -49,12 +53,14 @@ internal static class ReasoningOptions
     public static string ResolveModelOverride(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (!arguments.HasFlag("model"))
         {
             return string.Empty;
         }
 
         var model = arguments.GetOption("model");
+
         return !string.IsNullOrWhiteSpace(model)
             ? model.Trim()
             : throw new CliUsageException("--model requires a value.");

@@ -37,6 +37,7 @@ public sealed class ClientVisualTreeEventParserTests
         var parsed = ClientEventParser.ParseText(payload);
 
         Assert.Equal(WebSocketClientEventConstants.ClientVisualTree, parsed.Type);
+
         var snapshot = Assert.IsType<SessionVisualTreeSnapshot>(parsed.VisualTreeSnapshot);
         Assert.Equal("stream-test", snapshot.SnapshotId);
         Assert.Equal(DateTimeOffset.Parse(capturedAtUtc), snapshot.CapturedAtUtc);
@@ -94,6 +95,7 @@ public sealed class ClientVisualTreeEventParserTests
             ["children"] = new JsonArray()
         };
         var current = root;
+
         for (var depth = 1; depth < visualTreeDepth; depth++)
         {
             var child = new JsonObject
@@ -130,6 +132,7 @@ public sealed class ClientVisualTreeEventParserTests
         var parsed = ClientEventParser.ParseText(payload.ToJsonString(JsonUtil.Compact));
 
         Assert.Equal(WebSocketClientEventConstants.ClientVisualTree, parsed.Type);
+
         var snapshot = Assert.IsType<SessionVisualTreeSnapshot>(parsed.VisualTreeSnapshot);
         Assert.Equal("android", snapshot.RuntimePlatform);
         Assert.Equal(visualTreeDepth, snapshot.NodeCount);

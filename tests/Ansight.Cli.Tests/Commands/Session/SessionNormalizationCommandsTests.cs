@@ -12,8 +12,9 @@ public sealed class SessionNormalizationCommandsTests
         var storePath = Path.Combine(directory.Path, "secure-storage.json");
         var keyPath = Path.Combine(directory.Path, "secure-storage.key");
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         var arguments = CliArguments.Parse(
-        [
+            [
             "session",
             "normalize",
             "missing-session",
@@ -36,6 +37,7 @@ public sealed class SessionNormalizationCommandsTests
             allowResidentHostForwarding: false);
 
         Assert.Equal(CliExitCodes.Failure, exitCode);
+
         var payload = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("ansight.session-normalization/v1", payload["schemaVersion"]!.GetValue<string>());
         Assert.Equal("missing-session", payload["sessionId"]!.GetValue<string>());

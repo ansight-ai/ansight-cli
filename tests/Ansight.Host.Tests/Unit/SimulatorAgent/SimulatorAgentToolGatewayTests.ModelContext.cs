@@ -13,11 +13,13 @@ public sealed partial class SimulatorAgentToolGatewayTests
     {
         var gateway = new ToolGateway(new RecordingOperationDispatcher());
         gateway.BeginRun("session", SecretAccess.Empty);
+
         try
         {
             gateway.BuildOpenAiToolDefinitions([new RepositoryTaskShortcut(
                 "ansight_task_open_account_0123456789ab", "open-account", "Open account", "Open the account page.", null,
-                new JsonObject { ["type"] = "object", ["properties"] = new JsonObject() }, 90, 1)]);
+                new JsonObject {["type"] = "object", ["properties"] = new JsonObject() }, 90, 1)]);
+
             var arguments = new JsonObject
             {
                 ["taskId"] = suppliedTaskId,
@@ -48,6 +50,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         var swipe = ToolDefinition("ansight_swipe_ui", "Swipe", "sessionId", "includeScreenshot", "direction", "distance", "orientation", "length", "ancestorAutomationId", "startNormalizedX");
         swipe["inputSchema"]!["required"] = new JsonArray("sessionId", "direction", "orientation");
         swipe["inputSchema"]!["properties"]!["orientation"]!["additionalProperties"] = false;
+
         var find = ToolDefinition("ansight_find_ui", "Find", "exact", "index", "matchMode", "visible", "role");
         var tree = ToolDefinition("ansight_get_live_visual_tree", "Tree", "includeProperties", "includeBindableProperties", "includeBindingContexts", "includeInactivePages", "includeBounds");
         var module = ToolDefinition("ansight_describe_module", "Describe", "includeDefinitions", "moduleId");
@@ -70,6 +73,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.Contains("startNormalizedX", swipeProperties);
         Assert.Null(swipeProperties["orientation"]!["additionalProperties"]);
         Assert.False(swipeSchema["additionalProperties"]!.GetValue<bool>());
+
         var findProperties = tools["ansight_find_ui"]["parameters"]!["properties"]!.AsObject();
         Assert.DoesNotContain("exact", findProperties);
         Assert.DoesNotContain("index", findProperties);
@@ -126,14 +130,17 @@ public sealed partial class SimulatorAgentToolGatewayTests
                     ["match"] = new JsonObject { ["score"] = 90.0 - index, ["coverage"] = 1.0 }
                 }).ToArray())
         }, isError: false);
+
         var gateway = new ToolGateway(dispatcher);
 
         var first = await gateway.GetRepositoryTaskShortcutsAsync("session", "Open weather", CancellationToken.None);
         reversed = true;
+
         var second = await gateway.GetRepositoryTaskShortcutsAsync("session", "Open weather", CancellationToken.None);
 
         Assert.Equal(taskIds.Length, first.Count);
         Assert.Equal(taskIds.Length, first.Select(task => task.ToolName).Distinct().Count());
+
         foreach (var task in first)
         {
             Assert.InRange(task.ToolName.Length, 1, 64);
@@ -165,20 +172,25 @@ public sealed partial class SimulatorAgentToolGatewayTests
             ["assertions"] = new JsonArray(new JsonObject { ["assertionId"] = "destination-ready", ["passed"] = !failed, ["message"] = "Expected Details ready state." }),
             ["toolCalls"] = calls
         };
+
         if (failed)
         {
             content["standardError"] = "AssertionError: destination-ready";
         }
+
         var dispatcher = new RecordingOperationDispatcher();
         dispatcher.Responses["ansight_run_task"] = RequestResult.ToolResult(content, isError: failed);
+
         var gateway = new ToolGateway(dispatcher);
 
         var result = await gateway.ExecuteAsync("ansight_run_task", new JsonObject { ["taskId"] = "example" }, "session", "correlation", CancellationToken.None);
 
         Assert.Equal(failed, result.IsError);
+
         var audit = JsonNode.Parse(result.Output)!;
         Assert.Equal(100, audit["result"]!["toolCalls"]!.AsArray().Count);
         Assert.Null(audit["truncated"]);
+
         var model = JsonNode.Parse(Assert.IsType<string>(result.ModelOutput))!;
         Assert.Equal("example", model["result"]!["taskId"]!.GetValue<string>());
         Assert.Equal(failed ? "Failed" : "Passed", model["result"]!["status"]!.GetValue<string>());
@@ -187,6 +199,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.Null(model["result"]!["toolCalls"]);
         Assert.Null(model["result"]!["runId"]);
         Assert.True(result.ModelOutput!.Length < result.Output.Length / 10);
+
         if (failed)
         {
             var failure = Assert.Single(model["result"]!["failureContext"]!.AsArray());

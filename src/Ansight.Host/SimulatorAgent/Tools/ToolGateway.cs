@@ -22,7 +22,7 @@ internal sealed class ToolGateway : IToolGateway
     private const int MaximumRepositoryTaskToolNameLength = 64;
     private const int MaximumToolOutputCharacters = 12_000;
     private const int MaximumTruncatedToolPrefixCharacters = 4_000;
-    private static readonly HashSet<string> ActionToolNames = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> actionToolNames = new(StringComparer.Ordinal)
     {
         "ansight_tap_ui",
         "ansight_long_press_ui",
@@ -33,7 +33,7 @@ internal sealed class ToolGateway : IToolGateway
         "ansight_back_ui",
         "ansight_run_ui_sequence"
     };
-    private static readonly HashSet<string> AllowedToolNames = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> allowedToolNames = new(StringComparer.Ordinal)
     {
         "ansight_take_screenshot",
         "ansight_evaluate_screenshot",
@@ -60,9 +60,13 @@ internal sealed class ToolGateway : IToolGateway
         "ansight_run_task",
         "ansight_list_app_tools",
         "ansight_call_app_tool",
-        "ansight_get_execution_capabilities", "ansight_require_capabilities",
-        "ansight_list_sandbox_file", "ansight_read_sandbox_file", "ansight_capture_sandbox_file",
-        "ansight_get_telemetry", "ansight_get_logs"
+        "ansight_get_execution_capabilities",
+        "ansight_require_capabilities",
+        "ansight_list_sandbox_file",
+        "ansight_read_sandbox_file",
+        "ansight_capture_sandbox_file",
+        "ansight_get_telemetry",
+        "ansight_get_logs"
     };
 
     private readonly IOperationDispatcher operations;
@@ -87,6 +91,7 @@ internal sealed class ToolGateway : IToolGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(secretAccess);
+
         if (currentRun.Value is not null)
         {
             throw new InvalidOperationException("A simulator agent run is already active.");
@@ -94,15 +99,17 @@ internal sealed class ToolGateway : IToolGateway
 
         var captureScope = operations.BeginSimulatorAgentRun(sessionId.Trim(), targetDeviceIdentifier);
         currentRun.Value = new SimulatorAgentToolRunState(secretAccess, captureScope);
+
         try
         {
             lock (appToolCatalogGate)
             {
                 var normalizedSessionId = sessionId.Trim();
                 appToolPermissionsBySession.Remove(normalizedSessionId);
+
                 foreach (var cacheKey in appToolDiscoveryCache.Keys
-                             .Where(key => string.Equals(key.SessionId, normalizedSessionId, StringComparison.Ordinal))
-                             .ToArray())
+                    .Where(key => string.Equals(key.SessionId, normalizedSessionId, StringComparison.Ordinal))
+                    .ToArray())
                 {
                     appToolDiscoveryCache.Remove(cacheKey);
                 }
@@ -128,7 +135,9 @@ internal sealed class ToolGateway : IToolGateway
         string? targetDeviceIdentifier = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var run = currentRun.Value;
+
         if (run is null)
         {
             throw new InvalidOperationException("A simulator agent run is not active.");
@@ -146,9 +155,10 @@ internal sealed class ToolGateway : IToolGateway
         {
             var normalizedSessionId = sessionId.Trim();
             appToolPermissionsBySession.Remove(normalizedSessionId);
+
             foreach (var cacheKey in appToolDiscoveryCache.Keys
-                         .Where(key => string.Equals(key.SessionId, normalizedSessionId, StringComparison.Ordinal))
-                         .ToArray())
+                .Where(key => string.Equals(key.SessionId, normalizedSessionId, StringComparison.Ordinal))
+                .ToArray())
             {
                 appToolDiscoveryCache.Remove(cacheKey);
             }
@@ -161,10 +171,12 @@ internal sealed class ToolGateway : IToolGateway
         bool appGraphEnabled = false)
     {
         capabilities ??= SessionCapabilities.Empty();
+
         var definitions = operations.BuildToolsListResult()["tools"] as JsonArray ?? [];
         var tools = new JsonArray();
         var run = currentRun.Value;
         run?.RepositoryTaskIdsByToolName.Clear();
+
         foreach (var task in (repositoryTasks ?? []).OrderBy(static task => task.TaskId, StringComparer.Ordinal))
         {
             if (run is not null)
@@ -172,15 +184,22 @@ internal sealed class ToolGateway : IToolGateway
                 run.RepositoryTaskIdsByToolName[task.ToolName] = task.TaskId;
             }
         }
+
         foreach (var definition in definitions.OfType<JsonObject>()
-                     .OrderBy(static definition => ReadString(definition, "name"), StringComparer.Ordinal))
+            .OrderBy(static definition => ReadString(definition, "name"), StringComparer.Ordinal))
         {
             var name = ReadString(definition, "name");
-            if (name is null || !AllowedToolNames.Contains(name))
+
+            if (name is null || !allowedToolNames.Contains(name))
             {
                 continue;
             }
-            if (capabilities.IsDeviceOnly && !DeviceExecutionTools.IsSupported(name)) continue;
+
+            if (capabilities.IsDeviceOnly && !DeviceExecutionTools.IsSupported(name))
+            {
+                continue;
+            }
+
             if (string.Equals(name, "ansight_get_live_navigation_structure", StringComparison.Ordinal)
                 && capabilities.NavigationFrameworks.Count == 0)
             {
@@ -194,6 +213,7 @@ internal sealed class ToolGateway : IToolGateway
                 ["additionalProperties"] = false
             };
             RemoveHostControlledTargetProperties(parameters);
+
             if (string.Equals(name, "ansight_find_ui", StringComparison.Ordinal))
             {
                 RemoveParameter(parameters, "index");
@@ -212,6 +232,7 @@ internal sealed class ToolGateway : IToolGateway
                 // and rejected candidates out of ordinary model tool responses.
                 RemoveParameter(parameters, "includeDiagnostics");
             }
+
             ProjectModelParameters(name, parameters);
             tools.Add(new JsonObject
             {
@@ -253,15 +274,18 @@ internal sealed class ToolGateway : IToolGateway
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(instruction);
         cancellationToken.ThrowIfCancellationRequested();
+
         var normalizedInstruction = instruction.Trim();
         var queries = new List<string> { normalizedInstruction };
         queries.AddRange(BuildFocusedRepositoryTaskQueries(normalizedInstruction));
+
         var candidatesByTaskId = new Dictionary<string, RepositoryTaskShortcut>(StringComparer.Ordinal);
         var focusedLeaders = new List<string>();
 
         for (var queryIndex = 0; queryIndex < queries.Count; queryIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var arguments = new JsonObject
             {
                 ["sessionId"] = sessionId.Trim(),
@@ -270,16 +294,19 @@ internal sealed class ToolGateway : IToolGateway
                     ? MaximumPreloadedRepositoryTasks
                     : MaximumRepositoryTasksPerFocusedQuery
             };
+
             if (trace is not null)
             {
                 arguments["includeDiagnostics"] = true;
             }
+
             var result = await operations.CallToolAsync(
-                    "ansight_list_tasks",
-                    arguments,
-                    RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false))
+                "ansight_list_tasks",
+                arguments,
+                RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false))
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+
             if (result.IsError)
             {
                 trace?.Invoke(new SimulatorAgentRepositoryTaskDiscoveryTrace("query", queries[queryIndex], [])
@@ -295,30 +322,37 @@ internal sealed class ToolGateway : IToolGateway
                 .Where(task => IsRelevantRepositoryTaskShortcut(task, normalizedInstruction))
                 .ToArray();
             var decisions = trace is null ? null : new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
             if (decisions is not null)
             {
                 foreach (var task in returnedTasks)
                 {
                     var reasons = new List<string>();
+
                     if (IsRepositoryTaskExplicitlyExcluded(normalizedInstruction, task.TaskId))
                     {
                         reasons.Add("explicit-exclusion");
                     }
+
                     if (task.Score is null || task.Score < MinimumPreloadedRepositoryTaskScore)
                     {
                         reasons.Add(task.Score is null ? "missing-score" : "below-minimum-score");
                     }
+
                     if (task.Coverage is null || task.Coverage < MinimumPreloadedRepositoryTaskCoverage)
                     {
                         reasons.Add(task.Coverage is null ? "missing-coverage" : "below-minimum-coverage");
                     }
+
                     if (!RepositoryTaskSearchMatcher.HasTaskIntentMatch(task.TaskId, task.Title, task.Feature, normalizedInstruction, task.Keywords))
                     {
                         reasons.Add("task-intent-mismatch");
                     }
+
                     decisions[task.TaskId] = reasons;
                 }
             }
+
             if (queryIndex > 0 && queryTasks.Length > 0)
             {
                 focusedLeaders.Add(queryTasks[0].TaskId);
@@ -328,10 +362,12 @@ internal sealed class ToolGateway : IToolGateway
             {
                 var isDuplicate = candidatesByTaskId.TryGetValue(task.TaskId, out var existing);
                 var improvesMatch = !isDuplicate || CompareRepositoryTaskMatches(task, existing!) > 0;
+
                 if (improvesMatch)
                 {
                     candidatesByTaskId[task.TaskId] = task;
                 }
+
                 if (decisions is not null)
                 {
                     decisions[task.TaskId] = [isDuplicate
@@ -339,6 +375,7 @@ internal sealed class ToolGateway : IToolGateway
                         : "preload-candidate"];
                 }
             }
+
             if (trace is not null)
             {
                 trace(ReadRepositoryTaskDiscoveryTrace(result, queries[queryIndex], returnedTasks, decisions!));
@@ -349,10 +386,11 @@ internal sealed class ToolGateway : IToolGateway
         // them even when a short task covers too little of the whole journey to pass
         // the normal relevance thresholds.
         var preferredTasks = new List<RepositoryTaskShortcut>();
+
         foreach (var taskId in (preferredTaskIds ?? [])
-                     .Where(static id => !string.IsNullOrWhiteSpace(id))
-                     .Distinct(StringComparer.Ordinal)
-                     .Take(MaximumPreloadedRepositoryTasks))
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+            .Take(MaximumPreloadedRepositoryTasks))
         {
             if (candidatesByTaskId.TryGetValue(taskId, out var candidate))
             {
@@ -361,20 +399,27 @@ internal sealed class ToolGateway : IToolGateway
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+
             var result = await operations.CallToolAsync(
-                    "ansight_list_tasks",
-                    new JsonObject
-                    {
-                        ["sessionId"] = sessionId.Trim(),
-                        ["query"] = taskId,
-                        ["maxResults"] = RepositoryTaskProtocol.MaximumDiscoveryResults
-                    },
-                    RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false))
+                "ansight_list_tasks",
+                new JsonObject
+                {
+                    ["sessionId"] = sessionId.Trim(),
+                    ["query"] = taskId,
+                    ["maxResults"] = RepositoryTaskProtocol.MaximumDiscoveryResults
+                },
+                RunRequestContext.CreateCorrelationId(allowScreenshotOcr: false))
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+
             var exactTask = result.IsError ? null : ReadRepositoryTaskShortcuts(result)
                 .FirstOrDefault(task => string.Equals(task.TaskId, taskId, StringComparison.Ordinal));
-            if (exactTask is not null) preferredTasks.Add(exactTask);
+
+            if (exactTask is not null)
+            {
+                preferredTasks.Add(exactTask);
+            }
+
             trace?.Invoke(new SimulatorAgentRepositoryTaskDiscoveryTrace("preferred", taskId, [])
             {
                 SelectedTaskIds = exactTask is null ? [] : [taskId],
@@ -386,10 +431,15 @@ internal sealed class ToolGateway : IToolGateway
 
         var selectedTasks = new List<RepositoryTaskShortcut>();
         var selectedTaskIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var task in preferredTasks)
         {
-            if (selectedTaskIds.Add(task.TaskId)) selectedTasks.Add(task);
+            if (selectedTaskIds.Add(task.TaskId))
+            {
+                selectedTasks.Add(task);
+            }
         }
+
         foreach (var taskId in focusedLeaders)
         {
             if (selectedTaskIds.Add(taskId)
@@ -400,10 +450,10 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         foreach (var task in candidatesByTaskId.Values
-                     .OrderByDescending(task => task.Score ?? 0)
-                     .ThenByDescending(task => task.Coverage ?? 0)
-                     .ThenBy(task => task.Title, StringComparer.OrdinalIgnoreCase)
-                     .ThenBy(task => task.TaskId, StringComparer.Ordinal))
+            .OrderByDescending(task => task.Score ?? 0)
+            .ThenByDescending(task => task.Coverage ?? 0)
+            .ThenBy(task => task.Title, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(task => task.TaskId, StringComparer.Ordinal))
         {
             if (selectedTaskIds.Add(task.TaskId))
             {
@@ -430,6 +480,7 @@ internal sealed class ToolGateway : IToolGateway
             SelectedTaskIds = shortcuts.Select(task => task.TaskId).ToArray(),
             Message = $"Preload thresholds: score >= {MinimumPreloadedRepositoryTaskScore}, coverage >= {MinimumPreloadedRepositoryTaskCoverage}; maximum {MaximumPreloadedRepositoryTasks} shortcuts."
         });
+
         return shortcuts;
     }
 
@@ -445,6 +496,7 @@ internal sealed class ToolGateway : IToolGateway
             ? values.OfType<JsonObject>().Select(candidate =>
             {
                 var taskId = ReadString(candidate, "taskId") ?? string.Empty;
+
                 return new SimulatorAgentRepositoryTaskCandidateTrace(
                     taskId,
                     ReadDouble(candidate, "score"),
@@ -459,6 +511,7 @@ internal sealed class ToolGateway : IToolGateway
             }).ToArray()
             : returnedTasks.Select(task => new SimulatorAgentRepositoryTaskCandidateTrace(
                 task.TaskId, task.Score, task.Coverage, decisions[task.TaskId])).ToArray();
+
         return new SimulatorAgentRepositoryTaskDiscoveryTrace("query", query, candidates)
         {
             AvailableTaskCount = diagnostics?["availableTaskCount"]?.GetValue<int>(),
@@ -485,12 +538,13 @@ internal sealed class ToolGateway : IToolGateway
         {
             var content = result.Payload?["structuredContent"] ?? result.Payload;
             var tasks = content?["tasks"] as JsonArray;
+
             return tasks?
                        .OfType<JsonObject>()
-                       .Select(CreateRepositoryTaskShortcut)
-                       .OfType<RepositoryTaskShortcut>()
-                       .ToArray()
-                   ?? [];
+                           .Select(CreateRepositoryTaskShortcut)
+                           .OfType<RepositoryTaskShortcut>()
+                           .ToArray()
+                ?? [];
         }
         catch (JsonException)
         {
@@ -503,6 +557,7 @@ internal sealed class ToolGateway : IToolGateway
         const string clauseSeparators = @"(?i)(?:\bthen\b|\bbut\b|,\s*(?=(?:search|find|open|select|tap|return|navigate|verify|use)\b))";
         var queries = new List<string>();
         var sentences = new List<string>();
+
         foreach (var sentence in Regex.Split(instruction, @"[.!?;\r\n]+", RegexOptions.CultureInvariant))
         {
             if (!ContainsNegativeTaskDirective(sentence))
@@ -529,18 +584,20 @@ internal sealed class ToolGateway : IToolGateway
                 }
             }
         }
+
         foreach (var sentence in sentences)
         {
             // An explicitly named task late in a long instruction must not lose its query
             // budget to clause variants of an earlier transition.
             queries.AddRange(Regex.Matches(
-                    sentence,
-                    @"(?i)\b(?:run|running|use|using|invoke|call)\s+[`'""\s]*(?<task>[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+)",
-                    RegexOptions.CultureInvariant)
+                sentence,
+                @"(?i)\b(?:run|running|use|using|invoke|call)\s+[`'""\s]*(?<task>[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+)",
+                RegexOptions.CultureInvariant)
                 .Select(match => match.Groups["task"].Value));
         }
 
         queries.AddRange(sentences);
+
         foreach (var sentence in sentences)
         {
             // Preserve the location with its action before splitting into smaller transitions:
@@ -578,6 +635,7 @@ internal sealed class ToolGateway : IToolGateway
         RepositoryTaskShortcut right)
     {
         var scoreComparison = Nullable.Compare(left.Score, right.Score);
+
         return scoreComparison != 0
             ? scoreComparison
             : Nullable.Compare(left.Coverage, right.Coverage);
@@ -587,14 +645,15 @@ internal sealed class ToolGateway : IToolGateway
         RepositoryTaskShortcut task,
         string instruction)
         => task.Score >= MinimumPreloadedRepositoryTaskScore
-           && task.Coverage >= MinimumPreloadedRepositoryTaskCoverage
-           && RepositoryTaskSearchMatcher.HasTaskIntentMatch(
-               task.TaskId, task.Title, task.Feature, instruction, task.Keywords);
+            && task.Coverage >= MinimumPreloadedRepositoryTaskCoverage
+            && RepositoryTaskSearchMatcher.HasTaskIntentMatch(
+                task.TaskId, task.Title, task.Feature, instruction, task.Keywords);
 
     public OpenAiFunctionCall NormalizeFunctionCall(
         OpenAiFunctionCall call)
     {
         ArgumentNullException.ThrowIfNull(call);
+
         string? taskId = null;
         currentRun.Value?.RepositoryTaskIdsByToolName.TryGetValue(call.Name, out taskId);
 
@@ -606,8 +665,13 @@ internal sealed class ToolGateway : IToolGateway
             {
                 var arguments = call.Arguments.DeepClone().AsObject();
                 arguments["taskId"] = taskId;
-                return call with { Arguments = arguments };
+
+                return call with
+                {
+                    Arguments = arguments
+                };
             }
+
             return call;
         }
 
@@ -624,6 +688,7 @@ internal sealed class ToolGateway : IToolGateway
     public JsonObject ResolveUiSelectorForTracking(JsonObject arguments)
     {
         var resolved = arguments.DeepClone().AsObject();
+
         if (currentRun.Value?.UiContext is { } uiContext && !uiContext.TryResolveSelectors(resolved, out _))
         {
             return arguments.DeepClone().AsObject();
@@ -638,12 +703,13 @@ internal sealed class ToolGateway : IToolGateway
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
         var toolId = ReadString(arguments, "toolId");
+
         lock (appToolCatalogGate)
         {
             return toolId is null
-                   || !appToolPermissionsBySession.TryGetValue(sessionId, out var permissions)
-                   || !permissions.TryGetValue(toolId, out var permission)
-                   || !string.Equals(permission.Policy, "write", StringComparison.OrdinalIgnoreCase);
+                || !appToolPermissionsBySession.TryGetValue(sessionId, out var permissions)
+                || !permissions.TryGetValue(toolId, out var permission)
+                || !string.Equals(permission.Policy, "write", StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -652,6 +718,7 @@ internal sealed class ToolGateway : IToolGateway
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (!operations.TryGetSessionSnapshot(sessionId, out var snapshot) || snapshot is null)
         {
             return Task.FromResult<ToolSessionContext?>(null);
@@ -666,6 +733,7 @@ internal sealed class ToolGateway : IToolGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         cancellationToken.ThrowIfCancellationRequested();
+
         if (!operations.TryGetSessionSnapshot(sessionId.Trim(), out var snapshot)
             || snapshot is null)
         {
@@ -673,20 +741,29 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         var platform = ResolveRuntimePlatform(snapshot);
+
         if (snapshot.CaptureSource == WorkspaceExecutionModes.Device)
-            return SessionCapabilities.Empty(platform) with { IsDeviceOnly = true };
+        {
+            return SessionCapabilities.Empty(platform) with
+            {
+                IsDeviceOnly = true
+            };
+        }
+
         JsonObject? catalog;
+
         try
         {
             catalog = await operations.GetSessionAppToolCatalogAsync(
-                    sessionId.Trim(),
-                    cancellationToken)
+                sessionId.Trim(),
+                cancellationToken)
                 .ConfigureAwait(false);
         }
         catch when (!cancellationToken.IsCancellationRequested)
         {
             catalog = null;
         }
+
         return SessionCapabilities.FromPublishedTools(platform, catalog);
     }
 
@@ -699,6 +776,7 @@ internal sealed class ToolGateway : IToolGateway
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(currentSessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         if (timeout <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout must be positive.");
@@ -710,7 +788,7 @@ internal sealed class ToolGateway : IToolGateway
             ? null
             : targetDeviceIdentifier.Trim();
         var earliestCreatedUtc = operations.TryGetSessionSnapshot(normalizedSessionId, out var currentSnapshot)
-                                 && currentSnapshot is not null
+            && currentSnapshot is not null
             ? currentSnapshot.CreatedUtc
             : DateTimeOffset.MinValue;
         var deadlineUtc = DateTimeOffset.UtcNow.Add(timeout);
@@ -718,6 +796,7 @@ internal sealed class ToolGateway : IToolGateway
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var candidate = operations.GetSessionSummaries()
                 .Where(snapshot => string.Equals(snapshot.AppId, normalizedAppId, StringComparison.Ordinal))
                 .Where(snapshot => snapshot.CreatedUtc >= earliestCreatedUtc)
@@ -729,12 +808,14 @@ internal sealed class ToolGateway : IToolGateway
                     StringComparison.Ordinal))
                 .ThenByDescending(static snapshot => snapshot.LastUpdatedUtc)
                 .FirstOrDefault();
+
             if (candidate is not null)
             {
                 return CreateSessionContext(candidate);
             }
 
             var remaining = deadlineUtc - DateTimeOffset.UtcNow;
+
             if (remaining <= TimeSpan.Zero)
             {
                 return null;
@@ -751,11 +832,12 @@ internal sealed class ToolGateway : IToolGateway
     private ToolSessionContext CreateSessionContext(AppSessionSnapshot snapshot)
     {
         var device = snapshot.DeviceProfile?.Device;
+
         return new ToolSessionContext(
             snapshot.SessionId,
             snapshot.AppId,
             snapshot.DeviceProfile?.App?.AppName
-            ?? (string.IsNullOrWhiteSpace(snapshot.ClientName) ? snapshot.AppId : snapshot.ClientName),
+                ?? (string.IsNullOrWhiteSpace(snapshot.ClientName) ? snapshot.AppId : snapshot.ClientName),
             operations.IsSessionConnected(snapshot.SessionId),
             snapshot.AppState.ToString().ToLowerInvariant(),
             device is null && string.IsNullOrWhiteSpace(snapshot.DeviceProfileJson)
@@ -775,40 +857,51 @@ internal sealed class ToolGateway : IToolGateway
     {
         var devicePlatform = VisualTreeContract.NormalizeRuntimePlatform(
             snapshot.DeviceProfile?.Device?.OsName);
+
         if (devicePlatform != VisualTreeContract.UnknownRuntimePlatform)
         {
             return devicePlatform;
         }
 
         return snapshot.VisualTreeSnapshots
-                   .OrderByDescending(static tree => tree.CapturedAtUtc)
-                   .Select(static tree => VisualTreeContract.NormalizeRuntimePlatform(tree.RuntimePlatform))
-                   .FirstOrDefault(static platform => platform != VisualTreeContract.UnknownRuntimePlatform)
-               ?? VisualTreeContract.UnknownRuntimePlatform;
+            .OrderByDescending(static tree => tree.CapturedAtUtc)
+            .Select(static tree => VisualTreeContract.NormalizeRuntimePlatform(tree.RuntimePlatform))
+            .FirstOrDefault(static platform => platform != VisualTreeContract.UnknownRuntimePlatform)
+            ?? VisualTreeContract.UnknownRuntimePlatform;
     }
 
     private static bool MatchesDevice(
         AppSessionSnapshot snapshot,
         string? targetDeviceIdentifier)
         => targetDeviceIdentifier is null
-           || string.Equals(
-               DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot),
-               targetDeviceIdentifier,
-               StringComparison.OrdinalIgnoreCase);
+            || string.Equals(
+                DeviceLifecycleTool.ResolveNativeDeviceIdentifier(snapshot),
+                targetDeviceIdentifier,
+                StringComparison.OrdinalIgnoreCase);
 
     public async Task<ToolCallResult> ExecuteAsync(
         string toolName, JsonObject arguments, string sessionId, string correlationId,
         CancellationToken cancellationToken, OperationExecutionContext? context = null)
     {
         using var operation = activity?.Begin(toolName, "tool", sessionId, requestId: correlationId);
+
         try
         {
             var result = await ExecuteCoreAsync(toolName, arguments, sessionId, correlationId, cancellationToken, context).ConfigureAwait(false);
             operation?.Complete(result.IsError ? operation.WasDispatched ? "failed" : "rejected" : "succeeded");
+
             return result;
         }
-        catch (OperationCanceledException) { operation?.Complete("cancelled"); throw; }
-        catch (Exception exception) { operation?.Complete("failed", errorType: exception.GetType().Name); throw; }
+        catch (OperationCanceledException)
+        {
+            operation?.Complete("cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            operation?.Complete("failed", errorType: exception.GetType().Name);
+            throw;
+        }
     }
 
     private async Task<ToolCallResult> ExecuteCoreAsync(
@@ -822,7 +915,10 @@ internal sealed class ToolGateway : IToolGateway
         if (operations.TryGetSessionSnapshot(sessionId, out var target)
             && target?.CaptureSource == WorkspaceExecutionModes.Device
             && toolName != TypeSecretToolName && !DeviceExecutionTools.IsSupported(toolName))
+        {
             return ErrorResult($"Tool '{toolName}' is unavailable in device mode. Query execution capabilities for supported operations.");
+        }
+
         if (string.Equals(toolName, TypeSecretToolName, StringComparison.Ordinal))
         {
             return await TypeSecretAsync(
@@ -832,9 +928,10 @@ internal sealed class ToolGateway : IToolGateway
                 cancellationToken);
         }
 
-        if (!AllowedToolNames.Contains(toolName))
+        if (!allowedToolNames.Contains(toolName))
         {
             var deniedMessage = $"Tool '{toolName}' is not allowed by the simulator agent.";
+
             return new ToolCallResult(true, deniedMessage, deniedMessage);
         }
 
@@ -843,6 +940,7 @@ internal sealed class ToolGateway : IToolGateway
         {
             return ErrorResult(authorizationError);
         }
+
         if (string.Equals(toolName, "ansight_list_app_tools", StringComparison.Ordinal)
             && ReadString(arguments, "query") is null
             && ReadString(arguments, "feature") is null
@@ -851,6 +949,7 @@ internal sealed class ToolGateway : IToolGateway
             return ErrorResult(
                 "Provide a focused query, feature, or exact toolId when discovering app tools; broad catalog dumps are not available to the simulator agent.");
         }
+
         if (string.Equals(toolName, "ansight_list_tasks", StringComparison.Ordinal)
             && ReadString(arguments, "query") is null
             && ReadString(arguments, "feature") is null)
@@ -862,6 +961,7 @@ internal sealed class ToolGateway : IToolGateway
         var discoveryCacheKey = string.Equals(toolName, "ansight_list_app_tools", StringComparison.Ordinal)
             ? BuildDiscoveryCacheKey(sessionId, arguments)
             : null;
+
         if (discoveryCacheKey is not null)
         {
             lock (appToolCatalogGate)
@@ -877,26 +977,32 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var safeArguments = arguments.DeepClone().AsObject();
         safeArguments["sessionId"] = sessionId;
         safeArguments.Remove("appId");
         safeArguments.Remove("deviceId");
         safeArguments.Remove("bundleIdentifier");
+
         if (toolName == "ansight_evaluate_screenshot")
         {
             safeArguments.Remove("teamId");
+
             if (safeArguments["reference"] is JsonObject reference && reference.ContainsKey("workspacePath"))
             {
                 return ErrorResult("Screenshot assessment references must use a retained frameId from the selected session.");
             }
         }
+
         var uiContext = currentRun.Value?.UiContext;
-        var isUiTool = IsUiObservationTool(toolName) || ActionToolNames.Contains(toolName);
+        var isUiTool = IsUiObservationTool(toolName) || actionToolNames.Contains(toolName);
+
         if (isUiTool && uiContext is not null
             && !uiContext.TryResolveSelectors(safeArguments, out var selectorError))
         {
             return ErrorResult(selectorError!);
         }
+
         ApplySafetyLimits(toolName, safeArguments);
 
         // Invalidate before dispatch, including failures/cancellation: a task or gesture
@@ -908,15 +1014,18 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         var result = await operations.CallToolAsync(toolName, safeArguments, correlationId, context);
+
         // A task may have completed after cancellation was requested. Preserve its
         // retained call evidence before the agent loop observes that cancellation.
         if (!string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
         }
+
         if (result.IsError)
         {
             var protocolErrorMessage = result.ErrorMessage ?? "The Ansight tool call failed.";
+
             return new ToolCallResult(
                 true,
                 new JsonObject
@@ -929,60 +1038,64 @@ internal sealed class ToolGateway : IToolGateway
 
         var payload = result.Payload;
         var isError = payload?["isError"] is JsonValue errorValue
-                      && errorValue.TryGetValue<bool>(out var parsedError)
-                      && parsedError;
+            && errorValue.TryGetValue<bool>(out var parsedError)
+            && parsedError;
         var structuredContent = payload?["structuredContent"]?.DeepClone()
             ?? payload?.DeepClone()
             ?? new JsonObject();
         JsonObject? accessibilityEvidence = null;
+
         if (string.Equals(toolName, "ansight_get_live_visual_tree", StringComparison.Ordinal)
             && structuredContent is JsonObject visualTreeContent)
         {
             accessibilityEvidence = CreateAccessibilityTraceEvidence(visualTreeContent);
             structuredContent = VisualTreeObservation.Build(visualTreeContent)
-                                ?? structuredContent;
+                ?? structuredContent;
         }
         else if (string.Equals(toolName, "ansight_get_live_navigation_structure", StringComparison.Ordinal)
-                 && structuredContent is JsonObject navigationContent)
+            && structuredContent is JsonObject navigationContent)
         {
             structuredContent = NavigationStructureObservation.Build(navigationContent)
-                                ?? structuredContent;
+                ?? structuredContent;
         }
         else if (string.Equals(toolName, "ansight_list_app_tools", StringComparison.Ordinal)
-                 && structuredContent is JsonObject appToolContent)
+            && structuredContent is JsonObject appToolContent)
         {
             structuredContent = BuildAgentAppToolCatalog(appToolContent, sessionId);
         }
         else if (string.Equals(toolName, "ansight_call_app_tool", StringComparison.Ordinal)
-                 && structuredContent is JsonObject appToolResultContent)
+            && structuredContent is JsonObject appToolResultContent)
         {
             structuredContent = AppToolObservation.Build(appToolResultContent);
         }
-        else if (ActionToolNames.Contains(toolName)
-                 && structuredContent is JsonObject actionContent)
+        else if (actionToolNames.Contains(toolName)
+            && structuredContent is JsonObject actionContent)
         {
             accessibilityEvidence = AttachAfterActionObservation(actionContent, sessionId);
         }
 
         RepositoryTaskSourceTrace? taskSource = null;
+
         if (toolName == "ansight_run_task" && structuredContent is JsonObject taskResultContent
             && taskResultContent.Remove("sourceTrace", out var sourceNode) && sourceNode is not null)
         {
             taskSource = sourceNode.Deserialize<RepositoryTaskSourceTrace>(JsonUtil.Compact);
         }
+
         var traceEvidence = LiveUiOcrTraceEvidence.RemoveFrom(structuredContent);
 
         var resultMessage = ReadResultMessage(structuredContent)
-                            ?? (isError ? "The Ansight tool call failed." : "Ansight tool call completed.");
+            ?? (isError ? "The Ansight tool call failed." : "Ansight tool call completed.");
         var output = new JsonObject
         {
             ["isError"] = isError,
             ["result"] = structuredContent
         }.ToJsonString();
         var modelOutput = string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal)
-                          && structuredContent is JsonObject taskContent
+            && structuredContent is JsonObject taskContent
             ? BuildRepositoryTaskModelOutput(taskContent, isError)
             : null;
+
         if (toolName == "ansight_scan_screen" && structuredContent is JsonObject screenText)
         {
             modelOutput = ScreenTextObservation.BuildModelOutput(screenText, isError, MaximumToolOutputCharacters);
@@ -996,6 +1109,7 @@ internal sealed class ToolGateway : IToolGateway
                 ["isError"] = isError,
                 ["result"] = uiContext?.Project(observation) ?? observation
             }.ToJsonString();
+
             if (modelOutput.Length > MaximumToolOutputCharacters)
             {
                 // Never expose half a hierarchy or aliases whose targets were omitted.
@@ -1009,7 +1123,9 @@ internal sealed class ToolGateway : IToolGateway
                 }.ToJsonString();
             }
         }
+
         ToolCallResult toolResult;
+
         if (modelOutput is not null || output.Length <= MaximumToolOutputCharacters)
         {
             toolResult = new ToolCallResult(isError, output, resultMessage)
@@ -1017,11 +1133,11 @@ internal sealed class ToolGateway : IToolGateway
                 ModelOutput = modelOutput,
                 TaskSource = taskSource,
                 TaskAssertions = string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal)
-                                 && structuredContent["assertions"] is JsonArray taskAssertions
+                    && structuredContent["assertions"] is JsonArray taskAssertions
                     ? taskAssertions.Deserialize<RepositoryTaskAssertion[]>(JsonUtil.Compact)
                     : null,
                 TaskCalls = string.Equals(toolName, "ansight_run_task", StringComparison.Ordinal)
-                            && structuredContent["toolCalls"] is JsonArray taskCalls
+                    && structuredContent["toolCalls"] is JsonArray taskCalls
                     ? taskCalls.Deserialize<RepositoryTaskToolCall[]>(JsonUtil.Compact)
                     : null,
                 TraceEvidence = traceEvidence,
@@ -1061,6 +1177,7 @@ internal sealed class ToolGateway : IToolGateway
     private static string BuildRepositoryTaskModelOutput(JsonObject content, bool isError)
     {
         var result = new JsonObject();
+
         foreach (var propertyName in new[] { "taskId", "status", "message", "output" })
         {
             if (content[propertyName] is { } value)
@@ -1088,6 +1205,7 @@ internal sealed class ToolGateway : IToolGateway
                     result[propertyName] = value.DeepClone();
                 }
             }
+
             if (content["toolCalls"] is JsonArray calls)
             {
                 var failedCalls = calls.OfType<JsonObject>()
@@ -1097,6 +1215,7 @@ internal sealed class ToolGateway : IToolGateway
                 var failureContext = failedCalls.Length > 0
                     ? failedCalls
                     : calls.OfType<JsonObject>().TakeLast(1).ToArray();
+
                 if (failureContext.Length > 0)
                 {
                     result["failureContext"] = new JsonArray(failureContext
@@ -1117,9 +1236,9 @@ internal sealed class ToolGateway : IToolGateway
     private static JsonObject? CreateAccessibilityTraceEvidence(JsonObject structuredContent)
     {
         if (!string.Equals(
-                ReadString(structuredContent, "toolId"),
-                LiveUiTreeCapture.DeviceAccessibilityToolId,
-                StringComparison.Ordinal)
+            ReadString(structuredContent, "toolId"),
+            LiveUiTreeCapture.DeviceAccessibilityToolId,
+            StringComparison.Ordinal)
             || structuredContent["payload"]?["result"] is not JsonObject snapshot)
         {
             return null;
@@ -1139,10 +1258,12 @@ internal sealed class ToolGateway : IToolGateway
     {
         // Never trust a provider-supplied hint for permission to skip task reassessment.
         actionContent.Remove("navigationChanged");
+
         var snapshotId = actionContent["evidence"]?["after"]?["visualTreeSnapshotId"] is JsonValue value
-                         && value.TryGetValue<string>(out var parsedSnapshotId)
+            && value.TryGetValue<string>(out var parsedSnapshotId)
             ? parsedSnapshotId
             : null;
+
         if (string.IsNullOrWhiteSpace(snapshotId)
             || !operations.TryGetSessionSnapshot(sessionId, out var session)
             || session is null)
@@ -1154,6 +1275,7 @@ internal sealed class ToolGateway : IToolGateway
             candidate.SnapshotId,
             snapshotId,
             StringComparison.Ordinal));
+
         if (snapshot is null)
         {
             return null;
@@ -1161,22 +1283,27 @@ internal sealed class ToolGateway : IToolGateway
 
         var beforeId = actionContent["evidence"]?["before"]?["visualTreeSnapshotId"]?.GetValue<string>();
         var before = session.VisualTreeSnapshots.LastOrDefault(candidate => candidate.SnapshotId == beforeId);
+
         if (before is not null && before.Source == snapshot.Source
             && UiNavigationContext.Fingerprint(before.Payload) is { } beforeNavigation
             && UiNavigationContext.Fingerprint(snapshot.Payload) is { } afterNavigation)
+        {
             actionContent["navigationChanged"] = beforeNavigation != afterNavigation;
+        }
 
         var observation = VisualTreeObservation.Build(
             snapshot.Payload,
             session.SessionId,
             session.AppId,
             snapshot.Source);
+
         if (observation is not null)
         {
             actionContent["afterObservation"] = observation;
         }
 
         var format = snapshot.Payload["format"]?.GetValue<string>() ?? snapshot.VisualTreeFormat;
+
         if (!format.Contains("device-accessibility", StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -1198,6 +1325,7 @@ internal sealed class ToolGateway : IToolGateway
         var taskId = ReadString(task, "taskId");
         var title = ReadString(task, "title");
         var description = ReadString(task, "description");
+
         if (taskId is null
             || title is null
             || description is null
@@ -1231,14 +1359,15 @@ internal sealed class ToolGateway : IToolGateway
     {
         var slug = new string(taskId
             .Select(static character =>
-                character is >= 'a' and <= 'z'
-                    or >= 'A' and <= 'Z'
-                    or >= '0' and <= '9'
-                    or '_'
-                    ? char.ToLowerInvariant(character)
-                    : '_')
+                    character is >= 'a' and <= 'z'
+                        or >= 'A' and <= 'Z'
+                        or >= '0' and <= '9'
+                        or '_'
+                        ? char.ToLowerInvariant(character)
+                        : '_')
             .ToArray())
             .Trim('_');
+
         if (slug.Length == 0)
         {
             slug = "repository_task";
@@ -1247,6 +1376,7 @@ internal sealed class ToolGateway : IToolGateway
         // Every normalized ID gets a suffix: punctuation/case can collide even without truncation.
         var suffix = "_" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(taskId)))[..12];
         var maximumSlugLength = MaximumRepositoryTaskToolNameLength - RepositoryTaskToolPrefix.Length - suffix.Length;
+
         if (slug.Length > maximumSlugLength)
         {
             slug = slug[..maximumSlugLength];
@@ -1260,6 +1390,7 @@ internal sealed class ToolGateway : IToolGateway
     {
         var parameters = task.InputSchema.DeepClone().AsObject();
         RemoveInapplicableSchemaKeywords(parameters);
+
         return new JsonObject
         {
             ["type"] = "function",
@@ -1276,23 +1407,27 @@ internal sealed class ToolGateway : IToolGateway
         SecretAccess secretAccess)
     {
         var parameters = (typeTextDefinition?["inputSchema"]?.DeepClone() as JsonObject)
-                         ?? new JsonObject
-                         {
-                             ["type"] = "object",
-                             ["properties"] = new JsonObject(),
-                             ["additionalProperties"] = false
-                         };
+            ?? new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject(),
+                ["additionalProperties"] = false
+            };
         RemoveHostControlledTargetProperties(parameters);
+
         var properties = parameters["properties"] as JsonObject ?? new JsonObject();
         parameters["properties"] = properties;
         properties.Remove("value");
+
         var aliases = new JsonArray();
+
         foreach (var alias in secretAccess.Secrets.Keys.OrderBy(
-                     static alias => alias,
-                     StringComparer.OrdinalIgnoreCase))
+            static alias => alias,
+            StringComparer.OrdinalIgnoreCase))
         {
             aliases.Add(alias);
         }
+
         properties["secretAlias"] = new JsonObject
         {
             ["type"] = "string",
@@ -1302,6 +1437,7 @@ internal sealed class ToolGateway : IToolGateway
 
         var required = parameters["required"] as JsonArray ?? [];
         parameters["required"] = required;
+
         for (var index = required.Count - 1; index >= 0; index--)
         {
             if (string.Equals(required[index]?.GetValue<string>(), "value", StringComparison.Ordinal))
@@ -1309,13 +1445,15 @@ internal sealed class ToolGateway : IToolGateway
                 required.RemoveAt(index);
             }
         }
+
         if (!required.Any(node => string.Equals(
-                node?.GetValue<string>(),
-                "secretAlias",
-                StringComparison.Ordinal)))
+            node?.GetValue<string>(),
+            "secretAlias",
+            StringComparison.Ordinal)))
         {
             required.Add("secretAlias");
         }
+
         ProjectModelParameters("ansight_type_text", parameters);
 
         return new JsonObject
@@ -1334,16 +1472,21 @@ internal sealed class ToolGateway : IToolGateway
         CancellationToken cancellationToken)
     {
         var alias = ReadString(arguments, "secretAlias");
+
         if (alias is null)
         {
             return ErrorResult("secretAlias is required.");
         }
+
         var secretAccess = currentRun.Value?.SecretAccess ?? SecretAccess.Empty;
+
         if (!secretAccess.Secrets.TryGetValue(alias, out var metadata))
         {
             return ErrorResult($"Secret alias '{alias}' was not declared for this test run.");
         }
+
         var value = secretAccess.Resolve(metadata.Alias);
+
         if (value is null)
         {
             return ErrorResult(
@@ -1351,6 +1494,7 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var safeArguments = arguments.DeepClone().AsObject();
         safeArguments.Remove("secretAlias");
         safeArguments["value"] = value;
@@ -1359,14 +1503,19 @@ internal sealed class ToolGateway : IToolGateway
         safeArguments.Remove("deviceId");
         safeArguments.Remove("bundleIdentifier");
         ApplySafetyLimits("ansight_type_text", safeArguments);
+
         var uiContext = currentRun.Value?.UiContext;
+
         if (uiContext is not null && !uiContext.TryResolveSelectors(safeArguments, out var selectorError))
         {
             return ErrorResult(selectorError!);
         }
+
         uiContext?.Invalidate();
+
         var result = await operations.CallToolAsync("ansight_type_text", safeArguments, correlationId);
         cancellationToken.ThrowIfCancellationRequested();
+
         if (result.IsError)
         {
             return ErrorResult(
@@ -1374,8 +1523,9 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         var isError = result.Payload?["isError"] is JsonValue errorValue
-                      && errorValue.TryGetValue<bool>(out var parsedError)
-                      && parsedError;
+            && errorValue.TryGetValue<bool>(out var parsedError)
+            && parsedError;
+
         return isError
             ? ErrorResult($"The host could not type secret alias '{metadata.Alias}' into the selected field.")
             : new ToolCallResult(
@@ -1442,7 +1592,7 @@ internal sealed class ToolGateway : IToolGateway
             arguments["durationMs"] = Math.Clamp(ReadInteger(arguments, "durationMs", 250), 50, 1_000);
         }
 
-        if (ActionToolNames.Contains(toolName))
+        if (actionToolNames.Contains(toolName))
         {
             arguments["includeScreenshot"] = false;
         }
@@ -1466,6 +1616,7 @@ internal sealed class ToolGateway : IToolGateway
         for (var index = required.Count - 1; index >= 0; index--)
         {
             var propertyName = required[index]?.GetValue<string>();
+
             if (string.Equals(propertyName, "sessionId", StringComparison.Ordinal)
                 || string.Equals(propertyName, "appId", StringComparison.Ordinal)
                 || string.Equals(propertyName, "deviceId", StringComparison.Ordinal)
@@ -1504,6 +1655,7 @@ internal sealed class ToolGateway : IToolGateway
         if (toolName == "ansight_evaluate_screenshot")
         {
             RemoveParameter(parameters, "teamId");
+
             if (parameters["properties"]?["reference"] is JsonObject reference)
             {
                 RemoveParameter(reference, "workspacePath");
@@ -1511,10 +1663,12 @@ internal sealed class ToolGateway : IToolGateway
                 reference["description"] = "Optional reference screenshot: exact retained frameId from the selected session.";
             }
         }
-        if (ActionToolNames.Contains(toolName))
+
+        if (actionToolNames.Contains(toolName))
         {
             RemoveParameter(parameters, "includeScreenshot");
         }
+
         if (toolName == "ansight_get_live_visual_tree")
         {
             foreach (var field in new[] { "includeProperties", "includeBindableProperties", "includeBindingContexts", "includeInactivePages" })
@@ -1522,23 +1676,28 @@ internal sealed class ToolGateway : IToolGateway
                 RemoveParameter(parameters, field);
             }
         }
+
         if (toolName == "ansight_describe_module")
         {
             RemoveParameter(parameters, "includeDefinitions");
         }
+
         if (toolName == "ansight_list_app_tools")
         {
             RemoveParameter(parameters, "executableOnly");
         }
+
         if (toolName == "ansight_find_ui")
         {
             RemoveParameter(parameters, "exact");
         }
+
         if (toolName is "ansight_swipe_ui" or "ansight_scroll_ui")
         {
             RemoveParameter(parameters, "direction");
             RemoveParameter(parameters, "distance");
         }
+
         if (toolName == "ansight_run_ui_sequence"
             && parameters["properties"]?["actions"]?["items"] is JsonObject actionSchema)
         {
@@ -1547,10 +1706,12 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         RemoveInapplicableSchemaKeywords(parameters);
+
         if (parameters["properties"] is not JsonObject properties)
         {
             return;
         }
+
         foreach (var property in properties)
         {
             if (property.Value is JsonObject schema
@@ -1571,6 +1732,7 @@ internal sealed class ToolGateway : IToolGateway
             {
                 schema.Remove("additionalProperties");
             }
+
             foreach (var mapName in new[] { "properties", "$defs", "definitions", "patternProperties" })
             {
                 if (schema[mapName] is JsonObject map)
@@ -1581,6 +1743,7 @@ internal sealed class ToolGateway : IToolGateway
                     }
                 }
             }
+
             foreach (var propertyName in new[] { "items", "additionalProperties", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "prefixItems" })
             {
                 RemoveInapplicableSchemaKeywords(schema[propertyName]);
@@ -1637,6 +1800,7 @@ internal sealed class ToolGateway : IToolGateway
         SessionCapabilities capabilities)
     {
         RemoveParameter(parameters, "arguments");
+
         if (parameters["properties"] is not JsonObject properties)
         {
             return;
@@ -1649,7 +1813,7 @@ internal sealed class ToolGateway : IToolGateway
         else if (properties["toolId"] is JsonObject toolIdSchema)
         {
             toolIdSchema["description"] =
-                $"Optional visual-tree provider published for the {capabilities.ProfileDescription} app profile.";
+                        $"Optional visual-tree provider published for the {capabilities.ProfileDescription} app profile.";
             toolIdSchema["enum"] = new JsonArray(
                 capabilities.VisualTreeToolIds.Select(static toolId => (JsonNode?)toolId).ToArray());
         }
@@ -1662,15 +1826,18 @@ internal sealed class ToolGateway : IToolGateway
             RemoveParameter(parameters, "includeBindingContexts");
             RemoveParameter(parameters, "includeInactivePages");
         }
+
         if (!capabilities.VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal))
         {
             RemoveParameter(parameters, "includeComputedStyles");
         }
+
         if (!capabilities.VisualTreeToolIds.Contains(VisualTreeContract.ReactShadowToolId, StringComparer.Ordinal)
             && !capabilities.VisualTreeToolIds.Contains(VisualTreeContract.ReactComponentToolId, StringComparer.Ordinal))
         {
             RemoveParameter(parameters, "includeProps");
         }
+
         if (!capabilities.VisualTreeToolIds.Contains(VisualTreeContract.ReactComponentToolId, StringComparer.Ordinal))
         {
             RemoveParameter(parameters, "includeState");
@@ -1737,10 +1904,12 @@ internal sealed class ToolGateway : IToolGateway
         bool appGraphEnabled)
     {
         var description = "Observe the screen: accessibility-first digest, bounds in the source coordinate space, at most 40 visible nodes. Use focused find for follow-ups.";
+
         if (capabilities.VisualTreeToolIds.Count > 0)
         {
             description += $" {capabilities.ProfileDescription}; use an enumerated toolId for sparse accessibility.";
         }
+
         return appGraphEnabled ? description + " Includes App Graph controller evidence." : description;
     }
 
@@ -1749,6 +1918,7 @@ internal sealed class ToolGateway : IToolGateway
         bool appGraphEnabled)
     {
         var description = $"Read navigation state ({string.Join(", ", capabilities.NavigationFrameworks)}). Repeat only after hierarchy changes.";
+
         return appGraphEnabled ? description + " Includes App Graph guidance." : description;
     }
 
@@ -1756,11 +1926,13 @@ internal sealed class ToolGateway : IToolGateway
     {
         var permissions = new Dictionary<string, AppToolPermission>(StringComparer.Ordinal);
         var tools = new JsonArray();
+
         if (content["catalog"]?["tools"] is JsonArray catalogTools)
         {
             foreach (var tool in catalogTools.OfType<JsonObject>())
             {
                 var toolId = ReadString(tool, "id") ?? ReadString(tool, "name");
+
                 if (toolId is null)
                 {
                     continue;
@@ -1773,7 +1945,7 @@ internal sealed class ToolGateway : IToolGateway
 
                 var policy = ReadString(tool, "policy") ?? string.Empty;
                 var executable = ReadBoolean(tool, "executable", fallback: true)
-                                 && tool["denial"] is not JsonObject;
+                    && tool["denial"] is not JsonObject;
                 var denialReason = tool["denial"] is JsonObject denial
                     ? ReadString(denial, "reason")
                     : null;
@@ -1783,6 +1955,7 @@ internal sealed class ToolGateway : IToolGateway
                     executable,
                     denialReason);
                 permissions[toolId] = permission;
+
                 if (!permission.IsAllowedForAutomation)
                 {
                     continue;
@@ -1807,6 +1980,7 @@ internal sealed class ToolGateway : IToolGateway
             var merged = appToolPermissionsBySession.TryGetValue(sessionId, out var existing)
                 ? new Dictionary<string, AppToolPermission>(existing, StringComparer.Ordinal)
                 : new Dictionary<string, AppToolPermission>(StringComparer.Ordinal);
+
             foreach (var permission in permissions)
             {
                 merged[permission.Key] = permission.Value;
@@ -1833,17 +2007,20 @@ internal sealed class ToolGateway : IToolGateway
         out string error)
     {
         var toolId = ReadString(arguments, "toolId");
+
         if (toolId is null)
         {
             error = "toolId is required.";
+
             return false;
         }
 
         AppToolPermission? permission;
+
         lock (appToolCatalogGate)
         {
             permission = appToolPermissionsBySession.TryGetValue(sessionId, out var permissions)
-                         && permissions.TryGetValue(toolId, out var value)
+                && permissions.TryGetValue(toolId, out var value)
                 ? value
                 : null;
         }
@@ -1851,23 +2028,27 @@ internal sealed class ToolGateway : IToolGateway
         if (permission is null)
         {
             error = "Call ansight_list_app_tools first, then use an exact toolId from that live catalog.";
+
             return false;
         }
 
         if (!permission.IsExecutable)
         {
             error = permission.DenialReason
-                    ?? $"App tool '{toolId}' is not executable in the current app state.";
+                ?? $"App tool '{toolId}' is not executable in the current app state.";
+
             return false;
         }
 
         if (!permission.IsAllowedForAutomation)
         {
             error = $"App tool '{toolId}' is outside the simulator agent's non-critical validation and runtime-control policy.";
+
             return false;
         }
 
         error = string.Empty;
+
         return true;
     }
 
@@ -1889,37 +2070,37 @@ internal sealed class ToolGateway : IToolGateway
         }
 
         return ReadString(content, "message")
-               ?? (content["result"] is JsonObject result ? ReadString(result, "message") : null)
-               ?? (content["payload"] is JsonObject payload
-                   ? ReadString(payload, "message")
-                     ?? (payload["result"] is JsonObject payloadResult
-                         ? ReadString(payloadResult, "message")
-                         : null)
-                   : null);
+            ?? (content["result"] is JsonObject result ? ReadString(result, "message") : null)
+            ?? (content["payload"] is JsonObject payload
+                ? ReadString(payload, "message")
+                    ?? (payload["result"] is JsonObject payloadResult
+                        ? ReadString(payloadResult, "message")
+                        : null)
+                : null);
     }
 
     private static int ReadInteger(JsonObject value, string propertyName, int fallback)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<int>(out var number)
+            && property.TryGetValue<int>(out var number)
             ? number
             : fallback;
 
     private static bool ReadBoolean(JsonObject value, string propertyName, bool fallback)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<bool>(out var result)
+            && property.TryGetValue<bool>(out var result)
             ? result
             : fallback;
 
     private static double? ReadDouble(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<double>(out var result)
+            && property.TryGetValue<double>(out var result)
             ? result
             : null;
 
     private static string? ReadString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && property.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
@@ -1935,18 +2116,22 @@ internal sealed class ToolGateway : IToolGateway
                 ? "write"
                 : "read");
 
-    private sealed class SimulatorAgentToolRunState(
-        SecretAccess secretAccess,
-        IDisposable captureScope)
+    private sealed class SimulatorAgentToolRunState
     {
-        public SecretAccess SecretAccess { get; } = secretAccess;
+        public SimulatorAgentToolRunState(
+            SecretAccess secretAccess,
+            IDisposable captureScope)
+        {
+            this.SecretAccess = secretAccess;
+            this.CaptureScope = captureScope;
+            this.UiContext = new();
+            this.RepositoryTaskIdsByToolName = new(StringComparer.Ordinal);
+        }
 
-        public IDisposable CaptureScope { get; set; } = captureScope;
-
-        public ModelUiContext UiContext { get; } = new();
-
-        public Dictionary<string, string> RepositoryTaskIdsByToolName { get; } =
-            new(StringComparer.Ordinal);
+        public SecretAccess SecretAccess { get; }
+        public IDisposable CaptureScope { get; set; }
+        public ModelUiContext UiContext { get; }
+        public Dictionary<string, string> RepositoryTaskIdsByToolName { get; }
     }
 
     private static bool IsUiObservationTool(string toolName)

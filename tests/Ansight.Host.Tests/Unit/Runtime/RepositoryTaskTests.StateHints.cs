@@ -21,11 +21,13 @@ public sealed partial class RepositoryTaskTests
         var loaded = LoadRepository(repository.RootPath);
 
         Assert.Empty(loaded.Warnings);
+
         var task = Assert.Single(loaded.Tasks);
         Assert.Equal(1, task.SchemaVersion);
         Assert.Equal("Map tab is open with input.searchArea selected.", task.StartingState);
         Assert.Equal(task.StartingState, task.ToPublicDefinition().StartingState);
         Assert.Equal(task.SuccessState, task.ToPublicDefinition().SuccessState);
+
         var discovery = RepositoryTaskProtocol.BuildDiscoveryResult(loaded, "com.example.app", "session", null, null, 10);
         var descriptor = Assert.Single(discovery["tasks"]!.AsArray())!;
         Assert.Equal(task.StartingState, descriptor["startingState"]!.GetValue<string>());
@@ -38,9 +40,11 @@ public sealed partial class RepositoryTaskTests
         using var repository = CreateRepository(CreatePassingModule());
         var loaded = LoadRepository(repository.RootPath);
         Assert.Empty(loaded.Warnings);
+
         var task = Assert.Single(loaded.Tasks);
         Assert.Null(task.StartingState);
         Assert.Null(task.SuccessState);
+
         var discovery = RepositoryTaskProtocol.BuildDiscoveryResult(loaded, "com.example.app", "session", null, null, 10);
         var descriptor = Assert.Single(discovery["tasks"]!.AsArray())!.AsObject();
         Assert.False(descriptor.ContainsKey("startingState"));

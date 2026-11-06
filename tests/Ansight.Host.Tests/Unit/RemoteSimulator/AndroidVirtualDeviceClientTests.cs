@@ -64,6 +64,7 @@ public sealed class AndroidVirtualDeviceClientTests
         var avdHome = Path.Combine(testDirectory, ".android", "avd");
         var avdDirectory = Path.Combine(avdHome, "Pixel_9a.avd");
         Directory.CreateDirectory(avdDirectory);
+
         try
         {
             await File.WriteAllTextAsync(
@@ -72,6 +73,7 @@ public sealed class AndroidVirtualDeviceClientTests
             await File.WriteAllTextAsync(
                 Path.Combine(avdDirectory, "config.ini"),
                 "image.sysdir.1=system-images/android-36/google_apis_playstore/arm64-v8a/\n");
+
             var runner = new FakeAndroidEmulatorProcessRunner { ProcessId = 42 };
             var client = new AndroidVirtualDeviceClient(
                 AndroidEmulatorToolResolution.Found(
@@ -107,6 +109,7 @@ public sealed class AndroidVirtualDeviceClientTests
         var tabletDirectory = Path.Combine(avdHome, "Tablet.avd");
         Directory.CreateDirectory(phoneDirectory);
         Directory.CreateDirectory(tabletDirectory);
+
         try
         {
             await File.WriteAllTextAsync(Path.Combine(avdHome, "Phone.ini"), $"path={phoneDirectory}\n");
@@ -117,6 +120,7 @@ public sealed class AndroidVirtualDeviceClientTests
             await File.WriteAllTextAsync(
                 Path.Combine(tabletDirectory, "config.ini"),
                 "hw.device.name=pixel_tablet\nhw.lcd.width=1600\nhw.lcd.height=2560\nhw.lcd.density=320\n");
+
             var client = new AndroidVirtualDeviceClient(
                 AndroidEmulatorToolResolution.Found(EmulatorPath, "test"),
                 new FakeAndroidEmulatorProcessRunner(),

@@ -28,7 +28,9 @@ public sealed partial class RuntimeStateTests
         Assert.Equal(expectedSource, Assert.Single(snapshot!.Annotations).Source);
         Assert.Equal("ansight", new SessionAnnotation
         {
-            AnnotationId = "default-source", StartUtc = DateTimeOffset.UtcNow, Label = "Default"
+            AnnotationId = "default-source",
+            StartUtc = DateTimeOffset.UtcNow,
+            Label = "Default"
         }.Source);
     }
 
@@ -56,21 +58,21 @@ public sealed partial class RuntimeStateTests
                     Y = 0.2,
                     Points =
                     [
-                        new SessionAnnotationGeometryPoint { X = 0.1, Y = 0.2 },
-                        new SessionAnnotationGeometryPoint { X = 0.8, Y = 0.7 }
-                    ],
+                        new SessionAnnotationGeometryPoint {X = 0.1, Y = 0.2 },
+                        new SessionAnnotationGeometryPoint {X = 0.8, Y = 0.7 }                    ],
                     StrokeColor = "#FFFF3B30",
                     StrokeWidth = 3d
-                }
-            ]
+                }            ]
         };
 
         var saveResult = runtimeState.UpsertSessionAnnotation(sessionId, annotation);
 
         Assert.True(saveResult.IsSuccess, saveResult.Message);
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot));
+
         var savedAnnotation = Assert.Single(snapshot!.Annotations);
         Assert.Equal("Point to the broken control.", savedAnnotation.Label);
+
         var savedGeometry = Assert.Single(savedAnnotation.Geometry);
         Assert.Equal(SessionAnnotationGeometryKind.Arrow, savedGeometry.Kind);
         Assert.Equal("#FFFF3B30", savedGeometry.StrokeColor);
@@ -130,6 +132,7 @@ public sealed partial class RuntimeStateTests
 
         Assert.True(result.IsSuccess, result.Message);
         Assert.True(runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot));
+
         var savedLink = Assert.Single(snapshot!.AgentTaskLinks);
         Assert.Equal("codex", savedLink.Provider);
         Assert.Equal("thread-001", savedLink.ProviderTaskId);
@@ -138,7 +141,7 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(sessionId, out var persistedSnapshot)
-                  && persistedSnapshot?.AgentTaskLinks.SingleOrDefault()?.ProviderTaskId == "thread-001",
+                && persistedSnapshot?.AgentTaskLinks.SingleOrDefault()?.ProviderTaskId == "thread-001",
             because: "The linked provider task should remain reviewable after the host reloads the session.");
     }
 
@@ -179,8 +182,7 @@ public sealed partial class RuntimeStateTests
                     Y = 0.18,
                     Width = 0.34,
                     Height = 0.22
-                }
-            ]
+                }            ]
         };
 
         var saveResult = runtimeState.UpsertSessionAnnotation(sessionId, annotation);
@@ -199,7 +201,7 @@ public sealed partial class RuntimeStateTests
         AppSessionSnapshot? persistedAfterSave = null;
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(sessionId, out persistedAfterSave)
-                  && persistedAfterSave?.Annotations.Count == 1,
+                && persistedAfterSave?.Annotations.Count == 1,
             because: "The annotation should be persisted on the slower capture-store cadence.");
         Assert.NotNull(persistedAfterSave);
         Assert.Single(persistedAfterSave!.Annotations);
@@ -217,10 +219,11 @@ public sealed partial class RuntimeStateTests
 
         var deleted = Assert.Single(snapshots);
         Assert.Empty(deleted.Annotations);
+
         AppSessionSnapshot? persistedAfterDelete = null;
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(sessionId, out persistedAfterDelete)
-                  && persistedAfterDelete?.Annotations.Count == 0,
+                && persistedAfterDelete?.Annotations.Count == 0,
             because: "The annotation deletion should be persisted on the slower capture-store cadence.");
         Assert.NotNull(persistedAfterDelete);
         Assert.Empty(persistedAfterDelete!.Annotations);

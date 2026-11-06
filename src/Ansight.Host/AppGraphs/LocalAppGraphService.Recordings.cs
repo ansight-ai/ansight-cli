@@ -3,95 +3,18 @@ using Microsoft.Data.Sqlite;
 
 namespace Ansight.Host.AppGraphs;
 
-public sealed record LocalAppGraphRecording(
-    Guid Id,
-    string SessionId,
-    string AppId,
-    string AppName,
-    Guid? AppGraphId,
-    Guid? BaseVersionId,
-    Guid? CommittedVersionId,
-    string GraphName,
-    string Intent,
-    string Status,
-    string? CurrentDestinationId,
-    JsonObject Definition,
-    JsonObject Evidence,
-    JsonObject? PendingTransition,
-    DateTimeOffset StartedAtUtc,
-    DateTimeOffset UpdatedAtUtc,
-    DateTimeOffset? StoppedAtUtc,
-    IReadOnlyList<string> Gaps);
-
-public readonly record struct LocalAppGraphRecordingOperationResult(
-    bool IsSuccess,
-    string Message,
-    LocalAppGraphRecording? Recording,
-    Guid? GraphId = null,
-    Guid? VersionId = null)
-{
-    public static LocalAppGraphRecordingOperationResult Success(
-        LocalAppGraphRecording recording,
-        string message,
-        Guid? graphId = null,
-        Guid? versionId = null)
-        => new(true, message, recording, graphId, versionId);
-
-    public static LocalAppGraphRecordingOperationResult Failure(string message)
-        => new(false, message, null);
-}
-
-public sealed record LocalAppGraphRecordingStartRequest(
-    string SessionId,
-    string AppId,
-    string AppName,
-    string GraphName,
-    string Intent,
-    Guid? AppGraphId = null);
-
-public sealed record LocalAppGraphRecordingDestinationRequest(
-    string Kind,
-    string Name,
-    string Purpose,
-    string? DestinationId = null,
-    string? ParentDestinationId = null,
-    IReadOnlyList<string>? Synonyms = null);
-
-public sealed record LocalAppGraphRecordingArmTransitionRequest(string? FromDestinationId = null);
-
-public sealed record LocalAppGraphRecordingCompleteTransitionRequest(
-    string SemanticMeaning,
-    string? AutomationId = null,
-    string? ExistingDestinationId = null,
-    LocalAppGraphRecordingDestinationRequest? Destination = null);
-
-public sealed record LocalAppGraphRecordingNavigationHostRequest(
-    string Kind,
-    string Name,
-    string DestinationId,
-    string ActiveChildDestinationId,
-    IReadOnlyList<string> ChildDestinationIds,
-    string Framework,
-    string? HostId = null,
-    AppGraphNavigationTechnologyDescriptor? Technology = null);
-
-public sealed record LocalAppGraphRecordingTabGroupRequest(
-    string ParentDestinationId,
-    string SelectedDestinationId,
-    IReadOnlyList<string> TabDestinationIds,
-    string? TabGroupId = null,
-    AppGraphNavigationTechnologyDescriptor? Technology = null);
-
 public sealed partial class LocalAppGraphService
 {
     private static readonly HashSet<string> destinationKinds = new(
         ["screen", "dialog", "state"],
         StringComparer.Ordinal);
+
     public IReadOnlyList<LocalAppGraphRecording> ListRecordings(string? sessionId = null)
     {
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = """
@@ -104,12 +27,15 @@ public sealed partial class LocalAppGraphService
                 ORDER BY updated_utc DESC;
                 """;
             command.Parameters.AddWithValue("$session_id", sessionId?.Trim() ?? string.Empty);
+
             using var reader = command.ExecuteReader();
             var recordings = new List<LocalAppGraphRecording>();
+
             while (reader.Read())
             {
                 recordings.Add(ReadRecording(reader));
             }
+
             return recordings;
         }
     }
@@ -124,7 +50,9 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
+
             return ReadRecording(connection, recordingId);
         }
     }
@@ -136,6 +64,7 @@ public sealed partial class LocalAppGraphService
     private LocalAppGraphRecordingOperationResult StartRecordingMeasuredCore(LocalAppGraphRecordingStartRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.SessionId)
             || string.IsNullOrWhiteSpace(request.AppId)
             || string.IsNullOrWhiteSpace(request.GraphName))
@@ -147,12 +76,15 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var active = FindActiveRecording(connection, transaction, request.SessionId.Trim());
+
             if (active is not null)
             {
                 transaction.Commit();
+
                 return LocalAppGraphRecordingOperationResult.Success(
                     active,
                     $"Resumed local walkthrough '{active.GraphName}'.");
@@ -161,21 +93,26 @@ public sealed partial class LocalAppGraphService
             Guid? baseVersionId = null;
             JsonObject definition;
             JsonObject evidence;
+
             if (request.AppGraphId.HasValue)
             {
                 var graph = ReadGraph(connection, request.AppGraphId.Value, transaction);
+
                 if (graph is null)
                 {
                     return LocalAppGraphRecordingOperationResult.Failure(
                         $"Local App Graph '{request.AppGraphId.Value:D}' was not found.");
                 }
+
                 var identity = GetIdentityInTransaction(connection, transaction, request.AppGraphId.Value);
+
                 if (identity is null
                     || !string.Equals(identity.AppId, request.AppId.Trim(), StringComparison.Ordinal))
                 {
                     return LocalAppGraphRecordingOperationResult.Failure(
                         "The selected App Graph belongs to a different app.");
                 }
+
                 if (!graph.CurrentVersionId.HasValue)
                 {
                     return LocalAppGraphRecordingOperationResult.Failure(
@@ -183,11 +120,13 @@ public sealed partial class LocalAppGraphService
                 }
 
                 var version = ReadVersionInTransaction(connection, transaction, graph.CurrentVersionId.Value);
+
                 if (version is null)
                 {
                     return LocalAppGraphRecordingOperationResult.Failure(
                         "The selected App Graph version could not be read.");
                 }
+
                 baseVersionId = version.Id;
                 definition = version.Definition.DeepClone().AsObject();
                 evidence = CreateRecordingEvidence(ReadBindingsInTransaction(connection, transaction, version.Id));
@@ -199,6 +138,7 @@ public sealed partial class LocalAppGraphService
             }
 
             EnsureDefinitionCollections(definition);
+
             var now = DateTimeOffset.UtcNow;
             var recording = new LocalAppGraphRecording(
                 Guid.NewGuid(),
@@ -221,8 +161,12 @@ public sealed partial class LocalAppGraphService
                 []);
             InsertRecording(connection, transaction, recording);
             transaction.Commit();
+
             return LocalAppGraphRecordingOperationResult.Success(
-                recording with { Gaps = CollectRecordingGaps(recording.Definition, null, strict: false) },
+                recording with
+                {
+                    Gaps = CollectRecordingGaps(recording.Definition, null, strict: false)
+                },
                 $"Started local walkthrough '{recording.GraphName}'.");
         }
     }
@@ -234,12 +178,14 @@ public sealed partial class LocalAppGraphService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(snapshot);
+
         return UpdateRecording(recordingId, "capture a destination", (recording, now) =>
         {
             if (!TryCaptureDestination(recording, request, snapshot, now, out var updated, out var error))
             {
                 return RecordingMutation.Failure(error);
             }
+
             return RecordingMutation.Success(updated!, $"Recorded {request.Kind.Trim().ToLowerInvariant()} '{request.Name.Trim()}'.");
         });
     }
@@ -251,6 +197,7 @@ public sealed partial class LocalAppGraphService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(snapshot);
+
         return UpdateRecording(recordingId, "arm a transition", (recording, now) =>
         {
             if (recording.PendingTransition is not null)
@@ -261,6 +208,7 @@ public sealed partial class LocalAppGraphService
             var from = string.IsNullOrWhiteSpace(request.FromDestinationId)
                 ? recording.CurrentDestinationId
                 : request.FromDestinationId.Trim();
+
             if (string.IsNullOrWhiteSpace(from) || FindNode(recording.Definition, from) is null)
             {
                 return RecordingMutation.Failure("Choose a recorded source destination first.");
@@ -276,6 +224,7 @@ public sealed partial class LocalAppGraphService
                 ["preVisualTreeSnapshotId"] = visualTree?.SnapshotId,
                 ["preScreenshotFrameId"] = visualTree?.ScreenshotFrameId ?? screenshot?.FrameId
             };
+
             return RecordingMutation.Success(
                 recording with
                 {
@@ -294,12 +243,14 @@ public sealed partial class LocalAppGraphService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(snapshot);
+
         return UpdateRecording(recordingId, "complete a transition", (recording, now) =>
         {
             if (recording.PendingTransition is not JsonObject pending)
             {
                 return RecordingMutation.Failure("Arm a transition before capturing its result.");
             }
+
             if (string.IsNullOrWhiteSpace(request.SemanticMeaning))
             {
                 return RecordingMutation.Failure("Describe what the interacted element does.");
@@ -307,13 +258,16 @@ public sealed partial class LocalAppGraphService
 
             var working = recording;
             string toDestinationId;
+
             if (!string.IsNullOrWhiteSpace(request.ExistingDestinationId))
             {
                 toDestinationId = request.ExistingDestinationId.Trim();
+
                 if (FindNode(working.Definition, toDestinationId) is null)
                 {
                     return RecordingMutation.Failure("The selected result destination was not found in this draft.");
                 }
+
                 working = AppendCaptureEvidence(working, toDestinationId, "transition_result", snapshot, now);
             }
             else if (request.Destination is not null)
@@ -322,6 +276,7 @@ public sealed partial class LocalAppGraphService
                 {
                     return RecordingMutation.Failure(captureError);
                 }
+
                 working = captured!;
                 toDestinationId = working.CurrentDestinationId!;
             }
@@ -332,10 +287,12 @@ public sealed partial class LocalAppGraphService
 
             var touchStartIndex = pending["touchStartIndex"]?.GetValue<int>() ?? snapshot.Touches.Count;
             touchStartIndex = Math.Clamp(touchStartIndex, 0, snapshot.Touches.Count);
+
             var touches = snapshot.Touches.Skip(touchStartIndex).ToArray();
             var gestures = TouchGestureSegmenter.BuildGestureSegments(
                 touches,
                 TimeSpan.FromMilliseconds(TouchReviewDefaults.DefaultGestureGapMilliseconds));
+
             if (gestures.Count > 1)
             {
                 return RecordingMutation.Failure(
@@ -345,9 +302,11 @@ public sealed partial class LocalAppGraphService
             var gesture = gestures.SingleOrDefault();
             var automationId = request.AutomationId?.Trim();
             JsonObject? matchedTarget = null;
+
             if (string.IsNullOrWhiteSpace(automationId) && gesture is not null)
             {
                 var point = TouchReviewGeometry.ResolveGesturePoint(gesture);
+
                 if (point.HasValue)
                 {
                     var preVisualTreeSnapshotId = ReadString(pending, "preVisualTreeSnapshotId");
@@ -444,23 +403,27 @@ public sealed partial class LocalAppGraphService
         LocalAppGraphRecordingNavigationHostRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return UpdateRecording(recordingId, "define a navigation host", (recording, now) =>
         {
             var children = NormalizeIds(request.ChildDestinationIds);
+
             if (!AppGraphNavigationTechnologyCatalog.TryValidate(
-                    request.Technology,
-                    AppGraphNavigationTechnologyCatalog.NavigationHostScope,
-                    out var kind,
-                    out var technologyError))
+                request.Technology,
+                AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                out var kind,
+                out var technologyError))
             {
                 return RecordingMutation.Failure(technologyError);
             }
+
             if (!string.IsNullOrWhiteSpace(request.Kind)
                 && !string.Equals(request.Kind.Trim(), kind, StringComparison.OrdinalIgnoreCase))
             {
                 return RecordingMutation.Failure(
                     $"Navigation host kind must be '{kind}' for technology '{request.Technology!.Framework}/{request.Technology.Kind}'.");
             }
+
             if (!string.IsNullOrWhiteSpace(request.Framework)
                 && !string.Equals(
                     request.Framework.Trim(),
@@ -470,12 +433,14 @@ public sealed partial class LocalAppGraphService
                 return RecordingMutation.Failure(
                     "Navigation host framework must match its technology descriptor.");
             }
+
             if (string.IsNullOrWhiteSpace(request.Name)
                 || children.Count == 0)
             {
                 return RecordingMutation.Failure(
                     "Navigation host kind, name, and at least one child destination are required.");
             }
+
             if (FindNode(recording.Definition, request.DestinationId) is not JsonObject hostDestination
                 || children.Any(child => FindNode(recording.Definition, child) is null)
                 || !children.Contains(request.ActiveChildDestinationId, StringComparer.Ordinal))
@@ -483,14 +448,16 @@ public sealed partial class LocalAppGraphService
                 return RecordingMutation.Failure(
                     "Navigation host, active child, and child destinations must reference recorded destinations.");
             }
+
             if (children.Any(child => !string.Equals(ReadString(FindNode(recording.Definition, child), "kind"), "screen", StringComparison.Ordinal)))
             {
                 return RecordingMutation.Failure("Navigation host children must be screen destinations.");
             }
 
             var hosts = recording.Definition["navigationHosts"]!.AsArray();
+
             if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
-                    request.Technology, children, request.ActiveChildDestinationId, out var orderError))
+                request.Technology, children, request.ActiveChildDestinationId, out var orderError))
             {
                 return RecordingMutation.Failure(orderError);
             }
@@ -511,13 +478,19 @@ public sealed partial class LocalAppGraphService
                 ["confidence"] = 1m
             };
             UpsertById(hosts, hostId, host);
+
             var parentName = ReadString(hostDestination, "name")!;
+
             foreach (var child in children)
             {
                 FindNode(recording.Definition, child)!["parentScreen"] = parentName;
             }
+
             return RecordingMutation.Success(
-                recording with { UpdatedAtUtc = now },
+                recording with
+                {
+                    UpdatedAtUtc = now
+                },
                 $"Saved navigation host '{request.Name.Trim()}'.");
         });
     }
@@ -527,18 +500,20 @@ public sealed partial class LocalAppGraphService
         LocalAppGraphRecordingTabGroupRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         return UpdateRecording(recordingId, "define an internal tab group", (recording, now) =>
         {
             if (!AppGraphNavigationTechnologyCatalog.TryValidate(
-                    request.Technology,
-                    AppGraphNavigationTechnologyCatalog.TabGroupScope,
-                    out _,
-                    out var technologyError))
+                request.Technology,
+                AppGraphNavigationTechnologyCatalog.TabGroupScope,
+                out _,
+                out var technologyError))
             {
                 return RecordingMutation.Failure(technologyError);
             }
 
             var tabs = NormalizeIds(request.TabDestinationIds);
+
             if (tabs.Count == 0
                 || FindNode(recording.Definition, request.ParentDestinationId) is not JsonObject parent
                 || tabs.Any(tab => FindNode(recording.Definition, tab) is null)
@@ -547,6 +522,7 @@ public sealed partial class LocalAppGraphService
                 return RecordingMutation.Failure(
                     "Tab parent, selected tab, and at least one recorded tab destination are required.");
             }
+
             if (tabs.Any(tab => !string.Equals(ReadString(FindNode(recording.Definition, tab), "kind"), "state", StringComparison.Ordinal)))
             {
                 return RecordingMutation.Failure("Internal tab destinations must use kind state.");
@@ -566,13 +542,19 @@ public sealed partial class LocalAppGraphService
                 ["confidence"] = 1m
             };
             UpsertById(groups, groupId, group);
+
             var parentName = ReadString(parent, "name")!;
+
             foreach (var tab in tabs)
             {
                 FindNode(recording.Definition, tab)!["parentScreen"] = parentName;
             }
+
             return RecordingMutation.Success(
-                recording with { UpdatedAtUtc = now },
+                recording with
+                {
+                    UpdatedAtUtc = now
+                },
                 $"Saved internal tab group for '{parentName}'.");
         });
     }
@@ -584,22 +566,39 @@ public sealed partial class LocalAppGraphService
             {
                 return RecordingMutation.Failure("Complete the armed transition before stopping.");
             }
+
             return RecordingMutation.Success(
-                recording with { Status = "review", UpdatedAtUtc = now, StoppedAtUtc = now },
+                recording with
+                {
+                    Status = "review",
+                    UpdatedAtUtc = now,
+                    StoppedAtUtc = now
+                },
                 "Walkthrough stopped and is ready for review.");
         });
 
     public LocalAppGraphRecordingOperationResult ResumeRecording(Guid recordingId)
         => UpdateRecording(recordingId, "resume recording", (recording, now) =>
             RecordingMutation.Success(
-                recording with { Status = "recording", UpdatedAtUtc = now, StoppedAtUtc = null },
+                recording with
+                {
+                    Status = "recording",
+                    UpdatedAtUtc = now,
+                    StoppedAtUtc = null
+                },
                 "Walkthrough recording resumed."),
             allowReview: true);
 
     public LocalAppGraphRecordingOperationResult CancelRecording(Guid recordingId)
         => UpdateRecording(recordingId, "cancel recording", (recording, now) =>
             RecordingMutation.Success(
-                recording with { Status = "cancelled", PendingTransition = null, UpdatedAtUtc = now, StoppedAtUtc = now },
+                recording with
+                {
+                    Status = "cancelled",
+                    PendingTransition = null,
+                    UpdatedAtUtc = now,
+                    StoppedAtUtc = now
+                },
                 "Walkthrough draft cancelled."),
             allowReview: true);
 
@@ -612,18 +611,23 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var recording = ReadRecording(connection, recordingId, transaction);
+
             if (recording is null)
             {
                 return LocalAppGraphRecordingOperationResult.Failure("Walkthrough recording was not found.");
             }
+
             if (!string.Equals(recording.Status, "review", StringComparison.Ordinal))
             {
                 return LocalAppGraphRecordingOperationResult.Failure("Stop the walkthrough before committing it.");
             }
+
             var gaps = CollectRecordingGaps(recording.Definition, recording.PendingTransition, strict: true);
+
             if (gaps.Count > 0)
             {
                 return LocalAppGraphRecordingOperationResult.Failure(
@@ -634,18 +638,22 @@ public sealed partial class LocalAppGraphService
             Guid graphId;
             Guid versionId = Guid.NewGuid();
             int versionNumber;
+
             if (recording.AppGraphId.HasValue)
             {
                 var graph = ReadGraph(connection, recording.AppGraphId.Value, transaction);
+
                 if (graph is null)
                 {
                     return LocalAppGraphRecordingOperationResult.Failure("The target App Graph no longer exists.");
                 }
+
                 if (graph.CurrentVersionId != recording.BaseVersionId)
                 {
                     return LocalAppGraphRecordingOperationResult.Failure(
                         "The App Graph changed after this walkthrough started. Start a new recording from the latest version.");
                 }
+
                 graphId = graph.Id;
                 versionNumber = graph.Version + 1;
                 InsertVersion(
@@ -660,6 +668,7 @@ public sealed partial class LocalAppGraphService
                     now);
                 ReplaceBindings(connection, transaction, versionId, recording.Evidence, bindings: null);
                 InsertManualRecordingObservation(connection, transaction, recording, graphId, now);
+
                 using var updateGraph = connection.CreateCommand();
                 updateGraph.Transaction = transaction;
                 updateGraph.CommandText = """
@@ -681,6 +690,7 @@ public sealed partial class LocalAppGraphService
                     return LocalAppGraphRecordingOperationResult.Failure(
                         $"App '{recording.AppId}' already has an App Graph named '{recording.GraphName}'.");
                 }
+
                 graphId = Guid.NewGuid();
                 versionNumber = 1;
                 InsertGraph(
@@ -725,6 +735,7 @@ public sealed partial class LocalAppGraphService
             };
             WriteRecording(connection, transaction, committed);
             transaction.Commit();
+
             return LocalAppGraphRecordingOperationResult.Success(
                 committed,
                 $"Committed App Graph '{recording.GraphName}' version {versionNumber}.",
@@ -742,13 +753,16 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var recording = ReadRecording(connection, recordingId, transaction);
+
             if (recording is null)
             {
                 return LocalAppGraphRecordingOperationResult.Failure("Walkthrough recording was not found.");
             }
+
             if (!string.Equals(recording.Status, "recording", StringComparison.Ordinal)
                 && !(allowReview && string.Equals(recording.Status, "review", StringComparison.Ordinal)))
             {
@@ -757,10 +771,12 @@ public sealed partial class LocalAppGraphService
             }
 
             var mutation = mutate(recording, DateTimeOffset.UtcNow);
+
             if (!mutation.IsSuccess || mutation.Recording is null)
             {
                 return LocalAppGraphRecordingOperationResult.Failure(mutation.Message);
             }
+
             var updated = mutation.Recording with
             {
                 Gaps = CollectRecordingGaps(
@@ -770,6 +786,7 @@ public sealed partial class LocalAppGraphService
             };
             WriteRecording(connection, transaction, updated);
             transaction.Commit();
+
             return LocalAppGraphRecordingOperationResult.Success(updated, mutation.Message);
         }
     }
@@ -783,32 +800,41 @@ public sealed partial class LocalAppGraphService
         out string error)
     {
         updated = null;
+
         var kind = request.Kind?.Trim().ToLowerInvariant();
+
         if (kind is null || !destinationKinds.Contains(kind))
         {
             error = "Destination kind must be screen, dialog, or state.";
+
             return false;
         }
+
         if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Purpose))
         {
             error = "Destination name and purpose are required.";
+
             return false;
         }
 
         string? parentScreen = null;
+
         if (kind == "state")
         {
             if (string.IsNullOrWhiteSpace(request.ParentDestinationId)
                 || FindNode(recording.Definition, request.ParentDestinationId) is not JsonObject parent)
             {
                 error = "An internal state requires its recorded containing screen.";
+
                 return false;
             }
+
             parentScreen = ReadString(parent, "name");
         }
         else if (kind == "dialog" && !string.IsNullOrWhiteSpace(request.ParentDestinationId))
         {
             error = "Dialogs are top-level destinations and cannot have a containing screen.";
+
             return false;
         }
 
@@ -836,18 +862,25 @@ public sealed partial class LocalAppGraphService
             ["y"] = existing?["y"]?.GetValue<double>() ?? 120 + ((index / 4) * 180),
             ["confidence"] = 1m
         };
+
         if (!string.IsNullOrWhiteSpace(parentScreen))
         {
             node["parentScreen"] = parentScreen;
         }
+
         UpsertById(nodes, id, node);
         updated = AppendCaptureEvidence(
-            recording with { CurrentDestinationId = id, UpdatedAtUtc = now },
+            recording with
+            {
+                CurrentDestinationId = id,
+                UpdatedAtUtc = now
+            },
             id,
             kind,
             snapshot,
             now);
         error = string.Empty;
+
         return true;
     }
 
@@ -870,6 +903,7 @@ public sealed partial class LocalAppGraphService
             ["screenshotFrameId"] = visualTree?.ScreenshotFrameId ?? screenshot?.FrameId,
             ["screenshotHash"] = visualTree?.ScreenshotHash
         });
+
         return recording;
     }
 
@@ -885,41 +919,50 @@ public sealed partial class LocalAppGraphService
             .Where(node => !string.IsNullOrWhiteSpace(ReadString(node, "id")))
             .GroupBy(node => ReadString(node, "id")!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
         if (nodes.Count == 0)
         {
             gaps.Add("Record at least one destination.");
         }
+
         if (pendingTransition is not null)
         {
             gaps.Add("Complete the armed transition.");
         }
+
         foreach (var node in nodes.OfType<JsonObject>())
         {
             var id = ReadString(node, "id") ?? "unknown";
             var kind = ReadString(node, "kind");
+
             if (string.IsNullOrWhiteSpace(ReadString(node, "name"))
                 || string.IsNullOrWhiteSpace(ReadString(node, "purpose")))
             {
                 gaps.Add($"Destination '{id}' needs a name and purpose.");
             }
+
             if (kind == "state" && string.IsNullOrWhiteSpace(ReadString(node, "parentScreen")))
             {
                 gaps.Add($"Internal state '{id}' needs a containing screen.");
             }
+
             if (kind == "dialog" && !string.IsNullOrWhiteSpace(ReadString(node, "parentScreen")))
             {
                 gaps.Add($"Dialog '{id}' must remain top-level.");
             }
         }
+
         foreach (var edge in edges.OfType<JsonObject>())
         {
             var id = ReadString(edge, "id") ?? "unknown";
             var action = edge["action"] as JsonObject;
+
             if (!nodesById.ContainsKey(ReadString(edge, "from") ?? string.Empty)
                 || !nodesById.ContainsKey(ReadString(edge, "to") ?? string.Empty))
             {
                 gaps.Add($"Transition '{id}' references an unknown destination.");
             }
+
             if (string.IsNullOrWhiteSpace(ReadString(action, "automationId"))
                 || string.IsNullOrWhiteSpace(ReadString(action, "semanticMeaning")))
             {
@@ -928,46 +971,55 @@ public sealed partial class LocalAppGraphService
         }
 
         var navigationHostChildren = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+
         foreach (var host in (definition["navigationHosts"] as JsonArray ?? []).OfType<JsonObject>())
         {
             var id = ReadString(host, "id") ?? "unknown";
             var children = ReadIds(host["childDestinationIds"]);
+
             if (host["technology"] is JsonObject technologyValue)
             {
                 if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
-                        technologyValue, AppGraphNavigationTechnologyCatalog.NavigationHostScope,
-                        out var technology, out _, out var technologyError))
+                    technologyValue, AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                    out var technology, out _, out var technologyError))
                 {
                     gaps.Add(technologyError);
                 }
                 else if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
-                             technology, children, ReadString(host, "activeChildDestinationId") ?? string.Empty,
-                             out var orderError))
+                    technology, children, ReadString(host, "activeChildDestinationId") ?? string.Empty,
+                    out var orderError))
                 {
                     gaps.Add(orderError);
                 }
             }
+
             if (strict && children.Count == 0)
             {
                 gaps.Add($"Navigation host '{id}' needs a complete direct-child inventory.");
             }
+
             if (!children.Contains(ReadString(host, "activeChildDestinationId") ?? string.Empty, StringComparer.Ordinal))
             {
                 gaps.Add($"Navigation host '{id}' must include its active child.");
             }
+
             foreach (var child in children)
             {
                 navigationHostChildren[child] = host;
             }
         }
+
         foreach (var node in nodesById.Values.Where(node => ReadString(node, "kind") == "screen"))
         {
             var parent = ReadString(node, "parentScreen");
+
             if (string.IsNullOrWhiteSpace(parent))
             {
                 continue;
             }
+
             var id = ReadString(node, "id")!;
+
             if (!navigationHostChildren.TryGetValue(id, out var host)
                 || !nodesById.TryGetValue(ReadString(host, "destinationId") ?? string.Empty, out var hostNode)
                 || !string.Equals(ReadString(hostNode, "name"), parent, StringComparison.Ordinal))
@@ -975,24 +1027,30 @@ public sealed partial class LocalAppGraphService
                 gaps.Add($"Screen '{id}' identifies a parent without matching navigation-host membership.");
             }
         }
+
         foreach (var group in (definition["tabGroups"] as JsonArray ?? []).OfType<JsonObject>())
         {
             var id = ReadString(group, "id") ?? "unknown";
             var tabs = ReadIds(group["tabDestinationIds"]);
+
             if (strict && tabs.Count == 0)
             {
                 gaps.Add($"Tab group '{id}' needs at least one observed internal state.");
             }
+
             if (!tabs.Contains(ReadString(group, "selectedDestinationId") ?? string.Empty, StringComparer.Ordinal))
             {
                 gaps.Add($"Tab group '{id}' must include its selected state.");
             }
+
             if (tabs.Any(tab => !nodesById.TryGetValue(tab, out var node) || ReadString(node, "kind") != "state"))
             {
                 gaps.Add($"Tab group '{id}' may contain only internal state destinations.");
             }
         }
+
         gaps.AddRange(AppGraphContainment.FindErrors(AppGraphContainmentReader.ReadRelations(definition)));
+
         return gaps.Distinct(StringComparer.Ordinal).ToArray();
     }
 
@@ -1008,6 +1066,7 @@ public sealed partial class LocalAppGraphService
     private static JsonObject CreateRecordingEvidence(IReadOnlyList<CloudAppGraphBinding> bindings)
     {
         var candidates = new JsonArray();
+
         foreach (var binding in bindings.OrderBy(binding => binding.EdgeId).ThenBy(binding => binding.Priority))
         {
             candidates.Add(new JsonObject
@@ -1020,6 +1079,7 @@ public sealed partial class LocalAppGraphService
                 ["confidence"] = binding.Confidence
             });
         }
+
         return new JsonObject
         {
             ["schema"] = "ansight.app-graph-manual-recording-evidence/v1",
@@ -1069,7 +1129,7 @@ public sealed partial class LocalAppGraphService
 
     private static string? ReadString(JsonObject? value, string property)
         => value?[property] is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
+            && jsonValue.TryGetValue<string>(out var text)
             ? text?.Trim()
             : null;
 
@@ -1083,12 +1143,14 @@ public sealed partial class LocalAppGraphService
                 return index;
             }
         }
+
         return -1;
     }
 
     private static void UpsertById(JsonArray values, string id, JsonObject value)
     {
         var index = IndexOfId(values, id);
+
         if (index >= 0)
         {
             values[index] = value;
@@ -1111,21 +1173,27 @@ public sealed partial class LocalAppGraphService
         var slug = new string(source.Trim().ToLowerInvariant()
             .Select(character => char.IsLetterOrDigit(character) ? character : '-')
             .ToArray());
+
         while (slug.Contains("--", StringComparison.Ordinal))
         {
             slug = slug.Replace("--", "-", StringComparison.Ordinal);
         }
+
         slug = slug.Trim('-');
+
         if (string.IsNullOrWhiteSpace(slug))
         {
             slug = fallback;
         }
+
         var candidate = slug;
         var suffix = 2;
+
         while (existing.Contains(candidate))
         {
             candidate = $"{slug}-{suffix++}";
         }
+
         return candidate;
     }
 
@@ -1138,7 +1206,9 @@ public sealed partial class LocalAppGraphService
         command.Transaction = transaction;
         command.CommandText = "SELECT app_id, app_name FROM local_app_graphs WHERE id = $id;";
         command.Parameters.AddWithValue("$id", graphId.ToString("D"));
+
         using var reader = command.ExecuteReader();
+
         return reader.Read()
             ? new LocalAppGraphIdentity(graphId, reader.GetString(0), reader.GetString(1))
             : null;
@@ -1156,11 +1226,14 @@ public sealed partial class LocalAppGraphService
             FROM local_app_graph_versions WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", versionId.ToString("D"));
+
         using var reader = command.ExecuteReader();
+
         if (!reader.Read())
         {
             return null;
         }
+
         return new CloudAppGraphVersion
         {
             Id = Guid.Parse(reader.GetString(0)),
@@ -1189,8 +1262,10 @@ public sealed partial class LocalAppGraphService
             ORDER BY edge_id, priority;
             """;
         command.Parameters.AddWithValue("$version_id", versionId.ToString("D"));
+
         using var reader = command.ExecuteReader();
         var bindings = new List<CloudAppGraphBinding>();
+
         while (reader.Read())
         {
             bindings.Add(new CloudAppGraphBinding
@@ -1207,6 +1282,7 @@ public sealed partial class LocalAppGraphService
                 Confidence = reader.GetDecimal(7)
             });
         }
+
         return bindings;
     }
 
@@ -1255,7 +1331,9 @@ public sealed partial class LocalAppGraphService
             ORDER BY updated_utc DESC LIMIT 1;
             """;
         command.Parameters.AddWithValue("$session_id", sessionId);
+
         using var reader = command.ExecuteReader();
+
         return reader.Read() ? ReadRecording(reader) : null;
     }
 
@@ -1274,7 +1352,9 @@ public sealed partial class LocalAppGraphService
             FROM local_app_graph_recordings WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", recordingId.ToString("D"));
+
         using var reader = command.ExecuteReader();
+
         return reader.Read() ? ReadRecording(reader) : null;
     }
 
@@ -1285,9 +1365,11 @@ public sealed partial class LocalAppGraphService
         EnsureDefinitionCollections(definition);
         evidence["captures"] ??= new JsonArray();
         evidence["bindingCandidates"] ??= new JsonArray();
+
         var pending = reader.IsDBNull(13)
             ? null
             : JsonNode.Parse(reader.GetString(13))?.AsObject();
+
         return new LocalAppGraphRecording(
             Guid.Parse(reader.GetString(0)),
             reader.GetString(1),
@@ -1385,7 +1467,7 @@ public sealed partial class LocalAppGraphService
         LocalAppGraphRecording? Recording)
     {
         public static RecordingMutation Success(LocalAppGraphRecording recording, string message)
-            => new(true, message, recording);
+                => new(true, message, recording);
 
         public static RecordingMutation Failure(string message)
             => new(false, message, null);

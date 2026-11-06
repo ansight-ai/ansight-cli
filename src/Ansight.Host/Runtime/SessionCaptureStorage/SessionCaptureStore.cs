@@ -36,8 +36,8 @@ internal sealed partial class SessionCaptureStore
     private const string TouchesAppendFileName = "touches.jsonl";
     private const int DetailedLoadProgressFileLimit = 64;
     private const int LoadProgressFileReportInterval = 128;
-    private static readonly TimeSpan LogPersistenceBatchInterval = TimeSpan.FromMilliseconds(750);
-    private static readonly TimeSpan IndexRefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan logPersistenceBatchInterval = TimeSpan.FromMilliseconds(750);
+    private static readonly TimeSpan indexRefreshInterval = TimeSpan.FromSeconds(30);
     private static readonly Ansight.Infrastructure.Logging.ILogger log = Ansight.Infrastructure.Logging.Logger.Create();
     private const string MetricChannelsBlobFileName = "metric-channels.json";
     private const string TelemetryDirectoryName = "telemetry";
@@ -45,7 +45,7 @@ internal sealed partial class SessionCaptureStore
     private const string ImagesDirectoryName = "images";
     private const string VisualTreesDirectoryName = "visual-trees";
     private const string ArtifactsDirectoryName = "artifacts";
-    private static readonly SessionLoadStage[] FullSnapshotLoadStages =
+    private static readonly SessionLoadStage[] fullSnapshotLoadStages =
     [
         SessionLoadStage.Header,
         SessionLoadStage.DeviceProfile,
@@ -133,6 +133,7 @@ internal sealed partial class SessionCaptureStore
         lock (indexGate)
         {
             RefreshIndexIfStale();
+
             return summarySnapshotBySessionId?.Values
                 .OrderByDescending(snapshot => snapshot.LastUpdatedUtc)
                 .ToArray() ?? Array.Empty<AppSessionSnapshot>();
@@ -144,22 +145,26 @@ internal sealed partial class SessionCaptureStore
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             snapshot = null;
+
             return false;
         }
 
         if (!TryGetSummaryFilePath(sessionId, reloadIndex: true, out var filePath))
         {
             snapshot = null;
+
             return false;
         }
 
         snapshot = SessionSnapshotReader.LoadFullSnapshot(filePath);
+
         return snapshot is not null;
     }
 
     public AppSessionSnapshot ExpandRetainedLogs(AppSessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         if (snapshot.TotalLogCount <= snapshot.Logs.Count)
         {
             return snapshot;
@@ -189,6 +194,7 @@ internal sealed partial class SessionCaptureStore
                 RetainedEntryStartIndex = stream.TotalEntryCount
             }).ToArray();
             var streams = SessionLogStreams.Normalize(descriptors, logs);
+
             return SessionSnapshotCloner.WithLogs(snapshot, streams, logs);
         });
     }
@@ -204,10 +210,12 @@ internal sealed partial class SessionCaptureStore
         }
 
         var trimmedSessionId = sessionId.Trim();
+
         return Task.Run(
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 if (!TryGetSummaryFilePath(trimmedSessionId, reloadIndex: true, out var filePath))
                 {
                     return null;
@@ -223,6 +231,7 @@ internal sealed partial class SessionCaptureStore
         lock (indexGate)
         {
             RefreshIndexIfStale();
+
             return summaryBySessionId?.Keys
                 .Select(RuntimeState.ParseSessionNumber)
                 .DefaultIfEmpty(0)
@@ -233,6 +242,7 @@ internal sealed partial class SessionCaptureStore
     public bool TryFindSessionId(string appId, string processSessionId, out string sessionId)
     {
         sessionId = string.Empty;
+
         if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(processSessionId))
         {
             return false;
@@ -244,6 +254,7 @@ internal sealed partial class SessionCaptureStore
         lock (indexGate)
         {
             RefreshIndexIfStale();
+
             if (summaryBySessionId is null || summaryBySessionId.Count == 0)
             {
                 return false;
@@ -251,15 +262,17 @@ internal sealed partial class SessionCaptureStore
 
             var match = summaryBySessionId.Values
                 .Where(summary => string.Equals(summary.AppId, normalizedAppId, StringComparison.Ordinal)
-                                  && string.Equals(summary.ProcessSessionId, normalizedProcessSessionId, StringComparison.Ordinal))
+                    && string.Equals(summary.ProcessSessionId, normalizedProcessSessionId, StringComparison.Ordinal))
                 .OrderByDescending(summary => summary.LastUpdatedUtc)
                 .FirstOrDefault();
+
             if (match is null)
             {
                 return false;
             }
 
             sessionId = match.SessionId;
+
             return true;
         }
     }
@@ -267,6 +280,7 @@ internal sealed partial class SessionCaptureStore
     public bool TryGetSessionCacheSizeBytes(string sessionId, out long cacheSizeBytes)
     {
         cacheSizeBytes = 0;
+
         if (string.IsNullOrWhiteSpace(sessionId))
         {
             return false;
@@ -275,9 +289,11 @@ internal sealed partial class SessionCaptureStore
         var trimmedSessionId = sessionId.Trim();
         string? summaryFilePath;
         string? archiveFilePath;
+
         lock (indexGate)
         {
             EnsureIndex();
+
             if (cacheSizeBytesBySessionId is not null
                 && cacheSizeBytesBySessionId.TryGetValue(trimmedSessionId, out cacheSizeBytes))
             {
@@ -286,6 +302,7 @@ internal sealed partial class SessionCaptureStore
 
             filePathBySessionId!.TryGetValue(trimmedSessionId, out summaryFilePath);
             archivePathBySessionId!.TryGetValue(trimmedSessionId, out archiveFilePath);
+
             if (string.IsNullOrWhiteSpace(summaryFilePath)
                 && string.IsNullOrWhiteSpace(archiveFilePath))
             {
@@ -302,6 +319,7 @@ internal sealed partial class SessionCaptureStore
             var layout = SessionSnapshotReader.GetSessionLayoutFromSummaryPath(summaryFilePath!);
             cacheSizeBytes = GetDirectorySize(layout.SessionDirectoryPath);
         }
+
         lock (indexGate)
         {
             EnsureIndex();
@@ -348,6 +366,7 @@ internal sealed partial class SessionCaptureStore
                 DeleteIfExists(SessionCaptureArchiveCodec.GetSessionArchivePath(layout.SessionDirectoryPath));
 
                 Directory.CreateDirectory(layout.CapturedImagesDirectoryPath);
+
                 if (snapshotCopy.AppIcon is not null)
                 {
                     if (appIconBytes is null || appIconBytes.Length == 0)
@@ -373,14 +392,19 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 WriteImportedArtifactFiles(layout, artifactBytesByRelativePath);
+
                 foreach (var recording in snapshotCopy.VideoRecordings)
                 {
                     if (videoFilesById is null || !videoFilesById.TryGetValue(recording.RecordingId, out var videoPath))
+                    {
                         throw new InvalidDataException($"The archive is missing video '{recording.RecordingId}'.");
+                    }
+
                     CopyVideoFile(layout.SessionDirectoryPath, recording, videoPath);
                 }
 
                 SaveSnapshot(snapshotCopy);
+
                 // An offline device may delete its only copy after import returns.
                 // Flush every imported evidence file before issuing that receipt.
                 foreach (var path in Directory.EnumerateFiles(layout.SessionDirectoryPath, "*", SearchOption.AllDirectories))
@@ -432,8 +456,11 @@ internal sealed partial class SessionCaptureStore
                 CopyExtractedAppIcon(sourceLayout, targetLayout, sourceSnapshot.AppIcon, snapshotCopy.AppIcon);
                 CopyExtractedCapturedImages(sourceLayout, targetLayout, snapshotCopy.Images);
                 CopyExtractedArtifactPayloadDirectories(sourceLayout, targetLayout, snapshotCopy.ArtifactSnapshots);
+
                 foreach (var recording in snapshotCopy.VideoRecordings)
+                {
                     CopyVideoFile(targetLayout.SessionDirectoryPath, recording, Path.Combine(sourceLayout.SessionDirectoryPath, recording.EntryPath));
+                }
 
                 SaveSnapshot(snapshotCopy);
             }
@@ -477,9 +504,11 @@ internal sealed partial class SessionCaptureStore
 
         var layout = GetSessionLayout(appId, sessionId);
         var targetDirectoryPath = Path.Combine(layout.ArtifactsDirectoryPath, FileNameUtil.Sanitize(snapshot.ArtifactDirectoryName));
+
         lock (artifactGate)
         {
             Directory.CreateDirectory(layout.ArtifactsDirectoryPath);
+
             if (Directory.Exists(targetDirectoryPath))
             {
                 Directory.Delete(targetDirectoryPath, recursive: true);
@@ -502,12 +531,14 @@ internal sealed partial class SessionCaptureStore
         }
 
         var sourceFilePath = SessionAppIconArtifactPath.ResolveSessionIconPath(sourceLayout.SessionDirectoryPath, sourceAppIcon);
+
         if (!File.Exists(sourceFilePath))
         {
             return;
         }
 
         Directory.CreateDirectory(targetLayout.SessionDirectoryPath);
+
         var targetFilePath = SessionAppIconArtifactPath.ResolveSessionIconPath(targetLayout.SessionDirectoryPath, targetAppIcon);
         Directory.CreateDirectory(Path.GetDirectoryName(targetFilePath)!);
         File.Copy(sourceFilePath, targetFilePath, overwrite: true);
@@ -521,6 +552,7 @@ internal sealed partial class SessionCaptureStore
         foreach (var frame in frames)
         {
             var sourceFilePath = SessionImageArtifactPath.ResolveCapturedImagePath(sourceLayout.CapturedImagesDirectoryPath, frame);
+
             if (!File.Exists(sourceFilePath))
             {
                 throw new InvalidDataException($"The source session is missing image data for frame '{frame.FrameId}'.");
@@ -546,6 +578,7 @@ internal sealed partial class SessionCaptureStore
 
             var directoryName = FileNameUtil.Sanitize(artifactSnapshot.ArtifactDirectoryName);
             var sourceDirectoryPath = Path.Combine(sourceLayout.ArtifactsDirectoryPath, directoryName);
+
             if (!Directory.Exists(sourceDirectoryPath))
             {
                 continue;
@@ -564,6 +597,7 @@ internal sealed partial class SessionCaptureStore
         var snapshotCopy = SessionSnapshotReader.CloneAsHistorical(snapshot);
         var sessionId = snapshotCopy.SessionId;
         var shouldEnqueue = false;
+
         lock (pendingSnapshotGate)
         {
             if (deletedSessionIds.Contains(sessionId))
@@ -572,6 +606,7 @@ internal sealed partial class SessionCaptureStore
             }
 
             pendingSnapshotsBySessionId[sessionId] = snapshotCopy;
+
             if (queuedSnapshotSessionIds.Add(sessionId))
             {
                 shouldEnqueue = true;
@@ -587,6 +622,7 @@ internal sealed partial class SessionCaptureStore
     public void QueueLogBatch(SessionLogBatchEventArgs batch)
     {
         ArgumentNullException.ThrowIfNull(batch);
+
         if (batch.Entries.Count == 0 || IsDeleted(batch.SessionId))
         {
             return;
@@ -594,6 +630,7 @@ internal sealed partial class SessionCaptureStore
 
         var key = new SessionLogPersistenceKey(batch.SessionId, batch.StreamId);
         var shouldEnqueue = false;
+
         lock (pendingLogBatchGate)
         {
             if (pendingLogBatches.TryGetValue(key, out var pendingBatch))
@@ -629,6 +666,7 @@ internal sealed partial class SessionCaptureStore
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
+
         var taskCompletionSource = new TaskCompletionSource<SessionImageFrame?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pendingWrite = new PendingImageWrite(
             appId.Trim(),
@@ -642,6 +680,7 @@ internal sealed partial class SessionCaptureStore
             allowDuplicate,
             taskCompletionSource,
             ScreenshotGeometry.Validate(geometry));
+
         if (!pendingImageQueue.Writer.TryWrite(pendingWrite))
         {
             taskCompletionSource.TrySetResult(null);
@@ -673,8 +712,10 @@ internal sealed partial class SessionCaptureStore
 
         var layout = GetSessionLayout(appId, sessionId);
         Directory.CreateDirectory(layout.SessionDirectoryPath);
+
         var filePath = SessionAppIconArtifactPath.ResolveSessionIconPath(layout.SessionDirectoryPath, sessionIcon);
         WriteAllBytesAtomic(filePath, bytes);
+
         return sessionIcon;
     }
 
@@ -692,6 +733,7 @@ internal sealed partial class SessionCaptureStore
         lock (indexGate)
         {
             RefreshIndexIfStale();
+
             if (filePathBySessionId is not null
                 && filePathBySessionId.TryGetValue(trimmedSessionId, out var indexedPath))
             {
@@ -734,9 +776,10 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 incrementalPersistenceStateBySessionId.TryRemove(trimmedSessionId, out _);
+
                 foreach (var key in persistedLogCountByStream.Keys
-                             .Where(key => string.Equals(key.SessionId, trimmedSessionId, StringComparison.Ordinal))
-                             .ToArray())
+                    .Where(key => string.Equals(key.SessionId, trimmedSessionId, StringComparison.Ordinal))
+                    .ToArray())
                 {
                     persistedLogCountByStream.TryRemove(key, out _);
                 }
@@ -746,6 +789,7 @@ internal sealed partial class SessionCaptureStore
                 var sessionDirectoryPath = string.IsNullOrWhiteSpace(filePath)
                     ? null
                     : Path.GetDirectoryName(filePath);
+
                 if (!string.IsNullOrWhiteSpace(archiveFilePath))
                 {
                     DeleteIfExists(archiveFilePath);
@@ -758,6 +802,7 @@ internal sealed partial class SessionCaptureStore
                 }
 
                 var appDirectoryPath = Path.GetDirectoryName(sessionDirectoryPath ?? string.Empty);
+
                 if (!string.IsNullOrWhiteSpace(appDirectoryPath)
                     && Directory.Exists(appDirectoryPath)
                     && !Directory.EnumerateFileSystemEntries(appDirectoryPath).Any())
@@ -785,5 +830,4 @@ internal sealed partial class SessionCaptureStore
             return false;
         }
     }
-
 }

@@ -20,6 +20,7 @@ namespace Ansight.Host.Explorer;
 internal sealed partial class ExplorerServer : IAsyncDisposable
 {
     private sealed record LocalDoctorRequest(bool IncludeSecretMetadata = false);
+
     private const int AutomaticPortAttempts = 10;
     private const int LiveFileDownloadChunkBytes = 512 * 1024;
     private const int MaximumLiveFileSearchDepth = 16;
@@ -29,7 +30,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     private const int MaximumHostLogReadBytes = 2 * 1024 * 1024;
     private const int SessionEventBufferCapacity = 1;
     private const string ResourcePrefix = "Ansight.Host.Replay.Assets.";
-    private static readonly TimeSpan SessionEventHeartbeatInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan sessionEventHeartbeatInterval = TimeSpan.FromSeconds(15);
     internal static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
     {
         MaxDepth = JsonUtil.MaximumDepth
@@ -62,6 +63,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     private long nextSessionEventSubscriberId;
     private bool sessionCatalogEventsSubscribed;
     private int stopping;
+
     private ExplorerServer(RuntimeCoordinator runtime, string serverKey, string? initialSessionId, bool isExplorer, int port, string? requestedPath)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
@@ -92,17 +94,21 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(runtime);
         runtime.FeatureLifetime.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(serverKey);
+
         Exception? lastFailure = null;
         var attempts = requestedPort == 0 ? AutomaticPortAttempts : 1;
+
         for (var attempt = 0; attempt < attempts; attempt++)
         {
             var port = requestedPort == 0 ? FindAvailablePort() : requestedPort;
             var server = new ExplorerServer(runtime, serverKey, initialSessionId, isExplorer, port, requestedPath);
+
             try
             {
                 server.listener.Start();
                 server.SubscribeToSessionCatalogEvents();
                 server.runTask = server.RunAsync();
+
                 return server;
             }
             catch (HttpListenerException exception)
@@ -120,6 +126,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         StopListening();
+
         if (runTask is not null)
         {
             await runTask.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -131,6 +138,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         StopListening();
+
         if (runTask is not null)
         {
             try
@@ -155,6 +163,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         while (!shutdown.IsCancellationRequested)
         {
             HttpListenerContext context;
+
             try
             {
                 context = await listener.GetContextAsync().WaitAsync(shutdown.Token).ConfigureAwait(false);
@@ -174,6 +183,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
             var requestStart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var requestTask = HandleRequestAfterTrackingAsync(context, requestStart.Task, shutdown.Token);
+
             lock (requestGate)
             {
                 activeRequests.Add(requestTask);
@@ -210,6 +220,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         while (true)
         {
             Task[] pending;
+
             lock (requestGate)
             {
                 pending = activeRequests.ToArray();
@@ -227,6 +238,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     internal async Task WaitForActiveRequestSnapshotAsync(CancellationToken cancellationToken = default)
     {
         Task[] pending;
+
         lock (requestGate)
         {
             pending = activeRequests.ToArray();
@@ -245,6 +257,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         using var usage = new LocalRequestUsage(runtime.Analytics,
             path.StartsWith(prefix, StringComparison.Ordinal) ? path[prefix.Length..] : "",
             context.Request.HttpMethod, context.Response);
+
         try
         {
             await HandleRequestAsync(context, cancellationToken).ConfigureAwait(false);
@@ -272,26 +285,35 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         var request = context.Request;
         var response = context.Response;
         ApplySecurityHeaders(response);
+
         if (runtime.FeatureLifetime.IsCancellationRequested)
         {
             await WriteTextAsync(response, "product_access_required", HttpStatusCode.Forbidden, false, CancellationToken.None).ConfigureAwait(false);
+
             return;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var absolutePath = request.Url?.AbsolutePath ?? string.Empty;
         var replayPath = ReplayUrl.AbsolutePath;
+
         if (!absolutePath.StartsWith(replayPath, StringComparison.Ordinal))
         {
             await WriteTextAsync(response, "Not found.", HttpStatusCode.NotFound, false, cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
         using var callerContext = SessionActivityContext.Push(new SessionActivityContext(new ActivityCaller
-        { Ingress = "player", ClientName = "ansight-player" }));
+        {
+            Ingress = "player",
+            ClientName = "ansight-player"
+        }));
         var route = absolutePath[replayPath.Length..];
         var isGet = string.Equals(request.HttpMethod, "GET", StringComparison.Ordinal);
         var isHead = string.Equals(request.HttpMethod, "HEAD", StringComparison.Ordinal);
+
         if (isGet || isHead)
         {
             if (await TryHandleGetAsync(route, request, response, isHead, cancellationToken).ConfigureAwait(false))
@@ -319,6 +341,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         {
             response.Headers["Allow"] = "GET, HEAD, POST";
             await WriteTextAsync(response, "Method not allowed.", HttpStatusCode.MethodNotAllowed, false, cancellationToken).ConfigureAwait(false);
+
             return;
         }
 
@@ -326,6 +349,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     }
 
     internal static string RequireValue(string? value, string message) => string.IsNullOrWhiteSpace(value) ? throw new InvalidDataException(message) : value.Trim();
+
     private static void TryDeleteTemporaryFile(string path)
     {
         try
@@ -338,9 +362,11 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     }
 
     internal static bool AcceptsServerSentEvents(HttpListenerRequest request) => request.AcceptTypes?.Any(static value => value.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase)) == true;
+
     private static IReadOnlyList<WorkspaceSanitizerDefinition> DiscoverWorkspaceSanitizers(string workspacePath)
     {
         var sanitizersPath = Path.Combine(Path.GetFullPath(workspacePath), "ansight", "sanitizers");
+
         if (!Directory.Exists(sanitizersPath))
         {
             return [];
@@ -350,12 +376,15 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
         {
             var relativePath = Path.GetRelativePath(sanitizersPath, path);
             var sanitizerId = relativePath[..^Path.GetExtension(relativePath).Length].Replace(Path.DirectorySeparatorChar, '.').Replace(Path.AltDirectorySeparatorChar, '.');
+
             return new WorkspaceSanitizerDefinition(sanitizerId, Path.GetFullPath(path));
         }).ToArray();
     }
 
     private void RuntimeOnAppConnectionsChanged(object? sender, EventArgs eventArgs) => PublishSessionCatalogEvent("connections-changed", null);
+
     private void RuntimeAppsOnChanged(object? sender, EventArgs eventArgs) => PublishSessionCatalogEvent("apps-changed", null);
+
     private static void EnsureInRange(long value, long minimum, long maximum, string name)
     {
         if (value < minimum || value > maximum)
@@ -370,7 +399,9 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     }
 
     private sealed record SessionStorageBreakdown(long TotalSizeBytes, int FileCount, IReadOnlyList<SessionStorageBreakdownItem> Items);
+
     private sealed record SessionStorageBreakdownItem(string Label, long SizeBytes);
+
     internal async Task<AppSessionSnapshot?> LoadReplaySnapshotAsync(string sessionId, CancellationToken cancellationToken)
     {
         if (runtime.AppTools.IsConnected(sessionId) && runtime.Sessions.TryGetReplaySnapshot(sessionId, out var liveSnapshot) && liveSnapshot is not null)
@@ -394,15 +425,19 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     }
 
     private readonly record struct CachedReplayAsset(byte[] Content, string EntityTag);
+
     private sealed record SessionCatalogEvent(long Sequence, string Reason, string? SessionId, DateTimeOffset OccurredUtc);
+
     private sealed record SessionCatalogFingerprint(string AppId, string? Name, string ClientName, string Status, bool IsConnected, bool IsHistorical, bool IsPinned, string? RuntimeDeviceIdentifier, string? DeviceOsName, bool IsVirtualDevice, bool IsEmulator, string AppIconKey, string TagsKey, DateTimeOffset? LastUpdatedUtc, int? LogCount, int? ImageCount, int? VisualTreeSnapshotCount, int? ArtifactSnapshotCount)
     {
         public string? UiTestRunKey { get; init; }
     }
+
     private static int FindAvailablePort()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
+
         try
         {
             return ((IPEndPoint)probe.LocalEndpoint).Port;

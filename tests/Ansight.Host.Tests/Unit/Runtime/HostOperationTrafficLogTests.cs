@@ -71,8 +71,8 @@ public sealed class HostOperationTrafficLogTests
 
         await TestWait.UntilAsync(
             () => auditLog.CurrentFilePath is { Length: > 0 } path
-                  && File.Exists(path)
-                  && ReadAllTextShared(path).Contains(responseMarker, StringComparison.Ordinal),
+                && File.Exists(path)
+                && ReadAllTextShared(path).Contains(responseMarker, StringComparison.Ordinal),
             because: "The tool bridge response should be appended to the audit file.");
 
         var filePath = auditLog.CurrentFilePath!;
@@ -95,6 +95,7 @@ public sealed class HostOperationTrafficLogTests
     private static UserPreferences CreateUserPreferences(IApplicationPaths applicationPaths)
     {
         var preferencesFilePath = Path.Combine(applicationPaths.ApplicationDataPath, "preferences.json");
+
         return new UserPreferences(new FilePreferencesStore(preferencesFilePath));
     }
 
@@ -102,6 +103,7 @@ public sealed class HostOperationTrafficLogTests
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
+
         return reader.ReadToEnd();
     }
 

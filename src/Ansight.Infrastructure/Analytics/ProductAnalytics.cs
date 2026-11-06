@@ -1,6 +1,6 @@
 using Ansight.Infrastructure;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 /// <summary>
 /// Canonical product-analytics entry point for a single installation.
@@ -69,7 +69,11 @@ public sealed class ProductAnalytics
     /// <summary>Records a user-initiated operation after its business has been resolved.</summary>
     public void RecordBusinessActivity(Guid businessId)
     {
-        if (businessId == Guid.Empty) return;
+        if (businessId == Guid.Empty)
+        {
+            return;
+        }
+
         using var actor = AnalyticsAccount.Capture(dataDirectory, AnalyticsAccount.Read(dataDirectory), businessId.ToString("D"));
         ProductUsage.Record(dataDirectory, "business_activity", "host");
     }

@@ -11,9 +11,11 @@ internal sealed partial class SessionCaptureStore
     {
         var filePath = SessionMotionEvents.GetFilePath(layout.SessionDirectoryPath);
         var motionEvents = applicationEvents.Where(SessionMotionEvents.IsMotion).ToArray();
+
         if (motionEvents.Length == 0)
         {
             SessionCaptureFileSystem.DeleteIfExists(filePath);
+
             return;
         }
 

@@ -30,6 +30,7 @@ internal sealed class GetLogTimelineTool : Operation
     {
         var properties = SessionInspectionToolSchemas.LogReviewFilterProperties(includeRequiredQuery: false);
         properties["bucketCount"] = ToolSchema.Integer("Number of timeline buckets. Defaults to 24, max 200.", nullable: true);
+
         return properties;
     }
 }

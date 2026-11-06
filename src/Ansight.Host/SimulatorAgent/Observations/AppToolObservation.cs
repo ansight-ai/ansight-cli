@@ -9,6 +9,7 @@ internal static class AppToolObservation
     public static JsonObject Build(JsonObject content)
     {
         var toolId = ReadString(content, "toolId");
+
         if (toolId is null
             || content["payload"] is not JsonObject payload
             || !ReadBoolean(payload, "success")
@@ -25,6 +26,7 @@ internal static class AppToolObservation
                 BuildPlayerQueryResult(result),
             _ => null
         };
+
         if (compactResult is null)
         {
             return content;
@@ -48,10 +50,10 @@ internal static class AppToolObservation
 
     private static bool IsAnnotationSurfaceResult(JsonObject result)
         => result["annotationManagers"] is JsonArray
-           || result["boundAnnotations"] is JsonArray
-           || (result["surface"] is JsonObject surface
-               && (surface["annotationManagerCount"] is not null
-                   || surface["annotationCount"] is not null));
+            || result["boundAnnotations"] is JsonArray
+            || (result["surface"] is JsonObject surface
+                && (surface["annotationManagerCount"] is not null
+                    || surface["annotationCount"] is not null));
 
     private static JsonObject BuildAnnotationSurfaceResult(JsonObject result)
     {
@@ -108,6 +110,7 @@ internal static class AppToolObservation
             .OfType<JsonObject>()
             .Sum(static manager => manager["annotations"] is JsonArray annotations ? annotations.Count : 0);
         var returnedAnnotationCount = 0;
+
         foreach (var manager in managers.OfType<JsonObject>())
         {
             var compactManager = Select(
@@ -119,9 +122,11 @@ internal static class AppToolObservation
                 "returnedCount");
             var compactAnnotations = new JsonArray();
             var sourceManagerAnnotationCount = 0;
+
             if (manager["annotations"] is JsonArray annotations)
             {
                 sourceManagerAnnotationCount = annotations.Count;
+
                 foreach (var annotation in annotations.OfType<JsonObject>())
                 {
                     var compactAnnotation = Select(
@@ -130,6 +135,7 @@ internal static class AppToolObservation
                         "kind",
                         "screenPosition",
                         "selected");
+
                     if (annotation["geometry"] is JsonObject geometry
                         && string.Equals(ReadString(geometry, "type"), "Point", StringComparison.Ordinal))
                     {
@@ -158,6 +164,7 @@ internal static class AppToolObservation
                     }
 
                     var annotationCharacters = compactAnnotation.ToJsonString().Length;
+
                     if (characterCount + annotationCharacters > MaximumAnnotationCharacters)
                     {
                         break;
@@ -174,6 +181,7 @@ internal static class AppToolObservation
             compactManager["projectionReturnedCount"] = compactAnnotations.Count;
             compactManager["projectionTruncated"] = compactAnnotations.Count < sourceManagerAnnotationCount;
             compactManagers.Add(compactManager);
+
             if (characterCount >= MaximumAnnotationCharacters)
             {
                 break;
@@ -197,6 +205,7 @@ internal static class AppToolObservation
 
         var automationId = ReadString(surface, "automationId");
         var type = ReadString(surface, "type");
+
         if (automationId is null && type is null)
         {
             return null;
@@ -207,6 +216,7 @@ internal static class AppToolObservation
             ["visible"] = true,
             ["enabled"] = true
         };
+
         if (automationId is not null)
         {
             selector["automationId"] = automationId;
@@ -228,6 +238,7 @@ internal static class AppToolObservation
             "matchCount",
             "returnedCount",
             "truncated");
+
         if (result["players"] is JsonArray players)
         {
             compactResult["players"] = new JsonArray(
@@ -240,6 +251,7 @@ internal static class AppToolObservation
     private static JsonObject BuildPlayerQueryResult(JsonObject result)
     {
         var compactResult = Select(result, "platform", "capturedAtUtc", "requestedElement");
+
         if (result["player"] is JsonObject player)
         {
             compactResult["player"] = BuildPlayerSummary(player);
@@ -248,6 +260,7 @@ internal static class AppToolObservation
         if (result["scene"] is JsonObject scene)
         {
             var compactScene = Select(scene, "initialized", "type", "entitiesByTag");
+
             if (scene["asset"] is JsonObject asset)
             {
                 compactScene["asset"] = Select(asset, "hasLoadedAsset");
@@ -279,6 +292,7 @@ internal static class AppToolObservation
             "handlerAttached",
             "paused",
             "bounds");
+
         if (player["application"] is JsonObject application)
         {
             compactPlayer["application"] = Select(application, "type", "evergineVersion", "sceneInitialized");
@@ -296,6 +310,7 @@ internal static class AppToolObservation
                 "selection",
                 "visibility",
                 "counts");
+
             if (guide["camera"] is JsonObject camera
                 && camera["state"] is JsonObject cameraState)
             {
@@ -307,6 +322,7 @@ internal static class AppToolObservation
 
         var playerType = ReadString(player, "type");
         var ownerTag = ReadString(player, "ownerTag");
+
         if (ReadBoolean(player, "visible")
             && ReadBoolean(player, "enabled")
             && playerType is not null)
@@ -318,6 +334,7 @@ internal static class AppToolObservation
                 ["visible"] = true,
                 ["enabled"] = true
             };
+
             if (ownerTag is not null)
             {
                 selector["ancestorAutomationId"] = ownerTag;
@@ -339,6 +356,7 @@ internal static class AppToolObservation
     private static JsonObject Select(JsonObject source, params string[] propertyNames)
     {
         var result = new JsonObject();
+
         foreach (var propertyName in propertyNames)
         {
             Copy(source, result, propertyName);
@@ -369,25 +387,27 @@ internal static class AppToolObservation
             }
 
             target[targetPropertyName] = value.DeepClone();
+
             return;
         }
     }
 
     private static string? ReadString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && property.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 
     private static bool ReadBoolean(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue property
-           && property.TryGetValue<bool>(out var result)
-           && result;
+            && property.TryGetValue<bool>(out var result)
+            && result;
 
     private static bool TryReadDouble(JsonObject value, string propertyName, out double result)
     {
         result = 0;
+
         if (value[propertyName] is not JsonValue property)
         {
             return false;
@@ -401,12 +421,14 @@ internal static class AppToolObservation
         if (property.TryGetValue<int>(out var integer))
         {
             result = integer;
+
             return true;
         }
 
         if (property.TryGetValue<long>(out var longInteger))
         {
             result = longInteger;
+
             return true;
         }
 

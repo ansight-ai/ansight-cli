@@ -23,6 +23,7 @@ public sealed class WorkspaceCommandsTests
             allowResidentHostForwarding: false);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var help = standardOutput.ToString();
         Assert.Contains("What init creates:", help, StringComparison.Ordinal);
         Assert.Contains("ansight workspace list", help, StringComparison.Ordinal);
@@ -46,6 +47,7 @@ public sealed class WorkspaceCommandsTests
         var workspacePath = Path.Combine(directory.Path, "linked-workspace");
         var dataDirectory = Path.Combine(directory.Path, "host-data");
         Directory.CreateDirectory(workspacePath);
+
         await using var runtime = CreateRuntime(dataDirectory);
         Assert.True(runtime.Apps.Register(new AppRegistrationRequest(
             "com.example.linked",
@@ -54,12 +56,13 @@ public sealed class WorkspaceCommandsTests
         Assert.True(runtime.Apps.Register(new AppRegistrationRequest(
             "com.example.unlinked",
             "Unlinked App")).IsSuccess);
+
         using var context = CliCommandContext.Push(runtime, dataDirectory, secretValue: null);
 
         using var jsonOutput = new StringWriter();
         var jsonExitCode = await CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "workspace",
                 "list",
                 "--data-dir",
@@ -72,8 +75,10 @@ public sealed class WorkspaceCommandsTests
             allowResidentHostForwarding: false);
 
         Assert.Equal(CliExitCodes.Success, jsonExitCode);
+
         var payload = JsonNode.Parse(jsonOutput.ToString())!.AsObject();
         Assert.Equal("ansight.workspaces/v1", payload["schema"]!.GetValue<string>());
+
         var workspaces = payload["workspaces"]!.AsArray();
         var workspace = Assert.Single(workspaces)!.AsObject();
         Assert.Equal("com.example.linked", workspace["appId"]!.GetValue<string>());
@@ -83,7 +88,7 @@ public sealed class WorkspaceCommandsTests
         using var humanOutput = new StringWriter();
         var humanExitCode = await CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "workspaces",
                 "list",
                 "--data-dir",
@@ -112,7 +117,7 @@ public sealed class WorkspaceCommandsTests
 
         var exitCode = await CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "workspace",
                 "list",
                 "--data-dir",
@@ -132,6 +137,7 @@ public sealed class WorkspaceCommandsTests
         var storagePath = Path.Combine(dataDirectory, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = dataDirectory,
@@ -149,7 +155,7 @@ public sealed class WorkspaceCommandsTests
         await using var runtime = CreateRuntime(dataDirectory);
         using var context = CliCommandContext.Push(runtime, dataDirectory, null);
         var arguments = CliArguments.Parse(
-        [
+            [
             "workspace",
             "init",
             workspacePath,
@@ -177,7 +183,7 @@ public sealed class WorkspaceCommandsTests
         using var appOutput = new StringWriter();
         var getExitCode = await CliApplication.RunParsedAsync(
             CliArguments.Parse(
-            [
+                [
                 "app",
                 "get",
                 "com.example.app",
@@ -191,6 +197,7 @@ public sealed class WorkspaceCommandsTests
             allowResidentHostForwarding: false);
 
         Assert.Equal(CliExitCodes.Success, getExitCode);
+
         var appPayload = JsonNode.Parse(appOutput.ToString())!.AsObject();
         Assert.Equal(
             Path.GetFullPath(workspacePath),
@@ -207,7 +214,7 @@ public sealed class WorkspaceCommandsTests
         using var context = CliCommandContext.Push(runtime, dataDirectory, null);
         var workspacePath = Path.Combine(directory.Path, "workspace");
         var arguments = CliArguments.Parse(
-        [
+            [
             "workspace",
             "init",
             workspacePath,
@@ -232,6 +239,7 @@ public sealed class WorkspaceCommandsTests
             standardInputIsInteractive: true);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var payload = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("com.example.ci", payload["appRegistration"]!["app"]!["appId"]!.GetValue<string>());
         Assert.Equal("Example CI", payload["appRegistration"]!["app"]!["name"]!.GetValue<string>());
@@ -286,7 +294,7 @@ public sealed class WorkspaceCommandsTests
     {
         using var directory = TestDirectory.Create();
         var arguments = CliArguments.Parse(
-        [
+            [
             "workspace",
             "add",
             "test",
@@ -309,6 +317,7 @@ public sealed class WorkspaceCommandsTests
             allowResidentHostForwarding: false);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var payload = JsonNode.Parse(standardOutput.ToString())!.AsObject();
         Assert.Equal("ansight.workspace-authoring/v1", payload["schema"]!.GetValue<string>());
         Assert.True(payload["result"]!["isSuccess"]!.GetValue<bool>());
@@ -363,9 +372,11 @@ public sealed class WorkspaceCommandsTests
             "sanitizers",
             "team-safe.ts");
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var moduleSource = File.ReadAllText(modulePath);
         Assert.Contains("sanitizeLog", moduleSource, StringComparison.Ordinal);
         Assert.Contains("sanitizeNetworkRequest", moduleSource, StringComparison.Ordinal);
+
         var typeDefinitionsPath = Path.Combine(
             directory.Path,
             "ansight",

@@ -77,6 +77,7 @@ internal static partial class LocalSessionSummaryRunner
         bool isSection = false)
     {
         reportProgress?.Invoke(new("preparing", "Preparing the model and checking AI access…"));
+
         var gateway = runtime.WorkspaceTests.RunGateway
             ?? throw new InvalidOperationException("Session analysis is unavailable on this host.");
         var reasoning = AgentReasoningModes.Normalize(reasoningMode);
@@ -100,6 +101,7 @@ internal static partial class LocalSessionSummaryRunner
                 IsSessionSummary = !isSection
             },
             cancellationToken).ConfigureAwait(false);
+
         if (!preparation.IsSuccess)
         {
             throw new InvalidOperationException(preparation.Message);
@@ -110,21 +112,30 @@ internal static partial class LocalSessionSummaryRunner
         var stopwatch = Stopwatch.StartNew();
         OpenAiTurn? turn = null;
         var outcome = "failed";
+
         try
         {
             var transport = preparation.ModelTransport
                 ?? throw new InvalidOperationException("Session analysis could not start.");
             reportProgress?.Invoke(new("preparing", "Connecting to the AI provider…"));
+
             var accessKey = await transport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
+
             if (string.IsNullOrWhiteSpace(accessKey))
             {
                 throw new InvalidOperationException("Session analysis could not be authorized.");
             }
 
             reportProgress?.Invoke(new("evidence", $"Collecting visual evidence, {snapshot.Touches.Count} touches and {snapshot.Logs.Count} logs…"));
+
             using var visuals = await SessionSummaryVisualEvidence.CreateAsync(runtime, snapshot, reportProgress, cancellationToken).ConfigureAwait(false);
             var evidence = BuildEvidence(snapshot) + BuildFrameText(visuals.Images, reportProgress);
-            if (visuals.UsesVideo) evidence += "\nAttached images and OCR were decoded from replay video. Stored screenshots were not used. Only the listed frames were inspected; do not infer unseen transitions.\n";
+
+            if (visuals.UsesVideo)
+            {
+                evidence += "\nAttached images and OCR were decoded from replay video. Stored screenshots were not used. Only the listed frames were inspected; do not infer unseen transitions.\n";
+            }
+
             var content = new JsonArray(new JsonObject
             {
                 ["type"] = "input_text",
@@ -134,6 +145,7 @@ internal static partial class LocalSessionSummaryRunner
             var input = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
             var scope = isSection ? "section" : "session";
             reportProgress?.Invoke(new("analysis", imageCount > 0 ? $"Analysing {scope} with {imageCount} visual frames…" : $"Analysing {scope} evidence…"));
+
             using var client = new OpenAiResponsesClient();
             turn = await client.CreateResponseAsync(
                 new OpenAiRequest(
@@ -150,13 +162,16 @@ internal static partial class LocalSessionSummaryRunner
                 },
                 cancellationToken).ConfigureAwait(false);
             reportProgress?.Invoke(new("formatting", isSection ? "Writing the annotation…" : "Formatting the summary…"));
+
             var summary = FormatSummary(turn.AssistantText);
+
             if (summary.Length == 0)
             {
                 throw new InvalidOperationException("The model returned an empty session summary.");
             }
 
             outcome = "succeeded";
+
             return new SessionAnalysisRecord
             {
                 AnalysisId = Guid.CreateVersion7().ToString("N"),
@@ -174,16 +189,19 @@ internal static partial class LocalSessionSummaryRunner
         finally
         {
             stopwatch.Stop();
+
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
                 var passes = turn?.ResponseId is { Length: > 0 } responseId
-                    ? new[] { new SimulatorAgentModelPassUsage(
-                        responseId,
-                        turn.ResponseModel ?? configuration.Model,
-                        turn.ResponseServiceTier,
-                        DateTimeOffset.UtcNow,
-                        turn.Tokens) }
-                    : [];
+                    ? new[]
+                    {
+                        new SimulatorAgentModelPassUsage(
+                            responseId,
+                            turn.ResponseModel ?? configuration.Model,
+                            turn.ResponseServiceTier,
+                            DateTimeOffset.UtcNow,
+                            turn.Tokens)
+                    } : [];
                 await gateway.CompleteAsync(
                     new WorkspaceTestRunMeterCompletion(
                         trackingRunId,
@@ -203,15 +221,20 @@ internal static partial class LocalSessionSummaryRunner
     internal static string FormatSummary(string response)
     {
         var text = response.Trim();
+
         if (text.StartsWith("```", StringComparison.Ordinal))
         {
             var firstNewline = text.IndexOf('\n');
             var lastFence = text.LastIndexOf("```", StringComparison.Ordinal);
+
             if (firstNewline >= 0 && lastFence > firstNewline)
+            {
                 text = text[(firstNewline + 1)..lastFence].Trim();
+            }
         }
 
         JsonObject result;
+
         try
         {
             result = JsonNode.Parse(text) as JsonObject
@@ -229,8 +252,11 @@ internal static partial class LocalSessionSummaryRunner
                 .Take(MaximumSummarySteps)
                 .ToArray()
             : [];
+
         if (string.IsNullOrWhiteSpace(description) || steps.Length == 0)
+        {
             throw new InvalidOperationException("The analysis did not return a usable summary. Please try again.");
+        }
 
         return description + "\n\n" + string.Join("\n", steps.Select((step, index) => $"{index + 1}. {step}"));
     }
@@ -239,33 +265,53 @@ internal static partial class LocalSessionSummaryRunner
         Action<SessionSummaryProgress>? reportProgress, bool requireVideo)
     {
         var count = 0;
+
         for (var sampleIndex = 0; sampleIndex < frames.Count; sampleIndex++)
         {
             reportProgress?.Invoke(new("frames", $"Preparing frame {sampleIndex + 1} of {frames.Count}…", sampleIndex, frames.Count));
+
             var frame = frames[sampleIndex];
             var path = frame.FilePath;
+
             if (!File.Exists(path))
             {
-                if (requireVideo) throw new FileNotFoundException("The extracted video frame is missing.", path);
+                if (requireVideo)
+                {
+                    throw new FileNotFoundException("The extracted video frame is missing.", path);
+                }
+
                 continue;
             }
+
             try
             {
                 using var original = SKBitmap.Decode(path);
+
                 if (original is null)
                 {
-                    if (requireVideo) throw new InvalidDataException("The extracted video frame could not be decoded.");
+                    if (requireVideo)
+                    {
+                        throw new InvalidDataException("The extracted video frame could not be decoded.");
+                    }
+
                     continue;
                 }
+
                 var width = Math.Min(original.Width, MaximumScreenshotWidth);
                 var height = Math.Max(1, (int)Math.Round(original.Height * width / (double)original.Width));
                 using var resized = width == original.Width ? original.Copy()
                     : original.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
+
                 if (resized is null)
                 {
-                    if (requireVideo) throw new InvalidDataException("The extracted video frame could not be resized.");
+                    if (requireVideo)
+                    {
+                        throw new InvalidDataException("The extracted video frame could not be resized.");
+                    }
+
                     continue;
                 }
+
                 using var image = SKImage.FromBitmap(resized);
                 using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, ScreenshotJpegQuality);
                 // The scoped summary endpoint accepts one text item followed by up to five images.
@@ -281,10 +327,15 @@ internal static partial class LocalSessionSummaryRunner
             }
             catch (Exception exception) when (exception is IOException or InvalidOperationException)
             {
-                if (requireVideo) throw;
+                if (requireVideo)
+                {
+                    throw;
+                }
+
                 // Continue with other frames in legacy screenshot-only sessions.
             }
         }
+
         return count;
     }
 
@@ -328,6 +379,7 @@ internal static partial class LocalSessionSummaryRunner
             {
                 var channel = snapshot.MetricChannels.FirstOrDefault(item => item.ChannelId == group.Key);
                 var ordered = group.OrderBy(item => item.CapturedAtUtc).ToArray();
+
                 return $"{channel?.Name ?? $"channel {group.Key}"} ({channel?.Unit}): "
                     + $"first {ordered[0].Value}, last {ordered[^1].Value}, "
                     + $"min {ordered.Min(item => item.Value)}, max {ordered.Max(item => item.Value)}";
@@ -337,39 +389,63 @@ internal static partial class LocalSessionSummaryRunner
             .Select(item => $"{item.TimestampUtc:O} [{item.Priority}] {item.Tag}: {item.Message}"));
 
         var text = evidence.ToString();
+
         return text.Length <= MaximumEvidenceCharacters ? text : text[..MaximumEvidenceCharacters] + "\n[Evidence truncated]";
     }
 
     private static void AppendSection(StringBuilder evidence, string title, int characterLimit, IEnumerable<string> entries)
     {
         evidence.AppendLine($"\n{title}:");
+
         var available = entries.Select(item => item.Length <= MaximumEvidenceEntryCharacters
             ? item : item[..MaximumEvidenceEntryCharacters] + "…").ToArray();
+
         if (available.Sum(entry => entry.Length) <= characterLimit)
         {
-            foreach (var entry in available) evidence.AppendLine(entry);
+            foreach (var entry in available)
+            {
+                evidence.AppendLine(entry);
+            }
+
             return;
         }
 
         var selected = new SortedSet<int>();
+
         void AddFrom(int start, int end, int step, int budget)
         {
             var used = 0;
+
             for (var index = start; index != end; index += step)
             {
-                if (selected.Contains(index)) continue;
-                if (used + available[index].Length > budget) break;
+                if (selected.Contains(index))
+                {
+                    continue;
+                }
+
+                if (used + available[index].Length > budget)
+                {
+                    break;
+                }
+
                 selected.Add(index);
                 used += available[index].Length;
             }
         }
+
         AddFrom(0, available.Length, 1, characterLimit / SectionBudgetQuarterCount);
         AddFrom(available.Length / 2, available.Length, 1, characterLimit / SectionBudgetQuarterCount);
         AddFrom(available.Length - 1, -1, -1, characterLimit / SectionBudgetHalfCount);
+
         var previous = -1;
+
         foreach (var index in selected)
         {
-            if (index > previous + 1) evidence.AppendLine("[Entries omitted]");
+            if (index > previous + 1)
+            {
+                evidence.AppendLine("[Entries omitted]");
+            }
+
             evidence.AppendLine(available[index]);
             previous = index;
         }
@@ -378,7 +454,12 @@ internal static partial class LocalSessionSummaryRunner
     private static IReadOnlyList<T> SelectTimeline<T>(IOrderedEnumerable<T> entries, int limit)
     {
         var available = entries.ToArray();
-        if (available.Length <= limit) return available;
+
+        if (available.Length <= limit)
+        {
+            return available;
+        }
+
         var firstCount = limit / TimelineSampleFifths;
         var middleCount = limit / TimelineSampleFifths;
         var lastCount = limit - firstCount - middleCount;
@@ -390,6 +471,7 @@ internal static partial class LocalSessionSummaryRunner
             .Concat(Enumerable.Range(available.Length - lastCount, lastCount))
             .Distinct()
             .OrderBy(index => index);
+
         return indexes.Select(index => available[index]).ToArray();
     }
 
@@ -398,6 +480,7 @@ internal static partial class LocalSessionSummaryRunner
         if (Uri.TryCreate(url, UriKind.Absolute, out var parsed))
         {
             var port = parsed.IsDefaultPort ? string.Empty : $":{parsed.Port}";
+
             return $"{parsed.Scheme}://{parsed.Host}{port}{parsed.AbsolutePath}";
         }
 
@@ -406,26 +489,42 @@ internal static partial class LocalSessionSummaryRunner
 
     private static string BuildFrameText(IReadOnlyList<SessionSummaryImage> frames, Action<SessionSummaryProgress>? reportProgress)
     {
-        if (frames.Count == 0) return string.Empty;
-        var selected = new[] { frames[0], frames[frames.Count / 2], frames[^1] }
-            .DistinctBy(frame => frame.FilePath).ToArray();
+        if (frames.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var selected = new[] { frames[0], frames[frames.Count / 2], frames[^1] }.DistinctBy(frame => frame.FilePath).ToArray();
         var scanner = new TesseractSessionScreenshotOcrScanner();
         var text = new StringBuilder("\nVisual frame OCR (only frames listed below were scanned):\n");
+
         for (var index = 0; index < selected.Length; index++)
         {
             reportProgress?.Invoke(new("evidence", $"Reading frame text {index + 1} of {selected.Length}…", index, selected.Length));
+
             var frame = selected[index];
             var filePath = frame.FilePath;
-            if (!File.Exists(filePath)) continue;
+
+            if (!File.Exists(filePath))
+            {
+                continue;
+            }
+
             try
             {
                 var result = scanner.Scan(filePath);
-                if (!result.Available) continue;
+
+                if (!result.Available)
+                {
+                    continue;
+                }
+
                 var words = string.Join(" | ", result.Blocks
                     .Where(block => block.Confidence >= MinimumOcrConfidence && block.Text.Length >= MinimumOcrWordLength)
                     .Select(block => block.Text.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(MaximumOcrWordsPerFrame));
+
                 if (words.Length > 0)
                 {
                     text.AppendLine($"{frame.CapturedAtUtc:O}: {(words.Length <= MaximumOcrCharactersPerFrame ? words : words[..MaximumOcrCharactersPerFrame])}");

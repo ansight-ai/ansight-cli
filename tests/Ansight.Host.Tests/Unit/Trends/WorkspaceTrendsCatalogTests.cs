@@ -16,12 +16,14 @@ public sealed class WorkspaceTrendsCatalogTests
         var catalog = WorkspaceTrendsCatalog.Load(directory.RootPath);
 
         Assert.Empty(catalog.Warnings);
+
         var trends = Assert.Single(catalog.Definitions);
         Assert.Equal("login-trends", trends.TrendsId);
         Assert.True(trends.Enabled);
         Assert.Equal("login.started", trends.Span.Start.Label);
         Assert.Equal("login.completed", trends.Span.End.Label);
         Assert.Equal("ios", Assert.Single(trends.Metrics).Platform);
+
         var history = Assert.Single(catalog.HistoryDefinitions);
         Assert.Equal("login-trends.fps-p10", history.DecisionId);
         Assert.Equal("ios", history.Platform);

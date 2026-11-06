@@ -18,6 +18,7 @@ internal sealed class AdbLauncherProcessRunner : IProcessRunner
     {
         await using var process = Start(executablePath, arguments);
         process.StandardInput.Dispose();
+
         try
         {
             using var standardOutputReader = new StreamReader(process.StandardOutput);
@@ -28,6 +29,7 @@ internal sealed class AdbLauncherProcessRunner : IProcessRunner
                 .WaitAsync(cancellationToken)
                 .ConfigureAwait(false);
             await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false);
+
             return new AdbCommandResult(
                 exitCode,
                 standardOutputTask.Result,
@@ -45,6 +47,7 @@ internal sealed class AdbLauncherProcessRunner : IProcessRunner
         var process = Start(executablePath, arguments);
         process.StandardInput.Dispose();
         _ = ObserveLaunchedProcessAsync(process);
+
         return process.ProcessId;
     }
 

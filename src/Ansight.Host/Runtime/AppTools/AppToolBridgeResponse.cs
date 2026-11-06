@@ -14,7 +14,10 @@ internal sealed record AppToolBridgeResponse(
     public string? FailureCode { get; init; }
 
     public static AppToolBridgeResponse FromUnavailable(string message)
-        => FromFailure(message) with { FailureCode = ExecutionCapabilities.ErrorCode };
+        => FromFailure(message) with
+        {
+            FailureCode = ExecutionCapabilities.ErrorCode
+        };
 
     public static AppToolBridgeResponse FromSuccess(
         string message,

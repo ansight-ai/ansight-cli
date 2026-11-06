@@ -4,10 +4,23 @@ using Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 namespace Ansight.Host.UiAutomation;
 
 /// <summary>Fresh semantic observations with a cached capability choice, never cached targets.</summary>
-internal sealed class AppInteractionTree(
-    IRuntimeState runtimeState, IAppToolBridge appToolBridge, UiInputRouter input, AppSessionSnapshot session)
+internal sealed class AppInteractionTree
 {
+    private readonly IRuntimeState runtimeState;
+    private readonly IAppToolBridge appToolBridge;
+    private readonly UiInputRouter input;
+    private readonly AppSessionSnapshot session;
     private string? fallbackToolId;
+
+    public AppInteractionTree(
+        IRuntimeState runtimeState, IAppToolBridge appToolBridge, UiInputRouter input, AppSessionSnapshot session)
+    {
+        this.runtimeState = runtimeState;
+        this.appToolBridge = appToolBridge;
+        this.input = input;
+        this.session = session;
+    }
+
     public AppInteractionUi? Latest { get; private set; }
 
     public async Task<LiveUiTreeCapture?> CaptureAsync(
@@ -15,21 +28,31 @@ internal sealed class AppInteractionTree(
         PersistedScreenshotEvidence? screenshot = null)
     {
         Latest = null;
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(2_000);
+
         try
         {
             var capture = await LiveUiTreeCapture.CaptureForInteractionAsync(session, appToolBridge, input,
                 actionId, target is null ? null : Selector(target), fallbackToolId, timeout.Token).ConfigureAwait(false);
+
             if (!capture.IsSuccess || capture.Capture is not { } tree)
             {
                 Latest = Unavailable(capture.Message);
+
                 return null;
             }
-            if (tree.ToolId != LiveUiTreeCapture.DeviceAccessibilityToolId) fallbackToolId = tree.ToolId;
+
+            if (tree.ToolId != LiveUiTreeCapture.DeviceAccessibilityToolId)
+            {
+                fallbackToolId = tree.ToolId;
+            }
+
             var persisted = SessionVisualTreePersistence.Persist(runtimeState, session, tree.ToolId,
                 tree.RawPayload, new(actionId, "interact", target is null ? "after" : "before"), screenshot);
             Latest = Describe(tree, persisted.Snapshot?.SnapshotId);
+
             return tree;
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
@@ -37,15 +60,21 @@ internal sealed class AppInteractionTree(
             Latest = Unavailable(exception is OperationCanceledException
                 ? "Fresh UI tree capture timed out; use the retained screenshot if appropriate."
                 : $"Fresh UI tree unavailable: {exception.Message}");
+
             return null;
         }
     }
 
     internal static LiveUiSelector Selector(AppInteractionTarget target) => LiveUiSelector.Parse(new JsonObject
     {
-        ["automationId"] = target.AutomationId, ["text"] = target.Text, ["role"] = target.Role,
-        ["ancestorAutomationId"] = target.AncestorAutomationId, ["exact"] = true,
-        ["caseSensitive"] = true, ["visible"] = true, ["enabled"] = true
+        ["automationId"] = target.AutomationId,
+        ["text"] = target.Text,
+        ["role"] = target.Role,
+        ["ancestorAutomationId"] = target.AncestorAutomationId,
+        ["exact"] = true,
+        ["caseSensitive"] = true,
+        ["visible"] = true,
+        ["enabled"] = true
     });
 
     internal static AppInteractionUi Describe(LiveUiTreeCapture tree, string? snapshotId)
@@ -65,7 +94,7 @@ internal sealed class AppInteractionTree(
         }, options);
         var projectedNodes = projection["matches"]!.AsArray().OfType<JsonObject>();
         var truncated = tree.Payload["truncated"]?.GetValue<bool>() == true
-                        || projection["projectionTruncated"]?.GetValue<bool>() == true;
+            || projection["projectionTruncated"]?.GetValue<bool>() == true;
         var nodes = projectedNodes.Select(node => new AppInteractionUiNode(
             AutomationId: node["automationId"]?.GetValue<string>(),
             Text: node["text"]?.GetValue<string>(),
@@ -76,6 +105,7 @@ internal sealed class AppInteractionTree(
             AncestorAutomationIds: node["ancestorPath"]?.AsArray().OfType<JsonObject>()
                 .Select(ancestor => ancestor["automationId"]?.GetValue<string>()).OfType<string>().ToArray() ?? []))
             .ToArray();
+
         return new("available", tree.ToolId, snapshotId, tree.CapturedAtUtc, nodes, truncated);
     }
 

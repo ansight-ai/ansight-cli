@@ -22,8 +22,8 @@ public static class SessionCacheCleanupPlanner
 
         var retentionCandidates = candidates
             .Where(candidate => includeRetentionCandidates
-                                && IsDeletable(candidate, protectedSessionIds)
-                                && candidate.CreatedUtc < cutoffUtc)
+                && IsDeletable(candidate, protectedSessionIds)
+                && candidate.CreatedUtc < cutoffUtc)
             .OrderBy(static candidate => candidate.CreatedUtc)
             .ThenBy(static candidate => candidate.LastUpdatedUtc)
             .ToArray();
@@ -42,14 +42,15 @@ public static class SessionCacheCleanupPlanner
         }
 
         var cacheCandidateCount = 0;
+
         if (projectedCacheSizeBytes > normalizedMaximumCacheSizeBytes)
         {
             foreach (var candidate in candidates
-                         .Where(candidate => IsDeletable(candidate, protectedSessionIds)
-                                             && candidate.CacheSizeBytes > 0
-                                             && !selectedSessionIds.Contains(candidate.SessionId))
-                         .OrderBy(static candidate => candidate.CreatedUtc)
-                         .ThenBy(static candidate => candidate.LastUpdatedUtc))
+                .Where(candidate => IsDeletable(candidate, protectedSessionIds)
+                    && candidate.CacheSizeBytes > 0
+                    && !selectedSessionIds.Contains(candidate.SessionId))
+                .OrderBy(static candidate => candidate.CreatedUtc)
+                .ThenBy(static candidate => candidate.LastUpdatedUtc))
             {
                 if (projectedCacheSizeBytes <= normalizedMaximumCacheSizeBytes)
                 {
@@ -85,8 +86,8 @@ public static class SessionCacheCleanupPlanner
         ISet<string>? protectedSessionIds)
     {
         return !candidate.IsPinned
-               && !candidate.IsLive
-               && protectedSessionIds?.Contains(candidate.SessionId) != true;
+            && !candidate.IsLive
+            && protectedSessionIds?.Contains(candidate.SessionId) != true;
     }
 
     private static SessionCacheCleanupItem ToItem(

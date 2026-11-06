@@ -19,6 +19,7 @@ internal static partial class HostCommands
         }
 
         var subcommand = arguments.RequirePositional(1, "host subcommand").ToLowerInvariant();
+
         return subcommand switch
         {
             "run" => RunRecoverableHostAsync(arguments, output, cancellationToken,
@@ -40,8 +41,10 @@ internal static partial class HostCommands
         TimeProvider timeProvider)
     {
         authorizer = CliLocalAccessAuthorizer.Instance;
+
         var pairRequested = arguments.HasFlag("pair");
         var pairAppId = arguments.GetOption("pair");
+
         if (pairRequested && string.IsNullOrWhiteSpace(pairAppId))
         {
             throw new CliUsageException(
@@ -51,9 +54,10 @@ internal static partial class HostCommands
         }
 
         var noServe = arguments.HasFlag("no-serve");
+
         if (noServe && (arguments.HasFlag("open")
-                        || arguments.HasFlag("serve-port")
-                        || arguments.HasFlag("serve-path")))
+            || arguments.HasFlag("serve-port")
+            || arguments.HasFlag("serve-path")))
         {
             throw new CliUsageException(
                 "--no-serve cannot be combined with --open, --serve-port, or --serve-path.");
@@ -62,7 +66,12 @@ internal static partial class HostCommands
         var requestedCompanionMode = ParseCompanionAccessMode(arguments);
 
         var options = CliRuntime.ResolveOptions(arguments);
-        if (arguments.HasFlag("runner")) RunnerCommands.EnsureRegistered(options);
+
+        if (arguments.HasFlag("runner"))
+        {
+            RunnerCommands.EnsureRegistered(options);
+        }
+
         var servePath = LocalSettingsStore.ResolveExplorerPath(
             arguments,
             "serve-path",
@@ -71,13 +80,29 @@ internal static partial class HostCommands
             arguments,
             "serve-port",
             options.DataDirectory);
-        try { servePath = ExplorerServer.NormalizeRequestedPath(servePath); }
-        catch (InvalidOperationException exception) { throw new CliUsageException(exception.Message); }
+
+        try
+        {
+            servePath = ExplorerServer.NormalizeRequestedPath(servePath);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new CliUsageException(exception.Message);
+        }
+
         if (await ControlClient.TryRunHostCommandAsync(arguments, output, cancellationToken).ConfigureAwait(false) is { } reused)
+        {
             return reused;
+        }
+
         var start = await AcquireHostLockAsync(arguments, output, options.DataDirectory, cancellationToken).ConfigureAwait(false);
         using var dataLock = start.DataLock;
-        if (dataLock is null) return start.ExitCode;
+
+        if (dataLock is null)
+        {
+            return start.ExitCode;
+        }
+
         using var hostShutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var access = new CliLocalHostAccess();
         await using var server = noServe ? null : new CliLocalHostServer(servePort, servePath, access,
@@ -86,11 +111,22 @@ internal static partial class HostCommands
                 // Preserve this host's explicit credential-store configuration.
                 var loginOptions = new List<string> { "auth", "login", "--data-dir", options.DataDirectory };
                 loginOptions.AddRange(["--return-url", returnUrl.AbsoluteUri]);
+
                 foreach (var option in new[] { "secret-store-file", "secret-key-file" })
-                    if (arguments.GetOption(option) is { } value) loginOptions.AddRange(["--" + option, value]);
+                {
+                    if (arguments.GetOption(option) is { } value)
+                    {
+                        loginOptions.AddRange(["--" + option, value]);
+                    }
+                }
+
                 var loginArguments = CliArguments.Parse(loginOptions.ToArray());
                 var code = await AuthCommands.RunAsync(loginArguments, output, token).ConfigureAwait(false);
-                if (code != CliExitCodes.Success) throw new InvalidOperationException("Sign-in failed.");
+
+                if (code != CliExitCodes.Success)
+                {
+                    throw new InvalidOperationException("Sign-in failed.");
+                }
             }, hostShutdown.Token);
         var updateAvailable = await CliUpdateSuggestion.IsUpdateAvailableAsync(hostShutdown.Token).ConfigureAwait(false);
         await using var desktopHost = await CliDesktopHost.TryStartAsync(server?.Url, updateAvailable,
@@ -100,81 +136,123 @@ internal static partial class HostCommands
         await using var controlServer = new ControlServer(null, options.DataDirectory, hostShutdown.Token,
             authorizer, stopHost: hostShutdown.Cancel, startupArguments: arguments);
         controlServer.Start();
+
         if (arguments.HasFlag("open") && server is not null)
         {
             var warning = CliBrowserLauncher.TryOpen(server.Url);
-            if (warning is not null) output.WriteProgress(warning);
+
+            if (warning is not null)
+            {
+                output.WriteProgress(warning);
+            }
         }
 
         try
         {
             string? lastFailureReason = null;
+
             while (!hostShutdown.IsCancellationRequested)
             {
                 access.BeginCheck();
+
                 AccessDecision failure;
+
                 try
                 {
                     await using var lease = await CliAccessLease.CreateAsync(authorizer, hostShutdown.Token, timeProvider)
                         .ConfigureAwait(false);
                     using var accessContext = CliAccessContext.Push(authorizer, lease);
                     lastFailureReason = null;
+
                     try
                     {
                         await RunHostGenerationAsync(arguments, output, lease.Token, options, noServe, pairAppId,
                             requestedCompanionMode, access, server, lease, desktopHost, accessNotifications, controlServer).ConfigureAwait(false);
                     }
-                    catch (OperationCanceledException) when (lease.IsDenied) { }
+                    catch (OperationCanceledException) when (lease.IsDenied)
+                    {
+                    }
+
                     failure = lease.Failure;
                 }
-                catch (CliAccessDeniedException exception) { failure = exception.Decision; }
-                catch (OperationCanceledException) when (hostShutdown.IsCancellationRequested) { break; }
+                catch (CliAccessDeniedException exception)
+                {
+                    failure = exception.Decision;
+                }
+                catch (OperationCanceledException) when (hostShutdown.IsCancellationRequested)
+                {
+                    break;
+                }
                 catch (Exception exception) when (exception is not CliUsageException)
                 {
                     output.WriteProgress($"Host recovery: {exception.GetBaseException().Message}");
                     failure = AccessDecision.Unavailable;
                 }
-                if (hostShutdown.IsCancellationRequested) break;
+
+                if (hostShutdown.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 access.Block(failure);
                 await CliRuntime.WriteRecoveryMetadataAsync(options.DataDirectory, server?.Url,
                     CliLogging.CurrentLogFilePath, hostShutdown.Token, controlServer.PipeName).ConfigureAwait(false);
                 await accessNotifications.UpdateAsync(failure, hostShutdown.Token).ConfigureAwait(false);
+
                 if (lastFailureReason != failure.Reason)
+                {
                     output.WriteProgress($"{failure.Message} The host remains available. Explorer: {server?.Url}");
+                }
+
                 lastFailureReason = failure.Reason;
                 await access.WaitForRetryAsync(timeProvider, hostShutdown.Token).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (hostShutdown.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (hostShutdown.IsCancellationRequested)
+        {
+        }
         finally
         {
             await hostShutdown.CancelAsync().ConfigureAwait(false);
             await desktopActions.ConfigureAwait(false);
             CliRuntime.TryDeleteMetadata(options.DataDirectory);
         }
+
         return CliExitCodes.Success;
     }
 
     internal static async Task RunDesktopActionsAsync(CliDesktopHost? desktopHost, CliArguments arguments,
         CliOutput output, CancellationTokenSource shutdown)
     {
-        if (desktopHost is null) return;
+        if (desktopHost is null)
+        {
+            return;
+        }
+
         try
         {
             while (!shutdown.IsCancellationRequested)
             {
                 var action = await desktopHost.WaitForRequestedActionAsync(shutdown.Token).ConfigureAwait(false);
+
                 if (action == CliDesktopRequestedAction.Update)
                 {
                     var available = await TryApplyDesktopUpdateAsync(output, shutdown.Token).ConfigureAwait(false);
                     await desktopHost.SetUpdateAvailableAsync(available, shutdown.Token).ConfigureAwait(false);
                     continue;
                 }
-                if (action == CliDesktopRequestedAction.Restart) StartDesktopRestartWaiter(arguments);
+
+                if (action == CliDesktopRequestedAction.Restart)
+                {
+                    StartDesktopRestartWaiter(arguments);
+                }
+
                 await shutdown.CancelAsync().ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (shutdown.IsCancellationRequested)
+        {
+        }
     }
 
     internal static async Task<int> RunHostGenerationAsync(CliArguments arguments, CliOutput output,
@@ -188,8 +266,14 @@ internal static partial class HostCommands
             ? Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IRemoteRunnerControl>("Runner.CreateControl", [arguments, output, options, runtime, cancellationToken]) : null;
         runtime.RemoteRunnerControl = runnerControl;
         runtime.RemoteRunnerControlFactory = () => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<IRemoteRunnerControl>("Runner.CreateControl", [arguments, output, options, runtime, cancellationToken]);
+
         EventHandler<RemoteRunnerStatusSnapshot>? runnerStatusChanged = null;
-        if (requestedCompanionMode.HasValue) ConfigureCompanionRegistration(runtime, arguments, true);
+
+        if (requestedCompanionMode.HasValue)
+        {
+            ConfigureCompanionRegistration(runtime, arguments, true);
+        }
+
         AttachRuntimeProgress(runtime, output);
         runtime.StatusChanged += (_, status) => output.WriteProgress(status);
 
@@ -201,26 +285,32 @@ internal static partial class HostCommands
         {
             // Subscribe before startup resumes app watches and begins new recordings.
             if (notificationCoordinator is not null)
+            {
                 await notificationCoordinator.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             await runtime.StartAsync(cancellationToken).ConfigureAwait(false);
+
             var companionHost = await TryStartLocalSimulatorHostAsync(
-                    runtime,
-                    options,
-                    requestedCompanionMode,
-                    startForLocalExplorer: !noServe,
-                    output,
-                    cancellationToken)
+                runtime,
+                options,
+                requestedCompanionMode,
+                startForLocalExplorer: !noServe,
+                output,
+                cancellationToken)
                 .ConfigureAwait(false);
             await using var companionHostScope = companionHost;
             var companionAccess = companionHost?.AccessStatus;
             Uri? explorerUrl = null;
+
             if (!noServe)
             {
                 var explorer = await runtime.SessionReplays.StartExplorerAsync(
-                        new SessionExplorerStartRequest(
-                            0, UrlPath: server?.Url.AbsolutePath),
-                        cancellationToken)
+                    new SessionExplorerStartRequest(
+                        0, UrlPath: server?.Url.AbsolutePath),
+                    cancellationToken)
                     .ConfigureAwait(false);
+
                 if (!explorer.IsSuccess || explorer.ExplorerUrl is null)
                 {
                     throw new InvalidOperationException(explorer.Message);
@@ -234,20 +324,23 @@ internal static partial class HostCommands
 
             controlServer.AttachRuntime(runtime,
                 CliAccessContext.Current?.Authorizer
-                ?? throw new InvalidOperationException("Host startup requires a local runtime lifetime."),
+                    ?? throw new InvalidOperationException("Host startup requires a local runtime lifetime."),
                 lease, cancellationToken);
+
             if (desktopHost is not null)
             {
                 runnerStatusChanged = (_, runnerStatus) =>
-                    _ = UpdateDesktopRunnerStatusAsync(desktopHost, runnerStatus, cancellationToken);
+                                _ = UpdateDesktopRunnerStatusAsync(desktopHost, runnerStatus, cancellationToken);
                 runtime.RemoteRunner.StatusChanged += runnerStatusChanged;
                 await desktopHost.SetRunnerStatusAsync(runtime.RemoteRunner.GetSnapshot(), cancellationToken)
                     .ConfigureAwait(false);
             }
+
             if (arguments.HasFlag("runner"))
             {
                 await runnerControl!.StartAsync(cancellationToken).ConfigureAwait(false);
             }
+
             var status = runtime.GetStatusSnapshot();
             await CliRuntime.WriteMetadataAsync(
                 options.DataDirectory,
@@ -257,6 +350,7 @@ internal static partial class HostCommands
                 companionAccess,
                 CliLogging.CurrentLogFilePath,
                 CancellationToken.None).ConfigureAwait(false);
+
             if (notificationCoordinator is not null)
             {
                 await accessNotifications.UpdateAsync(lease.Decision, cancellationToken).ConfigureAwait(false);
@@ -308,17 +402,30 @@ internal static partial class HostCommands
             }
 
             if (!cancellationToken.IsCancellationRequested)
+            {
                 throw new InvalidOperationException("The local host runtime stopped unexpectedly.");
+            }
+
             return CliExitCodes.Success;
         }
         finally
         {
             controlServer.DetachRuntime();
-            if (runnerControl is not null) await runnerControl.StopAsync(CancellationToken.None).ConfigureAwait(false);
+
+            if (runnerControl is not null)
+            {
+                await runnerControl.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
             if (runnerStatusChanged is not null)
+            {
                 runtime.RemoteRunner.StatusChanged -= runnerStatusChanged;
+            }
+
             access.Block(lease.IsDenied ? lease.Failure : AccessDecision.Unavailable);
+
             using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
             try
             {
                 await runtime.StopAsync(stopTimeout.Token).ConfigureAwait(false);
@@ -327,10 +434,10 @@ internal static partial class HostCommands
             {
                 output.WriteProgress("Host shutdown exceeded the 10 second deadline.");
             }
-
         }
     }
-internal static Task RunResidentRunnerAsync(
+
+    internal static Task RunResidentRunnerAsync(
         CliArguments arguments,
         CliOutput output,
         CliRuntimeOptions options,
@@ -346,9 +453,15 @@ internal static Task RunResidentRunnerAsync(
         {
             await desktopHost.SetRunnerStatusAsync(status, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-        catch (IOException) { }
-        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     internal static async Task<bool> TryApplyDesktopUpdateAsync(
@@ -365,24 +478,27 @@ internal static Task RunResidentRunnerAsync(
                 installationState,
                 CliRuntimeIdentifier.Current);
             var status = await service.CheckAsync(
-                    requestedChannel: null,
-                    requestedVersion: null,
-                    requestedBuildNumber: null,
-                    cancellationToken)
+                requestedChannel: null,
+                requestedVersion: null,
+                requestedBuildNumber: null,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!status.IsUpdateAvailable)
             {
                 output.WriteProgress("[update] Ansight is already current.");
+
                 return false;
             }
 
             var result = await new CliInstallerRunner(httpClient, installationState)
                 .ApplyAsync(
-                    status,
-                    UpdateCommands.CreateProgress(output),
-                    cancellationToken)
+                status,
+                UpdateCommands.CreateProgress(output),
+                cancellationToken)
                 .ConfigureAwait(false);
             output.WriteProgress($"[update] {result.Message}");
+
             return false;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -390,10 +506,11 @@ internal static Task RunResidentRunnerAsync(
             throw;
         }
         catch (Exception exception) when (exception is HttpRequestException
-                                           or IOException
-                                           or InvalidOperationException)
+            or IOException
+            or InvalidOperationException)
         {
             output.WriteProgress($"[update.warning] Update failed: {exception.Message}");
+
             return true;
         }
     }
@@ -413,9 +530,10 @@ internal static Task RunResidentRunnerAsync(
             System.Globalization.CultureInfo.InvariantCulture));
         startInfo.Environment[DesktopRestartArgumentsEnvironmentVariable] =
             JsonSerializer.Serialize(arguments.OriginalArguments);
+
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException(
-                                "The Ansight restart helper could not be started.");
+            ?? throw new InvalidOperationException(
+                "The Ansight restart helper could not be started.");
     }
 
     internal static async Task<int> RunDesktopRestartAsync(
@@ -426,10 +544,12 @@ internal static Task RunResidentRunnerAsync(
         arguments.EnsurePositionalCount(
             2,
             "ansight host desktop-restart --previous-pid <pid>");
+
         var previousProcessId = arguments.GetRequiredIntOption(
             "previous-pid",
             minimum: 1,
             maximum: int.MaxValue);
+
         try
         {
             using var previousProcess = Process.GetProcessById(previousProcessId);
@@ -447,28 +567,31 @@ internal static Task RunResidentRunnerAsync(
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
         foreach (var argument in restartArguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
 
         using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException(
-                                "The restarted Ansight host could not be started.");
+            ?? throw new InvalidOperationException(
+                "The restarted Ansight host could not be started.");
         output.WriteProgress("Restarted Ansight.");
+
         return CliExitCodes.Success;
     }
 
     internal static IReadOnlyList<string> ReadDesktopRestartArguments()
     {
         var source = Environment.GetEnvironmentVariable(DesktopRestartArgumentsEnvironmentVariable);
+
         if (!string.IsNullOrWhiteSpace(source))
         {
             try
             {
                 var arguments = JsonSerializer.Deserialize<string[]>(source);
-                if (arguments is { Length: >= 2 }
-                    && string.Equals(arguments[0], "host", StringComparison.OrdinalIgnoreCase)
+
+                if (arguments is { Length: >= 2 } && string.Equals(arguments[0], "host", StringComparison.OrdinalIgnoreCase)
                     && string.Equals(arguments[1], "run", StringComparison.OrdinalIgnoreCase))
                 {
                     return arguments;
@@ -486,12 +609,14 @@ internal static Task RunResidentRunnerAsync(
     {
         var installationState = CliInstallationReceiptStore.Load();
         var executableName = OperatingSystem.IsWindows() ? "ansight.exe" : "ansight";
+
         if (!string.IsNullOrWhiteSpace(installationState.Receipt?.InstallRoot))
         {
             var currentExecutable = Path.Combine(
                 installationState.Receipt.InstallRoot,
                 "current",
                 executableName);
+
             if (File.Exists(currentExecutable))
             {
                 return currentExecutable;
@@ -503,6 +628,7 @@ internal static Task RunResidentRunnerAsync(
             var linkedExecutable = Path.Combine(
                 installationState.Receipt.BinDirectory,
                 executableName);
+
             if (File.Exists(linkedExecutable))
             {
                 return linkedExecutable;
@@ -510,8 +636,8 @@ internal static Task RunResidentRunnerAsync(
         }
 
         return Environment.ProcessPath
-               ?? throw new InvalidOperationException(
-                   "The active Ansight CLI executable could not be located.");
+            ?? throw new InvalidOperationException(
+                "The active Ansight CLI executable could not be located.");
     }
 
     internal static HostPairingStartedOutput IssuePairing(
@@ -527,6 +653,7 @@ internal static Task RunResidentRunnerAsync(
             appId,
             arguments.GetOption("name"),
             arguments.GetOption("duration"));
+
         if (!pairing.IsSuccess || pairing.Invite is null)
         {
             throw new InvalidOperationException(pairing.Message);
@@ -535,6 +662,7 @@ internal static Task RunResidentRunnerAsync(
         var code = runtime.Pairing.CreateCode(
             pairing.Invite.InviteId,
             arguments.GetOption("host-address"));
+
         if (!code.IsSuccess || string.IsNullOrWhiteSpace(code.PairingCode))
         {
             runtime.Pairing.Revoke(pairing.Invite.InviteId);
@@ -543,6 +671,7 @@ internal static Task RunResidentRunnerAsync(
         }
 
         var identity = CliReleaseIdentity.Current;
+
         return new HostPairingStartedOutput(
             "ansight.host-pairing/v1",
             Environment.ProcessId,
@@ -608,12 +737,13 @@ internal static Task RunResidentRunnerAsync(
         var companion = companionAccess is null
             ? string.Empty
             : $"Companion: {FormatCompanionAccessMode(companionAccess.Mode)} ({companionAccess.Status})\n";
+
         return $"Ansight host is running (PID {Environment.ProcessId}).\n"
-               + $"Version: {identity.Version} ({identity.BuildNumber}, {FormatCommitSha(identity.CommitSha)})\n"
-               + explorer
-               + companion
-               + (string.IsNullOrWhiteSpace(logFilePath) ? string.Empty : $"Logs: {logFilePath}\n")
-               + $"Data: {status.BaseFolderPath}";
+            + $"Version: {identity.Version} ({identity.BuildNumber}, {FormatCommitSha(identity.CommitSha)})\n"
+            + explorer
+            + companion
+            + (string.IsNullOrWhiteSpace(logFilePath) ? string.Empty : $"Logs: {logFilePath}\n")
+            + $"Data: {status.BaseFolderPath}";
     }
 
     internal static string BuildHostPairingStartedMessage(HostPairingStartedOutput output)
@@ -622,11 +752,11 @@ internal static Task RunResidentRunnerAsync(
             string.IsNullOrWhiteSpace(output.ExplorerUrl) ? null : new Uri(output.ExplorerUrl),
             output.CompanionAccess,
             output.LogFilePath)}\n\n"
-           + $"{output.Message}\n"
-           + $"Expires: {output.Invite.ExpiresAtUtc:O}\n"
-           + $"Pairing code (one-time credential; keep private):\n{output.Code.PairingCode}\n"
-           + $"QR (scan from the Ansight-enabled Debug app):\n{CliQrTerminalRenderer.Render(output.Code.PairingCode!)}\n"
-           + "Keep this command running. Pairing and live capture status will appear below.";
+            + $"{output.Message}\n"
+            + $"Expires: {output.Invite.ExpiresAtUtc:O}\n"
+            + $"Pairing code (one-time credential; keep private):\n{output.Code.PairingCode}\n"
+            + $"QR (scan from the Ansight-enabled Debug app):\n{CliQrTerminalRenderer.Render(output.Code.PairingCode!)}\n"
+            + "Keep this command running. Pairing and live capture status will appear below.";
 
     internal static int ShowStatus(CliArguments arguments, CliOutput output)
     {
@@ -652,6 +782,7 @@ internal static Task RunResidentRunnerAsync(
             () => isRunning
                 ? BuildHostStatusMessage(metadata!)
                 : "Ansight host is not running.");
+
         return isRunning ? CliExitCodes.Success : CliExitCodes.HostUnavailable;
     }
 
@@ -669,12 +800,14 @@ internal static Task RunResidentRunnerAsync(
         var logs = string.IsNullOrWhiteSpace(metadata.LogFilePath)
             ? string.Empty
             : $"\nLogs: {metadata.LogFilePath}";
+
         return $"Ansight host is running (PID {metadata.ProcessId}).{version}{explorer}{companion}{logs}";
     }
 
     internal static int ShowLogs(CliArguments arguments, CliOutput output)
     {
         arguments.EnsurePositionalCount(2, "ansight host logs");
+
         var options = CliRuntime.ResolveOptions(arguments);
         var metadata = CliRuntime.ReadMetadata(options.DataDirectory);
         var isRunning = metadata is not null && CliRuntime.IsHostProcessRunning(metadata);
@@ -687,6 +820,7 @@ internal static Task RunResidentRunnerAsync(
             logDirectory,
             currentLogFilePath);
         output.Write(result, () => RenderHostLogs(result));
+
         return CliExitCodes.Success;
     }
 
@@ -719,10 +853,11 @@ internal static Task RunResidentRunnerAsync(
         var current = string.IsNullOrWhiteSpace(result.CurrentLogFilePath)
             ? "Current: no persisted CLI-host log has been created yet"
             : $"Current: {result.CurrentLogFilePath}";
+
         return $"Host logs: {result.LogDirectory}\n"
-               + $"{current}\n"
-               + "Captured app logs: ansight session list --has-logs; "
-               + "then ansight session logs <session-id>";
+            + $"{current}\n"
+            + "Captured app logs: ansight session list --has-logs; "
+            + "then ansight session logs <session-id>";
     }
 
     internal static string FormatCommitSha(string? commitSha)
@@ -736,19 +871,27 @@ internal static Task RunResidentRunnerAsync(
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(2, "ansight host stop");
+
         var options = CliRuntime.ResolveOptions(arguments);
         var metadata = CliRuntime.ReadMetadata(options.DataDirectory);
+
         if (metadata is null || !CliRuntime.IsHostProcessRunning(metadata))
         {
             output.Write(new HostStoppedOutput("ansight.host-stop/v1", metadata?.ProcessId ?? 0, true),
                 () => "Ansight host is already stopped.");
+
             return CliExitCodes.Success;
         }
 
         var code = await ControlClient.TryRunHostCommandAsync(arguments, output, cancellationToken).ConfigureAwait(false);
-        if (code is not null && code != CliExitCodes.Success) return code.Value;
+
+        if (code is not null && code != CliExitCodes.Success)
+        {
+            return code.Value;
+        }
 
         var timeoutAtUtc = DateTimeOffset.UtcNow.AddSeconds(10);
+
         while (!HasHostStopped(options.DataDirectory, metadata) && DateTimeOffset.UtcNow < timeoutAtUtc)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
@@ -760,6 +903,7 @@ internal static Task RunResidentRunnerAsync(
             () => stopped
                 ? $"Ansight host PID {metadata.ProcessId} stopped."
                 : $"Ansight host PID {metadata.ProcessId} is still shutting down after 10 seconds. Inspect 'ansight host logs'.");
+
         return stopped ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -838,7 +982,8 @@ internal static Task RunResidentRunnerAsync(
            or unset either setting to use a random path or available port. Explicit --serve-path
            and --serve-port values always take precedence.
            """;
-internal static void ConfigureCompanionRegistration(
+
+    internal static void ConfigureCompanionRegistration(
         RuntimeCoordinator runtime,
         CliArguments arguments,
         bool companionAccessRequested) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<object?>("HostedHostCommands.ConfigureCompanionRegistration", [runtime, arguments, companionAccessRequested]);
@@ -867,6 +1012,7 @@ internal static void ConfigureCompanionRegistration(
         CancellationToken cancellationToken)
     {
         var mode = requestedMode ?? CompanionAccessMode.Disabled;
+
         if (!OperatingSystem.IsMacOS() && requestedMode.HasValue)
         {
             throw new PlatformNotSupportedException(
@@ -876,6 +1022,7 @@ internal static void ConfigureCompanionRegistration(
         var skipLocalControl = !startForLocalExplorer
             && !requestedMode.HasValue
             && mode == CompanionAccessMode.Disabled;
+
         if (skipLocalControl)
         {
             return null;
@@ -884,17 +1031,18 @@ internal static void ConfigureCompanionRegistration(
         try
         {
             return await CliLocalSimulatorHost.StartAsync(
-                    runtime,
-                    CliRuntime.CreateHostOptions(options),
-                    mode,
-                    output.WriteProgress,
-                    cancellationToken)
+                runtime,
+                CliRuntime.CreateHostOptions(options),
+                mode,
+                output.WriteProgress,
+                cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (!requestedMode.HasValue)
         {
             var status = $"Companion access is unavailable: {exception.Message}";
             output.WriteProgress(status);
+
             return null;
         }
     }
@@ -906,5 +1054,4 @@ internal static void ConfigureCompanionRegistration(
             CompanionAccessMode.Always => "always",
             _ => "disabled"
         };
-
 }

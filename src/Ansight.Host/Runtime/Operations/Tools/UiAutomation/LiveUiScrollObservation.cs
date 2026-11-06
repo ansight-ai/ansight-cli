@@ -20,6 +20,7 @@ internal static class LiveUiScrollObservation
             || before.ToolId != after.ToolId
             || before.Viewport is null
             || after.Viewport is null;
+
         if (cannotCompare)
         {
             return Unknown("A complete before/after observation from the same provider was unavailable.");
@@ -27,10 +28,12 @@ internal static class LiveUiScrollObservation
 
         var beforeRoot = target?.Node ?? before.Root;
         var afterRoot = after!.Root;
+
         if (target is not null)
         {
             var matches = LiveUiNodeQuery.PrioritizeActionTargets(
                 LiveUiNodeQuery.Find(after.Root, selector, after.TypeRegistry), after.Payload, after.Viewport!);
+
             if (matches.Count <= selector.Index)
             {
                 return Unknown("The observed scroll container could not be identified after the gesture.");
@@ -41,6 +44,7 @@ internal static class LiveUiScrollObservation
 
         var incomplete = !IsCompleteArea(beforeRoot, before.Payload, before.TypeRegistry)
             || !IsCompleteArea(afterRoot, after.Payload, after.TypeRegistry);
+
         if (incomplete)
         {
             return Unknown("The scroll area's own descendants were truncated; unrelated window truncation is ignored only when this subtree is complete.");
@@ -49,15 +53,18 @@ internal static class LiveUiScrollObservation
         var observation = CompareVisibleContent(beforeRoot, before.TypeRegistry, before.Viewport!,
             afterRoot, after.TypeRegistry, after.Viewport!);
         observation["provider"] = before.ToolId;
+
         return observation;
     }
 
     internal static bool IsCompleteArea(JsonObject root, JsonObject payload, VisualTreeTypeRegistry types)
     {
         var requiresChildCounts = payload["truncated"]?.GetValue<bool>() == true;
+
         foreach (var match in LiveUiNodeQuery.Enumerate(root, types))
         {
             var node = match.Node;
+
             if (node["truncated"]?.GetValue<bool>() == true)
             {
                 return false;
@@ -85,12 +92,14 @@ internal static class LiveUiScrollObservation
     {
         var before = Fingerprint(beforeRoot, beforeTypes, beforeViewport);
         var after = Fingerprint(afterRoot, afterTypes, afterViewport);
+
         if (before is null || after is null)
         {
             return Unknown("The scroll area did not expose enough visible semantic content to verify movement.");
         }
 
         var changed = before.Hash != after.Hash;
+
         return new JsonObject
         {
             ["status"] = changed ? "changed" : "unchanged",
@@ -113,18 +122,21 @@ internal static class LiveUiScrollObservation
         var hasInvalidArea = area is null
             || area.Width <= 0
             || area.Height <= 0;
+
         if (hasInvalidArea)
         {
             return null;
         }
 
         var nodes = new JsonArray();
+
         foreach (var match in LiveUiNodeQuery.Enumerate(root, types))
         {
             var nodeBounds = LiveUiNodeQuery.ReadBounds(match.Node);
             var isVisible = LiveUiNodeQuery.IsEffectivelyVisible(match)
                 && nodeBounds is not null
                 && LiveUiBounds.Intersection(nodeBounds, area!) is not null;
+
             if (!isVisible)
             {
                 continue;
@@ -137,6 +149,7 @@ internal static class LiveUiScrollObservation
                     || automationId is not null
                     || match.Node["value"] is JsonValue
                     || LiveUiNodeQuery.ReadSupportedActions(match.Node, types).Count > 0);
+
             if (!hasSemanticContent)
             {
                 continue;

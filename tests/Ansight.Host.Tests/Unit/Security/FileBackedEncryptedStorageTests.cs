@@ -46,6 +46,7 @@ public sealed class FileBackedEncryptedStorageTests
         var storage = new FileBackedEncryptedStorage(environment.SecureStorageFilePath);
 
         Assert.Equal("legacy-secret", storage.Get("legacy-key"));
+
         var content = File.ReadAllText(environment.SecureStorageFilePath);
         Assert.Contains("ansight.secure-storage/v2", content, StringComparison.Ordinal);
         Assert.DoesNotContain("legacy-secret", content, StringComparison.Ordinal);
@@ -56,6 +57,7 @@ public sealed class FileBackedEncryptedStorageTests
     {
         using var environment = new TestSupport.StorageTestEnvironment();
         File.Delete(environment.SecureStorageFilePath);
+
         var firstKey = RandomNumberGenerator.GetBytes(32);
         var secondKey = RandomNumberGenerator.GetBytes(32);
         var storage = new FileBackedEncryptedStorage(environment.SecureStorageFilePath, firstKey);

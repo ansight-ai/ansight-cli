@@ -21,6 +21,7 @@ public sealed class SimulatorPreviewSession : IDisposable
             deviceUdid,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (handle == IntPtr.Zero)
         {
             throw new SimulatorRtcException(
@@ -33,6 +34,7 @@ public sealed class SimulatorPreviewSession : IDisposable
         get
         {
             ObjectDisposedException.ThrowIf(disposed, this);
+
             return NativeMethods.PreviewViewGetLayer(handle);
         }
     }
@@ -40,25 +42,30 @@ public sealed class SimulatorPreviewSession : IDisposable
     public bool TryGetSurfaceSize(out SimulatorPreviewSurfaceSize surfaceSize)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         if (NativeMethods.PreviewViewGetSurfaceSize(handle, out var width, out var height))
         {
             surfaceSize = new SimulatorPreviewSurfaceSize(width, height);
+
             return true;
         }
 
         surfaceSize = default;
+
         return false;
     }
 
     public bool TryRenderCurrentFrame()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         return NativeMethods.PreviewViewRenderCurrentFrame(handle);
     }
 
     public void SetFramesPerSecond(int framesPerSecond)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         if (framesPerSecond is not (30 or 60))
         {
             throw new ArgumentOutOfRangeException(
@@ -81,6 +88,7 @@ public sealed class SimulatorPreviewSession : IDisposable
     public bool TryGetIsDeviceLocked(out bool isDeviceLocked)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         return NativeMethods.PreviewViewGetIsDeviceLocked(handle, out isDeviceLocked);
     }
 
@@ -92,7 +100,9 @@ public sealed class SimulatorPreviewSession : IDisposable
         }
 
         disposed = true;
+
         var activeHandle = Interlocked.Exchange(ref handle, IntPtr.Zero);
+
         if (activeHandle != IntPtr.Zero)
         {
             NativeMethods.PreviewViewDestroy(activeHandle);
@@ -102,12 +112,14 @@ public sealed class SimulatorPreviewSession : IDisposable
     private static string ReadBuffer(byte[] buffer, string fallback)
     {
         var length = Array.IndexOf(buffer, (byte)0);
+
         if (length < 0)
         {
             length = buffer.Length;
         }
 
         var message = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
 }

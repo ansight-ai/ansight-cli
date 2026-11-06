@@ -65,6 +65,7 @@ internal sealed class GetTouchHeatmapTool : Operation
         properties["columns"] = ToolSchema.Integer("Number of heatmap columns. Defaults to 6, max 100.", nullable: true);
         properties["rows"] = ToolSchema.Integer("Number of heatmap rows. Defaults to 10, max 100.", nullable: true);
         properties["includeEmpty"] = ToolSchema.Boolean("Include cells with zero touches. Defaults to false.", nullable: true);
+
         return properties;
     }
 }

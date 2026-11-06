@@ -14,7 +14,9 @@ public sealed partial class SimulatorAgentServiceTests
         var arguments = new RepositoryTaskCallPayload("{\"automationId\":\"account\"}", 26, false, "input-hash");
         var output = new RepositoryTaskCallPayload("{\"visible\":true}", 16, false, "output-hash");
         var assertion = new RepositoryTaskAssertion("visible", true, "Account is visible", JsonValue.Create(true), JsonValue.Create(true))
-        { Matcher = "expect.toBe" };
+        {
+            Matcher = "expect.toBe"
+        };
         var taskCall = new RepositoryTaskToolCall(1, "ansight_wait_for_ui", DateTimeOffset.UtcNow, 123, false, "Found account.")
         {
             Arguments = arguments,
@@ -41,18 +43,25 @@ public sealed partial class SimulatorAgentServiceTests
         using var service = CreateToolLoadingService(session, gateway);
 
         Assert.False(RepositoryTaskTraceScope.IsEnabled);
-        var result = await service.RunAsync(ToolLoadingRequest("Open account.") with { CaptureTrace = captureTrace });
+
+        var result = await service.RunAsync(ToolLoadingRequest("Open account.") with
+        {
+            CaptureTrace = captureTrace
+        });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(captureTrace, Assert.Single(gateway.TaskTraceStates));
         Assert.False(RepositoryTaskTraceScope.IsEnabled);
+
         var call = Assert.Single(result.Audit.ToolCalls, item => item.CallId == "task");
+
         if (captureTrace)
         {
             Assert.True(call.Result.WasTruncated);
             Assert.Equal(source, call.TaskSource);
             Assert.Equal(taskCall, Assert.Single(call.TaskCalls!));
             Assert.Equal(assertion, Assert.Single(call.TaskAssertions!));
+
             var persisted = JsonSerializer.Deserialize<SimulatorAgentRunAudit>(
                 JsonSerializer.Serialize(result.Audit, JsonUtil.Compact), JsonUtil.Compact)!;
             var restored = Assert.Single(Assert.Single(persisted.ToolCalls, item => item.CallId == "task").TaskCalls!);
@@ -62,6 +71,7 @@ public sealed partial class SimulatorAgentServiceTests
             Assert.Equal(taskCall.StartedAtUtc, restored.StartedAtUtc);
             Assert.Equal(taskCall.CompletedAtUtc, restored.CompletedAtUtc);
             Assert.Equal("task:1", restored.CorrelationId);
+
             var restoredAssertion = Assert.Single(persisted.ToolCalls.Single(item => item.CallId == "task").TaskAssertions!);
             Assert.True(restoredAssertion.Actual!.GetValue<bool>());
             Assert.Equal("expect.toBe", restoredAssertion.Matcher);

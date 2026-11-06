@@ -19,6 +19,7 @@ internal sealed class FocusedControlStore
     internal void Set(RuntimeFocusedControlSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
         if (string.IsNullOrWhiteSpace(snapshot.SessionId))
         {
             return;
@@ -37,6 +38,7 @@ internal sealed class FocusedControlStore
             if (string.IsNullOrWhiteSpace(sessionId))
             {
                 snapshotsBySessionId.Clear();
+
                 return;
             }
 

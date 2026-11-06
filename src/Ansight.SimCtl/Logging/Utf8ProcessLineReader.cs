@@ -18,17 +18,20 @@ internal static class Utf8ProcessLineReader
         var readBuffer = ArrayPool<byte>.Shared.Rent(ReadBufferSize);
         var lineBuffer = new ArrayBufferWriter<byte>();
         var isDiscardingOversizedLine = false;
+
         try
         {
             while (true)
             {
                 var bytesRead = await stream.ReadAsync(readBuffer, cancellationToken).ConfigureAwait(false);
+
                 if (bytesRead == 0)
                 {
                     break;
                 }
 
                 var consumed = 0;
+
                 for (var index = 0; index < bytesRead; index++)
                 {
                     if (readBuffer[index] != (byte)'\n')
@@ -39,10 +42,10 @@ internal static class Utf8ProcessLineReader
                     if (!isDiscardingOversizedLine)
                     {
                         await HandleLineAsync(
-                                readBuffer.AsMemory(consumed, index - consumed),
-                                lineBuffer,
-                                lineHandler,
-                                cancellationToken)
+                            readBuffer.AsMemory(consumed, index - consumed),
+                            lineBuffer,
+                            lineHandler,
+                            cancellationToken)
                             .ConfigureAwait(false);
                     }
 
@@ -57,6 +60,7 @@ internal static class Utf8ProcessLineReader
                 }
 
                 var remaining = readBuffer.AsSpan(consumed, bytesRead - consumed);
+
                 if (lineBuffer.WrittenCount + remaining.Length > MaximumLineLength)
                 {
                     lineBuffer.Clear();
@@ -87,6 +91,7 @@ internal static class Utf8ProcessLineReader
         if (lineBuffer.WrittenCount == 0)
         {
             await lineHandler(TrimCarriageReturn(lineFragment), cancellationToken).ConfigureAwait(false);
+
             return;
         }
 

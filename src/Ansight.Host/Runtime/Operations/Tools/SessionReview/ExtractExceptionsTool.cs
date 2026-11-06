@@ -75,24 +75,28 @@ internal sealed class ExtractExceptionsTool : Operation
     {
         var properties = SessionInspectionToolSchemas.LogReviewFilterProperties(includeRequiredQuery: false);
         properties["limit"] = ToolSchema.Integer("Maximum number of exception groups to return. Defaults to 50, max 200.", nullable: true);
+
         return properties;
     }
 
     private static ExceptionCandidate? TryBuildCandidate(SessionLogReviewEntry entry)
     {
         var message = entry.Log.Message;
+
         if (string.IsNullOrWhiteSpace(message))
         {
             return null;
         }
 
         var exceptionType = ResolveExceptionType(message, entry.Log.Priority);
+
         if (exceptionType is null)
         {
             return null;
         }
 
         var summary = ResolveSummary(message);
+
         return new ExceptionCandidate(
             entry,
             exceptionType,
@@ -136,6 +140,7 @@ internal sealed class ExtractExceptionsTool : Operation
     private static string? ResolveExceptionType(string message, LogPriority priority)
     {
         var exceptionMatch = exceptionTypePattern.Match(message);
+
         if (exceptionMatch.Success)
         {
             return exceptionMatch.Groups[1].Value;
@@ -172,6 +177,7 @@ internal sealed class ExtractExceptionsTool : Operation
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(value => !stackFramePattern.IsMatch(value))
             ?? message.Trim();
+
         return line.Length <= 500 ? line : string.Concat(line.AsSpan(0, 497), "...");
     }
 
@@ -183,5 +189,4 @@ internal sealed class ExtractExceptionsTool : Operation
 
     private static int CountStackFrames(string message)
         => stackFramePattern.Matches(message).Count;
-
 }

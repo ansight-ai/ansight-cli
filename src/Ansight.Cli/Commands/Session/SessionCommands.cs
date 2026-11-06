@@ -27,21 +27,31 @@ internal static class SessionCommands
         var runtime = lease.Runtime;
         var sessionPosition = action is "screenshot" or "artifact"
             || action == "telemetry" && string.Equals(arguments.Positionals.ElementAtOrDefault(2), "analyze", StringComparison.OrdinalIgnoreCase)
-                ? 3 : 2;
+            ? 3 : 2;
         // These inspection commands read the session directly instead of calling the operation dispatcher.
         using var activity = action is "show" or "logs" or "connectivity" or "network" or "requests" or "metrics"
             or "images" or "screenshots" or "touches" or "trees" or "visual-trees" or "artifacts" or "annotations" or "analyses"
             or "screenshot" or "artifact" or "telemetry"
             ? runtime.Activity.Begin("session." + action, "inspection", arguments.RequirePositional(
                 sessionPosition, "session identifier")) : null;
+
         try
         {
             var exitCode = await RunActionAsync(runtime, action, arguments, output, cancellationToken).ConfigureAwait(false);
             activity?.Complete(exitCode == CliExitCodes.Success ? "succeeded" : "failed");
+
             return exitCode;
         }
-        catch (OperationCanceledException) { activity?.Complete("cancelled"); throw; }
-        catch (Exception exception) { activity?.Complete(exception is CliUsageException ? "rejected" : "failed", errorType: exception.GetType().Name); throw; }
+        catch (OperationCanceledException)
+        {
+            activity?.Complete("cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            activity?.Complete(exception is CliUsageException ? "rejected" : "failed", errorType: exception.GetType().Name);
+            throw;
+        }
     }
 
     private static async Task<int> RunActionAsync(RuntimeCoordinator runtime, string action, CliArguments arguments,
@@ -160,19 +170,31 @@ internal static class SessionCommands
     internal static int Activity(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight session activity <session-id>");
+
         var page = runtime.Activity.Read(arguments.RequirePositional(2, "session identifier"),
             arguments.GetOption("cursor"), arguments.HasFlag("limit") ? arguments.GetRequiredIntOption("limit", 1, 500) : 200);
+
         if (arguments.HasFlag("jsonl"))
         {
-            foreach (var record in page.Records) output.WriteJsonLine(record);
+            foreach (var record in page.Records)
+            {
+                output.WriteJsonLine(record);
+            }
+
             if (page.PersistenceError is not null || page.SkippedRecords > 0 || page.IncompleteTail || page.ImportedHistoryIncomplete || page.CursorExpired || page.RetentionLimited)
+            {
                 output.WriteProgress("Activity history is incomplete; use --json for gap and retention details.");
+            }
         }
-        else output.Write(page, () => string.Join("\n", page.Records.Select(item =>
-            $"{item.TimestampUtc:O} {item.Operation} {item.Outcome ?? item.Phase} [{item.Caller.Kind}: {item.Caller.Name ?? item.Caller.ClientName ?? "unknown"} / {item.Caller.ExecutorAttribution}]"))
-            + $"\nNext cursor: {page.NextCursor ?? "none"}"
-            + (page.RetentionLimited || page.CursorExpired || page.SkippedRecords > 0 || page.IncompleteTail || page.ImportedHistoryIncomplete ? "\nHistory contains a retention or recording gap." : "")
-            + (page.PersistenceError is null ? "" : "\n" + page.PersistenceError));
+        else
+        {
+            output.Write(page, () => string.Join("\n", page.Records.Select(item =>
+                                $"{item.TimestampUtc:O} {item.Operation} {item.Outcome ?? item.Phase} [{item.Caller.Kind}: {item.Caller.Name ?? item.Caller.ClientName ?? "unknown"} / {item.Caller.ExecutorAttribution}]"))
+                + $"\nNext cursor: {page.NextCursor ?? "none"}"
+                + (page.RetentionLimited || page.CursorExpired || page.SkippedRecords > 0 || page.IncompleteTail || page.ImportedHistoryIncomplete ? "\nHistory contains a retention or recording gap." : "")
+                + (page.PersistenceError is null ? "" : "\n" + page.PersistenceError));
+        }
+
         return CliExitCodes.Success;
     }
 
@@ -190,6 +212,7 @@ internal static class SessionCommands
         var sessions = page.Items.Select(item =>
         {
             var session = item.Session;
+
             return new SessionSummaryOutput(
                 session.SessionId,
                 session.AppId,
@@ -210,7 +233,7 @@ internal static class SessionCommands
                 OsName = session.DeviceProfile?.Device?.OsName,
                 OsVersion = session.DeviceProfile?.Device?.OsVersion,
                 IsVirtual = session.DeviceProfile?.Device?.IsVirtual
-                            ?? session.DeviceProfile?.Device?.IsEmulator,
+                    ?? session.DeviceProfile?.Device?.IsEmulator,
                 IsEmulator = session.DeviceProfile?.Device?.IsEmulator
             };
         }).ToArray();
@@ -224,6 +247,7 @@ internal static class SessionCommands
                 page.NextCursor,
                 sessions),
             () => RenderSessionList(sessions, page.NextCursor));
+
         return Task.FromResult(CliExitCodes.Success);
     }
 
@@ -248,6 +272,7 @@ internal static class SessionCommands
         var osNameFilters = arguments.GetOptions("os-name").ToHashSet(StringComparer.OrdinalIgnoreCase);
         var osVersionFilters = arguments.GetOptions("os-version").ToHashSet(StringComparer.OrdinalIgnoreCase);
         var deviceTypeFilters = arguments.GetOptions("device-type").ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         if (arguments.HasFlag("physical"))
         {
             deviceTypeFilters.Add("physical");
@@ -266,6 +291,7 @@ internal static class SessionCommands
         var search = arguments.GetOption("search") ?? arguments.GetOption("contains");
         var fromUtc = ParseOptionalTimestamp(arguments.GetOption("from"), "from");
         var toUtc = ParseOptionalTimestamp(arguments.GetOption("to"), "to");
+
         if (fromUtc.HasValue && toUtc.HasValue && fromUtc.Value > toUtc.Value)
         {
             throw new CliUsageException("--from must be earlier than or equal to --to.");
@@ -290,23 +316,24 @@ internal static class SessionCommands
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var matched = summaries
             .Where(session => string.IsNullOrWhiteSpace(appId)
-                              || string.Equals(session.AppId, appId, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(session.AppId, appId, StringComparison.OrdinalIgnoreCase))
             .Where(session => !connectedOnly || ResolveConnectionState(session.SessionId))
             .Where(session => !fromUtc.HasValue || session.LastUpdatedUtc >= fromUtc.Value)
             .Where(session => !toUtc.HasValue || session.CreatedUtc <= toUtc.Value)
             .Where(session => MatchesSessionFilters(
-                    session,
-                    platformFilters,
-                    formFactorFilters,
-                    osNameFilters,
-                    osVersionFilters,
-                    deviceTypeFilters,
-                    requiredTags,
-                    search,
-                    arguments.HasFlag("has-logs"),
-                    arguments.HasFlag("has-telemetry")))
+                session,
+                platformFilters,
+                formFactorFilters,
+                osNameFilters,
+                osVersionFilters,
+                deviceTypeFilters,
+                requiredTags,
+                search,
+                arguments.HasFlag("has-logs"),
+                arguments.HasFlag("has-telemetry")))
             .OrderByDescending(static session => session.LastUpdatedUtc)
             .ThenBy(static session => session.SessionId, StringComparer.Ordinal)
             .ToArray();
@@ -324,6 +351,7 @@ internal static class SessionCommands
                 session,
                 ResolveConnectionState(session.SessionId)))
             .ToArray();
+
         return new SessionListPage(
             matched.Length,
             limit,
@@ -343,12 +371,13 @@ internal static class SessionCommands
 
         var rows = sessions.Select(session =>
             $"{session.SessionId}\t{session.AppId}\t{session.LastUpdatedUtc:O}\t"
-            + $"{(session.IsPinned ? "pinned" : "unpinned")}\t{FormatByteSize(session.CacheSizeBytes)}");
+                + $"{(session.IsPinned ? "pinned" : "unpinned")}\t{FormatByteSize(session.CacheSizeBytes)}");
         var rendered = string.Join(Environment.NewLine, rows);
+
         return nextCursor is null
             ? rendered
             : rendered + Environment.NewLine
-              + $"More sessions are available. Continue with --cursor {nextCursor}";
+                + $"More sessions are available. Continue with --cursor {nextCursor}";
     }
 
     internal static bool IsAfterSessionListCursor(
@@ -356,9 +385,10 @@ internal static class SessionCommands
         SessionListCursor cursor)
     {
         var timestampComparison = session.LastUpdatedUtc.CompareTo(cursor.LastUpdatedUtc);
+
         return timestampComparison < 0
-               || timestampComparison == 0
-               && StringComparer.Ordinal.Compare(session.SessionId, cursor.SessionId) > 0;
+            || timestampComparison == 0
+                && StringComparer.Ordinal.Compare(session.SessionId, cursor.SessionId) > 0;
     }
 
     internal static string EncodeSessionListCursor(AppSessionSnapshot session)
@@ -368,6 +398,7 @@ internal static class SessionCommands
             "v1",
             session.LastUpdatedUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
             session.SessionId);
+
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(payload))
             .TrimEnd('=')
             .Replace('+', '-')
@@ -386,8 +417,10 @@ internal static class SessionCommands
                 0 => normalized,
                 _ => throw new FormatException("Invalid Base64 URL length.")
             };
+
             var payload = Encoding.UTF8.GetString(Convert.FromBase64String(normalized));
             var parts = payload.Split('\n', 3, StringSplitOptions.None);
+
             if (parts.Length != 3
                 || !string.Equals(parts[0], "v1", StringComparison.Ordinal)
                 || !DateTimeOffset.TryParse(
@@ -422,6 +455,7 @@ internal static class SessionCommands
     {
         var device = snapshot.DeviceProfile?.Device;
         var isVirtual = device?.IsVirtual ?? device?.IsEmulator;
+
         if (platforms.Count > 0 && !platforms.Contains(ResolvePlatform(snapshot))
             || formFactors.Count > 0 && !MatchesFilter(formFactors, device?.FormFactor)
             || osNames.Count > 0 && !MatchesFilter(osNames, device?.OsName)
@@ -434,30 +468,29 @@ internal static class SessionCommands
         }
 
         if (deviceTypes.Count > 0 && !deviceTypes.Any(type => type.ToLowerInvariant() switch
-            {
-                "physical" => isVirtual == false,
-                "virtual" => isVirtual == true,
-                "emulator" or "simulator" => device?.IsEmulator == true,
-                _ => false
-            }))
+{
+    "physical" => isVirtual == false,
+    "virtual" => isVirtual == true,
+    "emulator" or "simulator" => device?.IsEmulator == true,
+    _ => false
+}))
         {
             return false;
         }
 
         return string.IsNullOrWhiteSpace(search)
-               || new[]
-                   {
-                       snapshot.SessionId,
-                       snapshot.AppId,
-                       snapshot.Name,
-                       snapshot.ClientName,
-                       device?.Model,
-                       device?.OsName,
-                       device?.OsVersion
-                   }
-                   .Where(static value => !string.IsNullOrWhiteSpace(value))
-                   .Any(value => value!.Contains(search, StringComparison.OrdinalIgnoreCase))
-               || snapshot.Tags.Any(tag => tag.Contains(search, StringComparison.OrdinalIgnoreCase));
+            || new[]
+            {
+                snapshot.SessionId,
+                snapshot.AppId,
+                snapshot.Name,
+                snapshot.ClientName,
+                device?.Model,
+                device?.OsName,
+                device?.OsVersion
+            }.Where(static value => !string.IsNullOrWhiteSpace(value))
+                .Any(value => value!.Contains(search, StringComparison.OrdinalIgnoreCase))
+            || snapshot.Tags.Any(tag => tag.Contains(search, StringComparison.OrdinalIgnoreCase));
     }
 
     internal static bool MatchesFilter(IReadOnlySet<string> filters, string? value)
@@ -466,6 +499,7 @@ internal static class SessionCommands
     internal static string ResolvePlatform(AppSessionSnapshot snapshot)
     {
         var osName = snapshot.DeviceProfile?.Device?.OsName ?? string.Empty;
+
         if (osName.Contains("android", StringComparison.OrdinalIgnoreCase))
         {
             return "android";
@@ -509,11 +543,14 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session show <session-id>");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var session = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken).ConfigureAwait(false);
+
         if (session is null)
         {
             output.WriteError("session_not_found", $"Session '{sessionId}' was not found.", CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
@@ -523,15 +560,16 @@ internal static class SessionCommands
                 session,
                 runtime.IsSessionLive(session.SessionId)),
             () => $"Session: {session.SessionId}\n"
-                  + $"App: {session.AppId}\n"
-                  + $"Client: {session.ClientName}\n"
-                  + $"Status: {session.Status}\n"
-                  + $"Connected: {runtime.IsSessionLive(session.SessionId)}\n"
-                  + $"Pinned: {session.IsPinned}\n"
-                  + $"Cache: {FormatByteSize(session.CacheSizeBytes)}\n"
-                  + $"Logs: {session.TotalLogCount}\n"
-                  + $"Metrics: {session.TotalMetricSampleCount}\n"
-                  + $"Images: {session.TotalImageCount}");
+                + $"App: {session.AppId}\n"
+                + $"Client: {session.ClientName}\n"
+                + $"Status: {session.Status}\n"
+                + $"Connected: {runtime.IsSessionLive(session.SessionId)}\n"
+                + $"Pinned: {session.IsPinned}\n"
+                + $"Cache: {FormatByteSize(session.CacheSizeBytes)}\n"
+                + $"Logs: {session.TotalLogCount}\n"
+                + $"Metrics: {session.TotalMetricSampleCount}\n"
+                + $"Images: {session.TotalImageCount}");
+
         return CliExitCodes.Success;
     }
 
@@ -539,6 +577,7 @@ internal static class SessionCommands
     {
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var result = runtime.SessionEditing.Delete(sessionId);
+
         return WriteOperation("delete", sessionId, result, output);
     }
 
@@ -547,6 +586,7 @@ internal static class SessionCommands
         var action = arguments.Positionals.Count >= 3
             ? arguments.Positionals[2].ToLowerInvariant()
             : "status";
+
         if (action is not ("status" or "plan" or "prune" or "compact"))
         {
             throw new CliUsageException(
@@ -556,6 +596,7 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             action == "status" && arguments.Positionals.Count == 2 ? 2 : 3,
             "ansight session cache status|plan|prune|compact [options]");
+
         if (action != "prune" && arguments.HasFlag("apply"))
         {
             throw new CliUsageException("--apply is only valid with 'ansight session cache prune'.");
@@ -586,6 +627,7 @@ internal static class SessionCommands
                         session.SessionId,
                         item.SessionId,
                         StringComparison.Ordinal));
+
                 if (current is null)
                 {
                     failures.Add(new SessionCacheFailureOutput(
@@ -603,6 +645,7 @@ internal static class SessionCommands
                 }
 
                 var result = runtime.SessionEditing.Delete(item.SessionId);
+
                 if (result.IsSuccess)
                 {
                     deletedSessionIds.Add(item.SessionId);
@@ -626,6 +669,7 @@ internal static class SessionCommands
             deletedSessionIds,
             failures);
         output.Write(resultOutput, () => RenderCacheResult(resultOutput));
+
         return failures.Count == 0 ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -652,16 +696,18 @@ internal static class SessionCommands
         output.Write(
             result,
             () => $"Compacted {compactedSessionCount} "
-                  + $"{(compactedSessionCount == 1 ? "session" : "sessions")} "
-                  + $"at least {compactionAgeDays} days old.{Environment.NewLine}"
-                  + $"Current cache: {FormatByteSize(resultingCacheSizeBytes)}.");
+                + $"{(compactedSessionCount == 1 ? "session" : "sessions")} "
+                + $"at least {compactionAgeDays} days old.{Environment.NewLine}"
+                + $"Current cache: {FormatByteSize(resultingCacheSizeBytes)}.");
+
         return CliExitCodes.Success;
     }
 
     internal static long ParseMaximumCacheSize(CliArguments arguments)
     {
         var source = arguments.GetOption("max-cache")
-                     ?? arguments.GetOption("max-cache-size");
+            ?? arguments.GetOption("max-cache-size");
+
         return source is null
             ? SessionCleanupPreferenceDefaults.MaximumCacheBytes
             : ByteSizeParser.Parse(
@@ -683,6 +729,7 @@ internal static class SessionCommands
 
         lines.AddRange(plan.Items.Select(item =>
             $"{item.SessionId}\t{item.Reason}\t{FormatByteSize(item.CacheSizeBytes)}\t{item.CreatedUtc:O}"));
+
         if (result.Operation == "prune" && !result.Applied)
         {
             lines.Add("Dry run only. Re-run with --apply to delete these unpinned, inactive sessions.");
@@ -695,6 +742,7 @@ internal static class SessionCommands
 
         lines.AddRange(result.Failures.Select(failure =>
             $"Failed: {failure.SessionId}: {failure.Message}"));
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -724,9 +772,11 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session logs <session-id> [--limit <count>] [--contains <text>] [--stream <id>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -740,13 +790,13 @@ internal static class SessionCommands
         var endUtc = ParseOptionalTimestamp(arguments.GetOption("end"), "end");
         var minimumPriority = ParseOptionalLogPriority(
             arguments.GetOption("minimum-priority")
-            ?? arguments.GetOption("minimum-severity")
-            ?? arguments.GetOption("severity"));
+                ?? arguments.GetOption("minimum-severity")
+                ?? arguments.GetOption("severity"));
         var exactPriority = ParseOptionalLogPriority(arguments.GetOption("priority"));
         var limit = arguments.GetIntOption("limit", 200, 1, 10_000);
         var logs = snapshot.Logs
             .Where(log => string.IsNullOrWhiteSpace(contains)
-                          || log.Message.Contains(contains, StringComparison.OrdinalIgnoreCase))
+                || log.Message.Contains(contains, StringComparison.OrdinalIgnoreCase))
             .Where(log => streams.Count == 0 || streams.Contains(log.StreamId))
             .Where(log => tags.Count == 0 || tags.Contains(log.Tag))
             .Where(log => sources.Count == 0 || sources.Contains(log.Source))
@@ -769,6 +819,7 @@ internal static class SessionCommands
                     Environment.NewLine,
                     logs.Select(log =>
                         $"{log.TimestampUtc:O}\t{log.Priority}\t{log.StreamId}\t{log.Message}")));
+
         return CliExitCodes.Success;
     }
 
@@ -780,10 +831,10 @@ internal static class SessionCommands
         }
 
         if (DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var parsed))
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed))
         {
             return parsed.ToUniversalTime();
         }
@@ -794,16 +845,25 @@ internal static class SessionCommands
     internal static async Task<int> ConnectivityAsync(RuntimeCoordinator runtime, CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
     {
         if (arguments.Positionals.Count is < 3 or > 4)
+        {
             throw new ArgumentException("Usage: ansight session connectivity <session-id> [summary|events|quality|timeline|at] [--from <time>] [--to <time>] [--offset <time>] [--limit <n>] [--cursor <cursor>] [--json]");
+        }
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken).ConfigureAwait(false);
-        if (snapshot is null) return WriteSessionNotFound(sessionId, output);
+
+        if (snapshot is null)
+        {
+            return WriteSessionNotFound(sessionId, output);
+        }
+
         var mode = arguments.Positionals.Count == 4 ? arguments.RequirePositional(3, "connectivity action").ToLowerInvariant() : "summary";
         var origin = snapshot.CreatedUtc;
         var from = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("from"), origin);
         var to = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("to"), origin);
         var at = Ansight.Host.Connectivity.SessionConnectivity.ParseTime(arguments.GetOption("offset") ?? arguments.GetOption("at"), origin);
         var annotationId = arguments.GetOption("annotation");
+
         if (annotationId is not null)
         {
             var annotation = snapshot.Annotations.FirstOrDefault(value => value.AnnotationId == annotationId)
@@ -812,9 +872,11 @@ internal static class SessionCommands
             from ??= annotation.StartUtc.AddSeconds(-arguments.GetIntOption("before", 120, 1, 3600));
             to ??= (annotation.EndUtc ?? annotation.StartUtc).AddSeconds(arguments.GetIntOption("after", 30, 1, 3600));
         }
+
         var payload = Ansight.Host.Connectivity.SessionConnectivity.Query(snapshot, mode, from, to, at,
             arguments.GetOption("kind"), arguments.GetIntOption("limit", 200, 1, 1000), arguments.GetOption("cursor"));
         output.Write(payload, () => payload.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
         return 0;
     }
 
@@ -827,9 +889,11 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session network <session-id> [--method <method>] [--status <code|class>] [--host <host>] [--contains <text>] [--failed] [--bodies] [--limit <count>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -847,12 +911,12 @@ internal static class SessionCommands
         var limit = arguments.GetIntOption("limit", 200, 1, 10_000);
         var matched = snapshot.NetworkRequests
             .Where(request => string.IsNullOrWhiteSpace(requestId)
-                              || string.Equals(request.Id, requestId, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(request.Id, requestId, StringComparison.OrdinalIgnoreCase))
             .Where(request => methods.Count == 0 || methods.Contains(request.Method))
             .Where(request => statuses.Length == 0 || statuses.Any(status => SessionNetworkRequestFilter.MatchesStatus(request, status)))
             .Where(request => string.IsNullOrWhiteSpace(host) || SessionNetworkRequestFilter.MatchesHost(request.Url, host))
             .Where(request => string.IsNullOrWhiteSpace(contains)
-                              || SessionNetworkRequestFilter.MatchesQuery(request, contains))
+                || SessionNetworkRequestFilter.MatchesQuery(request, contains))
             .Where(request => !startUtc.HasValue || request.StartedAtUtc >= startUtc.Value)
             .Where(request => !endUtc.HasValue || request.StartedAtUtc <= endUtc.Value)
             .Where(request => !failedOnly || SessionNetworkRequestFilter.IsFailed(request))
@@ -872,17 +936,19 @@ internal static class SessionCommands
                 : string.Join(
                     Environment.NewLine,
                     requests.Select(request => FormatNetworkRequest(request, includeBodies))));
+
         return CliExitCodes.Success;
     }
 
     internal static string FormatNetworkStatus(SessionNetworkRequest request)
         => request.StatusCode?.ToString(CultureInfo.InvariantCulture)
-           ?? (!string.IsNullOrWhiteSpace(request.ErrorType) ? "ERROR" : "NO_RESPONSE");
+            ?? (!string.IsNullOrWhiteSpace(request.ErrorType) ? "ERROR" : "NO_RESPONSE");
 
     internal static string FormatNetworkRequest(SessionNetworkRequest request, bool includeBodies)
     {
         var summary = FormattableString.Invariant(
             $"{request.StartedAtUtc:O}\t{request.Method}\t{FormatNetworkStatus(request)}\t{request.DurationMilliseconds:0.0}ms\t{request.Url}");
+
         if (!includeBodies)
         {
             return summary;
@@ -911,6 +977,7 @@ internal static class SessionCommands
         var size = total is null
             ? body.CapturedBytes.ToString(CultureInfo.InvariantCulture)
             : $"{body.CapturedBytes.ToString(CultureInfo.InvariantCulture)}/{total.Value.ToString(CultureInfo.InvariantCulture)}";
+
         return $"  {label} body ({body.Encoding}, {size} bytes{(body.Truncated ? ", truncated" : string.Empty)}):{Environment.NewLine}{body.Data}";
     }
 
@@ -948,15 +1015,18 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session metrics <session-id> [--limit <count>] [--channel <id>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
         }
 
         byte? channelId = null;
+
         if (arguments.GetOption("channel") is { } channelValue)
         {
             if (!byte.TryParse(channelValue, out var parsedChannel))
@@ -989,6 +1059,7 @@ internal static class SessionCommands
                     Environment.NewLine,
                     samples.Select(sample =>
                         $"{sample.CapturedAtUtc:O}\t{sample.ChannelId}\t{sample.Value}\tsegment={sample.SegmentId}")));
+
         return CliExitCodes.Success;
     }
 
@@ -999,7 +1070,7 @@ internal static class SessionCommands
         CancellationToken cancellationToken)
     {
         return arguments.Positionals.Count >= 3
-               && string.Equals(arguments.Positionals[2], "analyze", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(arguments.Positionals[2], "analyze", StringComparison.OrdinalIgnoreCase)
             ? AnalyzeTelemetryAsync(runtime, arguments, output, cancellationToken)
             : MetricsAsync(runtime, arguments, output, cancellationToken);
     }
@@ -1013,9 +1084,11 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session telemetry analyze <session-id> [--kind <all|fps-drop|memory-spike>] [--memory-min-percent <percent>] [--memory-min-mb <megabytes>] [--max-events <count>] [--fail-on-detection]");
+
         var sessionId = arguments.RequirePositional(3, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -1062,10 +1135,10 @@ internal static class SessionCommands
             minimumIncreaseMegabytes);
         var memorySpikes = selection is TelemetryAnalysisSelection.All or TelemetryAnalysisSelection.MemorySpike
             ? analysisService.AnalyzeMemorySpikes(
-                    snapshot.Metrics,
-                    snapshot.MetricChannels,
-                    memoryOptions,
-                    cancellationToken)
+                snapshot.Metrics,
+                snapshot.MetricChannels,
+                memoryOptions,
+                cancellationToken)
                 .OrderByDescending(static detection => detection.SeverityScore)
                 .ThenBy(static detection => detection.StartUtc)
                 .Take(maximumEventsPerKind)
@@ -1136,6 +1209,7 @@ internal static class SessionCommands
             $"{detection.FocusUtc:O}\tfps-drop\t{detection.ChannelName}\t{detection.BaselineFps} -> {detection.MinimumFps} FPS\tdrop={detection.DropFps}\tseverity={detection.Severity}")));
         lines.AddRange(result.MemorySpikes.Select(static detection => FormattableString.Invariant(
             $"{detection.FocusUtc:O}\tmemory-spike\t{detection.ChannelName}\t+{detection.DeltaBytes / (1024d * 1024d):0.#} MB\tdelta={detection.DeltaPercent:0.#}%\tseverity={detection.Severity}")));
+
         return lines.Count == 0
             ? "No FPS drops or memory spikes detected."
             : string.Join(Environment.NewLine, lines.Order(StringComparer.Ordinal));
@@ -1152,9 +1226,11 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             $"ansight session {collectionName} <session-id> [--limit <count>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -1174,8 +1250,9 @@ internal static class SessionCommands
                 ? Commands.ArtifactComparison.ArtifactCommands.FormatList(new ArtifactListResult(
                     "ansight.artifact-list/v1", items.Cast<SessionArtifactSnapshot>().Select(item => ArtifactComparisonService.Describe(snapshot, item)).ToArray(), allItems.Count, null))
                 : items.Length == 0
-                ? $"No {collectionName} found."
-                : $"{items.Length} of {allItems.Count} {collectionName}. Use --json for structured details.");
+                    ? $"No {collectionName} found."
+                    : $"{items.Length} of {allItems.Count} {collectionName}. Use --json for structured details.");
+
         return CliExitCodes.Success;
     }
 
@@ -1188,6 +1265,7 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight session metadata <session-id> [--name <name>] [--tag <tag>] [--pin|--unpin]");
+
         if (arguments.HasFlag("pin") && arguments.HasFlag("unpin"))
         {
             throw new CliUsageException("Use only one of --pin or --unpin.");
@@ -1196,6 +1274,7 @@ internal static class SessionCommands
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var snapshot = await runtime.Sessions.LoadSnapshotAsync(sessionId, null, cancellationToken)
             .ConfigureAwait(false);
+
         if (snapshot is null)
         {
             return WriteSessionNotFound(sessionId, output);
@@ -1220,6 +1299,7 @@ internal static class SessionCommands
             tags,
             notes,
             arguments.GetOption("name") ?? snapshot.Name);
+
         return WriteOperation("metadata", sessionId, result, output);
     }
 
@@ -1229,6 +1309,7 @@ internal static class SessionCommands
             "session_not_found",
             $"Session '{sessionId}' was not found.",
             CliExitCodes.Failure);
+
         return CliExitCodes.Failure;
     }
 
@@ -1236,6 +1317,7 @@ internal static class SessionCommands
     {
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var result = runtime.AppTools.ForceDisconnect(sessionId);
+
         return WriteOperation("disconnect", sessionId, result, output);
     }
 
@@ -1248,6 +1330,7 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session export <session-id> <output.zip> [--exclude-native-logs] [--sanitize] [--sanitizer <module.ts>]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var outputPath = Path.GetFullPath(arguments.RequirePositional(3, "archive output path"));
         var sanitizerModulePath = ResolveSanitizerModulePath(arguments);
@@ -1270,6 +1353,7 @@ internal static class SessionCommands
                 sessionId,
                 outputPath),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -1282,6 +1366,7 @@ internal static class SessionCommands
         arguments.EnsurePositionalCount(
             4,
             "ansight session sanitize <session-id> <output.zip> [--sanitizer <module.ts>] [--exclude-native-logs]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var outputPath = Path.GetFullPath(arguments.RequirePositional(3, "archive output path"));
         var sanitizerModulePath = ResolveSanitizerModulePath(arguments);
@@ -1304,6 +1389,7 @@ internal static class SessionCommands
                 sessionId,
                 outputPath),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -1317,15 +1403,18 @@ internal static class SessionCommands
             && string.Equals(arguments.Positionals[2], "stop", StringComparison.OrdinalIgnoreCase))
         {
             arguments.EnsurePositionalCount(4, "ansight session serve stop <session-id>");
+
             var stoppedSessionId = arguments.RequirePositional(3, "session identifier");
             var stopResult = await runtime.SessionReplays.StopAsync(stoppedSessionId, cancellationToken)
                 .ConfigureAwait(false);
+
             return WriteOperation("serve-stop", stoppedSessionId, stopResult, output);
         }
 
         arguments.EnsurePositionalCount(
             3,
             "ansight session serve <session-id> [--port <port>] [--open]");
+
         var sessionId = arguments.RequirePositional(2, "session identifier");
         var result = await runtime.SessionReplays.StartAsync(
             new SessionReplayStartRequest(
@@ -1334,6 +1423,7 @@ internal static class SessionCommands
             cancellationToken).ConfigureAwait(false);
         var isResidentHost = CliCommandContext.Current is not null;
         string? openWarning = null;
+
         if (result.IsSuccess && result.ReplayUrl is not null && arguments.HasFlag("open"))
         {
             openWarning = CliBrowserLauncher.TryOpen(result.ReplayUrl);
@@ -1350,6 +1440,7 @@ internal static class SessionCommands
                 result.WasAlreadyRunning,
                 isResidentHost),
             () => BuildServeMessage(result, isResidentHost, openWarning));
+
         if (!result.IsSuccess)
         {
             return CliExitCodes.Failure;
@@ -1390,25 +1481,29 @@ internal static class SessionCommands
         var warning = string.IsNullOrWhiteSpace(openWarning)
             ? string.Empty
             : $"\nBrowser warning: {openWarning}";
+
         return $"{result.Message}\nReplay: {result.ReplayUrl}\n{lifetime}{warning}";
     }
-internal static Task<int> ShareAsync(
+
+    internal static Task<int> ShareAsync(
         RuntimeCoordinator runtime,
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CloudSessionCommands.ShareAsync", [runtime, arguments, output, cancellationToken]);
-internal static Task<int> ShareBatchAsync(
+
+    internal static Task<int> ShareBatchAsync(
         RuntimeCoordinator runtime,
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CloudSessionCommands.ShareBatchAsync", [runtime, arguments, output, cancellationToken]);
 
-internal static Task<int> ShareUrlAsync(
+    internal static Task<int> ShareUrlAsync(
         RuntimeCoordinator runtime,
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CloudSessionCommands.ShareUrlAsync", [runtime, arguments, output, cancellationToken]);
-internal static Task<int> SummaryAsync(
+
+    internal static Task<int> SummaryAsync(
         RuntimeCoordinator runtime,
         CliArguments arguments,
         CliOutput output,
@@ -1423,6 +1518,7 @@ internal static Task<int> SummaryAsync(
         arguments.EnsurePositionalCount(
             3,
             "ansight session import <archive.zip> [--password-env <NAME>]");
+
         var archivePath = Path.GetFullPath(arguments.RequirePositional(2, "archive path"));
         var password = arguments.GetOption("password-env") is { Length: > 0 } passwordVariable
             ? Environment.GetEnvironmentVariable(passwordVariable)
@@ -1440,6 +1536,7 @@ internal static Task<int> SummaryAsync(
                 result.ImportedSession?.SessionId,
                 archivePath),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
@@ -1457,24 +1554,28 @@ internal static Task<int> SummaryAsync(
                 result.IsSuccess,
                 result.Message),
             () => result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
     internal static string? ResolveSanitizerModulePath(CliArguments arguments)
     {
         var modulePath = arguments.GetOption("sanitizer") ?? arguments.GetOption("policy");
+
         if (string.IsNullOrWhiteSpace(modulePath))
         {
             return null;
         }
 
         var absolutePath = Path.GetFullPath(modulePath);
+
         if (!File.Exists(absolutePath))
         {
             throw new CliUsageException($"Sanitizer module '{absolutePath}' was not found.");
         }
 
         var extension = Path.GetExtension(absolutePath);
+
         if (!extension.Equals(".ts", StringComparison.OrdinalIgnoreCase))
         {
             throw new CliUsageException("Sanitizer modules must use .ts.");
@@ -1676,12 +1777,4 @@ internal static Task<int> SummaryAsync(
            are available through `ansight app tools`, `ansight app call`, and `ansight ui`.
            Find session IDs with `ansight session list`; add `--connected` for live sessions only.
            """;
-
-}
-
-internal enum TelemetryAnalysisSelection
-{
-    All,
-    FpsDrop,
-    MemorySpike
 }

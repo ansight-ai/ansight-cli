@@ -24,7 +24,10 @@ internal static class SessionEvidencePayloads
             ["byteCount"] = frame.ByteCount
         };
 
-        if (frame.Geometry is not null) payload["geometry"] = frame.Geometry.DeepClone();
+        if (frame.Geometry is not null)
+        {
+            payload["geometry"] = frame.Geometry.DeepClone();
+        }
 
         if (!string.IsNullOrWhiteSpace(localPath))
         {
@@ -108,6 +111,7 @@ internal static class SessionEvidencePayloads
         IReadOnlyDictionary<byte, SessionMetricChannel> channelMap)
     {
         channelMap.TryGetValue(sample.ChannelId, out var channel);
+
         return new JsonObject
         {
             ["capturedAtUtc"] = sample.CapturedAtUtc,

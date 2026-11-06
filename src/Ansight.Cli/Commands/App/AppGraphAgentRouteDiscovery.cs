@@ -11,9 +11,34 @@ internal static class AppGraphAgentRouteDiscovery
     private const int MaximumBindingsPerTransition = 3;
     private static readonly HashSet<string> stopWords = new(StringComparer.Ordinal)
     {
-        "a", "an", "and", "app", "at", "be", "by", "can", "do", "for", "from", "in", "into",
-        "is", "it", "of", "on", "open", "or", "screen", "select", "tap", "the", "then", "to",
-        "use", "wait", "with"
+        "a",
+        "an",
+        "and",
+        "app",
+        "at",
+        "be",
+        "by",
+        "can",
+        "do",
+        "for",
+        "from",
+        "in",
+        "into",
+        "is",
+        "it",
+        "of",
+        "on",
+        "open",
+        "or",
+        "screen",
+        "select",
+        "tap",
+        "the",
+        "then",
+        "to",
+        "use",
+        "wait",
+        "with"
     };
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -29,10 +54,12 @@ internal static class AppGraphAgentRouteDiscovery
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentNullException.ThrowIfNull(instructions);
+
         if (!isEnabled)
         {
             return AppGraphAgentRouteDiscoveryResult.Empty;
         }
+
         if (!teamId.HasValue || teamId.Value == Guid.Empty)
         {
             return AppGraphAgentRouteDiscoveryResult.Unavailable(
@@ -41,6 +68,7 @@ internal static class AppGraphAgentRouteDiscovery
 
         var appsResult = await catalog.ListRegisteredAppsAsync(teamId.Value, cancellationToken)
             .ConfigureAwait(false);
+
         if (!appsResult.IsSuccess)
         {
             return AppGraphAgentRouteDiscoveryResult.Unavailable(appsResult.Message);
@@ -48,7 +76,8 @@ internal static class AppGraphAgentRouteDiscovery
 
         var registeredApp = appsResult.Apps.FirstOrDefault(app =>
             app.TeamId == teamId.Value
-            && string.Equals(app.AppId, appId, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(app.AppId, appId, StringComparison.OrdinalIgnoreCase));
+
         if (registeredApp is null)
         {
             return AppGraphAgentRouteDiscoveryResult.Unavailable(
@@ -57,6 +86,7 @@ internal static class AppGraphAgentRouteDiscovery
 
         var graphsResult = await catalog.ListAppGraphsAsync(teamId.Value, cancellationToken)
             .ConfigureAwait(false);
+
         if (!graphsResult.IsSuccess)
         {
             return AppGraphAgentRouteDiscoveryResult.Unavailable(graphsResult.Message);
@@ -66,10 +96,10 @@ internal static class AppGraphAgentRouteDiscovery
             !string.IsNullOrWhiteSpace(instruction)));
         var availableGraphs = graphsResult.Graphs
             .Where(graph => graph.TeamId == teamId.Value
-                            && graph.TeamAppId == registeredApp.Id
-                            && (requirePublished
-                                ? graph.PublishedVersionId.HasValue
-                                : graph.CurrentVersionId.HasValue || graph.PublishedVersionId.HasValue))
+                && graph.TeamAppId == registeredApp.Id
+                && (requirePublished
+                    ? graph.PublishedVersionId.HasValue
+                    : graph.CurrentVersionId.HasValue || graph.PublishedVersionId.HasValue))
             .Select(graph => new RankedAppGraph(graph, Score(requestedIntent, $"{graph.Name} {graph.Intent}")))
             .OrderByDescending(static candidate => candidate.Score)
             .ThenByDescending(static candidate => candidate.Graph.UpdatedAt)
@@ -78,6 +108,7 @@ internal static class AppGraphAgentRouteDiscovery
             .Where(candidate => candidate.Score > 0 || availableGraphs.Length == 1)
             .Take(MaximumCandidateGraphs)
             .ToArray();
+
         if (candidates.Length == 0)
         {
             return AppGraphAgentRouteDiscoveryResult.Unavailable(
@@ -86,12 +117,14 @@ internal static class AppGraphAgentRouteDiscovery
 
         var plans = new List<SimulatorAgentAppGraphPlan>();
         var warnings = new List<string>();
+
         foreach (var candidate in candidates)
         {
             var detailResult = await catalog.GetPublishedAppGraphAsync(
-                    candidate.Graph.Id,
-                    cancellationToken)
+                candidate.Graph.Id,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!detailResult.IsSuccess || detailResult.Detail is null)
             {
                 warnings.Add(detailResult.Message);
@@ -102,6 +135,7 @@ internal static class AppGraphAgentRouteDiscovery
             var expectedVersionId = requirePublished
                 ? detail.Graph.PublishedVersionId
                 : detail.Graph.CurrentVersionId ?? detail.Graph.PublishedVersionId;
+
             if (detail.Graph.TeamId != teamId.Value
                 || detail.Graph.TeamAppId != registeredApp.Id
                 || expectedVersionId != detail.Version.Id)
@@ -112,16 +146,18 @@ internal static class AppGraphAgentRouteDiscovery
 
             var requestedTarget = ResolveBestTargetLabel(detail, requestedIntent);
             var plan = AppGraphPlanner.Build(detail, requestedTarget);
+
             if (plan.Errors.Count > 0)
             {
                 warnings.Add($"Published App Graph '{detail.Graph.Name}' is not executable: {string.Join(" ", plan.Errors)}");
                 continue;
             }
+
             if (plan.Steps.Count == 0 || plan.Steps.Count > MaximumRouteTransitions)
             {
                 warnings.Add(
                     $"Published App Graph '{detail.Graph.Name}' produced {plan.Steps.Count} transitions; "
-                    + $"agent route guidance requires between 1 and {MaximumRouteTransitions}.");
+                        + $"agent route guidance requires between 1 and {MaximumRouteTransitions}.");
                 continue;
             }
 
@@ -165,6 +201,7 @@ internal static class AppGraphAgentRouteDiscovery
         try
         {
             var definition = detail.Version.Definition.Deserialize<AppGraphDocument>(jsonOptions);
+
             if (definition is null)
             {
                 return null;
@@ -172,8 +209,8 @@ internal static class AppGraphAgentRouteDiscovery
 
             var targets = definition.Nodes.Where(node =>
                 node.Kind.Equals("outcome", StringComparison.OrdinalIgnoreCase)
-                || node.Kind.Equals("assertion", StringComparison.OrdinalIgnoreCase)
-                || !definition.Edges.Any(edge => string.Equals(edge.From, node.Id, StringComparison.Ordinal)))
+                    || node.Kind.Equals("assertion", StringComparison.OrdinalIgnoreCase)
+                    || !definition.Edges.Any(edge => string.Equals(edge.From, node.Id, StringComparison.Ordinal)))
                 .Select(node => new
                 {
                     Node = node,
@@ -184,6 +221,7 @@ internal static class AppGraphAgentRouteDiscovery
                 .OrderByDescending(static candidate => candidate.Score)
                 .ThenBy(static candidate => candidate.Node.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
             return targets.FirstOrDefault()?.Score > 0 ? targets[0].Node.Name : null;
         }
         catch (JsonException)
@@ -195,6 +233,7 @@ internal static class AppGraphAgentRouteDiscovery
     private static int Score(string requestedIntent, string candidateText)
     {
         var requestedTokens = Tokenize(requestedIntent);
+
         if (requestedTokens.Count == 0)
         {
             return 0;
@@ -203,6 +242,7 @@ internal static class AppGraphAgentRouteDiscovery
         var candidateTokens = Tokenize(candidateText);
         var score = requestedTokens.Count(candidateTokens.Contains);
         var normalizedCandidate = candidateText.Trim();
+
         if (normalizedCandidate.Length >= 6
             && requestedIntent.Contains(normalizedCandidate, StringComparison.OrdinalIgnoreCase))
         {
@@ -215,6 +255,7 @@ internal static class AppGraphAgentRouteDiscovery
     private static HashSet<string> Tokenize(string value)
     {
         var normalized = new StringBuilder(value.Length);
+
         foreach (var character in value)
         {
             normalized.Append(char.IsLetterOrDigit(character)

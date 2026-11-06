@@ -31,12 +31,14 @@ internal sealed class GetTelemetryTimelineTool : Operation
 
         var types = ArgumentReader.ReadStringSet(arguments, "types");
         types.Remove("all");
+
         var channelIds = ArgumentReader.ReadByteSet(arguments, "channelIds");
         var channelNames = ArgumentReader.ReadStringSet(arguments, "channelNames");
         var channelMap = snapshot!.MetricChannels.ToDictionary(channel => channel.ChannelId);
         var samples = TelemetryReviewPayloads.FilterSamples(snapshot, startUtc, endUtc, types, channelIds, channelNames);
         var resolvedStartUtc = TelemetryReviewPayloads.ResolveStartUtc(snapshot, startUtc, samples);
         var resolvedEndUtc = TelemetryReviewPayloads.ResolveEndUtc(snapshot, endUtc, samples);
+
         if (resolvedEndUtc <= resolvedStartUtc)
         {
             resolvedEndUtc = resolvedStartUtc.AddMilliseconds(1);
@@ -52,9 +54,20 @@ internal sealed class GetTelemetryTimelineTool : Operation
 
         if (spans.Length > 0)
         {
-            if (!startUtc.HasValue) resolvedStartUtc = new[] { resolvedStartUtc, spans.Min(span => span.StartedAtUtc) }.Min();
-            if (!endUtc.HasValue) resolvedEndUtc = new[] { resolvedEndUtc, spans.Max(span => span.DurationMs is { } duration
-                ? span.StartedAtUtc.AddMilliseconds(duration) : snapshot.LastUpdatedUtc) }.Max();
+            if (!startUtc.HasValue)
+            {
+                resolvedStartUtc = new[] { resolvedStartUtc, spans.Min(span => span.StartedAtUtc) }.Min();
+            }
+
+            if (!endUtc.HasValue)
+            {
+                resolvedEndUtc = new[]
+                {
+                    resolvedEndUtc,
+                    spans.Max(span => span.DurationMs is {}duration
+                        ? span.StartedAtUtc.AddMilliseconds(duration) : snapshot.LastUpdatedUtc)
+                }.Max();
+            }
         }
 
         return Task.FromResult(RequestResult.ToolResult(
@@ -90,6 +103,7 @@ internal sealed class GetTelemetryTimelineTool : Operation
         properties["channelIds"] = ToolSchema.Array(ToolSchema.Integer("Channel id."), nullable: true);
         properties["channelNames"] = ToolSchema.Array(ToolSchema.String("Exact channel name, case-insensitive."), nullable: true);
         properties["bucketCount"] = ToolSchema.Integer("Number of timeline buckets. Defaults to 24, max 200.", nullable: true);
+
         return properties;
     }
 }

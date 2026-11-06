@@ -29,6 +29,7 @@ internal sealed class DeletePairingConfigTool : PairingOperation
     public override Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         var configId = NormalizeOptionalString(arguments?["inviteId"]?.GetValue<string>());
+
         if (configId is null)
         {
             return Task.FromResult(ToolError("inviteId is required."));
@@ -41,12 +42,14 @@ internal sealed class DeletePairingConfigTool : PairingOperation
         }
 
         var expectedAppId = NormalizeOptionalString(arguments?["expectedAppId"]?.GetValue<string>());
+
         if (expectedAppId is null)
         {
             return Task.FromResult(ToolError("expectedAppId is required."));
         }
 
         var item = hostPairingService.Get(configId);
+
         if (item is null)
         {
             return Task.FromResult(ToolError($"Enrollment invite '{configId}' was not found."));
@@ -66,6 +69,7 @@ internal sealed class DeletePairingConfigTool : PairingOperation
 
         var deletedConfig = BuildPairingConfigSummaryPayload(item.Summary);
         var result = hostPairingService.Revoke(configId, expectedAppId);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));

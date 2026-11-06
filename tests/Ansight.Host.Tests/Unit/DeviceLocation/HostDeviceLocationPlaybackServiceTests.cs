@@ -30,6 +30,7 @@ public sealed class HostDeviceLocationPlaybackServiceTests
         await TestWait.UntilAsync(
             () => service.GetSnapshot().Status == "completed",
             TimeSpan.FromSeconds(3));
+
         var snapshot = service.GetSnapshot();
         Assert.False(snapshot.IsPlaying);
         Assert.Equal(1, snapshot.CurrentPointIndex);
@@ -61,6 +62,7 @@ public sealed class HostDeviceLocationPlaybackServiceTests
         Assert.True(result.IsSuccess, result.Message);
 
         await TestWait.UntilAsync(() => devices.Locations.Count >= 2, TimeSpan.FromSeconds(3));
+
         var stopped = await service.StopAsync();
 
         Assert.True(stopped.IsSuccess, stopped.Message);

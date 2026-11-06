@@ -13,6 +13,7 @@ internal static class BoundedAuditHistory
             .ToArray();
         var totalBytes = runs.Sum(static run => run.SizeBytes);
         var remainingCount = runs.Length;
+
         for (var index = runs.Length - 1; index >= 0; index--)
         {
             if (remainingCount <= MaximumRuns && totalBytes <= MaximumBytes)
@@ -21,6 +22,7 @@ internal static class BoundedAuditHistory
             }
 
             var run = runs[index];
+
             if (string.Equals(run.AuditPath, currentFilePath, StringComparison.Ordinal))
             {
                 continue;
@@ -53,6 +55,7 @@ internal static class BoundedAuditHistory
                 : string.Empty;
             TimestampUtc = File.GetLastWriteTimeUtc(auditPath);
             SizeBytes = new FileInfo(auditPath).Length;
+
             if (File.Exists(meteringPath))
             {
                 SizeBytes += new FileInfo(meteringPath).Length;
@@ -72,6 +75,7 @@ internal static class BoundedAuditHistory
         internal void Delete()
         {
             File.Delete(AuditPath);
+
             if (File.Exists(meteringPath))
             {
                 File.Delete(meteringPath);

@@ -18,6 +18,7 @@ public static class MacSimulatorHidCompatibilityProbe
         Func<string, string?> compatibilityCheck)
     {
         ArgumentNullException.ThrowIfNull(compatibilityCheck);
+
         if (!isMacOS)
         {
             return Unavailable(
@@ -27,10 +28,13 @@ public static class MacSimulatorHidCompatibilityProbe
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(developerDirectory);
+
         var normalizedDeveloperDirectory = Path.GetFullPath(developerDirectory.Trim());
+
         try
         {
             var failure = compatibilityCheck(normalizedDeveloperDirectory);
+
             if (!string.IsNullOrWhiteSpace(failure))
             {
                 throw new MacSimulatorHidException(failure);
@@ -46,6 +50,7 @@ public static class MacSimulatorHidCompatibilityProbe
         catch (Exception exception) when (IsCompatibilityFailure(exception.GetBaseException()))
         {
             var rootException = exception.GetBaseException();
+
             return Unavailable(
                 ResolveFailureStatus(rootException),
                 $"The native SimulatorKit HID binding is unavailable: {rootException.Message}",
@@ -60,17 +65,21 @@ public static class MacSimulatorHidCompatibilityProbe
             developerDirectory,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (isCompatible)
         {
             return null;
         }
 
         var length = Array.IndexOf(errorBuffer, (byte)0);
+
         if (length < 0)
         {
             length = errorBuffer.Length;
         }
+
         var message = System.Text.Encoding.UTF8.GetString(errorBuffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message)
             ? "The native SimulatorKit HID compatibility check failed."
             : message;
@@ -101,11 +110,11 @@ public static class MacSimulatorHidCompatibilityProbe
 
     private static bool IsXcodeCompatibilityFailure(string message)
         => message.Contains("Could not load CoreSimulator", StringComparison.OrdinalIgnoreCase)
-           || message.Contains("Could not load SimulatorKit", StringComparison.OrdinalIgnoreCase)
-           || message.Contains("does not expose the required", StringComparison.OrdinalIgnoreCase)
-           || message.Contains("service context is unavailable", StringComparison.OrdinalIgnoreCase)
-           || message.Contains("SimDeviceLegacyHIDClient is unavailable", StringComparison.OrdinalIgnoreCase)
-           || message.Contains("has no supported", StringComparison.OrdinalIgnoreCase);
+            || message.Contains("Could not load SimulatorKit", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("does not expose the required", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("service context is unavailable", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("SimDeviceLegacyHIDClient is unavailable", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("has no supported", StringComparison.OrdinalIgnoreCase);
 
     private static MacSimulatorHidCompatibility Unavailable(
         string status,

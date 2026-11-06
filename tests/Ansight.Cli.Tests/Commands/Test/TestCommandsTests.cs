@@ -23,6 +23,7 @@ public sealed class TestCommandsTests
                 [], string.Empty)
         };
         Assert.Equal(exitCode, TestCommands.ResolveRunExitCode(result));
+
         var rendered = TestCommands.RenderRun(result, "/result.json", includeAudit: true);
         Assert.Contains(label, rendered);
         Assert.Contains("Run: task-run", rendered);
@@ -63,20 +64,20 @@ public sealed class TestCommandsTests
             RemovedHistoryResultCount: 12,
             RebuiltHistoryResultCount: 10,
             Apps:
-            [
-                new WorkspaceTrendsHistoryRebuildAppResult(
-                    "com.example.app",
-                    "/workspace",
-                    MetricCount: 20,
-                    HistoryDefinitionCount: 2,
-                    HistoryResultCount: 10)
-            ],
+                [
+                    new WorkspaceTrendsHistoryRebuildAppResult(
+                        "com.example.app",
+                        "/workspace",
+                        MetricCount: 20,
+                        HistoryDefinitionCount: 2,
+                        HistoryResultCount: 10)
+                ],
             SkippedApps:
-            [
-                new WorkspaceTrendsHistoryRebuildSkippedApp(
-                    "com.example.missing",
-                    "No registered codebase.")
-            ]);
+                [
+                    new WorkspaceTrendsHistoryRebuildSkippedApp(
+                        "com.example.missing",
+                        "No registered codebase.")
+                ]);
 
         var rendered = TrendsCommands.RenderRebuild(result);
 
@@ -212,7 +213,10 @@ public sealed class TestCommandsTests
     [Fact]
     public void RunAllConfigurationRejectsExplicitlyRequestedDisabledTests()
     {
-        var disabled = CreateRunResult("session").Test! with { Enabled = false };
+        var disabled = CreateRunResult("session").Test! with
+        {
+            Enabled = false
+        };
         var catalog = new WorkspaceTestCatalogResult(
             "/workspace",
             [disabled, CreateRunResult("other-session").Test! with { TestId = "other" }],
@@ -227,7 +231,10 @@ public sealed class TestCommandsTests
     [Fact]
     public void RunAllConfigurationRejectsACatalogContainingOnlyDisabledTests()
     {
-        var disabled = CreateRunResult("session").Test! with { Enabled = false };
+        var disabled = CreateRunResult("session").Test! with
+        {
+            Enabled = false
+        };
         var catalog = new WorkspaceTestCatalogResult("/workspace", [disabled], []);
 
         var error = TestCommands.GetRunAllConfigurationError(catalog, []);
@@ -270,6 +277,7 @@ public sealed class TestCommandsTests
             new WorkspaceTestValidation(string.Empty, []),
             [],
             "/tmp/example.json");
+
         return WorkspaceTestRunResult.Failure("Example failure.", test, sessionId);
     }
 

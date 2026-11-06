@@ -19,14 +19,17 @@ public sealed class MacWindowRtcSession : IDisposable
         int averageBitRate = 5_000_000)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceIdentifier);
+
         if (processIdentifier <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(processIdentifier));
         }
+
         if (framesPerSecond is < 1 or > 60)
         {
             throw new ArgumentOutOfRangeException(nameof(framesPerSecond));
         }
+
         if (averageBitRate <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(averageBitRate));
@@ -35,6 +38,7 @@ public sealed class MacWindowRtcSession : IDisposable
         DeviceIdentifier = deviceIdentifier;
         ProcessIdentifier = processIdentifier;
         callbackHandle = GCHandle.Alloc(this);
+
         var errorBuffer = new byte[ErrorBufferSize];
         handle = NativeMethods.MacWindowSessionCreate(
             deviceIdentifier,
@@ -45,6 +49,7 @@ public sealed class MacWindowRtcSession : IDisposable
             GCHandle.ToIntPtr(callbackHandle),
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (handle == IntPtr.Zero)
         {
             callbackHandle.Free();
@@ -57,7 +62,6 @@ public sealed class MacWindowRtcSession : IDisposable
     public event EventHandler<SimulatorRtcInputEventArgs>? InputReceived;
 
     public string DeviceIdentifier { get; }
-
     public int ProcessIdentifier { get; }
 
     public async Task<SimulatorRtcDescription> CreateAnswerAsync(
@@ -66,25 +70,31 @@ public sealed class MacWindowRtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ApplyOffer(offer);
+
         var answerBuffer = new byte[AnswerBufferSize];
         var errorBuffer = new byte[ErrorBufferSize];
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var result = NativeMethods.SessionCopyAnswer(
                 handle,
                 answerBuffer,
                 (nuint)answerBuffer.Length,
                 errorBuffer,
                 (nuint)errorBuffer.Length);
+
             if (result > 0)
             {
                 return new SimulatorRtcDescription("answer", ReadBuffer(answerBuffer, string.Empty));
             }
+
             if (result < 0)
             {
                 throw new SimulatorRtcException(ReadBuffer(errorBuffer, "macOS window WebRTC answer creation failed."));
             }
+
             await Task.Delay(20, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -93,6 +103,7 @@ public sealed class MacWindowRtcSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
         var data = Encoding.UTF8.GetBytes(message);
         var errorBuffer = new byte[ErrorBufferSize];
         var result = NativeMethods.SessionSendMessage(
@@ -101,10 +112,12 @@ public sealed class MacWindowRtcSession : IDisposable
             data.Length,
             errorBuffer,
             (nuint)errorBuffer.Length);
+
         if (result < 0)
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not send a macOS window data-channel message."));
         }
+
         return result > 0;
     }
 
@@ -116,11 +129,14 @@ public sealed class MacWindowRtcSession : IDisposable
         }
 
         disposed = true;
+
         var activeHandle = Interlocked.Exchange(ref handle, IntPtr.Zero);
+
         if (activeHandle != IntPtr.Zero)
         {
             NativeMethods.SessionDestroy(activeHandle);
         }
+
         if (callbackHandle.IsAllocated)
         {
             callbackHandle.Free();
@@ -130,13 +146,16 @@ public sealed class MacWindowRtcSession : IDisposable
     private void ApplyOffer(SimulatorRtcDescription offer)
     {
         ArgumentNullException.ThrowIfNull(offer);
+
         if (!string.Equals(offer.Type, "offer", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("The remote description must be a WebRTC offer.", nameof(offer));
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(offer.Sdp);
+
         var errorBuffer = new byte[ErrorBufferSize];
+
         if (!NativeMethods.SessionSetOffer(handle, offer.Sdp, errorBuffer, (nuint)errorBuffer.Length))
         {
             throw new SimulatorRtcException(ReadBuffer(errorBuffer, "Could not apply the macOS window WebRTC offer."));
@@ -153,12 +172,14 @@ public sealed class MacWindowRtcSession : IDisposable
         try
         {
             var session = GCHandle.FromIntPtr(context).Target as MacWindowRtcSession;
+
             if (session is null || session.disposed)
             {
                 return;
             }
 
             var payload = Marshal.PtrToStringUTF8(message, size);
+
             if (!string.IsNullOrWhiteSpace(payload))
             {
                 session.InputReceived?.Invoke(session, new SimulatorRtcInputEventArgs(payload));
@@ -173,11 +194,14 @@ public sealed class MacWindowRtcSession : IDisposable
     private static string ReadBuffer(byte[] buffer, string fallback)
     {
         var length = Array.IndexOf(buffer, (byte)0);
+
         if (length < 0)
         {
             length = buffer.Length;
         }
+
         var message = Encoding.UTF8.GetString(buffer, 0, length).Trim();
+
         return string.IsNullOrWhiteSpace(message) ? fallback : message;
     }
 }

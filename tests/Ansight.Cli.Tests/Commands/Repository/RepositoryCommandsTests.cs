@@ -40,7 +40,7 @@ public sealed class RepositoryCommandsTests
         await WriteTaskAsync(repositoryPath, "registered-task", "Registered task");
 
         var registration = await RunAsync(
-        [
+            [
             "app",
             "register",
             "com.example.app",
@@ -50,7 +50,7 @@ public sealed class RepositoryCommandsTests
             dataDirectory
         ]);
         var result = await RunAsync(
-        [
+            [
             "task",
             "list",
             "--app-id",
@@ -77,7 +77,7 @@ public sealed class RepositoryCommandsTests
         await WriteTaskAsync(overrideRepositoryPath, "override-task", "Override task");
 
         var registration = await RunAsync(
-        [
+            [
             "app",
             "register",
             "com.example.app",
@@ -87,7 +87,7 @@ public sealed class RepositoryCommandsTests
             dataDirectory
         ]);
         var result = await RunAsync(
-        [
+            [
             "task",
             "list",
             "--app-id",
@@ -110,7 +110,7 @@ public sealed class RepositoryCommandsTests
     {
         using var directory = TestDirectory.Create();
         var result = await RunAsync(
-        [
+            [
             "task",
             "run",
             "onboarding",
@@ -135,7 +135,7 @@ public sealed class RepositoryCommandsTests
     {
         using var directory = TestDirectory.Create();
         var result = await RunAsync(
-        [
+            [
             "repo",
             "task",
             "run",
@@ -158,7 +158,7 @@ public sealed class RepositoryCommandsTests
         await File.WriteAllTextAsync(inputFile, "{}");
 
         var result = await RunAsync(
-        [
+            [
             "repo",
             "task",
             "run",
@@ -184,7 +184,7 @@ public sealed class RepositoryCommandsTests
     {
         using var directory = TestDirectory.Create();
         var result = await RunAsync(
-        [
+            [
             "repo",
             "task",
             "run",
@@ -228,7 +228,12 @@ public sealed class RepositoryCommandsTests
     private static async Task<CommandResult> RunAsync(string[] commandArguments)
     {
         var dataIndex = Array.IndexOf(commandArguments, "--data-dir");
-        if (dataIndex >= 0) ConfigureTestCredentials(commandArguments[dataIndex + 1]);
+
+        if (dataIndex >= 0)
+        {
+            ConfigureTestCredentials(commandArguments[dataIndex + 1]);
+        }
+
         var arguments = CliArguments.Parse(commandArguments);
         using var standardOutput = new StringWriter();
         using var standardError = new StringWriter();
@@ -238,16 +243,24 @@ public sealed class RepositoryCommandsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(
             exitCode,
             standardOutput.ToString(),
             standardError.ToString());
     }
+
     private static void ConfigureTestCredentials(string dataDirectory)
     {
         Directory.CreateDirectory(dataDirectory);
+
         var key = Path.Combine(dataDirectory, "test-key");
-        if (!File.Exists(key)) FileEncryptionKeyProvider.CreateKeyFile(key);
+
+        if (!File.Exists(key))
+        {
+            FileEncryptionKeyProvider.CreateKeyFile(key);
+        }
+
         new LocalSettingsStore(dataDirectory).SetCredentials(new CredentialSettings("protected-file", key, Path.Combine(dataDirectory, "test-store.json")));
     }
 }

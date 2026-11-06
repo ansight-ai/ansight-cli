@@ -26,6 +26,7 @@ public sealed class IosAudioInjectionProviderTests
     {
         var response = SuccessfulResponse();
         response["diagnostics"]!["audioDeviceUid"] = "built-in-speaker";
+
         var provider = CreateProvider((_, _) => Task.FromResult(response));
         var result = await provider.GetCapabilitiesAsync(target, CancellationToken.None);
         Assert.False(result.Available);
@@ -37,6 +38,7 @@ public sealed class IosAudioInjectionProviderTests
     {
         var response = SuccessfulResponse();
         response["diagnostics"]!["inputRouteEvidence"] = "recent-device-preferences";
+
         var provider = CreateProvider((_, _) => Task.FromResult(response));
         Assert.False((await provider.GetCapabilitiesAsync(target, CancellationToken.None)).Available);
     }
@@ -74,6 +76,7 @@ public sealed class IosAudioInjectionProviderTests
         var provider = CreateProvider((arguments, _) =>
         {
             actualArguments = arguments;
+
             return Task.FromResult(SuccessfulResponse());
         });
         var fixture = new AudioFixture("/fixtures/a quote.wav", new("sha256", 1000, 16000, 1, 16, 16000), []);
@@ -83,8 +86,22 @@ public sealed class IosAudioInjectionProviderTests
         Assert.Equal(16000, result.SubmittedFrames);
         Assert.False(result.Diagnostics["captureVerified"]!.GetValue<bool>());
         Assert.False(result.Diagnostics["transcriptionVerified"]!.GetValue<bool>());
-        Assert.Equal(new[] { "inject", "--device-uid", "BlackHole2ch_UID", "--simulator-app", "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app",
-            "--device-id", target.DeviceId, "--app-id", target.AppId, "--file", "/fixtures/a quote.wav", "--wait-ms", "4500" }, actualArguments);
+        Assert.Equal(new[]
+        {
+            "inject",
+            "--device-uid",
+            "BlackHole2ch_UID",
+            "--simulator-app",
+            "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app",
+            "--device-id",
+            target.DeviceId,
+            "--app-id",
+            target.AppId,
+            "--file",
+            "/fixtures/a quote.wav",
+            "--wait-ms",
+            "4500"
+        }, actualArguments);
     }
 
     [Theory]
@@ -95,6 +112,7 @@ public sealed class IosAudioInjectionProviderTests
         var response = SuccessfulResponse();
         response["diagnostics"]!["submittedFrames"] = frames;
         response["diagnostics"]!["completionKind"] = completion;
+
         var provider = CreateProvider((_, _) => Task.FromResult(response));
         var fixture = new AudioFixture("/fixtures/input.wav", new("sha256", 1000, 16000, 1, 16, 16000), []);
         var error = await Assert.ThrowsAsync<AudioInjectionException>(() => provider.InjectAsync(target, fixture, 0, CancellationToken.None));
@@ -110,8 +128,16 @@ public sealed class IosAudioInjectionProviderTests
         var provider = CreateProvider(async (_, token) =>
         {
             started.SetResult();
-            try { await Task.Delay(Timeout.Infinite, token); }
-            finally { stopped = true; }
+
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            finally
+            {
+                stopped = true;
+            }
+
             return SuccessfulResponse();
         });
         var operation = provider.InjectAsync(target, new("fixture.wav", new("sha256", 1000, 16000, 1, 16, 16000), []), 0, cancellation.Token);
@@ -129,7 +155,10 @@ public sealed class IosAudioInjectionProviderTests
         var result = await provider.GetCapabilitiesAsync(target, CancellationToken.None);
         Assert.False(result.Available);
         Assert.Equal("platform-unavailable", result.Code);
-        Assert.Equal(provider.GetLeaseKey(target), provider.GetLeaseKey(target with { DeviceId = Guid.NewGuid().ToString() }));
+        Assert.Equal(provider.GetLeaseKey(target), provider.GetLeaseKey(target with
+        {
+            DeviceId = Guid.NewGuid().ToString()
+        }));
     }
 
     [Fact]
@@ -137,10 +166,12 @@ public sealed class IosAudioInjectionProviderTests
     {
         var response = SuccessfulResponse();
         response["diagnostics"]!["audioDeviceUid"] = "dedicated-loopback";
+
         var provider = new IosAudioInjectionProvider((arguments, _) =>
         {
             Assert.Contains("dedicated-loopback", arguments);
             Assert.DoesNotContain("BlackHole2ch_UID", arguments);
+
             return Task.FromResult(response);
         }, _ => Task.FromResult<string?>("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app"), true, "dedicated-loopback");
         Assert.True((await provider.GetCapabilitiesAsync(target, CancellationToken.None)).Available);

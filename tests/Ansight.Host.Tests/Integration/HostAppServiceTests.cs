@@ -90,6 +90,7 @@ public sealed class HostAppServiceTests
             Assert.Equal(
                 [0x89, 0x50, 0x4e, 0x47],
                 File.ReadAllBytes(qrPath).Take(4).Select(static value => (int)value).ToArray());
+
             if (!OperatingSystem.IsWindows())
             {
                 Assert.Equal(
@@ -154,6 +155,7 @@ public sealed class HostAppServiceTests
         var storagePath = Path.Combine(baseFolderPath, "secrets.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         return new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = baseFolderPath,

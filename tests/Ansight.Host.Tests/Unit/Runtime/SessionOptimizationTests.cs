@@ -27,7 +27,8 @@ public sealed class SessionOptimizationTests
         var png = CreatePng();
         var imported = state.ImportSessionSnapshot(CreateSnapshot(), new Dictionary<string, byte[]>
         {
-            ["a"] = png, ["b"] = png
+            ["a"] = png,
+            ["b"] = png
         }).ImportedSession!;
         var progress = new List<SessionOptimizationProgress>();
 
@@ -39,11 +40,14 @@ public sealed class SessionOptimizationTests
         Assert.Contains(progress, item => item.Message == "Checking screenshots for duplicates…" && item.Completed == 2 && item.Total == 2);
         Assert.Contains(progress, item => item.Message == "Converting screenshots to WebP…" && item.Completed == 1 && item.Total == 1);
         Assert.Contains(progress, item => item.Message == "Saving converted screenshots…");
+
         var reloadedState = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         Assert.True(reloadedState.TryGetSessionSnapshot(imported.SessionId, out var reloaded));
+
         var frame = Assert.Single(reloaded!.Images);
         Assert.Equal("a", frame.FrameId);
         Assert.Equal("webp", frame.Format);
+
         var path = SessionImageArtifactPath.ResolveCapturedImagePath(store.CapturesRootPath, imported.AppId, imported.SessionId, frame);
         using var decoded = SKBitmap.Decode(path);
         Assert.NotNull(decoded);
@@ -61,7 +65,8 @@ public sealed class SessionOptimizationTests
         var state = new RuntimeState(store);
         var imported = state.ImportSessionSnapshot(CreateSnapshot(), new Dictionary<string, byte[]>
         {
-            ["a"] = CreatePng(), ["b"] = [1, 2, 3]
+            ["a"] = CreatePng(),
+            ["b"] = [1, 2, 3]
         }).ImportedSession!;
 
         Assert.Throws<InvalidDataException>(() => state.OptimizeSession(imported.SessionId));
@@ -79,8 +84,10 @@ public sealed class SessionOptimizationTests
     {
         using var bitmap = new SKBitmap(64, 64);
         bitmap.Erase(SKColors.CornflowerBlue);
+
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+
         return data.ToArray();
     }
 
@@ -99,15 +106,30 @@ public sealed class SessionOptimizationTests
     private static AppSessionSnapshot CreateSnapshot()
     {
         var created = DateTimeOffset.Parse("2026-09-14T00:00:00Z");
+
         return new()
         {
-            SessionId = "optimize-test", AppId = "com.example.optimize", ClientName = "Optimize", RemoteAddress = "local",
-            CreatedUtc = created, LastUpdatedUtc = created.AddSeconds(3), ConfigId = null, Status = "Complete", IsHistorical = true,
+            SessionId = "optimize-test",
+            AppId = "com.example.optimize",
+            ClientName = "Optimize",
+            RemoteAddress = "local",
+            CreatedUtc = created,
+            LastUpdatedUtc = created.AddSeconds(3),
+            ConfigId = null,
+            Status = "Complete",
+            IsHistorical = true,
             Images = new[] { "a", "b" }.Select((id, index) => new SessionImageFrame
             {
-                FrameId = id, CapturedAtUtc = created.AddSeconds(index + 1), Format = "png",
-                Width = 64, Height = 64, Quality = 100, ByteCount = 0
-            }).ToArray(), MetricChannels = [], Metrics = []
+                FrameId = id,
+                CapturedAtUtc = created.AddSeconds(index + 1),
+                Format = "png",
+                Width = 64,
+                Height = 64,
+                Quality = 100,
+                ByteCount = 0
+            }).ToArray(),
+            MetricChannels = [],
+            Metrics = []
         };
     }
 }

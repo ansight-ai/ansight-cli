@@ -36,6 +36,7 @@ public sealed class LiveVisualTreeCaptureService
         }
 
         var normalizedSessionId = sessionId.Trim();
+
         if (!IsLive(normalizedSessionId)
             || !sessionReader.TryGetSessionSnapshot(normalizedSessionId, out var snapshot)
             || snapshot is null)
@@ -46,10 +47,11 @@ public sealed class LiveVisualTreeCaptureService
         var catalog = snapshot.CaptureSource == WorkspaceExecutionModes.Device
             ? null
             : await appToolBridge.QueryToolsAsync(
-            normalizedSessionId, cancellationToken,
-            new AppToolBridgeRequestContext("local-explorer", "list_visual_tree_sources"))
-            .ConfigureAwait(false);
+                normalizedSessionId, cancellationToken,
+                new AppToolBridgeRequestContext("local-explorer", "list_visual_tree_sources"))
+                .ConfigureAwait(false);
         var sources = new List<LiveVisualTreeSource>();
+
         if (catalog is { Success: true } && catalog.Envelope?.Type != ToolProtocolMessageTypes.ErrorType)
         {
             sources.AddRange(ResolveAppSources(catalog.Envelope?.Payload, SessionPlatformFilters.ResolveSessionPlatformKey(snapshot)));
@@ -58,6 +60,7 @@ public sealed class LiveVisualTreeCaptureService
         var accessibility = await LiveUiTreeCapture.CaptureDeviceAccessibilityAsync(
             snapshot, accessibilityRouter, maxNodes: 1, maxDepth: 1,
             cancellationToken: cancellationToken, allowCached: false).ConfigureAwait(false);
+
         if (accessibility.Capture is not null)
         {
             sources.Add(new(LiveUiTreeCapture.DeviceAccessibilityToolId, "Accessibility"));
@@ -73,7 +76,7 @@ public sealed class LiveVisualTreeCaptureService
 
     private bool IsLive(string sessionId)
         => appToolBridge.IsSessionConnected(sessionId)
-           || sessionReader is ISessionLifecycle lifecycle && lifecycle.IsDeviceSessionActive(sessionId);
+            || sessionReader is ISessionLifecycle lifecycle && lifecycle.IsDeviceSessionActive(sessionId);
 
     internal static IReadOnlyList<LiveVisualTreeSource> ResolveAppSources(JsonNode? catalog, string? platform)
     {
@@ -92,6 +95,7 @@ public sealed class LiveVisualTreeCaptureService
             new(VisualTreeContract.DomToolId, "DOM"),
             new(VisualTreeContract.NativeToolId, nativeLabel)
         ];
+
         return supported.Where(source => RemoteAppToolCatalog.HasTool(catalog, source.ToolId)).ToArray();
     }
 
@@ -111,6 +115,7 @@ public sealed class LiveVisualTreeCaptureService
         }
 
         var normalizedSessionId = sessionId.Trim();
+
         if (!IsLive(normalizedSessionId))
         {
             return Failure(normalizedSessionId, $"Session '{normalizedSessionId}' is not connected.");
@@ -127,19 +132,23 @@ public sealed class LiveVisualTreeCaptureService
             var accessibility = await LiveUiTreeCapture.CaptureDeviceAccessibilityAsync(
                 snapshot, accessibilityRouter, maxNodes: 2000, maxDepth: 64,
                 cancellationToken: cancellationToken, allowCached: false).ConfigureAwait(false);
+
             return accessibility.Capture is { } capture
                 ? Persist(snapshot, capture.ToolId, capture.Payload)
                 : Failure(normalizedSessionId, accessibility.Message);
         }
 
         if (snapshot.CaptureSource == WorkspaceExecutionModes.Device)
+        {
             return Failure(normalizedSessionId, "App visual trees require an embedded SDK. Use Accessibility for external captures. " + ExecutionCapabilities.SdkSetupMessage);
+        }
 
         var catalogResponse = await appToolBridge.QueryToolsAsync(
-                normalizedSessionId,
-                cancellationToken,
-                new AppToolBridgeRequestContext("local-explorer", "capture_live_visual_tree"))
+            normalizedSessionId,
+            cancellationToken,
+            new AppToolBridgeRequestContext("local-explorer", "capture_live_visual_tree"))
             .ConfigureAwait(false);
+
         if (!catalogResponse.Success || catalogResponse.Envelope is null)
         {
             return Failure(normalizedSessionId, catalogResponse.Message);
@@ -154,6 +163,7 @@ public sealed class LiveVisualTreeCaptureService
 
         var toolId = GetLiveVisualTreeTool.ResolveToolId(
             new JsonObject { ["toolId"] = requestedToolId }, catalogResponse.Envelope.Payload);
+
         if (toolId is null)
         {
             return Failure(
@@ -162,10 +172,10 @@ public sealed class LiveVisualTreeCaptureService
         }
 
         if (!GetLiveVisualTreeTool.TryBuildVisualTreeArguments(
-                null,
-                toolId,
-                out var visualTreeArguments,
-                out var argumentError))
+            null,
+            toolId,
+            out var visualTreeArguments,
+            out var argumentError))
         {
             return Failure(
                 normalizedSessionId,
@@ -180,13 +190,14 @@ public sealed class LiveVisualTreeCaptureService
             OperationDefaults.DefaultScreenshotMaxWidth,
             out _);
         var toolResponse = await appToolBridge.CallToolWithCatalogRecoveryAsync(
-                normalizedSessionId,
-                toolId,
-                forwardedArguments,
-                after: null,
-                cancellationToken,
-                new AppToolBridgeRequestContext("local-explorer", "capture_live_visual_tree"))
+            normalizedSessionId,
+            toolId,
+            forwardedArguments,
+            after: null,
+            cancellationToken,
+            new AppToolBridgeRequestContext("local-explorer", "capture_live_visual_tree"))
             .ConfigureAwait(false);
+
         if (!toolResponse.Success || toolResponse.Envelope is null)
         {
             return Failure(normalizedSessionId, toolResponse.Message);
@@ -215,6 +226,7 @@ public sealed class LiveVisualTreeCaptureService
             snapshot,
             toolId,
             visualTreePayload);
+
         return persisted.IsSuccess && persisted.Snapshot is not null
             ? new LiveVisualTreeCaptureResult(
                 true,
@@ -230,9 +242,9 @@ public sealed class LiveVisualTreeCaptureService
 
     private static string ReadResponseMessage(JsonNode? payload, string fallback)
         => payload is JsonObject responsePayload
-           && responsePayload["message"] is JsonValue messageValue
-           && messageValue.TryGetValue<string>(out var message)
-           && !string.IsNullOrWhiteSpace(message)
+            && responsePayload["message"] is JsonValue messageValue
+            && messageValue.TryGetValue<string>(out var message)
+            && !string.IsNullOrWhiteSpace(message)
             ? message.Trim()
             : fallback;
 }

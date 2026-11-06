@@ -18,6 +18,7 @@ public sealed partial class RepositoryTaskTests
         var result = LoadRepository(repository.RootPath);
 
         Assert.Empty(result.Warnings);
+
         var task = Assert.Single(result.Tasks);
         Assert.Equal("map.validate", task.TaskId);
         Assert.Equal(1, task.SchemaVersion);
@@ -41,6 +42,7 @@ public sealed partial class RepositoryTaskTests
         var result = LoadRepository(repository.RootPath);
 
         Assert.Empty(result.Warnings);
+
         var task = Assert.Single(result.Tasks);
         Assert.Equal(["ios"], task.Platforms);
         Assert.Equal(["physical"], task.DeviceKinds);
@@ -180,6 +182,7 @@ public sealed partial class RepositoryTaskTests
         var loadResult = LoadRepository(repository.RootPath);
 
         Assert.Empty(loadResult.Warnings);
+
         var task = Assert.Single(loadResult.Tasks);
         Assert.False(task.Enabled);
         Assert.False(task.ToPublicDefinition().Enabled);
@@ -228,6 +231,7 @@ public sealed partial class RepositoryTaskTests
             contract["definitionSchema"]?["$id"]?.GetValue<string>());
         Assert.Equal("ansight-task.js", contract["runtimeModule"]?["fileName"]?.GetValue<string>());
         Assert.Contains("export const Permission", contract["runtimeModule"]?["source"]?.GetValue<string>(), StringComparison.Ordinal);
+
         var typeDefinitions = contract["typeDefinitions"]?.GetValue<string>();
         Assert.Contains("TaskFunction", typeDefinitions, StringComparison.Ordinal);
         Assert.Contains("TaskFramework", typeDefinitions, StringComparison.Ordinal);
@@ -283,10 +287,10 @@ public sealed partial class RepositoryTaskTests
     public void HostRegistry_ExposesOnlyToolsMarkedAsTaskSessionBound()
     {
         var registry = new OperationRegistry(
-        [
-            OperationRegistration.TaskSessionBound(new StubHostTool("ansight_get_app_state")),
+            [
+                OperationRegistration.TaskSessionBound(new StubHostTool("ansight_get_app_state")),
             OperationRegistration.HostOnly(new StubHostTool("ansight_privileged_feature"))
-        ]);
+            ]);
 
         var sessionTool = Assert.IsType<RepositoryTaskHostToolDescriptor>(
             registry.ResolveRepositoryTaskTool("ansight_get_app_state"));
@@ -395,6 +399,7 @@ public sealed partial class RepositoryTaskTests
             null,
             out var input,
             out var validationError), validationError);
+
         var invocations = new List<RepositoryTaskTestInvocation>();
         var executor = CreateExecutor(
             (toolName, arguments, _) =>
@@ -402,6 +407,7 @@ public sealed partial class RepositoryTaskTests
                 invocations.Add(new RepositoryTaskTestInvocation(
                     toolName,
                     arguments.DeepClone().AsObject()));
+
                 if (string.Equals(toolName, "ansight_find_ui", StringComparison.Ordinal))
                 {
                     return Task.FromResult(RequestResult.ToolResult(
@@ -446,6 +452,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Null(invocations[0].Arguments["appId"]);
         Assert.Null(invocations[0].Arguments["deviceId"]);
         Assert.Null(invocations[0].Arguments["bundleIdentifier"]);
+
         var appArguments = Assert.IsType<JsonObject>(invocations[1].Arguments["arguments"]);
         Assert.Null(appArguments["sessionId"]);
         Assert.Null(appArguments["appId"]);
@@ -496,6 +503,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal(RepositoryTaskRunStatus.Error, result.Status);
         Assert.Equal(expectedMessage, result.Message);
         Assert.True(Assert.Single(result.Assertions).Passed);
+
         var failedCall = Assert.Single(result.ToolCalls, call => call.IsError);
         Assert.Equal("redpoint.example.read", failedCall.ToolName);
         Assert.Equal(expectedMessage, failedCall.Message);
@@ -523,8 +531,7 @@ public sealed partial class RepositoryTaskTests
         var executor = CreateExecutor(
             (toolName, arguments, _) => Task.FromResult(RequestResult.ToolResult(
                 string.Equals(toolName, "ansight_find_ui", StringComparison.Ordinal)
-                    ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() }
-                    : new JsonObject
+                    ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() } : new JsonObject
                     {
                         ["payload"] = new JsonObject
                         {
@@ -561,11 +568,11 @@ public sealed partial class RepositoryTaskTests
             {
                 dispatchedTools.Add(
                     arguments["toolId"]?.GetValue<string>()
-                    ?? toolName);
+                        ?? toolName);
+
                 return Task.FromResult(RequestResult.ToolResult(
                     string.Equals(toolName, "ansight_find_ui", StringComparison.Ordinal)
-                        ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() }
-                        : new JsonObject
+                        ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() } : new JsonObject
                         {
                             ["payload"] = new JsonObject
                             {
@@ -601,6 +608,7 @@ public sealed partial class RepositoryTaskTests
                 invocations.Add(new RepositoryTaskTestInvocation(
                     toolName,
                     arguments.DeepClone().AsObject()));
+
                 return Task.FromResult(RequestResult.ToolResult(
                     new JsonObject
                     {
@@ -645,11 +653,13 @@ public sealed partial class RepositoryTaskTests
             null,
             out var input,
             out var validationError), validationError);
+
         var dispatched = false;
         var executor = CreateExecutor(
             (_, _, _) =>
             {
                 dispatched = true;
+
                 return Task.FromResult(RequestResult.ToolResult(new JsonObject(), isError: false));
             });
 
@@ -681,6 +691,7 @@ public sealed partial class RepositoryTaskTests
             null,
             out var input,
             out var validationError), validationError);
+
         var executor = CreateExecutor(
             (_, arguments, _) => Task.FromResult(RequestResult.ToolResult(
                 new JsonObject { ["value"] = arguments["text"]?.DeepClone() },
@@ -696,6 +707,7 @@ public sealed partial class RepositoryTaskTests
             CancellationToken.None);
 
         Assert.Equal(RepositoryTaskRunStatus.Failed, result.Status);
+
         var assertion = Assert.Single(result.Assertions);
         Assert.False(assertion.Passed);
         Assert.Equal("label-found", assertion.AssertionId);
@@ -718,11 +730,13 @@ public sealed partial class RepositoryTaskTests
             null,
             out var input,
             out var validationError), validationError);
+
         var dispatchedTools = new List<string>();
         var executor = CreateExecutor(
             (toolName, arguments, _) =>
             {
                 dispatchedTools.Add(toolName);
+
                 return Task.FromResult(toolName == "ansight_find_ui"
                     ? RequestResult.ToolResult(
                         new JsonObject { ["value"] = arguments["text"]?.DeepClone() },
@@ -771,6 +785,7 @@ public sealed partial class RepositoryTaskTests
             null,
             out var input,
             out var validationError), validationError);
+
         var executor = CreateExecutor(
             (toolName, arguments, _) => Task.FromResult(toolName == "ansight_find_ui"
                 ? RequestResult.ToolResult(
@@ -806,9 +821,11 @@ public sealed partial class RepositoryTaskTests
         using var repository = CreateRepository(CreateComposingModule());
         var taskDirectory = Path.Combine(repository.RootPath, "ansight", "tasks", "map");
         File.WriteAllText(Path.Combine(taskDirectory, "child.ts"), CreateChildModule());
+
         var router = CreateConfiguredRouter(repository.RootPath);
         var loadResult = router.Load(repository.RootPath, "com.example.app");
         Assert.Empty(loadResult.Warnings);
+
         var task = Assert.Single(loadResult.Tasks, candidate => candidate.TaskId == "map.validate");
         Assert.True(RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
             task.InputSchema,
@@ -864,6 +881,7 @@ public sealed partial class RepositoryTaskTests
 
         Assert.Equal(RepositoryTaskRunStatus.Error, result.Status);
         Assert.Contains("Recursive repository task call rejected", result.Message, StringComparison.Ordinal);
+
         var toolCall = Assert.Single(result.ToolCalls);
         Assert.Equal("ansight.tasks.run", toolCall.ToolName);
         Assert.True(toolCall.IsError);
@@ -880,6 +898,7 @@ public sealed partial class RepositoryTaskTests
                 "expect(input.value, { id: \"child-value\" }).toBe(\"nested-value\");",
                 "expect(input.value, { id: \"child-value\" }).toBe(\"different-value\");",
                 StringComparison.Ordinal));
+
         var router = CreateConfiguredRouter(repository.RootPath);
         var task = Assert.Single(
             router.Load(repository.RootPath, "com.example.app").Tasks,
@@ -916,6 +935,7 @@ public sealed partial class RepositoryTaskTests
         var taskDirectory = Path.Combine(repository.RootPath, "ansight", "tasks", "map");
         Directory.CreateDirectory(taskDirectory);
         File.WriteAllText(Path.Combine(taskDirectory, "validate.ts"), source);
+
         return repository;
     }
 
@@ -957,6 +977,7 @@ public sealed partial class RepositoryTaskTests
         router.ConfigureHostToolRegistry(new OperationRegistry([]));
         router.ConfigureToolExecutor((_, _, _) => Task.FromResult(
             RequestResult.ToolResult(new JsonObject(), isError: false)));
+
         return router;
     }
 
@@ -1121,18 +1142,23 @@ public sealed partial class RepositoryTaskTests
         string ToolName,
         JsonObject Arguments);
 
-    private sealed class StubHostTool(string name) : IOperation
+    private sealed class StubHostTool : IOperation
     {
-        public string Name { get; } = name;
-
-        public JsonObject Definition { get; } = new()
+        public StubHostTool(string name)
         {
-            ["name"] = name,
-            ["description"] = "Test tool.",
-            ["inputSchema"] = new JsonObject { ["type"] = "object" }
-        };
+            this.Name = name;
+            this.Definition = new()
+            {
+                ["name"] = name,
+                ["description"] = "Test tool.",
+                ["inputSchema"] = new JsonObject { ["type"] = "object" }
+            };
+        }
+
+        public string Name { get; }
+        public JsonObject Definition { get; }
 
         public Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
-            => Task.FromResult(RequestResult.ToolResult(new JsonObject(), isError: false));
+                    => Task.FromResult(RequestResult.ToolResult(new JsonObject(), isError: false));
     }
 }

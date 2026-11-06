@@ -10,6 +10,7 @@ public static class AppGraphContainmentReader
         var relations = new List<AppGraphContainmentRelation>();
         AddRelations(graph["navigationHosts"] as JsonArray, "destinationId", "childDestinationIds", relations);
         AddRelations(graph["tabGroups"] as JsonArray, "parentDestinationId", "tabDestinationIds", relations);
+
         return relations;
     }
 

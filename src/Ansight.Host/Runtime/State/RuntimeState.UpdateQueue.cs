@@ -18,6 +18,7 @@ internal sealed partial class RuntimeState
         bool shouldPersist = true)
     {
         ArgumentNullException.ThrowIfNull(update);
+
         if (string.IsNullOrWhiteSpace(sessionId) || !EnsureSessionLoaded(sessionId))
         {
             return;
@@ -31,10 +32,11 @@ internal sealed partial class RuntimeState
             }
 
             var wasActiveDeviceCapture = session.CaptureSource == WorkspaceExecutionModes.Device
-                                         && !session.IsHistorical;
+                && !session.IsHistorical;
             update(session);
+
             if (updateTimelineEnd && (session.CaptureSource != WorkspaceExecutionModes.Device
-                                      || wasActiveDeviceCapture))
+                || wasActiveDeviceCapture))
             {
                 SessionStateMapper.TouchTimelineEnd(session, timelineEndUtc ?? DateTimeOffset.UtcNow);
             }
@@ -70,11 +72,13 @@ internal sealed partial class RuntimeState
         UpdateSession(sessionId, session =>
         {
             var properties = SessionSnapshotCloner.CloneCustomProperties(customProperties);
+
             if (session.CustomProperties?[SessionUiTestRun.PropertyGroup] is { } testRun)
             {
                 properties ??= new JsonObject();
                 properties[SessionUiTestRun.PropertyGroup] = testRun.DeepClone();
             }
+
             session.CustomProperties = properties;
         }, updateTimelineEnd: false);
     }
@@ -108,6 +112,7 @@ internal sealed partial class RuntimeState
         }
 
         string appId;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(sessionId, out var session))
@@ -133,12 +138,14 @@ internal sealed partial class RuntimeState
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
+
         if (bytes.Length == 0 || !EnsureSessionLoaded(sessionId))
         {
             return null;
         }
 
         string appId;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(sessionId, out var session))
@@ -159,6 +166,7 @@ internal sealed partial class RuntimeState
             quality,
             bytes,
             allowDuplicate: allowDuplicate, geometry: geometry);
+
         if (frame is null)
         {
             return null;
@@ -169,6 +177,7 @@ internal sealed partial class RuntimeState
             session.Images.Add(frame);
             session.MarkImagesChanged();
         }, frame.CapturedAtUtc);
+
         return frame;
     }
 
@@ -177,13 +186,29 @@ internal sealed partial class RuntimeState
         UpdateSession(sessionId, session =>
         {
             var frame = session.Images.FirstOrDefault(image => image.FrameId == frameId);
-            if (frame is null) return;
+
+            if (frame is null)
+            {
+                return;
+            }
+
             var validated = ScreenshotGeometry.Validate(geometry);
-            if (JsonNode.DeepEquals(frame.Geometry, validated)) return;
+
+            if (JsonNode.DeepEquals(frame.Geometry, validated))
+            {
+                return;
+            }
+
             session.Images[session.Images.IndexOf(frame)] = new SessionImageFrame
             {
-                FrameId = frame.FrameId, CapturedAtUtc = frame.CapturedAtUtc, Format = frame.Format,
-                Width = frame.Width, Height = frame.Height, Quality = frame.Quality, ByteCount = frame.ByteCount, Geometry = validated
+                FrameId = frame.FrameId,
+                CapturedAtUtc = frame.CapturedAtUtc,
+                Format = frame.Format,
+                Width = frame.Width,
+                Height = frame.Height,
+                Quality = frame.Quality,
+                ByteCount = frame.ByteCount,
+                Geometry = validated
             };
             session.MarkImagesChanged();
         }, updateTimelineEnd: false);
@@ -208,6 +233,7 @@ internal sealed partial class RuntimeState
             {
                 TouchRetainedLoadedSession(loadedSession);
                 EnforceRetainedLoadedSessionLimit();
+
                 return true;
             }
         }
@@ -236,6 +262,7 @@ internal sealed partial class RuntimeState
         if (!IsRetainedLoadedSessionCandidate(session))
         {
             RemoveRetainedLoadedSession(session.SessionId);
+
             return;
         }
 
@@ -252,14 +279,17 @@ internal sealed partial class RuntimeState
         while (retainedLoadedSessionNodeById.Count > MaximumRetainedLoadedSessionCount)
         {
             var oldestNode = retainedLoadedSessionIds.First;
+
             if (oldestNode is null)
             {
                 retainedLoadedSessionNodeById.Clear();
+
                 return;
             }
 
             var sessionId = oldestNode.Value;
             RemoveRetainedLoadedSession(sessionId);
+
             if (sessionsById.TryGetValue(sessionId, out var session)
                 && IsRetainedLoadedSessionCandidate(session))
             {
@@ -328,6 +358,7 @@ internal sealed partial class RuntimeState
         lock (broadcastGate)
         {
             pendingSessionUpdateIds.Add(sessionId);
+
             if (shouldPersist)
             {
                 pendingSessionPersistenceIds.Add(sessionId);
@@ -341,8 +372,8 @@ internal sealed partial class RuntimeState
             sessionUpdateBroadcastTimer = new Timer(
                 FlushPendingSessionUpdates,
                 null,
-                SessionUpdateBroadcastInterval,
-                SessionUpdateBroadcastInterval);
+                sessionUpdateBroadcastInterval,
+                sessionUpdateBroadcastInterval);
         }
     }
 
@@ -405,7 +436,7 @@ internal sealed partial class RuntimeState
 
                 if (!terminalSessionIds.Contains(sessionId)
                     && lastSessionPersistenceUtcById.TryGetValue(sessionId, out var lastPersistenceUtc)
-                    && nowUtc - lastPersistenceUtc < SessionPersistenceInterval)
+                    && nowUtc - lastPersistenceUtc < sessionPersistenceInterval)
                 {
                     continue;
                 }
@@ -413,6 +444,7 @@ internal sealed partial class RuntimeState
                 if (pendingSessionPersistenceIds.Remove(sessionId))
                 {
                     sessionIdsToPersist.Add(sessionId);
+
                     if (terminalSessionIds.Contains(sessionId))
                     {
                         lastSessionPersistenceUtcById.Remove(sessionId);
@@ -437,6 +469,7 @@ internal sealed partial class RuntimeState
         {
             var broadcasts = new List<AppSessionSnapshot>(sessionIdsToBroadcast.Length);
             var persists = new List<AppSessionSnapshot>(sessionIdsToPersist.Count);
+
             foreach (var sessionId in sessionIdsToBroadcast)
             {
                 if (!sessionsById.TryGetValue(sessionId, out var session))

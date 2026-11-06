@@ -8,7 +8,9 @@ internal static class CloudCommands
     public static Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken cancellationToken)
     {
         if (CliCommandHelp.IsRequested(arguments))
+        {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp(arguments.HasFlag("beta"))));
+        }
 
         return Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CloudCommands.RunAsync", [arguments, output, cancellationToken]);
     }
@@ -18,6 +20,7 @@ internal static class CloudCommands
 
     internal static CloudSessionAnalysisRunRequest CreateAnalysisRequest(Guid sessionId, CliArguments arguments, bool summaryDefaults)
         => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<CloudSessionAnalysisRunRequest>("CloudCommands.CreateAnalysisRequest", [sessionId, arguments, summaryDefaults]);
+
     private static string BuildHelp(bool includeBetaFeatures)
     {
         var help = """
@@ -130,6 +133,7 @@ Beta feature commands:
   ansight cloud app-graph list --team-id <uuid> [--search <text>]
   ansight cloud app-graph show <graph-id> [--published]
 """;
+
         return help.Replace(
             analysisOptionsHeading,
             betaFeatureHelp + Environment.NewLine + analysisOptionsHeading,

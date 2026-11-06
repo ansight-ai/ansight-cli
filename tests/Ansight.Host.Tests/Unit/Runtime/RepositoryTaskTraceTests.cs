@@ -39,28 +39,46 @@ public sealed partial class RepositoryTaskTests
         // Dynamic imports are captured by the loader alongside the entry module.
         source = source.Replace("const found =", "await import('./helper.ts');\nconst found =", StringComparison.Ordinal);
         File.WriteAllText(task.ModulePath, source);
+
         var executor = CreateExecutor((toolName, arguments, _) =>
         {
             File.WriteAllText(task.ModulePath, "// changed after module load");
             File.WriteAllText(helperPath, "// changed helper");
+
             return Task.FromResult(RequestResult.ToolResult(toolName == "ansight_find_ui"
-                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() }
-                : new JsonObject { ["payload"] = new JsonObject { ["success"] = true,
-                    ["result"] = new JsonObject { ["ready"] = true } } }, isError: false));
+                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() } : new JsonObject
+                {
+                    ["payload"] = new JsonObject
+                    {
+                        ["success"] = true,
+                        ["result"] = new JsonObject { ["ready"] = true }
+                    }
+                }, isError: false));
         });
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest(
             "run-source", task, "session-1", new JsonObject { ["label"] = "Map" }, "source")
-        { CaptureTrace = captureTrace }, CancellationToken.None);
+        {
+            CaptureTrace = captureTrace
+        }, CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
-        if (!captureTrace) { Assert.Null(result.SourceTrace); return; }
+
+        if (!captureTrace)
+        {
+            Assert.Null(result.SourceTrace);
+
+            return;
+        }
+
         Assert.NotNull(result.SourceTrace);
         Assert.Null(result.SourceTrace.CaptureError);
+
         var main = Assert.Single(result.SourceTrace.Modules, module => module.Path.EndsWith("validate.ts"));
         Assert.Equal(source, main.Content);
         Assert.Equal("typescript", main.Language);
         Assert.False(main.WasTruncated);
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(source))), main.Sha256);
         Assert.Equal(helper, Assert.Single(result.SourceTrace.Modules, module => module.Path.EndsWith("helper.ts")).Content);
+
         var persisted = JsonSerializer.Deserialize<RepositoryTaskRunResult>(JsonSerializer.Serialize(result));
         Assert.Equal(main, persisted!.SourceTrace!.Modules[0]);
         Assert.NotNull(RepositoryTaskProtocol.BuildRunResult(result)["sourceTrace"]);
@@ -73,12 +91,16 @@ public sealed partial class RepositoryTaskTests
         using var repository = CreateRepository(CreatePassingModule());
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var source = "export default async function run({ expect }) { expect(true, { id: 'ok' }).toBe(true); }\n//"
-                     + new string('x', 300_000);
+            + new string('x', 300_000);
         File.WriteAllText(task.ModulePath, source);
+
         var result = await CreateExecutor((_, _, _) => throw new InvalidOperationException()).ExecuteAsync(
             new RepositoryTaskExecutionRequest("large-source", task, "session", new JsonObject(), "source")
-            { CaptureTrace = true }, CancellationToken.None);
+            {
+                CaptureTrace = true
+            }, CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
+
         var module = Assert.Single(result.SourceTrace!.Modules);
         Assert.True(module.WasTruncated);
         Assert.Equal(262_144, module.Content.Length);
@@ -94,7 +116,9 @@ public sealed partial class RepositoryTaskTests
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var result = await CreateExecutor((_, _, _) => throw new InvalidOperationException()).ExecuteAsync(
             new RepositoryTaskExecutionRequest("failure-source", task, "session", new JsonObject(), "source")
-            { CaptureTrace = true }, CancellationToken.None);
+            {
+                CaptureTrace = true
+            }, CancellationToken.None);
         Assert.Equal(RepositoryTaskRunStatus.Error, result.Status);
         Assert.Equal(source, Assert.Single(result.SourceTrace!.Modules).Content);
     }
@@ -108,8 +132,7 @@ public sealed partial class RepositoryTaskTests
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var executor = CreateExecutor((toolName, arguments, _) => Task.FromResult(
             RequestResult.ToolResult(toolName == "ansight_find_ui"
-                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() }
-                : new JsonObject
+                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() } : new JsonObject
                 {
                     ["payload"] = new JsonObject
                     {
@@ -133,6 +156,7 @@ public sealed partial class RepositoryTaskTests
             Assert.True(call.CompletedAtUtc <= result.CompletedAtUtc);
             Assert.True(call.DurationMilliseconds >= 0);
             Assert.Equal($"correlation-trace:{call.Sequence}", call.CorrelationId);
+
             if (captureTrace)
             {
                 Assert.Equal("session-override", ReadCallPayload(call.Arguments)["sessionId"]?.GetValue<string>());
@@ -145,6 +169,7 @@ public sealed partial class RepositoryTaskTests
                 Assert.Null(call.ChildCalls);
             }
         });
+
         if (captureTrace)
         {
             Assert.Equal("Secret Garden", ReadCallPayload(result.ToolCalls[0].Arguments)["text"]?.GetValue<string>());
@@ -162,15 +187,15 @@ public sealed partial class RepositoryTaskTests
         using var repository = CreateRepository(CreateTraceSingleCallModule());
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         var executor = CreateExecutor((_, _, _) => failureMode switch
-        {
-            "throw" => throw new InvalidOperationException("Call failed for trace test."),
-            "request-error" => Task.FromResult(RequestResult.Error(400, "Call failed for trace test.")),
-            _ => Task.FromResult(RequestResult.ToolResult(new JsonObject
-            {
-                ["message"] = "Call failed for trace test.",
-                ["code"] = "trace_test_failure"
-            }, isError: true))
-        });
+{
+    "throw" => throw new InvalidOperationException("Call failed for trace test."),
+    "request-error" => Task.FromResult(RequestResult.Error(400, "Call failed for trace test.")),
+    _ => Task.FromResult(RequestResult.ToolResult(new JsonObject
+    {
+        ["message"] = "Call failed for trace test.",
+        ["code"] = "trace_test_failure"
+    }, isError: true))
+});
 
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest(
             "run-error", task, "session-1", new JsonObject { ["text"] = "input retained" }, "correlation-error")
@@ -179,15 +204,18 @@ public sealed partial class RepositoryTaskTests
         }, CancellationToken.None);
 
         Assert.Equal(RepositoryTaskRunStatus.Error, result.Status);
+
         var call = Assert.Single(result.ToolCalls);
         Assert.True(call.IsError);
         Assert.Equal("input retained", ReadCallPayload(call.Arguments)["text"]?.GetValue<string>());
         Assert.Equal("Call failed for trace test.", ReadCallPayload(call.Result)["message"]?.GetValue<string>());
         Assert.True(call.CompletedAtUtc >= call.StartedAtUtc);
+
         if (failureMode == "request-error")
         {
             Assert.Equal(400, ReadCallPayload(call.Result)["errorCode"]?.GetValue<int>());
         }
+
         if (failureMode == "throw")
         {
             Assert.Equal(nameof(InvalidOperationException), ReadCallPayload(call.Result)["exceptionType"]?.GetValue<string>());
@@ -203,6 +231,7 @@ public sealed partial class RepositoryTaskTests
         var executor = CreateExecutor((_, _, _) =>
         {
             cancellation.Cancel();
+
             return new TaskCompletionSource<RequestResult>().Task;
         });
 
@@ -214,6 +243,7 @@ public sealed partial class RepositoryTaskTests
 
         Assert.Equal(RepositoryTaskRunStatus.Cancelled, result.Status);
         Assert.NotEmpty(result.SourceTrace!.Modules);
+
         var call = Assert.Single(result.ToolCalls);
         Assert.True(call.IsError);
         Assert.Equal("pending input", ReadCallPayload(call.Arguments)["text"]?.GetValue<string>());
@@ -242,6 +272,7 @@ public sealed partial class RepositoryTaskTests
         }, CancellationToken.None);
 
         Assert.Equal(expectedStatus, result.Status);
+
         var call = Assert.Single(result.ToolCalls);
         AssertBoundedCallPayload(call.Arguments, input.ToJsonString(JsonUtil.Compact), RepositoryTaskCallTrace.MaximumArgumentCharacters);
         AssertBoundedCallPayload(call.Result, output.ToJsonString(JsonUtil.Compact), RepositoryTaskCallTrace.MaximumResultCharacters);
@@ -259,11 +290,13 @@ public sealed partial class RepositoryTaskTests
                 + "await app.callTool(\"trace.third\", { value: input.value });\n"
                 + "expect(input.value", StringComparison.Ordinal);
         File.WriteAllText(Path.Combine(repository.RootPath, "ansight", "tasks", "map", "child.ts"), childSource);
+
         var router = CreateConfiguredRouter(repository.RootPath);
         router.ConfigureToolExecutor((_, _, _) => Task.FromResult(RequestResult.ToolResult(new JsonObject
         {
             ["value"] = new string('x', 300_000)
         }, isError: false)));
+
         var task = Assert.Single(router.Load(repository.RootPath, "com.example.app").Tasks, candidate => candidate.TaskId == "map.validate");
 
         using var trace = RepositoryTaskTraceScope.Begin(true);
@@ -271,11 +304,13 @@ public sealed partial class RepositoryTaskTests
 
         Assert.Equal(RepositoryTaskRunStatus.Passed, result.Status);
         Assert.Equal(2, result.ToolCalls.Count);
+
         var composition = result.ToolCalls[1];
         Assert.Equal("map.child", ReadCallPayload(composition.Arguments)["taskId"]?.GetValue<string>());
         Assert.Equal("nested-value", ReadCallPayload(composition.Result)["output"]?["value"]?.GetValue<string>());
         Assert.False(composition.Result!.WasTruncated);
         Assert.Equal(3, composition.ChildCalls?.Count);
+
         var nestedAssertion = Assert.Single(composition.Assertions!);
         Assert.True(nestedAssertion.Passed);
         Assert.Equal("expect.toBe", nestedAssertion.Matcher);
@@ -298,6 +333,7 @@ public sealed partial class RepositoryTaskTests
         Assert.Equal(composition.Result, protocolCalls[1].Result);
         Assert.Equal(composition.ChildCalls![2], protocolCalls[1].ChildCalls![2]);
         Assert.Equal("nested-value", Assert.Single(protocolCalls[1].Assertions!).Actual!.GetValue<string>());
+
         var persisted = File.ReadLines(Path.Combine(repository.RootPath, "automation", "task-runs.jsonl"))
             .Select(line => JsonSerializer.Deserialize<RepositoryTaskRunResult>(line, JsonUtil.Compact)!)
             .Single(run => run.RunId == result.RunId);
@@ -341,6 +377,7 @@ public sealed partial class RepositoryTaskTests
         Assert.False(payload.WasTruncated);
         Assert.Equal(payload.Content.Length, payload.OriginalCharacterCount);
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload.Content))), payload.Sha256);
+
         return JsonNode.Parse(payload.Content)!;
     }
 

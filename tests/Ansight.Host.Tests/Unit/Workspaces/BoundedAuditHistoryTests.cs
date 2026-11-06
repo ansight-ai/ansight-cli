@@ -13,10 +13,12 @@ public sealed class BoundedAuditHistoryTests
         var currentPath = Path.Combine(directory.Path, "current.json");
         File.WriteAllText(oldPath, "{}");
         File.WriteAllText(oldPath + ".metering", "[]");
+
         var tracePath = Path.Combine(directory.Path, "old.trace");
         Directory.CreateDirectory(tracePath);
         File.WriteAllText(Path.Combine(tracePath, "ocr.json"), "{}");
         File.SetLastWriteTimeUtc(oldPath, DateTime.UtcNow.AddDays(-1));
+
         for (var index = 0; index < BoundedAuditHistory.MaximumRuns; index++)
         {
             File.WriteAllText(Path.Combine(directory.Path, $"run-{index:D4}.json"), "{}");

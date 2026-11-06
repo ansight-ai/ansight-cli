@@ -10,6 +10,7 @@ internal static class SecurityToolPasswordOutputDecoder
         }
 
         var trimmed = output.TrimEnd('\r', '\n');
+
         if (LooksLikeStructuredText(trimmed) || !IsHexEncoded(trimmed))
         {
             return trimmed;
@@ -18,6 +19,7 @@ internal static class SecurityToolPasswordOutputDecoder
         try
         {
             var decoded = Encoding.UTF8.GetString(Convert.FromHexString(trimmed));
+
             return LooksLikeStructuredText(decoded) ? decoded : trimmed;
         }
         catch (FormatException)
@@ -33,6 +35,7 @@ internal static class SecurityToolPasswordOutputDecoder
     private static bool LooksLikeStructuredText(string value)
     {
         var trimmed = value.TrimStart();
+
         return trimmed.Length > 0 && trimmed[0] is '{' or '[' or '"';
     }
 

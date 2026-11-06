@@ -46,6 +46,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
 
         var path = LiveUiToolSchemas.ReadString(arguments, "path");
         var sql = LiveUiToolSchemas.ReadString(arguments, "sql");
+
         if (path is null || sql is null)
         {
             return ToolError("path and sql are required.");
@@ -53,6 +54,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
 
         var expectedRowCount = ReadNullableInteger(arguments, "expectedRowCount");
         var expectedScalar = ReadOptionalScalar(arguments, "expectedScalar");
+
         if (!expectedRowCount.HasValue && expectedScalar is null)
         {
             return ToolError("expectedRowCount or expectedScalar is required.");
@@ -62,6 +64,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
             snapshot!.SessionId,
             CancellationToken.None,
             new AppToolBridgeRequestContext("host-ui", Name, correlationId));
+
         if (!catalogResponse.Success
             || catalogResponse.Envelope?.Payload is not { } catalog
             || !RemoteAppToolCatalog.HasTool(catalog, QueryToolId))
@@ -82,6 +85,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
         do
         {
             attempts++;
+
             var response = await appToolBridge.CallToolWithCatalogRecoveryAsync(
                 snapshot.SessionId,
                 QueryToolId,
@@ -96,6 +100,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
                 after: null,
                 CancellationToken.None,
                 new AppToolBridgeRequestContext("host-ui", Name, correlationId));
+
             if (response.Success
                 && response.Envelope is not null
                 && !string.Equals(response.Envelope.Type, ToolProtocolMessageTypes.ErrorType, StringComparison.Ordinal)
@@ -103,6 +108,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
                 && latest is not null)
             {
                 latestError = null;
+
                 if ((!expectedRowCount.HasValue || latest.RowCount == expectedRowCount.Value)
                     && (expectedScalar is null || string.Equals(latest.Scalar, expectedScalar, StringComparison.Ordinal)))
                 {
@@ -126,14 +132,14 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
             }
 
             var remainingMs = timeoutMs - stopwatch.ElapsedMilliseconds;
+
             if (remainingMs <= 0)
             {
                 break;
             }
 
             await Task.Delay((int)Math.Min(pollIntervalMs, remainingMs));
-        }
-        while (stopwatch.ElapsedMilliseconds <= timeoutMs);
+        } while (stopwatch.ElapsedMilliseconds <= timeoutMs);
 
         return BuildResult(
             snapshot,
@@ -204,6 +210,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
         out DatabaseAssertionSample? sample)
     {
         sample = null;
+
         if (envelopePayload is not JsonObject payload
             || payload["result"] is not JsonObject rawResult)
         {
@@ -211,6 +218,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
         }
 
         var result = rawResult["query"] as JsonObject ?? rawResult;
+
         if (result["rows"] is not JsonArray rows)
         {
             return false;
@@ -218,6 +226,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
 
         var firstRow = rows.OfType<JsonObject>().FirstOrDefault();
         JsonNode? scalar = null;
+
         if (firstRow is not null)
         {
             if (scalarColumn is not null)
@@ -234,6 +243,7 @@ internal sealed class AssertLiveDatabaseTool : RemoteAppOperation
             rows.Count,
             ReadScalar(scalar),
             ReadCapturedAtUtc(rawResult));
+
         return true;
     }
 

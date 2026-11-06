@@ -19,31 +19,26 @@ public sealed class UserPreferences : IUserPreferences
         get => preferencesStore.Get(PreferenceKeys.PreferredTheme, ThemeIdentifiers.Dark);
         set => preferencesStore.Set(PreferenceKeys.PreferredTheme, value ?? string.Empty);
     }
-
     public string PreferredLanguage
     {
         get => preferencesStore.Get(PreferenceKeys.PreferredLanguage, "en");
         set => preferencesStore.Set(PreferenceKeys.PreferredLanguage, value ?? "en");
     }
-
     public bool UseDeviceLanguage
     {
         get => preferencesStore.Get(PreferenceKeys.UseDeviceLanguage, true);
         set => preferencesStore.Set(PreferenceKeys.UseDeviceLanguage, value);
     }
-
     public string LastOpenedRoute
     {
         get => preferencesStore.Get(PreferenceKeys.LastOpenedRoute, string.Empty);
         set => preferencesStore.Set(PreferenceKeys.LastOpenedRoute, value ?? string.Empty);
     }
-
     public string PreferredAiAgent
     {
         get => preferencesStore.Get(PreferenceKeys.PreferredAiAgent, "Codex");
         set => preferencesStore.Set(PreferenceKeys.PreferredAiAgent, value ?? "Codex");
     }
-
     public string PreferredBuildWorkspaceDirectory
     {
         get => preferencesStore.Get(PreferenceKeys.PreferredBuildWorkspaceDirectory, string.Empty);
@@ -51,7 +46,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.PreferredBuildWorkspaceDirectory,
             value?.Trim() ?? string.Empty);
     }
-
     public string LogCaptureLevel
     {
         get => preferencesStore.Get(PreferenceKeys.LogCaptureLevel, "Information");
@@ -59,19 +53,16 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.LogCaptureLevel,
             string.IsNullOrWhiteSpace(value) ? "Information" : value);
     }
-
     public string AdbPath
     {
         get => preferencesStore.Get(PreferenceKeys.AdbPath, string.Empty);
         set => preferencesStore.Set(PreferenceKeys.AdbPath, value?.Trim() ?? string.Empty);
     }
-
     public string XcodePath
     {
         get => preferencesStore.Get(PreferenceKeys.XcodePath, string.Empty);
         set => preferencesStore.Set(PreferenceKeys.XcodePath, value?.Trim() ?? string.Empty);
     }
-
     public string RecentlyUsedSimulatorDeviceIdentifiers
     {
         get => preferencesStore.Get(PreferenceKeys.RecentlyUsedSimulatorDeviceIdentifiers, string.Empty);
@@ -79,7 +70,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.RecentlyUsedSimulatorDeviceIdentifiers,
             value ?? string.Empty);
     }
-
     public string PinnedSimulatorDeviceIdentifiers
     {
         get => preferencesStore.Get(PreferenceKeys.PinnedSimulatorDeviceIdentifiers, string.Empty);
@@ -87,7 +77,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.PinnedSimulatorDeviceIdentifiers,
             value ?? string.Empty);
     }
-
     public string ExternalSimulatorAccessMode
     {
         get => preferencesStore.Get(PreferenceKeys.ExternalSimulatorAccessMode, "disabled");
@@ -95,7 +84,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.ExternalSimulatorAccessMode,
             string.IsNullOrWhiteSpace(value) ? "disabled" : value.Trim().ToLowerInvariant());
     }
-
     public string ExternalSimulatorAccessOwnerUserId
     {
         get => preferencesStore.Get(PreferenceKeys.ExternalSimulatorAccessOwnerUserId, string.Empty);
@@ -103,7 +91,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.ExternalSimulatorAccessOwnerUserId,
             value?.Trim() ?? string.Empty);
     }
-
     public string ExternalSimulatorMachineName
     {
         get => preferencesStore.Get(PreferenceKeys.ExternalSimulatorMachineName, string.Empty);
@@ -111,7 +98,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.ExternalSimulatorMachineName,
             value?.Trim() ?? string.Empty);
     }
-
     public string ExternalSimulatorTeamId
     {
         get => preferencesStore.Get(PreferenceKeys.ExternalSimulatorTeamId, string.Empty);
@@ -119,13 +105,11 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.ExternalSimulatorTeamId,
             value?.Trim() ?? string.Empty);
     }
-
     public bool CaptureNativeSessionLogs
     {
         get => preferencesStore.Get(PreferenceKeys.CaptureNativeSessionLogs, true);
         set => preferencesStore.Set(PreferenceKeys.CaptureNativeSessionLogs, value);
     }
-
     public string UpdateReleaseChannel
     {
         get => preferencesStore.Get(PreferenceKeys.UpdateReleaseChannel, "public");
@@ -133,31 +117,26 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.UpdateReleaseChannel,
             string.IsNullOrWhiteSpace(value) ? "public" : value);
     }
-
     public string TeamAppPublishingEnabledTeamIds
     {
         get => preferencesStore.Get(PreferenceKeys.TeamAppPublishingEnabledTeamIds, string.Empty);
         set => preferencesStore.Set(PreferenceKeys.TeamAppPublishingEnabledTeamIds, value ?? string.Empty);
     }
-
     public bool CaptureHostOperationLogs
     {
         get => preferencesStore.Get(PreferenceKeys.CaptureHostOperationLogs, true);
         set => preferencesStore.Set(PreferenceKeys.CaptureHostOperationLogs, value);
     }
-
     public bool CaptureFullHostOperationTrafficToDisk
     {
         get => preferencesStore.Get(PreferenceKeys.CaptureFullHostOperationTrafficToDisk, false);
         set => preferencesStore.Set(PreferenceKeys.CaptureFullHostOperationTrafficToDisk, value);
     }
-
     public bool SessionAutoCleanupEnabled
     {
         get => preferencesStore.Get(PreferenceKeys.SessionAutoCleanupEnabled, SessionCleanupPreferenceDefaults.Enabled);
         set => preferencesStore.Set(PreferenceKeys.SessionAutoCleanupEnabled, value);
     }
-
     public int SessionAutoCleanupRetentionDays
     {
         get => SessionCleanupPreferenceDefaults.NormalizeRetentionDays(
@@ -168,7 +147,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.SessionAutoCleanupRetentionDays,
             SessionCleanupPreferenceDefaults.NormalizeRetentionDays(value));
     }
-
     public int SessionAutoCompactionAgeDays
     {
         get => SessionCleanupPreferenceDefaults.NormalizeCompactionAgeDays(
@@ -179,7 +157,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.SessionAutoCompactionAgeDays,
             SessionCleanupPreferenceDefaults.NormalizeCompactionAgeDays(value));
     }
-
     public long SessionAutoCleanupMaximumCacheBytes
     {
         get => SessionCleanupPreferenceDefaults.NormalizeMaximumCacheBytes(
@@ -190,7 +167,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.SessionAutoCleanupMaximumCacheBytes,
             SessionCleanupPreferenceDefaults.NormalizeMaximumCacheBytes(value));
     }
-
     public int MemorySpikeMinimumIncreasePercent
     {
         get => TelemetryAnalysisPreferenceDefaults.NormalizeMemorySpikeMinimumIncreasePercent(
@@ -201,7 +177,6 @@ public sealed class UserPreferences : IUserPreferences
             PreferenceKeys.MemorySpikeMinimumIncreasePercent,
             TelemetryAnalysisPreferenceDefaults.NormalizeMemorySpikeMinimumIncreasePercent(value));
     }
-
     public int MemorySpikeMinimumIncreaseMegabytes
     {
         get => TelemetryAnalysisPreferenceDefaults.NormalizeMemorySpikeMinimumIncreaseMegabytes(

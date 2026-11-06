@@ -14,12 +14,14 @@ public sealed class MigratingEncryptedStorage : IEncryptedStorage
     public string? Get(string key)
     {
         var value = primary.Get(key);
+
         if (value is not null)
         {
             return value;
         }
 
         value = fallback.Get(key);
+
         if (value is not null)
         {
             primary.Set(key, value);
@@ -34,6 +36,7 @@ public sealed class MigratingEncryptedStorage : IEncryptedStorage
         if (value is null)
         {
             Remove(key);
+
             return;
         }
 

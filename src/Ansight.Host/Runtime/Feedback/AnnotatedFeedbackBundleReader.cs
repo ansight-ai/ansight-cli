@@ -30,25 +30,31 @@ internal static class AnnotatedFeedbackBundleReader
         {
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
             var manifestEntry = FindEntry(archive, "manifest.json");
+
             if (manifestEntry is null)
             {
                 error = $"Annotated feedback bundle '{sourceName}' is missing manifest.json.";
+
                 return false;
             }
 
             using var manifestStream = manifestEntry.Open();
             using var document = JsonDocument.Parse(manifestStream, documentOptions);
             var manifest = document.RootElement;
+
             if (!string.Equals(ReadString(manifest, "schema"), BundleSchema, StringComparison.Ordinal))
             {
                 error = $"Annotated feedback bundle '{sourceName}' uses an unsupported schema.";
+
                 return false;
             }
 
             var annotationId = NormalizeGuidIdentifier(ReadString(manifest, "annotationId"));
+
             if (annotationId is null)
             {
                 error = $"Annotated feedback bundle '{sourceName}' is missing a valid annotation id.";
+
                 return false;
             }
 
@@ -57,6 +63,7 @@ internal static class AnnotatedFeedbackBundleReader
             var visualTrees = ReadVisualTrees(archive, manifest, annotationId, capturedAtUtc);
             var artifacts = ReadArtifacts(archive, manifest);
             var evidence = ReadEvidence(manifest).ToList();
+
             foreach (var artifact in artifacts)
             {
                 if (evidence.Any(item => string.Equals(item.Id, artifact.EvidenceId, StringComparison.Ordinal)))
@@ -91,11 +98,13 @@ internal static class AnnotatedFeedbackBundleReader
                 Evidence = evidence,
                 HookFailures = ReadStringArray(manifest, "hookFailures")
             };
+
             return true;
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
         {
             error = $"Unable to read annotated feedback bundle '{sourceName}': {exception.Message}";
+
             return false;
         }
     }
@@ -110,12 +119,14 @@ internal static class AnnotatedFeedbackBundleReader
 
         var path = ReadString(screenshotElement, "path");
         var entry = FindEntry(archive, path);
+
         if (entry is null)
         {
             return null;
         }
 
         byte[] bytes;
+
         try
         {
             bytes = ReadEntryBytes(entry, MaximumEntryBytes);
@@ -124,6 +135,7 @@ internal static class AnnotatedFeedbackBundleReader
         {
             return null;
         }
+
         return bytes.Length == 0
             ? null
             : new AnnotatedFeedbackScreenshot(
@@ -150,6 +162,7 @@ internal static class AnnotatedFeedbackBundleReader
 
         var visualTrees = new List<AnnotatedFeedbackVisualTree>();
         var index = 0;
+
         foreach (var element in visualTreesElement.EnumerateArray())
         {
             if (element.ValueKind != JsonValueKind.Object)
@@ -158,12 +171,14 @@ internal static class AnnotatedFeedbackBundleReader
             }
 
             var entry = FindEntry(archive, ReadString(element, "path"));
+
             if (entry is null)
             {
                 continue;
             }
 
             byte[] bytes;
+
             try
             {
                 bytes = ReadEntryBytes(entry, MaximumEntryBytes);
@@ -172,7 +187,9 @@ internal static class AnnotatedFeedbackBundleReader
             {
                 continue;
             }
+
             JsonObject? payload;
+
             try
             {
                 payload = JsonNode.Parse(bytes, documentOptions: documentOptions) as JsonObject;
@@ -212,6 +229,7 @@ internal static class AnnotatedFeedbackBundleReader
         var artifacts = new List<AnnotatedFeedbackArtifact>();
         var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var index = 0;
+
         foreach (var element in artifactsElement.EnumerateArray())
         {
             if (element.ValueKind != JsonValueKind.Object)
@@ -222,9 +240,11 @@ internal static class AnnotatedFeedbackBundleReader
             var name = NormalizeText(ReadString(element, "name")) ?? $"Artifact {index + 1}";
             var status = NormalizeText(ReadString(element, "status"))?.ToLowerInvariant() ?? "unknown";
             byte[]? bytes = null;
+
             if (string.Equals(status, "captured", StringComparison.Ordinal))
             {
                 var entry = FindEntry(archive, ReadString(element, "path"));
+
                 if (entry is not null)
                 {
                     try
@@ -288,12 +308,15 @@ internal static class AnnotatedFeedbackBundleReader
         }
 
         var shapes = new List<AnnotatedFeedbackShape>();
+
         foreach (var element in shapesElement.EnumerateArray())
         {
             var kind = ReadString(element, "kind")?.Trim().ToLowerInvariant();
+
             if (kind == "freedraw")
             {
                 var points = ReadShapePoints(element);
+
                 if (points.Count < 2)
                 {
                     continue;
@@ -303,6 +326,7 @@ internal static class AnnotatedFeedbackBundleReader
                 var pathY = points.Min(point => point.Y);
                 var pathWidth = points.Max(point => point.X) - pathX;
                 var pathHeight = points.Max(point => point.Y) - pathY;
+
                 if (pathWidth <= 0d && pathHeight <= 0d)
                 {
                     continue;
@@ -330,6 +354,7 @@ internal static class AnnotatedFeedbackBundleReader
             var y = Math.Clamp(ReadDouble(element, "y") ?? 0d, 0d, 1d);
             var width = Math.Clamp(ReadDouble(element, "width") ?? 0d, 0d, 1d - x);
             var height = Math.Clamp(ReadDouble(element, "height") ?? 0d, 0d, 1d - y);
+
             if (width <= 0d || height <= 0d)
             {
                 continue;
@@ -391,6 +416,7 @@ internal static class AnnotatedFeedbackBundleReader
     private static ZipArchiveEntry? FindEntry(ZipArchive archive, string? path)
     {
         var normalizedPath = NormalizeArchivePath(path);
+
         if (normalizedPath is null)
         {
             return null;
@@ -410,9 +436,11 @@ internal static class AnnotatedFeedbackBundleReader
         using var source = entry.Open();
         using var destination = new MemoryStream(entry.Length > 0 ? checked((int)Math.Min(entry.Length, int.MaxValue)) : 0);
         var buffer = new byte[64 * 1024];
+
         while (true)
         {
             var read = source.Read(buffer, 0, buffer.Length);
+
             if (read == 0)
             {
                 break;
@@ -458,12 +486,14 @@ internal static class AnnotatedFeedbackBundleReader
                 if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
                 {
                     value = property.Value;
+
                     return true;
                 }
             }
         }
 
         value = default;
+
         return false;
     }
 
@@ -489,6 +519,7 @@ internal static class AnnotatedFeedbackBundleReader
     private static DateTimeOffset? ReadTimestamp(JsonElement element, string propertyName)
     {
         var value = ReadString(element, propertyName);
+
         return DateTimeOffset.TryParse(
             value,
             CultureInfo.InvariantCulture,
@@ -511,6 +542,7 @@ internal static class AnnotatedFeedbackBundleReader
         }
 
         var normalized = path.Replace('\\', '/').Trim('/');
+
         return normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == "..")
             ? null
             : normalized;
@@ -519,19 +551,22 @@ internal static class AnnotatedFeedbackBundleReader
     private static string NormalizeImageFormat(string? mimeType, string? path)
     {
         var candidate = $"{mimeType} {Path.GetExtension(path)}";
+
         return candidate.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpeg";
     }
 
     private static string CreateUniqueFileName(string fileName, int index, HashSet<string> usedFileNames)
     {
         var sanitized = string.Concat(Path.GetFileName(fileName).Select(character =>
-            Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
+                Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
+
         if (string.IsNullOrWhiteSpace(sanitized))
         {
             sanitized = $"artifact-{index + 1:D3}.bin";
         }
 
         var candidate = $"{index:D3}-{sanitized}";
+
         while (!usedFileNames.Add(candidate))
         {
             candidate = $"{index:D3}-{Guid.NewGuid():N}-{sanitized}";
@@ -543,6 +578,7 @@ internal static class AnnotatedFeedbackBundleReader
     private static string SanitizeIdentifier(string value)
     {
         var result = new string(value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray());
+
         return string.IsNullOrWhiteSpace(result) ? "item" : result;
     }
 }

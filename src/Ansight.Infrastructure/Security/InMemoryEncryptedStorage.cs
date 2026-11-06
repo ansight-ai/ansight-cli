@@ -30,6 +30,7 @@ public sealed class InMemoryEncryptedStorage : IEncryptedStorage
             if (value is null)
             {
                 values.Remove(key);
+
                 return;
             }
 

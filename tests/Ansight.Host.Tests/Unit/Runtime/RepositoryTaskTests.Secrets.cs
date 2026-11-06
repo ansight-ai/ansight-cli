@@ -13,17 +13,17 @@ public sealed partial class RepositoryTaskTests
         var module = CreatePassingModule()
             .Replace("{ input, ansight, app, expect }", "{ input, ansight, app, expect, secrets }", StringComparison.Ordinal)
             .Replace("const found = await ansight.ui.find({",
-                "expect(secrets.require('login_password').length, { id: 'secret-present' }).toBe(8);\n"
+            "expect(secrets.require('login_password').length, { id: 'secret-present' }).toBe(8);\n"
                 + "             expect(secrets.get('not_granted'), { id: 'secret-absent' }).toBeUndefined();\n"
                 + "             const found = await ansight.ui.find({", StringComparison.Ordinal);
         using var repository = CreateRepository(module);
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         Assert.True(RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
             task.InputSchema, null, out var input, out var error), error);
+
         var executor = CreateExecutor((toolName, arguments, _) => Task.FromResult(
             RequestResult.ToolResult(toolName == "ansight_find_ui"
-                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() }
-                : new JsonObject { ["payload"] = new JsonObject { ["result"] = new JsonObject { ["ready"] = true } } },
+                ? new JsonObject { ["value"] = arguments["text"]?.DeepClone() } : new JsonObject { ["payload"] = new JsonObject { ["result"] = new JsonObject { ["ready"] = true } } },
                 isError: false)));
 
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest(

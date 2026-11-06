@@ -6,7 +6,7 @@ internal static class DeadTouchAnalyzer
 {
     private const int MaximumReturnedFailureSignals = 20;
 
-    private static readonly string[] InteractionTerms =
+    private static readonly string[] interactionTerms =
     [
         "gesture",
         "touch",
@@ -15,7 +15,7 @@ internal static class DeadTouchAnalyzer
         "input"
     ];
 
-    private static readonly string[] FailureTerms =
+    private static readonly string[] failureTerms =
     [
         "timeout",
         "timed out",
@@ -78,8 +78,9 @@ internal static class DeadTouchAnalyzer
     private static bool IsGestureFailureSignal(LogEntry log)
     {
         var message = log.Message;
-        return InteractionTerms.Any(term => message.Contains(term, StringComparison.OrdinalIgnoreCase))
-               && FailureTerms.Any(term => message.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+        return interactionTerms.Any(term => message.Contains(term, StringComparison.OrdinalIgnoreCase))
+            && failureTerms.Any(term => message.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
     private static JsonObject BuildFailureSignalPayload(LogEntry log)

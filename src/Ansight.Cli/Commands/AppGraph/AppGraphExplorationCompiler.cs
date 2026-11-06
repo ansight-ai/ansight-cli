@@ -12,6 +12,7 @@ internal static class AppGraphExplorationCompiler
     private const int MaximumExistingGraphCharacters = 96_000;
     private static readonly HashSet<string> supportedBindingMechanisms =
         new(["app_link", "native_route", "app_tool", "ui_action"], StringComparer.Ordinal);
+
     public static string BuildInstruction(
         CloudAppGraphDetail? detail,
         string graphName,
@@ -19,6 +20,7 @@ internal static class AppGraphExplorationCompiler
         string? focus)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(graphName);
+
         var definitionNode = detail?.Version.Definition ?? new JsonObject
         {
             ["schema"] = "ansight.app-graph/v1",
@@ -26,6 +28,7 @@ internal static class AppGraphExplorationCompiler
             ["edges"] = new JsonArray()
         };
         var definition = definitionNode.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
         if (definition.Length > MaximumExistingGraphCharacters)
         {
             definition = definition[..MaximumExistingGraphCharacters] + "…";
@@ -60,6 +63,7 @@ internal static class AppGraphExplorationCompiler
                     ["VERSION_NUMBER"] = detail.Version.VersionNumber.ToString(
                         CultureInfo.InvariantCulture)
                 }).TrimEnd();
+
         return AppGraphTextResource.RenderSection(
             AppGraphTextResource.CatalogFileName,
             "exploration-instruction",
@@ -79,22 +83,35 @@ internal static class AppGraphExplorationCompiler
     {
         candidate = null;
         error = string.Empty;
-        if (!AppGraphExplorationSummaryValidator.TryValidate(completionSummary, out error)) return false;
-        if (!TryParseObject(completionSummary, out var root, out error)) return false;
+
+        if (!AppGraphExplorationSummaryValidator.TryValidate(completionSummary, out error))
+        {
+            return false;
+        }
+
+        if (!TryParseObject(completionSummary, out var root, out error))
+        {
+            return false;
+        }
+
         if (!string.Equals(ReadString(root, "schema"), ExplorationSchema, StringComparison.Ordinal))
         {
             error = $"The exploration summary must use schema '{ExplorationSchema}'.";
+
             return false;
         }
 
         if (root["destinations"] is not JsonArray destinationValues || destinationValues.Count == 0)
         {
             error = "The exploration did not return any observed destinations.";
+
             return false;
         }
+
         if (root["transitions"] is not JsonArray transitionValues)
         {
             error = "The exploration summary must include a transitions array.";
+
             return false;
         }
 
@@ -102,47 +119,64 @@ internal static class AppGraphExplorationCompiler
         var destinationIds = new Dictionary<string, string>(StringComparer.Ordinal);
         var compiledNodesBySourceId = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
         var usedNodeIds = new HashSet<string>(StringComparer.Ordinal);
+
         for (var index = 0; index < destinationValues.Count; index++)
         {
             if (destinationValues[index] is not JsonObject destination)
             {
                 error = $"Exploration destination {index + 1} is not an object.";
+
                 return false;
             }
+
             var sourceId = ReadString(destination, "id");
             var name = ReadString(destination, "name");
             var purpose = ReadString(destination, "purpose");
+
             if (string.IsNullOrWhiteSpace(sourceId)
                 || string.IsNullOrWhiteSpace(name)
                 || string.IsNullOrWhiteSpace(purpose))
             {
                 error = $"Exploration destination {index + 1} requires id, name, and purpose.";
+
                 return false;
             }
+
             if (destinationIds.ContainsKey(sourceId))
             {
                 error = $"Exploration destination id '{sourceId}' is duplicated.";
+
                 return false;
             }
+
             var destinationKind = ReadString(destination, "kind")?.Trim().ToLowerInvariant();
+
             if (destinationKind is not ("screen" or "dialog" or "state"))
             {
                 error = $"Exploration destination '{sourceId}' must use kind screen, dialog, or state.";
+
                 return false;
             }
+
             var parentScreen = ReadString(destination, "parentScreen");
+
             if (destinationKind == "state" && string.IsNullOrWhiteSpace(parentScreen))
             {
                 error = $"Named state '{sourceId}' requires its containing screen in parentScreen.";
+
                 return false;
             }
+
             if (destinationKind == "dialog" && !string.IsNullOrWhiteSpace(parentScreen))
             {
                 error = $"Dialog destination '{sourceId}' cannot belong to a navigation host or containing screen.";
+
                 return false;
             }
+
             var normalizedId = MakeUniqueId(NormalizeId(sourceId, destinationKind), usedNodeIds);
             destinationIds[sourceId] = normalizedId;
+
             var compiledNode = new JsonObject
             {
                 ["id"] = normalizedId,
@@ -159,15 +193,16 @@ internal static class AppGraphExplorationCompiler
         }
 
         if (!TryCompileNavigationStructure(
-                root,
-                destinationIds,
-                compiledNodesBySourceId,
-                out var navigationHosts,
-                out var tabGroups,
-                out error))
+            root,
+            destinationIds,
+            compiledNodesBySourceId,
+            out var navigationHosts,
+            out var tabGroups,
+            out error))
         {
             return false;
         }
+
         if (!TryValidateScreenParents(nodes, navigationHosts, out error))
         {
             return false;
@@ -177,45 +212,56 @@ internal static class AppGraphExplorationCompiler
         var observedTransitions = new JsonArray();
         var bindingCandidates = new JsonArray();
         var usedEdgeIds = new HashSet<string>(StringComparer.Ordinal);
+
         for (var index = 0; index < transitionValues.Count; index++)
         {
             if (transitionValues[index] is not JsonObject transition)
             {
                 error = $"Exploration transition {index + 1} is not an object.";
+
                 return false;
             }
+
             var sourceEdgeId = ReadString(transition, "id");
             var sourceFrom = ReadString(transition, "from");
             var sourceTo = ReadString(transition, "to");
             var action = transition["action"] as JsonObject;
             var semanticMeaning = action is null ? null : ReadString(action, "semanticMeaning");
             var automationId = action is null ? null : ReadString(action, "automationId");
+
             if (string.IsNullOrWhiteSpace(sourceEdgeId)
                 || string.IsNullOrWhiteSpace(sourceFrom)
                 || string.IsNullOrWhiteSpace(sourceTo)
                 || string.IsNullOrWhiteSpace(semanticMeaning))
             {
                 error = $"Exploration transition {index + 1} requires id, from, to, and semantic action values.";
+
                 return false;
             }
+
             if (!destinationIds.TryGetValue(sourceFrom, out var from))
             {
                 error = $"Exploration transition '{sourceEdgeId}' references unknown source destination '{sourceFrom}'.";
+
                 return false;
             }
+
             if (!destinationIds.TryGetValue(sourceTo, out var to))
             {
                 error = $"Exploration transition '{sourceEdgeId}' references unknown resulting destination '{sourceTo}'.";
+
                 return false;
             }
 
             var edgeId = MakeUniqueId(NormalizeId(sourceEdgeId, "edge"), usedEdgeIds);
             var postconditions = ReadStringArray(transition, "postconditions");
+
             if (postconditions.Count == 0)
             {
                 var targetName = (nodes.FirstOrDefault(node => node?["id"]?.GetValue<string>() == to) as JsonObject)?["name"]?.GetValue<string>();
                 postconditions = [$"{targetName ?? "The resulting destination"} is visible"];
             }
+
             var hasStableAutomationId = !string.IsNullOrWhiteSpace(automationId);
             var navigationKind = AppGraphActionIdentity.NavigationKind(
                 "ansight_tap_ui", automationId ?? string.Empty,
@@ -235,8 +281,7 @@ internal static class AppGraphExplorationCompiler
                     ["navigationKind"] = navigationKind
                 },
                 ["navigationContext"] = requiresReturnContext
-                    ? new JsonObject { ["returnDestinationId"] = to }
-                    : null,
+                    ? new JsonObject { ["returnDestinationId"] = to } : null,
                 ["parameters"] = JsonSerializer.SerializeToNode(ReadStringArray(transition, "parameters")),
                 ["preconditions"] = JsonSerializer.SerializeToNode(ReadStringArray(transition, "preconditions")),
                 ["postconditions"] = JsonSerializer.SerializeToNode(postconditions)
@@ -249,6 +294,7 @@ internal static class AppGraphExplorationCompiler
                 observedTransitions.Add(compiledEdge);
                 continue;
             }
+
             edges.Add(compiledEdge);
 
             if (transition["binding"] is JsonObject binding
@@ -257,12 +303,14 @@ internal static class AppGraphExplorationCompiler
                 && binding["configuration"] is JsonObject configuration)
             {
                 var normalizedConfiguration = configuration.DeepClone().AsObject();
+
                 if (string.Equals(mechanism, "ui_action", StringComparison.Ordinal))
                 {
                     var selector = normalizedConfiguration["selector"] as JsonObject ?? new JsonObject();
                     selector["automationId"] ??= automationId!.Trim();
                     normalizedConfiguration["selector"] = selector;
                 }
+
                 bindingCandidates.Add(new JsonObject
                 {
                     ["edgeId"] = edgeId,
@@ -276,7 +324,12 @@ internal static class AppGraphExplorationCompiler
         }
 
         var summary = ReadString(root, "summary")?.Trim();
-        if (string.IsNullOrWhiteSpace(summary)) summary = $"Observed {nodes.Count} destinations and {edges.Count} element actions.";
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            summary = $"Observed {nodes.Count} destinations and {edges.Count} element actions.";
+        }
+
         candidate = new AppGraphExplorationCandidate(
             new JsonObject
             {
@@ -298,6 +351,7 @@ internal static class AppGraphExplorationCompiler
             summary,
             nodes.Count,
             edges.Count + observedTransitions.Count);
+
         return true;
     }
 
@@ -307,6 +361,7 @@ internal static class AppGraphExplorationCompiler
         out string error)
     {
         error = string.Empty;
+
         foreach (var node in nodes.OfType<JsonObject>())
         {
             if (!string.Equals(ReadString(node, "kind"), "screen", StringComparison.Ordinal)
@@ -321,25 +376,27 @@ internal static class AppGraphExplorationCompiler
                 .OfType<JsonObject>()
                 .Any(host =>
                     host["childDestinationIds"] is JsonArray childIds
-                    && childIds.Any(child => string.Equals(
-                        child?.GetValue<string>(),
-                        nodeId,
-                        StringComparison.Ordinal))
-                    && nodes.OfType<JsonObject>().Any(hostNode =>
+                        && childIds.Any(child => string.Equals(
+                            child?.GetValue<string>(),
+                            nodeId,
+                            StringComparison.Ordinal))
+                        && nodes.OfType<JsonObject>().Any(hostNode =>
                         string.Equals(
                             ReadString(hostNode, "id"),
                             ReadString(host, "destinationId"),
                             StringComparison.Ordinal)
-                        && string.Equals(
-                            ReadString(hostNode, "name"),
-                            parentScreen,
-                            StringComparison.Ordinal)));
+                            && string.Equals(
+                                ReadString(hostNode, "name"),
+                                parentScreen,
+                                StringComparison.Ordinal)));
+
             if (hasMatchingHost)
             {
                 continue;
             }
 
             error = $"Screen destination '{nodeId}' may only use parentScreen when it is declared as a child of that navigation host.";
+
             return false;
         }
 
@@ -358,6 +415,7 @@ internal static class AppGraphExplorationCompiler
             ReadString(technology, "kind") ?? string.Empty,
             ReadString(technology, "navigationToolId") ?? string.Empty,
             ReadString(technology, "structureFingerprint") ?? string.Empty);
+
         return AppGraphNavigationTechnologyCatalog.ToJson(descriptor);
     }
 
@@ -372,14 +430,17 @@ internal static class AppGraphExplorationCompiler
         navigationHosts = new JsonArray();
         tabGroups = new JsonArray();
         error = string.Empty;
+
         var sourceNavigationHosts = root["navigationHosts"] as JsonArray ?? [];
         var sourceTabGroups = root["tabGroups"] as JsonArray ?? [];
         var usedHostIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var value in sourceNavigationHosts)
         {
             if (value is not JsonObject source)
             {
                 error = "Every navigation host must be an object.";
+
                 return false;
             }
 
@@ -395,32 +456,41 @@ internal static class AppGraphExplorationCompiler
                 || string.IsNullOrWhiteSpace(destinationId)
                 || string.IsNullOrWhiteSpace(activeChildDestinationId)
                 || childDestinationIds.Count == 0;
+
             if (hasIncompleteHost)
             {
                 error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least one observed direct child.";
+
                 return false;
             }
+
             if (!destinationIds.TryGetValue(destinationId, out var normalizedDestinationId)
                 || !compiledNodesBySourceId.TryGetValue(destinationId, out var hostNode))
             {
                 error = $"Navigation host '{id}' references unknown host destination '{destinationId}'.";
+
                 return false;
             }
+
             if (!childDestinationIds.Contains(activeChildDestinationId, StringComparer.Ordinal))
             {
                 error = $"Navigation host '{id}' does not include active child '{activeChildDestinationId}'.";
+
                 return false;
             }
 
             var normalizedChildren = new JsonArray();
+
             foreach (var childDestinationId in childDestinationIds)
             {
                 if (!destinationIds.TryGetValue(childDestinationId, out var normalizedChildId)
                     || !compiledNodesBySourceId.TryGetValue(childDestinationId, out var childNode))
                 {
                     error = $"Navigation host '{id}' references unknown child destination '{childDestinationId}'.";
+
                     return false;
                 }
+
                 childNode["parentScreen"] = hostNode["name"]?.GetValue<string>() ?? destinationId;
                 normalizedChildren.Add(normalizedChildId);
             }
@@ -440,11 +510,13 @@ internal static class AppGraphExplorationCompiler
         }
 
         var usedTabGroupIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var value in sourceTabGroups)
         {
             if (value is not JsonObject source)
             {
                 error = "Every tab group must be an object.";
+
                 return false;
             }
 
@@ -456,37 +528,48 @@ internal static class AppGraphExplorationCompiler
                 || string.IsNullOrWhiteSpace(parentDestinationId)
                 || string.IsNullOrWhiteSpace(selectedDestinationId)
                 || tabDestinationIds.Count == 0;
+
             if (hasIncompleteTabGroup)
             {
                 error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least one observed tabDestinationId.";
+
                 return false;
             }
+
             if (!destinationIds.TryGetValue(parentDestinationId, out var normalizedParentId)
                 || !compiledNodesBySourceId.TryGetValue(parentDestinationId, out var parentNode))
             {
                 error = $"Tab group '{id}' references unknown parent destination '{parentDestinationId}'.";
+
                 return false;
             }
+
             if (!tabDestinationIds.Contains(selectedDestinationId, StringComparer.Ordinal))
             {
                 error = $"Tab group '{id}' does not include selected tab '{selectedDestinationId}'.";
+
                 return false;
             }
 
             var normalizedTabs = new JsonArray();
+
             foreach (var tabDestinationId in tabDestinationIds)
             {
                 if (!destinationIds.TryGetValue(tabDestinationId, out var normalizedTabId)
                     || !compiledNodesBySourceId.TryGetValue(tabDestinationId, out var tabNode))
                 {
                     error = $"Tab group '{id}' references unknown tab destination '{tabDestinationId}'.";
+
                     return false;
                 }
+
                 if (!string.Equals(tabNode["kind"]?.GetValue<string>(), "state", StringComparison.Ordinal))
                 {
                     error = $"Internal tab destination '{tabDestinationId}' must use kind state.";
+
                     return false;
                 }
+
                 tabNode["parentScreen"] = parentNode["name"]?.GetValue<string>() ?? parentDestinationId;
                 normalizedTabs.Add(normalizedTabId);
             }
@@ -509,7 +592,9 @@ internal static class AppGraphExplorationCompiler
     {
         ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(result);
+
         var toolCalls = new JsonArray();
+
         foreach (var call in result.Audit.ToolCalls.Where(static call => call.IsAnsightTool).Take(96))
         {
             toolCalls.Add(new JsonObject
@@ -540,6 +625,7 @@ internal static class AppGraphExplorationCompiler
             ["localAuditFilePath"] = result.AuditFilePath,
             ["toolCalls"] = toolCalls
         };
+
         return enriched;
     }
 
@@ -547,22 +633,28 @@ internal static class AppGraphExplorationCompiler
     {
         result = new JsonObject();
         error = string.Empty;
+
         var source = value?.Trim() ?? string.Empty;
         var firstBrace = source.IndexOf('{');
         var lastBrace = source.LastIndexOf('}');
+
         if (firstBrace < 0 || lastBrace <= firstBrace)
         {
             error = "The exploration agent did not return a JSON object in its completion summary.";
+
             return false;
         }
+
         try
         {
             result = JsonNode.Parse(source[firstBrace..(lastBrace + 1)]) as JsonObject ?? new JsonObject();
+
             return result.Count > 0;
         }
         catch (JsonException exception)
         {
             error = $"The exploration completion summary is not valid JSON: {exception.Message}";
+
             return false;
         }
     }
@@ -580,8 +672,16 @@ internal static class AppGraphExplorationCompiler
 
     private static decimal ReadConfidence(JsonObject source, decimal fallback)
     {
-        if (source["confidence"] is not JsonValue value) return fallback;
-        if (value.TryGetValue<decimal>(out var decimalValue)) return Math.Clamp(decimalValue, 0m, 1m);
+        if (source["confidence"] is not JsonValue value)
+        {
+            return fallback;
+        }
+
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return Math.Clamp(decimalValue, 0m, 1m);
+        }
+
         return value.TryGetValue<double>(out var doubleValue)
             ? Math.Clamp((decimal)doubleValue, 0m, 1m)
             : fallback;
@@ -590,12 +690,19 @@ internal static class AppGraphExplorationCompiler
     private static string NormalizeId(string source, string prefix)
     {
         var builder = new StringBuilder(source.Length + prefix.Length + 1);
+
         foreach (var character in source.Trim().ToLowerInvariant())
         {
             builder.Append(char.IsLetterOrDigit(character) ? character : '_');
         }
+
         var normalized = builder.ToString().Trim('_');
-        if (string.IsNullOrWhiteSpace(normalized)) normalized = prefix;
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            normalized = prefix;
+        }
+
         return normalized.StartsWith(prefix + "_", StringComparison.Ordinal) ? normalized : $"{prefix}_{normalized}";
     }
 
@@ -603,18 +710,15 @@ internal static class AppGraphExplorationCompiler
     {
         var candidate = source;
         var suffix = 2;
-        while (!used.Add(candidate)) candidate = $"{source}_{suffix++}";
+
+        while (!used.Add(candidate))
+        {
+            candidate = $"{source}_{suffix++}";
+        }
+
         return candidate;
     }
 
     private static string Truncate(string source, int maximumCharacters)
         => source.Length <= maximumCharacters ? source : source[..maximumCharacters] + "…";
 }
-
-internal sealed record AppGraphExplorationCandidate(
-    JsonObject Definition,
-    JsonObject Evidence,
-    decimal Confidence,
-    string Summary,
-    int DestinationCount,
-    int ElementActionCount);

@@ -24,19 +24,23 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modulePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(configuredExecutablePath);
+
         var absoluteModulePath = Path.GetFullPath(modulePath.Trim());
+
         if (!File.Exists(absoluteModulePath))
         {
             throw new FileNotFoundException("The sanitizer module was not found.", absoluteModulePath);
         }
 
         var extension = Path.GetExtension(absoluteModulePath);
+
         if (!extension.Equals(".ts", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("Sanitizer modules must use .ts.");
         }
 
         var runtime = JavaScriptRuntimeResolver.Resolve(configuredExecutablePath);
+
         if (!runtime.IsAvailable)
         {
             throw new InvalidOperationException(runtime.Message);
@@ -59,12 +63,14 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
                 }
             }
         };
+
         if (!process.Start())
         {
             throw new InvalidOperationException("The sanitizer Node.js runtime did not start.");
         }
 
         process.BeginErrorReadLine();
+
         try
         {
             var handshake = process.StandardOutput.ReadLineAsync()
@@ -72,6 +78,7 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
                 .GetAwaiter()
                 .GetResult();
             var message = ParseMessage(handshake);
+
             if (!string.Equals(message["type"]?.GetValue<string>(), "ready", StringComparison.Ordinal))
             {
                 throw new InvalidDataException("The sanitizer module did not complete its startup handshake.");
@@ -91,9 +98,11 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(handler);
         ArgumentNullException.ThrowIfNull(item);
+
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
+
             var request = new JsonObject
             {
                 ["handler"] = handler,
@@ -103,7 +112,9 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
             var requestLine = request.ToJsonString(JsonUtil.Compact);
             process.StandardInput.WriteLine(requestLine);
             process.StandardInput.Flush();
+
             string? responseLine;
+
             try
             {
                 responseLine = process.StandardOutput.ReadLineAsync()
@@ -127,11 +138,12 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
             {
                 throw new InvalidDataException(
                     $"Sanitizer function '{handler}' returned {responseLine.Length:N0} characters from "
-                    + $"a {requestLine.Length:N0}-character request, exceeding the {MaximumResponseCharacters:N0}-character "
-                    + "per-item limit. Return a smaller object or null from this handler.");
+                        + $"a {requestLine.Length:N0}-character request, exceeding the {MaximumResponseCharacters:N0}-character "
+                        + "per-item limit. Return a smaller object or null from this handler.");
             }
 
             var response = ParseMessage(responseLine);
+
             if (string.Equals(response["type"]?.GetValue<string>(), "error", StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
@@ -160,9 +172,11 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
             }
 
             disposed = true;
+
             try
             {
                 process.StandardInput.Close();
+
                 if (!process.WaitForExit(500))
                 {
                     TryKill();
@@ -189,6 +203,7 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         if (extension.Equals(".ts", StringComparison.OrdinalIgnoreCase))
         {
             startInfo.ArgumentList.Add("--no-warnings");
@@ -200,12 +215,14 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
         startInfo.ArgumentList.Add(bootstrapSource);
         startInfo.ArgumentList.Add("--");
         startInfo.ArgumentList.Add(modulePath);
+
         var inheritedPath = Environment.GetEnvironmentVariable("PATH");
         var inheritedTemp = Environment.GetEnvironmentVariable("TMPDIR")
-                            ?? Environment.GetEnvironmentVariable("TEMP")
-                            ?? Path.GetTempPath();
+            ?? Environment.GetEnvironmentVariable("TEMP")
+            ?? Path.GetTempPath();
         var inheritedSystemRoot = Environment.GetEnvironmentVariable("SystemRoot");
         startInfo.Environment.Clear();
+
         if (!string.IsNullOrWhiteSpace(inheritedPath))
         {
             startInfo.Environment["PATH"] = inheritedPath;
@@ -216,6 +233,7 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
         startInfo.Environment["TMP"] = inheritedTemp;
         startInfo.Environment["ANSIGHT_SANITIZER"] = "1";
         startInfo.Environment["NO_COLOR"] = "1";
+
         if (!string.IsNullOrWhiteSpace(inheritedSystemRoot))
         {
             startInfo.Environment["SystemRoot"] = inheritedSystemRoot;
@@ -229,7 +247,7 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
         try
         {
             return JsonNode.Parse(line ?? string.Empty) as JsonObject
-                   ?? throw new InvalidDataException("The sanitizer runtime returned malformed protocol JSON.");
+                ?? throw new InvalidDataException("The sanitizer runtime returned malformed protocol JSON.");
         }
         catch (JsonException exception)
         {
@@ -263,8 +281,3 @@ internal sealed class JavaScriptSessionSanitizerExecutor : IDisposable
         }
     }
 }
-
-internal sealed record SessionSanitizerInvocationResult(
-    JsonObject? Value,
-    bool WasRemoved,
-    int RedactionCount);

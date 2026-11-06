@@ -33,12 +33,14 @@ internal sealed class ReadArtifactFileTool : Operation
 
         var resolvedSnapshot = snapshot!;
         var requestedPath = SessionFileLocator.NormalizeArtifactPath(arguments?["path"]?.GetValue<string>());
+
         if (string.IsNullOrWhiteSpace(requestedPath))
         {
             return Task.FromResult(ToolError("path is required."));
         }
 
         var snapshotId = NormalizeOptionalString(arguments?["snapshotId"]?.GetValue<string>());
+
         if (!TryFindEntry(resolvedSnapshot, snapshotId, requestedPath, out var artifactSnapshot, out var entry))
         {
             return Task.FromResult(ToolError($"Artifact file '{requestedPath}' was not found."));
@@ -46,6 +48,7 @@ internal sealed class ReadArtifactFileTool : Operation
 
         var resolvedArtifactSnapshot = artifactSnapshot!;
         var resolvedEntry = entry!;
+
         if (SessionEvidencePayloads.IsArtifactDirectory(resolvedEntry))
         {
             return Task.FromResult(ToolError($"Artifact path '{requestedPath}' is a directory."));
@@ -90,6 +93,7 @@ internal sealed class ReadArtifactFileTool : Operation
         properties["path"] = ToolSchema.String("SnapshotRelativePath or ArchiveRelativePath of the artifact file.");
         properties["maxBytes"] = ToolSchema.Integer("Maximum bytes to return. Defaults to 65536, max 1048576.", nullable: true);
         properties["forceBase64"] = ToolSchema.Boolean("Return base64 even when the file appears textual. Defaults to false.", nullable: true);
+
         return properties;
     }
 
@@ -102,12 +106,14 @@ internal sealed class ReadArtifactFileTool : Operation
     {
         artifactSnapshot = null;
         entry = null;
+
         foreach (var candidateSnapshot in snapshot.ArtifactSnapshots.Where(candidate =>
                      snapshotId is null || string.Equals(candidate.SnapshotId, snapshotId, StringComparison.Ordinal)))
         {
             var candidateEntry = candidateSnapshot.Entries.FirstOrDefault(candidate =>
-                string.Equals(SessionFileLocator.NormalizeArtifactPath(candidate.SnapshotRelativePath), requestedPath, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(SessionFileLocator.NormalizeArtifactPath(candidate.ArchiveRelativePath), requestedPath, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(SessionFileLocator.NormalizeArtifactPath(candidate.SnapshotRelativePath), requestedPath, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(SessionFileLocator.NormalizeArtifactPath(candidate.ArchiveRelativePath), requestedPath, StringComparison.OrdinalIgnoreCase));
+
             if (candidateEntry is null)
             {
                 continue;
@@ -115,6 +121,7 @@ internal sealed class ReadArtifactFileTool : Operation
 
             artifactSnapshot = candidateSnapshot;
             entry = candidateEntry;
+
             return true;
         }
 

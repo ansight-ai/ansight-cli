@@ -85,6 +85,7 @@ public sealed class DeadTouchAnalyzerTests
             CreateTouch("touch-down", "down", startedAtUtc),
             CreateTouch("touch-up", "up", completedAtUtc)
         };
+
         return new TouchGestureSegment(
             "gesture-001",
             "tap",
@@ -121,6 +122,7 @@ public sealed class DeadTouchAnalyzerTests
     private static AppSessionSnapshot CreateSnapshot(params LogEntry[] logs)
     {
         var createdAtUtc = DateTimeOffset.Parse("2026-08-10T01:00:00Z");
+
         return new AppSessionSnapshot
         {
             SessionId = "session-001",

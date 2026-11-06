@@ -1,4 +1,4 @@
-﻿// ReSharper disable UnusedMember.Global
+// ReSharper disable UnusedMember.Global
 using System.Buffers;
 
 namespace Ansight.Infrastructure.Utilities;
@@ -23,6 +23,7 @@ public static class UriHelper
         }
 
         var query = uri.Query;
+
         if (string.IsNullOrEmpty(query) || query == "?")
         {
             return new Dictionary<string, string>();
@@ -30,12 +31,14 @@ public static class UriHelper
 
         var result = new Dictionary<string, string>();
         var span = query.AsSpan();
+
         if (span[0] == '?')
         {
             span = span[1..];
         }
 
         var start = 0;
+
         for (var i = 0; i <= span.Length; i++)
         {
             if (i < span.Length && span[i] != '&' && span[i] != ';')
@@ -44,6 +47,7 @@ public static class UriHelper
             }
 
             var length = i - start;
+
             if (length > 0)
             {
                 ParseParameter(span.Slice(start, length), result);
@@ -63,6 +67,7 @@ public static class UriHelper
         }
 
         var equalsIndex = pair.IndexOf('=');
+
         if (equalsIndex == 0)
         {
             return;
@@ -108,9 +113,11 @@ public static class UriHelper
         }
 
         var needsDecoding = false;
+
         for (var i = 0; i < value.Length; i++)
         {
             var c = value[i];
+
             if (c == '%' || c == '+')
             {
                 needsDecoding = true;
@@ -124,12 +131,15 @@ public static class UriHelper
         }
 
         var rented = ArrayPool<char>.Shared.Rent(value.Length);
+
         try
         {
             var length = 0;
+
             for (var i = 0; i < value.Length; i++)
             {
                 var c = value[i];
+
                 if (c == '+')
                 {
                     rented[length++] = ' ';
@@ -157,9 +167,21 @@ public static class UriHelper
     {
         static int FromHex(char c)
         {
-            if (c >= '0' && c <= '9') return c - '0';
-            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+            if (c >= '0' && c <= '9')
+            {
+                return c - '0';
+            }
+
+            if (c >= 'a' && c <= 'f')
+            {
+                return c - 'a' + 10;
+            }
+
+            if (c >= 'A' && c <= 'F')
+            {
+                return c - 'A' + 10;
+            }
+
             return -1;
         }
 
@@ -169,10 +191,12 @@ public static class UriHelper
         if (highValue == -1 || lowValue == -1)
         {
             value = default;
+
             return false;
         }
 
         value = (char)((highValue << 4) | lowValue);
+
         return true;
     }
 }

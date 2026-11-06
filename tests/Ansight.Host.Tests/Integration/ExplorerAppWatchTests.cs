@@ -15,10 +15,12 @@ public sealed class ExplorerAppWatchTests
         using var client = new HttpClient { BaseAddress = Assert.IsType<Uri>(explorer.ExplorerUrl) };
         using var added = await client.PostAsJsonAsync("api/app-watches/add", new
         {
-            appId = "com.example.notes", captureFiles = new[] { "Documents/notes.sqlite" },
+            appId = "com.example.notes",
+            captureFiles = new[] { "Documents/notes.sqlite" },
             screenshotIntervalMilliseconds = 1000
         });
         Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+
         var result = JsonNode.Parse(await added.Content.ReadAsStringAsync())!;
         var watch = Assert.Single(result["watches"]!.AsArray())!["watch"]!;
         var id = watch["id"]!.GetValue<string>();
@@ -30,10 +32,14 @@ public sealed class ExplorerAppWatchTests
 
         foreach (var action in new[] { "disable", "enable" })
         {
-            using var updated = await client.PostAsJsonAsync($"api/app-watches/{id}/{action}", new { });
+            using var updated = await client.PostAsJsonAsync($"api/app-watches/{id}/{action}", new
+            {
+            });
             Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+
             var list = JsonNode.Parse(await client.GetStringAsync("api/app-watches"))!;
             Assert.Equal(action == "enable", Assert.Single(list["watches"]!.AsArray())!["watch"]!["enabled"]!.GetValue<bool>());
+
             var persisted = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(runtime.ApplicationPaths.ApplicationDataPath, "app-watches.json")))!;
             Assert.Equal(action == "enable", Assert.Single(persisted.AsArray())!["enabled"]!.GetValue<bool>());
         }
@@ -43,24 +49,36 @@ public sealed class ExplorerAppWatchTests
             screenshotIntervalMilliseconds = 500
         });
         Assert.Equal(HttpStatusCode.OK, configured.StatusCode);
+
         var saved = Assert.Single(runtime.AppWatches.List()).Watch;
         Assert.Equal(500, saved.ScreenshotIntervalMilliseconds);
         Assert.Equal("Documents/notes.sqlite", Assert.Single(saved.CaptureFiles));
+
         var configuredFile = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(
             runtime.ApplicationPaths.ApplicationDataPath, "app-watches.json")))!;
         Assert.Equal(500, Assert.Single(configuredFile.AsArray())!["screenshotIntervalMilliseconds"]!.GetValue<int>());
-        foreach (var body in new object[] { new { }, new { screenshotIntervalMilliseconds = 0 },
-                     new { screenshotIntervalMilliseconds = 60001 } })
+
+        foreach (var body in new object[]
+        {
+            new {},
+            new {screenshotIntervalMilliseconds = 0 },
+            new {screenshotIntervalMilliseconds = 60001 }
+        })
         {
             using var rejected = await client.PostAsJsonAsync($"api/app-watches/{id}/configure", body);
             Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
             Assert.Equal(500, Assert.Single(runtime.AppWatches.List()).Watch.ScreenshotIntervalMilliseconds);
         }
 
-        using var removed = await client.PostAsJsonAsync($"api/app-watches/{id}/remove", new { });
+        using var removed = await client.PostAsJsonAsync($"api/app-watches/{id}/remove", new
+        {
+        });
         Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
         Assert.Empty(runtime.AppWatches.List());
-        using var unknown = await client.PostAsJsonAsync($"api/app-watches/{id}/enable", new { });
+
+        using var unknown = await client.PostAsJsonAsync($"api/app-watches/{id}/enable", new
+        {
+        });
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
     }
 

@@ -13,6 +13,7 @@ public sealed partial class AppInteractionBackendTests
         var accessible = CreateModalNativeTree();
         accessible["root"]!["children"] = new JsonArray();
         router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+
         using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
         var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-options-list" });
         var before = await Capture(0, default);
@@ -22,12 +23,14 @@ public sealed partial class AppInteractionBackendTests
         var settled = await LiveUiScrollSettlement.CaptureAsync(initial, selector, token =>
         {
             samples++;
+
             var offset = scenario switch
             {
                 "bounce" => samples == 1 ? 5 : 0,
                 "movement" => 20,
                 _ => 20 + samples * 3
             };
+
             return Capture(offset, token);
         }, default);
 
@@ -37,6 +40,7 @@ public sealed partial class AppInteractionBackendTests
         Assert.Equal(isSettled, settled.IsSettled);
         Assert.Equal(expected, observation["status"]!.GetValue<string>());
         Assert.InRange(samples, 2, 8);
+
         if (scenario == "bounce")
         {
             Assert.Equal(4, samples);
@@ -45,6 +49,7 @@ public sealed partial class AppInteractionBackendTests
         async Task<LiveUiCaptureResult> Capture(int offset, CancellationToken token)
         {
             var tree = CreateModalNativeTree();
+
             foreach (var node in GetModalCopyNodes(tree))
             {
                 var bounds = node["bounds"]!.AsArray();
@@ -52,6 +57,7 @@ public sealed partial class AppInteractionBackendTests
             }
 
             var bridge = new ModalSelectorBridge(session.SessionId, tree);
+
             return await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
                 "ansight_scroll_ui", null, selector, token, allowCached: false, targetSource: "ui.get_visual_tree");
         }
@@ -66,27 +72,32 @@ public sealed partial class AppInteractionBackendTests
         var native = CreateModalNativeTree();
         var list = native["root"]!["children"]![0]!["children"]![0]!.AsObject();
         list["childCount"] = 2;
+
         var subtree = native.DeepClone().AsObject();
         subtree["root"] = list.DeepClone();
         subtree["coordinateSpace"] = new JsonObject { ["x"] = 0, ["y"] = 450, ["width"] = 400, ["height"] = 300 };
+
         if (mismatchedBounds)
         {
             subtree["root"]!["bounds"] = new JsonArray(0, 50, 400, 300);
         }
 
         list["children"]!.AsArray().RemoveAt(1);
+
         var bridge = new ModalSelectorBridge(session.SessionId, native) { Subtree = subtree };
         var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-options-list" });
         var router = new UiInputRouter();
         var accessible = native.DeepClone().AsObject();
         accessible["root"]!["children"] = new JsonArray();
         router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+
         using var targetScope = router.BeginTargetScope(session.SessionId, "simulator-001");
 
         var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
             "ansight_scroll_ui", null, selector, default, targetSource: "ui.get_visual_tree");
 
         Assert.Equal("options", bridge.LastSubtreeRoot);
+
         var capture = result.Capture!;
         var target = Assert.Single(LiveUiNodeQuery.Find(capture.Root, selector, capture.TypeRegistry));
         Assert.Equal(!mismatchedBounds, LiveUiScrollObservation.IsCompleteArea(target.Node, capture.Payload, capture.TypeRegistry));
@@ -101,6 +112,7 @@ public sealed partial class AppInteractionBackendTests
         var session = CreateModalTestSession();
         var native = CreateModalNativeTree();
         var list = native["root"]!["children"]![0]!["children"]![0]!.AsObject();
+
         if (mismatchedBounds)
         {
             list["bounds"] = new JsonArray(0, 50, 400, 300);
@@ -117,6 +129,7 @@ public sealed partial class AppInteractionBackendTests
         var bridge = new ModalSelectorBridge(session.SessionId, native);
         var router = new UiInputRouter();
         router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+
         using var targetScope = router.BeginTargetScope(session.SessionId, "simulator-001");
         var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "area-share-options-list" });
         var initial = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,

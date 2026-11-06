@@ -39,12 +39,12 @@ public sealed class ReasoningOptionsTests
     public async Task InvalidReasoningIsRejectedBeforeForwarding(string command)
     {
         foreach (var options in new string[][]
-                 {
-                     ["--reasoning=invalid"],
-                     ["--reasoning="],
-                     ["--reasoning"],
-                     ["--reasoning", "fast", "--model", "custom-model"]
-                 })
+        {
+            ["--reasoning=invalid"],
+            ["--reasoning="],
+            ["--reasoning"],
+            ["--reasoning", "fast", "--model", "custom-model"]
+        })
         {
             using var output = new StringWriter();
             var forwarded = false;
@@ -57,6 +57,7 @@ public sealed class ReasoningOptionsTests
                 residentHostForwarder: (_, _, _) =>
                 {
                     forwarded = true;
+
                     return Task.FromResult<int?>(CliExitCodes.Success);
                 });
 
@@ -81,6 +82,7 @@ public sealed class ReasoningOptionsTests
             residentHostForwarder: (arguments, _, _) =>
             {
                 forwarded = arguments;
+
                 return Task.FromResult<int?>(CliExitCodes.Success);
             });
 

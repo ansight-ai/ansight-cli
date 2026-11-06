@@ -20,6 +20,7 @@ internal static class SessionTelemetryInspection
 
         var typeFilters = ArgumentReader.ReadStringSet(arguments, "types");
         typeFilters.Remove("all");
+
         var channelIdFilters = ArgumentReader.ReadByteSet(arguments, "channelIds");
         var channelNameFilters = ArgumentReader.ReadStringSet(arguments, "channelNames");
         var channelMap = snapshot!.MetricChannels.ToDictionary(channel => channel.ChannelId);
@@ -44,6 +45,7 @@ internal static class SessionTelemetryInspection
             .Select(group =>
             {
                 channelMap.TryGetValue(group.Key, out var channel);
+
                 return (JsonNode?)new JsonObject
                 {
                     ["channelId"] = group.Key,

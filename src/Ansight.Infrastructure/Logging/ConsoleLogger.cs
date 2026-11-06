@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 
 namespace Ansight.Infrastructure.Logging;
@@ -25,6 +25,7 @@ public class ConsoleLogger : BaseLogger
         if (platformConsoleLogger != null)
         {
             platformConsoleLogger(tag, message, logLevel);
+
             return;
         }
 
@@ -40,11 +41,10 @@ public class ConsoleLogger : BaseLogger
                 continue;
             }
 
-            var output =  shouldFormat ? LogFormatter.Render(now, tag, line, ProcessId, Thread.CurrentThread.ManagedThreadId, logLevel) : line;
+            var output = shouldFormat ? LogFormatter.Render(now, tag, line, ProcessId, Thread.CurrentThread.ManagedThreadId, logLevel) : line;
             Console.Out.WriteLine(output);
         }
     }
-
 
     public override void Exception(Exception ex)
     {

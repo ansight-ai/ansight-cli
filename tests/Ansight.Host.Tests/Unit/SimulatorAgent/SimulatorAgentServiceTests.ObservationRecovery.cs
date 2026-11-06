@@ -29,9 +29,9 @@ public sealed partial class SimulatorAgentServiceTests
             Result = observation
         };
         AddToolLoadingDefinitions(gateway);
+
         var turns = initialObservation
-            ? new[] { CompleteWebSocketTurn() }
-            : new[] { CreateFunctionTurn("observe", toolName, new JsonObject()), CompleteWebSocketTurn() };
+            ? new[] { CompleteWebSocketTurn() } : new[] { CreateFunctionTurn("observe", toolName, new JsonObject()), CompleteWebSocketTurn() };
         var session = new FakeOpenAiSession(turns);
         using var service = CreateToolLoadingService(session, gateway);
 
@@ -39,6 +39,7 @@ public sealed partial class SimulatorAgentServiceTests
 
         var input = session.Requests[^1].Input.ToJsonString();
         Assert.Equal(expectsRecovery, input.Contains("This UI observation is truncated:", StringComparison.Ordinal));
+
         if (expectsRecovery)
         {
             Assert.Contains("not absent", input);
@@ -63,16 +64,19 @@ public sealed partial class SimulatorAgentServiceTests
               "root":{"automationId":"ForYouPage","children":[
                 {"automationId":"for-you-global-search","text":"Search crags, routes or weather","role":"textbox"}]}}}
             """, "Truncated framework tree."));
+
         var client = new FakeOpenAiClient([
             CreateFunctionTurn("type", "ansight_type_text", new JsonObject
             {
-                ["automationId"] = "for-you-global-search", ["value"] = "Eagle Rock"
+                ["automationId"] = "for-you-global-search",
+                ["value"] = "Eagle Rock"
             }),
-            CreateFunctionTurn("find", "ansight_find_ui", new JsonObject { ["text"] = "Eagle Rock" }),
-            CreateFunctionTurn("tree", "ansight_get_live_visual_tree", new JsonObject { ["toolId"] = "maui.get_visual_tree" }),
+            CreateFunctionTurn("find", "ansight_find_ui", new JsonObject {["text"] = "Eagle Rock" }),
+            CreateFunctionTurn("tree", "ansight_get_live_visual_tree", new JsonObject {["toolId"] = "maui.get_visual_tree" }),
             CreateFunctionTurn("complete", "complete_instruction", new JsonObject
             {
-                ["outcome"] = "failed", ["summary"] = "Result identity remains ambiguous."
+                ["outcome"] = "failed",
+                ["summary"] = "Result identity remains ambiguous."
             })
         ]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);

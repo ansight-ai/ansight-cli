@@ -11,9 +11,10 @@ public static class DeviceLocationMath
         var latitudeDelta = endLatitude - startLatitude;
         var longitudeDelta = DegreesToRadians(end.Longitude - start.Longitude);
         var haversine = Math.Pow(Math.Sin(latitudeDelta / 2d), 2d)
-                        + Math.Cos(startLatitude)
-                        * Math.Cos(endLatitude)
-                        * Math.Pow(Math.Sin(longitudeDelta / 2d), 2d);
+            + Math.Cos(startLatitude)
+                * Math.Cos(endLatitude)
+                * Math.Pow(Math.Sin(longitudeDelta / 2d), 2d);
+
         return EarthRadiusMeters * 2d * Math.Atan2(Math.Sqrt(haversine), Math.Sqrt(1d - haversine));
     }
 
@@ -23,6 +24,7 @@ public static class DeviceLocationMath
         double progress)
     {
         progress = Math.Clamp(progress, 0d, 1d);
+
         return new DeviceLocationPoint(
             start.Latitude + ((end.Latitude - start.Latitude) * progress),
             start.Longitude + ((end.Longitude - start.Longitude) * progress),
@@ -38,6 +40,7 @@ public static class DeviceLocationMath
 
         var resolvedStart = start ?? end!.Value;
         var resolvedEnd = end ?? resolvedStart;
+
         return resolvedStart + ((resolvedEnd - resolvedStart) * progress);
     }
 

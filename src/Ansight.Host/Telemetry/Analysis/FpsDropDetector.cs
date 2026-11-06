@@ -6,22 +6,24 @@ internal static class FpsDropDetector
     private const int SignificantFpsDropThreshold = 20;
     private const int SignificantFpsDropCeiling = 40;
     private const int HealthyFpsBaseline = 50;
-    private static readonly TimeSpan FpsDropMergeGap = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan TelemetryAnalysisEventDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan fpsDropMergeGap = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan telemetryAnalysisEventDuration = TimeSpan.FromSeconds(2);
 
     public static IReadOnlyList<FpsDropAnalysisWindow> AnalyzeFpsDrops(MetricChartState chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
 
         var candidates = new List<FpsDropAnalysisWindow>();
+
         foreach (var channelGroup in chart.Metrics
-                     .Where(sample => MetricChannelClassification.IsFpsChannel(chart.Channels, sample.ChannelId))
-                     .GroupBy(sample => sample.ChannelId)
-                     .OrderBy(group => group.Key))
+            .Where(sample => MetricChannelClassification.IsFpsChannel(chart.Channels, sample.ChannelId))
+            .GroupBy(sample => sample.ChannelId)
+            .OrderBy(group => group.Key))
         {
             var samples = channelGroup
                 .OrderBy(sample => sample.CapturedAtUtc)
                 .ToArray();
+
             if (samples.Length < 2)
             {
                 continue;
@@ -54,8 +56,9 @@ internal static class FpsDropDetector
             if (activeBaseline is not null && activeLast is not null && activeMinimum is not null)
             {
                 var shouldContinueDropWindow =
-                    sample.CapturedAtUtc - activeLast.CapturedAtUtc <= FpsDropMergeGap
-                    && IsDroppedFpsSample(sample);
+                                sample.CapturedAtUtc - activeLast.CapturedAtUtc <= fpsDropMergeGap
+                                    && IsDroppedFpsSample(sample);
+
                 if (!shouldContinueDropWindow)
                 {
                     AddFpsDropAnalysisWindow(candidates, channelId, activeBaseline, activeMinimum);
@@ -66,6 +69,7 @@ internal static class FpsDropDetector
                 else
                 {
                     activeLast = sample;
+
                     if (sample.Value < activeMinimum.Value)
                     {
                         activeMinimum = sample;
@@ -101,7 +105,7 @@ internal static class FpsDropDetector
         var startUtc = baseline.CapturedAtUtc;
         var endUtc = minimum.CapturedAtUtc > startUtc
             ? minimum.CapturedAtUtc
-            : startUtc + TelemetryAnalysisEventDuration;
+            : startUtc + telemetryAnalysisEventDuration;
         candidates.Add(new FpsDropAnalysisWindow(
             channelId,
             baseline,
@@ -118,18 +122,18 @@ internal static class FpsDropDetector
         }
 
         var drop = previous.Value - sample.Value;
+
         if (drop < SignificantFpsDropThreshold)
         {
             return false;
         }
 
         return sample.Value <= CriticalFpsThreshold
-               || previous.Value >= HealthyFpsBaseline && sample.Value <= SignificantFpsDropCeiling;
+            || previous.Value >= HealthyFpsBaseline && sample.Value <= SignificantFpsDropCeiling;
     }
 
     private static bool IsDroppedFpsSample(SessionMetricSample sample)
     {
         return sample.Value <= SignificantFpsDropCeiling;
     }
-
 }

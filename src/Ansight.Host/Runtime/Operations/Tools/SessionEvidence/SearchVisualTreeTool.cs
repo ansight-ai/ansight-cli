@@ -50,6 +50,7 @@ internal sealed class SearchVisualTreeTool : Operation
         }
 
         var matches = VisualTreeSearch.Search(snapshot!, criteria);
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -74,6 +75,7 @@ internal sealed class SearchVisualTreeTool : Operation
         properties["normalizedX"] = ToolSchema.Number("Optional normalized x coordinate for point-in-bounds matching.", nullable: true);
         properties["normalizedY"] = ToolSchema.Number("Optional normalized y coordinate for point-in-bounds matching.", nullable: true);
         properties["limit"] = ToolSchema.Integer("Maximum number of matches to return. Defaults to 100, max 1000.", nullable: true);
+
         return properties;
     }
 
@@ -81,6 +83,7 @@ internal sealed class SearchVisualTreeTool : Operation
     {
         value = null;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -93,14 +96,17 @@ internal sealed class SearchVisualTreeTool : Operation
             if (double.IsNaN(parsed) || double.IsInfinity(parsed) || parsed < 0d || parsed > 1d)
             {
                 errorMessage = $"{propertyName} must be between 0.0 and 1.0.";
+
                 return false;
             }
 
             value = parsed;
+
             return true;
         }
 
         errorMessage = $"{propertyName} must be a number.";
+
         return false;
     }
 }

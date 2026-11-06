@@ -19,13 +19,16 @@ public sealed class OfflineCaptureTransferTests
         var source = Guid.NewGuid().ToString("D");
         var archive = Archive(source, "app.test");
         var descriptor = Descriptor(source, archive);
+
         using (var receiver = new OfflineCaptureTransferManager(state))
         {
             Deliver(receiver, live, descriptor, archive);
+
             var receipt = receiver.Commit(live, descriptor);
             Assert.True(receipt["durable"]!.GetValue<bool>());
             Assert.Equal("offline-" + source, receipt["importedSessionId"]!.GetValue<string>());
         }
+
         var restarted = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         Assert.True(restarted.TryGetSessionSnapshot("offline-" + source, out var imported));
         Assert.Single(imported!.Metrics);
@@ -35,10 +38,12 @@ public sealed class OfflineCaptureTransferTests
         Assert.Single(imported.Touches);
         Assert.Single(imported.NetworkRequests);
         Assert.Contains(imported.Logs, log => log.Message == "Offline log");
+
         var nextLive = restarted.CreateSession("app.test", "App", IPAddress.Loopback, null, null);
         using var retry = new OfflineCaptureTransferManager(restarted);
         descriptor["transferId"] = Guid.NewGuid().ToString("N");
         Deliver(retry, nextLive, descriptor, archive);
+
         var repeated = retry.Commit(nextLive, descriptor);
         Assert.Equal("offline-" + source, repeated["importedSessionId"]!.GetValue<string>());
     }
@@ -57,10 +62,23 @@ public sealed class OfflineCaptureTransferTests
         var source = Guid.NewGuid().ToString("D");
         var archive = Archive(invalid == "identity" ? Guid.NewGuid().ToString("D") : source, invalid == "app" ? "other.app" : "app.test", invalid == "unsafe");
         var descriptor = Descriptor(source, archive);
-        if (invalid == "hash") descriptor["sha256"] = new string('a', 64);
+
+        if (invalid == "hash")
+        {
+            descriptor["sha256"] = new string('a', 64);
+        }
+
         using var receiver = new OfflineCaptureTransferManager(state);
-        if (invalid == "incomplete") receiver.Begin(live, descriptor);
-        else Deliver(receiver, live, descriptor, archive);
+
+        if (invalid == "incomplete")
+        {
+            receiver.Begin(live, descriptor);
+        }
+        else
+        {
+            Deliver(receiver, live, descriptor, archive);
+        }
+
         Assert.Throws<InvalidDataException>(() => receiver.Commit(live, descriptor));
         Assert.False(state.TryGetSessionSnapshot("offline-" + source, out _));
     }
@@ -84,8 +102,10 @@ public sealed class OfflineCaptureTransferTests
 
     private static JsonObject Descriptor(string source, byte[] bytes) => new()
     {
-        ["schema"] = "ansight.offline-transfer.v1", ["sessionId"] = source,
-        ["transferId"] = Guid.NewGuid().ToString("N"), ["byteCount"] = bytes.LongLength,
+        ["schema"] = "ansight.offline-transfer.v1",
+        ["sessionId"] = source,
+        ["transferId"] = Guid.NewGuid().ToString("N"),
+        ["byteCount"] = bytes.LongLength,
         ["sha256"] = Convert.ToHexStringLower(SHA256.HashData(bytes))
     };
 
@@ -107,17 +127,28 @@ public sealed class OfflineCaptureTransferTests
         BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(44), offset);
         BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(52), bytes.Length);
         bytes.CopyTo(frame, 56);
+
         return frame;
     }
 
     private static byte[] Archive(string source, string appId, bool unsafePath = false)
     {
         using var memory = new MemoryStream();
+
         using (var zip = new ZipArchive(memory, ZipArchiveMode.Create, leaveOpen: true))
         {
-            if (unsafePath) Add(zip, "../escape.txt", "invalid");
-            Add(zip, "manifest.json", new JsonObject { ["sessionId"] = source, ["appId"] = appId,
-                ["startedAtUtc"] = "2026-10-11T01:00:00Z", ["stoppedAtUtc"] = "2026-10-11T01:01:00Z" }.ToJsonString());
+            if (unsafePath)
+            {
+                Add(zip, "../escape.txt", "invalid");
+            }
+
+            Add(zip, "manifest.json", new JsonObject
+            {
+                ["sessionId"] = source,
+                ["appId"] = appId,
+                ["startedAtUtc"] = "2026-10-11T01:00:00Z",
+                ["stoppedAtUtc"] = "2026-10-11T01:01:00Z"
+            }.ToJsonString());
             Add(zip, "records.jsonl", """
                 {"channels":[{"id":1,"name":"FPS","unit":"fps"}]}
                 {"type":"CLIENT_LOG","data":"Offline log","capturedAtUtc":"2026-10-11T01:00:01Z"}
@@ -128,9 +159,11 @@ public sealed class OfflineCaptureTransferTests
                 {"type":"CLIENT_EVENTS","events":[{"id":"event","label":"Tapped","eventType":"Event","channel":1,"capturedAtUtc":"2026-10-11T01:00:01Z"}]}
                 """);
             Add(zip, "screenshots/index/frames.jsonl", """{"path":"screenshots/one.jpg","capturedAtUtc":"2026-10-11T01:00:01Z","width":1,"height":1,"quality":70}""");
+
             using var image = zip.CreateEntry("screenshots/one.jpg").Open();
             image.Write([0xff, 0xd8, 0xff, 0xd9]);
         }
+
         return memory.ToArray();
     }
 

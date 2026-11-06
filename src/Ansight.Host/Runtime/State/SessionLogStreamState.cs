@@ -35,6 +35,7 @@ internal sealed class SessionLogStreamState
             TotalEntryCount = Math.Max(stream.TotalEntryCount, stream.Entries.Count)
         };
         state.Entries.AddRange(stream.Entries);
+
         return state;
     }
 

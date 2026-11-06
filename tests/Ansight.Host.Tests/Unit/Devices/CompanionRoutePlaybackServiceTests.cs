@@ -17,6 +17,7 @@ public sealed class CompanionRoutePlaybackServiceTests
         var started = await service.ExecuteAsync(new RemoteDeviceTestingRequest(
             "sim", "route-start", RouteContent: Gpx, Platform: "ios"));
         Assert.True(started.IsSuccess, started.Message);
+
         var runId = started.Details!["runId"]!.GetValue<string>();
 
         var wrongTarget = await service.ExecuteAsync(new RemoteDeviceTestingRequest(
@@ -27,6 +28,7 @@ public sealed class CompanionRoutePlaybackServiceTests
         clock.Advance(TimeSpan.FromSeconds(16));
         await service.CheckTimeoutAsync();
         Assert.False(playback.GetSnapshot().IsPlaying);
+
         var countAfterStop = devices.Locations.Count;
         await Task.Delay(100);
         Assert.Equal(countAfterStop, devices.Locations.Count);
@@ -60,6 +62,7 @@ public sealed class CompanionRoutePlaybackServiceTests
         var refused = await service.ExecuteAsync(new RemoteDeviceTestingRequest("sim", "route-start", RouteContent: Gpx, Platform: "ios"));
         Assert.False(refused.IsSuccess);
         Assert.Equal(existing.Playback.RunId, playback.GetSnapshot().RunId);
+
         var invalid = await service.ExecuteAsync(new RemoteDeviceTestingRequest("sim", "route-start",
             RouteContent: "<!DOCTYPE gpx [<!ENTITY external SYSTEM 'file:///etc/passwd'>]><gpx>&external;</gpx>", Platform: "ios"));
         Assert.False(invalid.IsSuccess);

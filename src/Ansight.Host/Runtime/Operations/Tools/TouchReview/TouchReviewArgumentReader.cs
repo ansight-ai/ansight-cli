@@ -9,6 +9,7 @@ internal static class TouchReviewArgumentReader
     {
         filters = TouchFilters.Empty;
         errorMessage = null;
+
         if (!ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "startUtc", out var startUtc, out errorMessage)
             || !ArgumentReader.TryReadDateTimeOffsetArgument(arguments, "endUtc", out var endUtc, out errorMessage)
             || !TryReadOptionalIntegerArgument(arguments, "minPointerCount", out var minPointerCount, out errorMessage)
@@ -20,24 +21,28 @@ internal static class TouchReviewArgumentReader
         if (startUtc.HasValue && endUtc.HasValue && startUtc.Value > endUtc.Value)
         {
             errorMessage = "startUtc must be before or equal to endUtc.";
+
             return false;
         }
 
         if (minPointerCount.HasValue && minPointerCount.Value < 1)
         {
             errorMessage = "minPointerCount must be greater than 0.";
+
             return false;
         }
 
         if (maxPointerCount.HasValue && maxPointerCount.Value < 1)
         {
             errorMessage = "maxPointerCount must be greater than 0.";
+
             return false;
         }
 
         if (minPointerCount.HasValue && maxPointerCount.HasValue && minPointerCount.Value > maxPointerCount.Value)
         {
             errorMessage = "minPointerCount must be less than or equal to maxPointerCount.";
+
             return false;
         }
 
@@ -48,6 +53,7 @@ internal static class TouchReviewArgumentReader
             ReadLongSet(arguments, "pointerIds"),
             minPointerCount,
             maxPointerCount);
+
         return true;
     }
 
@@ -55,6 +61,7 @@ internal static class TouchReviewArgumentReader
     {
         value = null;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -65,10 +72,12 @@ internal static class TouchReviewArgumentReader
                 || int.TryParse(jsonValue.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedValue)))
         {
             value = parsedValue;
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -81,6 +90,7 @@ internal static class TouchReviewArgumentReader
     {
         value = defaultValue;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -91,10 +101,12 @@ internal static class TouchReviewArgumentReader
                 || bool.TryParse(jsonValue.ToString(), out parsedValue)))
         {
             value = parsedValue;
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be true or false.";
+
         return false;
     }
 
@@ -119,6 +131,7 @@ internal static class TouchReviewArgumentReader
     {
         value = defaultValue;
         errorMessage = null;
+
         if (arguments?[propertyName] is null)
         {
             return true;
@@ -131,14 +144,17 @@ internal static class TouchReviewArgumentReader
             if (parsedValue < 0)
             {
                 errorMessage = $"'{propertyName}' must be greater than or equal to 0.";
+
                 return false;
             }
 
             value = Math.Min(parsedValue, maxValue);
+
             return true;
         }
 
         errorMessage = $"'{propertyName}' must be an integer.";
+
         return false;
     }
 
@@ -146,7 +162,9 @@ internal static class TouchReviewArgumentReader
     {
         format = "both";
         errorMessage = null;
+
         var rawFormat = NormalizeOptionalString(arguments?["format"]?.GetValue<string>());
+
         if (rawFormat is null)
         {
             return true;
@@ -157,16 +175,19 @@ internal static class TouchReviewArgumentReader
             || string.Equals(rawFormat, "both", StringComparison.OrdinalIgnoreCase))
         {
             format = rawFormat.ToLowerInvariant();
+
             return true;
         }
 
         errorMessage = "format must be one of: json, markdown, both.";
+
         return false;
     }
 
     private static HashSet<string> ReadTouchActionFilters(JsonObject? arguments)
     {
         var actions = ArgumentReader.ReadStringSet(arguments, "actions");
+
         return actions
             .Select(TouchReviewGeometry.NormalizeTouchAction)
             .Where(action => !string.IsNullOrWhiteSpace(action))
@@ -176,6 +197,7 @@ internal static class TouchReviewArgumentReader
     private static HashSet<long> ReadLongSet(JsonObject? arguments, string propertyName)
     {
         var values = new HashSet<long>();
+
         if (arguments?[propertyName] is not JsonArray array)
         {
             return values;

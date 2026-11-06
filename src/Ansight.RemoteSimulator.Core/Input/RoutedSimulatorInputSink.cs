@@ -54,6 +54,7 @@ public sealed class RoutedSimulatorInputSink : ISimulatorInputSink
         }
 
         disposed = true;
+
         foreach (var sink in sinksByPlatform.Values.Distinct())
         {
             await sink.DisposeAsync().ConfigureAwait(false);
@@ -63,9 +64,11 @@ public sealed class RoutedSimulatorInputSink : ISimulatorInputSink
     private ISimulatorInputSink ResolveSink(string deviceUdid)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var platform = runtimeSource.Current.Devices.FirstOrDefault(device =>
                 string.Equals(device.Identifier, deviceUdid, StringComparison.OrdinalIgnoreCase))?.Platform
             ?? throw new InvalidOperationException("The selected runtime is no longer available.");
+
         return sinksByPlatform.TryGetValue(platform, out var sink)
             ? sink
             : throw new InvalidOperationException($"Input forwarding is unavailable for {platform} runtimes.");

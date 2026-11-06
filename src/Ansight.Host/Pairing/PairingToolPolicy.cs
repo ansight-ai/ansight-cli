@@ -1,12 +1,5 @@
 namespace Ansight.Host.Pairing;
 
-internal enum RemoteToolPolicy
-{
-    Read = 0,
-    Write = 1,
-    Critical = 2
-}
-
 internal static class PairingToolPolicy
 {
     public static string Normalize(string? value, string fallback = "read")
@@ -18,8 +11,8 @@ internal static class PairingToolPolicy
 
     public static bool Allows(string? maximumPolicy, string? requiredPolicy)
         => TryParse(maximumPolicy, out var maximum)
-           && TryParse(requiredPolicy, out var required)
-           && required <= maximum;
+            && TryParse(requiredPolicy, out var required)
+            && required <= maximum;
 
     public static bool TryParse(string? value, out RemoteToolPolicy policy)
     {

@@ -38,10 +38,12 @@ public sealed class AudioCommandsTests
                 Assert.Equal(42000, supplied["timeoutMs"]!.GetValue<int>());
                 Assert.Equal(1200, supplied["waitForMicrophoneMs"]!.GetValue<int>());
                 Assert.Equal(cancellation.Token, token);
+
                 return Task.FromResult(Result(operation));
             }, cancellation.Token);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
         var payload = JsonNode.Parse(standardOutput.ToString())!;
         Assert.Equal("ansight.audio-injection/v1", payload["schema"]!.GetValue<string>());
         Assert.Equal("completed", payload["status"]!.GetValue<string>());
@@ -55,12 +57,13 @@ public sealed class AudioCommandsTests
             CliArguments.Parse(["audio", "capabilities", "--session", "session-1"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null),
             (operation, supplied, _) =>
-            {
-                Assert.Equal(AudioOperation.Capabilities, operation);
-                Assert.Single(supplied);
-                Assert.Equal("session-1", supplied["sessionId"]!.GetValue<string>());
-                return Task.FromResult(Result(operation));
-            }, CancellationToken.None);
+                {
+                    Assert.Equal(AudioOperation.Capabilities, operation);
+                    Assert.Single(supplied);
+                    Assert.Equal("session-1", supplied["sessionId"]!.GetValue<string>());
+
+                    return Task.FromResult(Result(operation));
+                }, CancellationToken.None);
         Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
@@ -87,10 +90,11 @@ public sealed class AudioCommandsTests
     public void ForwardingKeepsSessionAndNormalizesFileBeforeResidentHostDispatch()
     {
         var arguments = CliArguments.Parse([
-            "audio", "inject", "--session", "session-1", "--file", "fixtures/quote.wav"
-        ]);
+                "audio", "inject", "--session", "session-1", "--file", "fixtures/quote.wav"
+            ]);
         var callerDirectory = Path.Combine(Path.GetTempPath(), "ansight-audio-caller");
         Assert.True(ControlClient.ShouldForward(arguments));
+
         var forwarded = CliArguments.Parse(ControlClient.CreateForwardedArguments(arguments, callerDirectory));
         Assert.Equal(Path.Combine(callerDirectory, "fixtures", "quote.wav"), forwarded.GetOption("file"));
         Assert.Equal("session-1", forwarded.GetOption("session"));
@@ -131,10 +135,13 @@ public sealed class AudioCommandsTests
             new CliOutput(true, standardOutput, TextWriter.Null),
             (operation, _, _) => Task.FromResult(new AudioOperationResult(operation, false, "Failure", new JsonObject
             {
-                ["schema"] = "ansight.audio-injection/v1", ["operationId"] = "operation-1",
-                ["status"] = "failed", ["code"] = code
+                ["schema"] = "ansight.audio-injection/v1",
+                ["operationId"] = "operation-1",
+                ["status"] = "failed",
+                ["code"] = code
             })), CancellationToken.None);
         Assert.Equal(expectedExit, exitCode);
+
         var payload = JsonNode.Parse(standardOutput.ToString())!;
         Assert.Equal("operation-1", payload["operationId"]!.GetValue<string>());
         Assert.Equal(code, payload["code"]!.GetValue<string>());
@@ -152,8 +159,10 @@ public sealed class AudioCommandsTests
             new CliOutput(json, output, TextWriter.Null),
             (operation, _, _) => Task.FromResult(new AudioOperationResult(operation, false, message, new JsonObject
             {
-                ["status"] = "failed", ["code"] = "accessibility-permission-required",
-                ["message"] = message, ["deliveryStarted"] = false
+                ["status"] = "failed",
+                ["code"] = "accessibility-permission-required",
+                ["message"] = message,
+                ["deliveryStarted"] = false
             })), CancellationToken.None);
 
         Assert.Equal(CliExitCodes.CapabilityUnavailable, exitCode);

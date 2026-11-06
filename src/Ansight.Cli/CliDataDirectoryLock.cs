@@ -12,7 +12,9 @@ internal sealed class CliDataDirectoryLock : IDisposable
     public static CliDataDirectoryLock Acquire(string dataDirectory)
     {
         Directory.CreateDirectory(dataDirectory);
+
         var lockPath = Path.Combine(dataDirectory, "ansight.lock");
+
         try
         {
             var stream = new FileStream(
@@ -22,6 +24,7 @@ internal sealed class CliDataDirectoryLock : IDisposable
                 FileShare.None,
                 bufferSize: 1,
                 FileOptions.None);
+
             return new CliDataDirectoryLock(stream);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

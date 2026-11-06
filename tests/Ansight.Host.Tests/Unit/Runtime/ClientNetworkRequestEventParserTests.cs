@@ -47,6 +47,7 @@ public sealed class ClientNetworkRequestEventParserTests
         var parsed = ClientEventParser.ParseText(payload);
 
         Assert.Equal(WebSocketClientEventConstants.ClientNetworkRequest, parsed.Type);
+
         var request = Assert.IsType<SessionNetworkRequest>(parsed.NetworkRequest);
         Assert.Equal("request-001", request.Id);
         Assert.Equal("GET", request.Method);

@@ -75,6 +75,7 @@ public static class AppFilePush
     {
         var normalizedPath = NormalizeRequiredText(localFilePath, LocalFilePathArgument);
         var fullPath = Path.GetFullPath(normalizedPath);
+
         if (!File.Exists(fullPath))
         {
             throw new FileNotFoundException($"The local file '{fullPath}' does not exist.", fullPath);
@@ -88,6 +89,7 @@ public static class AppFilePush
         var resolvedFileName = string.IsNullOrWhiteSpace(fileName)
             ? Path.GetFileName(localFilePath)
             : fileName.Trim();
+
         if (string.IsNullOrWhiteSpace(resolvedFileName))
         {
             throw new InvalidOperationException("A destination fileName could not be inferred from localFilePath.");
@@ -113,6 +115,7 @@ public static class AppFilePush
     private static string ResolveTemplateFileName(string? localFilePath, JsonObject? existingArguments)
     {
         var existingFileName = ReadOptionalString(existingArguments, "fileName");
+
         if (!string.IsNullOrWhiteSpace(existingFileName))
         {
             return existingFileName;
@@ -146,6 +149,7 @@ public static class AppFilePush
     private static string ReadRequiredString(JsonObject? arguments, string propertyName)
     {
         var value = ReadOptionalString(arguments, propertyName);
+
         if (string.IsNullOrWhiteSpace(value))
         {
             throw new InvalidOperationException($"{propertyName} is required.");
@@ -162,6 +166,7 @@ public static class AppFilePush
         }
 
         var value = arguments[propertyName]?.GetValue<string>();
+
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
@@ -178,6 +183,7 @@ public static class AppFilePush
         }
 
         var text = value.ToString();
+
         if (bool.TryParse(text, out boolValue))
         {
             return boolValue;

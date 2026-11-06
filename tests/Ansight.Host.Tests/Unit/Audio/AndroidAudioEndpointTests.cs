@@ -16,6 +16,7 @@ public sealed class AndroidAudioEndpointTests : IDisposable
         Write(2, "5556", 9912, "other-token");
         Write(3, "5554", 9913, "stale-token");
         processes.Remove(3);
+
         var endpoint = Resolver().Resolve("emulator-5554");
         Assert.Equal(9911, endpoint.Port);
         Assert.Equal(1, endpoint.ProcessId);
@@ -29,6 +30,7 @@ public sealed class AndroidAudioEndpointTests : IDisposable
     {
         Write(1, "5554", 9911, "first-token");
         Write(2, "5554", 9912, "second-token");
+
         var error = Assert.Throws<AndroidAudioEndpointException>(() => Resolver().Resolve("emulator-5554"));
         Assert.Equal("endpoint-ambiguous", error.Code);
         Assert.DoesNotContain("token", error.Message);
@@ -40,6 +42,7 @@ public sealed class AndroidAudioEndpointTests : IDisposable
         Write(1, "5554", 9911, "");
         Assert.Equal("endpoint-authentication-unavailable", Assert.Throws<AndroidAudioEndpointException>(() => Resolver().Resolve("emulator-5554")).Code);
         Write(1, "5554", 9911, "first-token");
+
         var resolver = Resolver();
         var endpoint = resolver.Resolve("emulator-5554");
         processes[1]++;

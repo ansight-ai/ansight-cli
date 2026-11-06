@@ -14,7 +14,10 @@ public sealed partial class OpenAiResponsesClientTests
         var transport = new RecordingModelTransport { Client = httpClient };
         using var client = new OpenAiResponsesClient(httpClient);
 
-        var response = await client.CreateResponseAsync(CreateRequest() with { Transport = transport }, CancellationToken.None);
+        var response = await client.CreateResponseAsync(CreateRequest() with
+        {
+            Transport = transport
+        }, CancellationToken.None);
 
         var usage = Assert.Single(transport.Usage);
         Assert.Equal(response.ResponseId, usage.ResponseId);
@@ -34,6 +37,9 @@ public sealed partial class OpenAiResponsesClientTests
         using var client = new OpenAiResponsesClient(httpClient);
 
         await Assert.ThrowsAsync<ModelUsageRecordingException>(() =>
-            client.CreateResponseAsync(CreateRequest() with { Transport = transport }, CancellationToken.None));
+            client.CreateResponseAsync(CreateRequest() with
+            {
+                Transport = transport
+            }, CancellationToken.None));
     }
 }

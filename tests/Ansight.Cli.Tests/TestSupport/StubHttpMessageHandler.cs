@@ -35,6 +35,7 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
         RequestBodies.Add(request.Content is null
             ? string.Empty
             : await request.Content.ReadAsStringAsync(cancellationToken));
+
         return responses.Count > 0
             ? responses.Dequeue()
             : new HttpResponseMessage(HttpStatusCode.OK)

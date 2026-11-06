@@ -13,6 +13,7 @@ public sealed class DeviceNetworkCommandsTests
             "--profile", "{\"downloadKbps\":128}", "--duration-ms", "30000", "--json"]);
         Assert.True(ControlClient.ShouldForward(arguments));
         Assert.True(ControlProtocol.SupportsCooperativeCancellation(arguments));
+
         var exit = await DeviceNetworkCommands.RunAsync(arguments, new CliOutput(true, TextWriter.Null, TextWriter.Null),
             (action, value, _) =>
             {
@@ -20,6 +21,7 @@ public sealed class DeviceNetworkCommandsTests
                 Assert.Equal("owned", value["leaseId"]!.GetValue<string>());
                 Assert.Equal("test", value["sessionId"]!.GetValue<string>());
                 Assert.Equal(128, value["profile"]!["downloadKbps"]!.GetValue<int>());
+
                 return Task.FromResult(new NetworkConditioningResult(true, new JsonObject { ["status"] = "ready" }));
             }, default);
         Assert.Equal(CliExitCodes.Success, exit);
@@ -35,6 +37,7 @@ public sealed class DeviceNetworkCommandsTests
             {
                 Assert.Null(value["sessionId"]);
                 Assert.Equal("owned", value["leaseId"]!.GetValue<string>());
+
                 return Task.FromResult(new NetworkConditioningResult(true, new JsonObject { ["status"] = "stopped" }));
             }, default);
     }

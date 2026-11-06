@@ -33,7 +33,9 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateRequest(request);
+
         DeviceLocationRoute route;
+
         try
         {
             using var stream = new MemoryStream(Encoding.UTF8.GetBytes(request.RouteContent));
@@ -45,23 +47,28 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
         }
 
         await operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             ThrowIfDisposed();
+
             if (!replaceActive && GetSnapshot().IsPlaying)
             {
                 return new DeviceLocationPlaybackStartResult(false,
                     "A location route is already playing. Stop it before starting another.", GetSnapshot());
             }
+
             await StopActivePlaybackAsync().ConfigureAwait(false);
+
             var firstPoint = route.Points[0];
             var firstResult = await devices.SetLocationAsync(
-                    request.Platform,
-                    request.DeviceIdentifier,
-                    firstPoint.Latitude,
-                    firstPoint.Longitude,
-                    cancellationToken)
+                request.Platform,
+                request.DeviceIdentifier,
+                firstPoint.Latitude,
+                firstPoint.Longitude,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             if (!firstResult.IsSuccess)
             {
                 return new DeviceLocationPlaybackStartResult(false, firstResult.Message, GetSnapshot());
@@ -70,6 +77,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
             var runId = Guid.NewGuid().ToString("N");
             var startedUtc = DateTimeOffset.UtcNow;
             var cancellation = new CancellationTokenSource();
+
             lock (stateGate)
             {
                 snapshot = new DeviceLocationPlaybackSnapshot(
@@ -108,15 +116,19 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
         string? expectedRunId = null)
     {
         await operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             ThrowIfDisposed();
+
             if (expectedRunId is not null && GetSnapshot().RunId != expectedRunId)
             {
                 return OperationResult.Failure("The requested route is no longer the active playback.");
             }
+
             var wasPlaying = GetSnapshot().IsPlaying;
             await StopActivePlaybackAsync().ConfigureAwait(false);
+
             return wasPlaying
                 ? OperationResult.Success("Location route replay stopped.")
                 : OperationResult.Failure("No location route is currently playing.");
@@ -130,6 +142,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await operationGate.WaitAsync().ConfigureAwait(false);
+
         try
         {
             if (disposed)
@@ -164,17 +177,20 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
                     var duration = ResolveSegmentDuration(start, end, request, route);
                     var stepCount = (int)Math.Clamp(Math.Ceiling(duration.TotalSeconds), 1d, int.MaxValue);
                     var stepDuration = TimeSpan.FromTicks(Math.Max(1L, duration.Ticks / stepCount));
+
                     for (var step = 1; step <= stepCount; step++)
                     {
                         await Task.Delay(stepDuration, cancellation.Token).ConfigureAwait(false);
+
                         var location = DeviceLocationMath.Interpolate(start, end, (double)step / stepCount);
                         var result = await devices.SetLocationAsync(
-                                request.Platform,
-                                request.DeviceIdentifier,
-                                location.Latitude,
-                                location.Longitude,
-                                cancellation.Token)
+                            request.Platform,
+                            request.DeviceIdentifier,
+                            location.Latitude,
+                            location.Longitude,
+                            cancellation.Token)
                             .ConfigureAwait(false);
+
                         if (!result.IsSuccess)
                         {
                             throw new InvalidOperationException(result.Message);
@@ -183,8 +199,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
                         UpdateProgress(runId, index, location);
                     }
                 }
-            }
-            while (request.Loop && !cancellation.IsCancellationRequested);
+            } while (request.Loop && !cancellation.IsCancellationRequested);
 
             Complete(runId, "completed", "Location route replay complete.");
         }
@@ -215,6 +230,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
     {
         CancellationTokenSource? cancellation;
         Task? activeTask;
+
         lock (stateGate)
         {
             cancellation = playbackCancellation;
@@ -282,6 +298,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
 
         var speedMetersPerSecond = request.FixedSpeedKph / 3.6d;
         var seconds = DeviceLocationMath.DistanceMeters(start, end) / speedMetersPerSecond;
+
         return TimeSpan.FromSeconds(Math.Max(0.05d, seconds));
     }
 
@@ -298,6 +315,7 @@ public sealed class DeviceLocationPlaybackService : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DeviceIdentifier);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceFileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.RouteContent);
+
         if (!double.IsFinite(request.PlaybackSpeedMultiplier)
             || request.PlaybackSpeedMultiplier is < 0.1d or > 100d)
         {

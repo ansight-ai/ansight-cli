@@ -14,9 +14,7 @@ public sealed record WorkspaceTestDefinition(
     public TestVideoOptions Video { get; init; } = new();
 
     public string? TaskId { get; init; }
-
     public System.Text.Json.Nodes.JsonObject? TaskInput { get; init; }
-
     public bool IsTaskOnly => !string.IsNullOrWhiteSpace(TaskId) && string.IsNullOrWhiteSpace(Prompt);
 
     public IReadOnlyList<string> HintTasks { get; init; } = [];
@@ -30,20 +28,26 @@ public sealed record WorkspaceTestDefinition(
 
     public string BuildRunnerPrompt(string? promptOverride = null)
     {
-        if (IsTaskOnly) return string.Empty;
+        if (IsTaskOnly)
+        {
+            return string.Empty;
+        }
 
         var scenario = string.IsNullOrWhiteSpace(promptOverride)
             ? Prompt.Trim()
             : promptOverride.Trim();
+
         if (HintTasks.Count > 0)
         {
             scenario += "\n\nSuggested repository tasks (hints only; use each only when available and its starting state and scope match): "
-                        + string.Join(", ", HintTasks.Select(static taskId => $"'{taskId}'")) + ".";
+                + string.Join(", ", HintTasks.Select(static taskId => $"'{taskId}'")) + ".";
         }
+
         if (!string.IsNullOrWhiteSpace(TaskId))
         {
             scenario = $"Run repository task '{TaskId}'.\n\n{scenario}";
         }
+
         var validationSection = string.IsNullOrWhiteSpace(Validation.Prompt)
             ? string.Empty
             : BuildSection(
@@ -68,6 +72,7 @@ public sealed record WorkspaceTestDefinition(
                 {
                     ["SECRETS"] = BuildBulletList(RequiredSecrets)
                 });
+
         return WorkspacePromptReferences.Expand(EmbeddedTextResource.RenderSection(
             "Workspaces/Catalog/Prompts/workspace-test-prompts.md",
             "runner",
@@ -92,6 +97,7 @@ public sealed record WorkspaceTestDefinition(
                 "Workspaces/Catalog/Prompts/workspace-test-prompts.md",
                 sectionName,
                 values);
+
         return Environment.NewLine + Environment.NewLine + content.TrimEnd();
     }
 

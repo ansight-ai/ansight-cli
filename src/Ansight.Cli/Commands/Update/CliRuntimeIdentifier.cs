@@ -23,6 +23,7 @@ internal static class CliRuntimeIdentifier
                 _ => throw new PlatformNotSupportedException(
                     $"Ansight CLI updates do not support {RuntimeInformation.ProcessArchitecture}.")
             };
+
             return $"{platform}-{architecture}";
         }
     }

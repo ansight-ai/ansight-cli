@@ -13,6 +13,7 @@ public sealed class WorkspaceTestRecoveryTests
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         store.Save(CreateSession("orphan", "running"));
         Assert.True(store.TryLoad("orphan", out var original));
+
         await using var runtime = environment.CreateRuntime();
 
         await runtime.StartAsync();
@@ -29,12 +30,19 @@ public sealed class WorkspaceTestRecoveryTests
 
         // Recovery must fix the saved record, not just the explorer's current view.
         AppSessionSnapshot? persisted = null;
+
         for (var attempt = 0; attempt < 100; attempt++)
         {
             Assert.True(store.TryLoad("orphan", out persisted));
-            if (ReadRun(persisted!).Status == "cancelled") break;
+
+            if (ReadRun(persisted!).Status == "cancelled")
+            {
+                break;
+            }
+
             await Task.Delay(25);
         }
+
         Assert.Equal("cancelled", ReadRun(persisted!).Status);
     }
 
@@ -46,6 +54,7 @@ public sealed class WorkspaceTestRecoveryTests
     {
         using var environment = new TestEnvironment();
         new SessionCaptureStore(environment.ApplicationPaths).Save(CreateSession("recorded", "running"));
+
         using var runtime = environment.CreateRuntime();
         var audit = CreateAudit("recorded", status);
         Assert.Null(runtime.SimulatorAgent.PersistRunAudit(audit).ErrorMessage);
@@ -63,15 +72,20 @@ public sealed class WorkspaceTestRecoveryTests
         using var environment = new TestEnvironment();
         var store = new SessionCaptureStore(environment.ApplicationPaths);
         store.Save(CreateSession("finished", "succeeded"));
+
         var malformed = CreateSession("malformed", "running");
         malformed.CustomProperties!["ui-test"] = new JsonObject { ["status"] = 12 };
         store.Save(malformed);
+
         var composition = new MefHostComposition(environment.ApplicationPaths,
             new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
         using var runtime = composition.Get<RuntimeCoordinator>();
         var state = composition.Get<IRuntimeState>();
         var liveId = state.CreateDeviceSession(new WorkspaceTestTarget("android", "phone", "Phone", "test.app", false, false, false)
-        { ExecutionMode = "device", DeviceKind = DeviceKinds.Physical });
+        {
+            ExecutionMode = "device",
+            DeviceKind = DeviceKinds.Physical
+        });
         state.SetSessionUiTestRun(liveId, new SessionUiTestRun("test", "Test", "live-run", "running", "task", startedUtc));
 
         Assert.Equal(0, runtime.WorkspaceTests.RecoverInterruptedSessionRuns());
@@ -86,9 +100,13 @@ public sealed class WorkspaceTestRecoveryTests
     {
         using var environment = new TestEnvironment();
         new SessionCaptureStore(environment.ApplicationPaths).Save(CreateSession("orphan", "running"));
+
         using var runtime = environment.CreateRuntime();
         Assert.Null(runtime.SimulatorAgent.PersistRunAudit(CreateAudit("other-session", SimulatorAgentRunStatus.Succeeded)
-            with { RunId = "run-orphan" }).ErrorMessage);
+            with
+        {
+            RunId = "run-orphan"
+        }).ErrorMessage);
 
         Assert.Equal(1, runtime.WorkspaceTests.RecoverInterruptedSessionRuns());
         Assert.True(runtime.Sessions.TryGetSnapshot("orphan", out var recovered));
@@ -100,10 +118,19 @@ public sealed class WorkspaceTestRecoveryTests
 
     private static AppSessionSnapshot CreateSession(string id, string status) => new()
     {
-        SessionId = id, AppId = "test.app", ClientName = "Test", Name = "Keep recording",
-        RemoteAddress = "127.0.0.1", CreatedUtc = startedUtc, LastUpdatedUtc = startedUtc.AddMinutes(1),
-        ConfigId = "config", Status = "WebSocket Open", IsPinned = true, IsHistorical = true,
-        MetricChannels = [], Metrics = [],
+        SessionId = id,
+        AppId = "test.app",
+        ClientName = "Test",
+        Name = "Keep recording",
+        RemoteAddress = "127.0.0.1",
+        CreatedUtc = startedUtc,
+        LastUpdatedUtc = startedUtc.AddMinutes(1),
+        ConfigId = "config",
+        Status = "WebSocket Open",
+        IsPinned = true,
+        IsHistorical = true,
+        MetricChannels = [],
+        Metrics = [],
         Logs = [new LogEntry(startedUtc.AddMinutes(1), "Keep evidence")],
         CustomProperties = new JsonObject
         {

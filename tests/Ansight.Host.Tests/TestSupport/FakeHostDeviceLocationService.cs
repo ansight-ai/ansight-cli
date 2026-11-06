@@ -12,6 +12,7 @@ internal sealed class FakeHostDeviceLocationService : IDeviceLocationService
         CancellationToken cancellationToken = default)
     {
         Locations.Enqueue(new DeviceLocationPoint(latitude, longitude, null, null));
+
         return Task.FromResult(DeviceOperationResult.Success(
             "set-location",
             platform,

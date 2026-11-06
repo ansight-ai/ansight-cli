@@ -5,7 +5,11 @@ public sealed class AndroidReadinessDoctorTests
     [Fact]
     public async Task DefaultDoctorDoesNotWarnAboutAnUnrequestedAndroidConnection()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var directory = TestDirectory.Create();
         var adb = Path.Combine(directory.Path, "adb");
         await File.WriteAllTextAsync(adb, "#!/bin/sh\nprintf 'List of devices attached\\n'\n");
@@ -32,11 +36,16 @@ public sealed class AndroidReadinessDoctorTests
     [InlineData("offline", false)]
     public async Task ExternalTargetDoesNotRequireLocalEmulatorOrKvm(string state, bool expectedReady)
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         using var directory = TestDirectory.Create();
         var adb = Path.Combine(directory.Path, "adb");
         await File.WriteAllTextAsync(adb, "#!/bin/sh\nprintf 'List of devices attached\\nremote-test\\t" + state + "\\n'\n");
         File.SetUnixFileMode(adb, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
         var checks = await AndroidReadinessDoctor.CheckAsync("android-device", adb, CancellationToken.None);
         Assert.Equal(expectedReady, checks.Single(check => check.Name == "android.connection").IsSuccess);
         Assert.All(checks, check => Assert.True(check.IsRequired));

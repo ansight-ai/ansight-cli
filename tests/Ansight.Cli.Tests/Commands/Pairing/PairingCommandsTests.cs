@@ -13,6 +13,7 @@ public sealed class PairingCommandsTests
         var keyPath = Path.Combine(directory.Path, "secure-storage.key");
         var appId = $"com.example.cli.{Guid.NewGuid():N}";
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         var issueOutput = await RunAsync(
             [
                 "pairing",
@@ -68,6 +69,7 @@ public sealed class PairingCommandsTests
         var storePath = Path.Combine(directory.Path, "secure-storage.json");
         var keyPath = Path.Combine(directory.Path, "secure-storage.key");
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         var issueOutput = await RunAsync(
             [
                 "pairing",
@@ -113,6 +115,7 @@ public sealed class PairingCommandsTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(string.Empty, standardError.ToString());
+
         return standardOutput.ToString();
     }
 }

@@ -18,6 +18,7 @@ internal static class LicensesCommands
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (CliCommandHelp.IsRequested(arguments))
         {
             return Task.FromResult(CliCommandHelp.Write(output, BuildHelp()));
@@ -26,6 +27,7 @@ internal static class LicensesCommands
         var action = arguments.Positionals.Count >= 2
             ? arguments.Positionals[1].ToLowerInvariant()
             : "list";
+
         return Task.FromResult(action switch
         {
             "list" => List(arguments, output),
@@ -40,8 +42,10 @@ internal static class LicensesCommands
         arguments.EnsurePositionalCount(
             arguments.Positionals.Count == 1 ? 1 : 2,
             "ansight licenses list [--json]");
+
         var catalog = ThirdPartySoftwareCatalog.Load();
         output.Write(catalog, () => RenderList(catalog));
+
         return CliExitCodes.Success;
     }
 
@@ -50,7 +54,9 @@ internal static class LicensesCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight licenses export <output.md|output.json> [--format <markdown|json>] [--force]");
+
         var path = Path.GetFullPath(arguments.RequirePositional(2, "output path"));
+
         if (File.Exists(path) && !arguments.HasFlag("force"))
         {
             throw new CliUsageException(
@@ -60,6 +66,7 @@ internal static class LicensesCommands
         var format = ResolveFormat(path, arguments.GetOption("format"));
         var catalog = ThirdPartySoftwareCatalog.Load();
         var directory = Path.GetDirectoryName(path);
+
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -78,12 +85,14 @@ internal static class LicensesCommands
                 catalog.Software.Count,
                 catalog.Warnings),
             () => $"Exported {catalog.Software.Count} software attribution(s) to {path}.");
+
         return CliExitCodes.Success;
     }
 
     private static string ResolveFormat(string path, string? requestedFormat)
     {
         var format = requestedFormat?.Trim().ToLowerInvariant();
+
         if (format is "md")
         {
             format = "markdown";
@@ -112,13 +121,14 @@ internal static class LicensesCommands
         builder.AppendLine();
         builder.AppendLine(
             "This inventory distinguishes software distributed with Ansight from external tools "
-            + "that Ansight can invoke when installed separately.");
+                + "that Ansight can invoke when installed separately.");
         builder.AppendLine(
             "It is an attribution inventory; release packaging must still preserve any complete "
-            + "license and notice texts required by the upstream distributions.");
+                + "license and notice texts required by the upstream distributions.");
         builder.AppendLine();
         builder.AppendLine("| Software | Version | License | Distribution | Source | Usage | Project |");
         builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
+
         foreach (var entry in catalog.Software)
         {
             var project = string.IsNullOrWhiteSpace(entry.ProjectUrl)
@@ -129,8 +139,8 @@ internal static class LicensesCommands
                 : $"[{Escape(entry.License)}]({entry.LicenseUrl})";
             builder.AppendLine(
                 $"| {Escape(entry.Name)} | {Escape(entry.Version ?? string.Empty)} | {license} | "
-                + $"{Escape(entry.Distribution)} | {Escape(entry.Source)} | "
-                + $"{Escape(entry.Usage)} | {project} |");
+                    + $"{Escape(entry.Distribution)} | {Escape(entry.Source)} | "
+                    + $"{Escape(entry.Usage)} | {project} |");
         }
 
         if (catalog.Warnings.Count > 0)
@@ -138,6 +148,7 @@ internal static class LicensesCommands
             builder.AppendLine();
             builder.AppendLine("## Inventory notes");
             builder.AppendLine();
+
             foreach (var warning in catalog.Warnings)
             {
                 builder.AppendLine($"- {warning}");
@@ -150,8 +161,9 @@ internal static class LicensesCommands
     private static string RenderList(ThirdPartySoftwareCatalogOutput catalog)
     {
         var lines = catalog.Software.Select(entry =>
-            $"{entry.Name}\t{entry.Version ?? "-"}\t{entry.License}\t{entry.Distribution}").ToList();
+                $"{entry.Name}\t{entry.Version ?? "-"}\t{entry.License}\t{entry.Distribution}").ToList();
         lines.AddRange(catalog.Warnings.Select(static warning => $"Warning: {warning}"));
+
         return string.Join(Environment.NewLine, lines);
     }
 

@@ -40,18 +40,19 @@ internal sealed class GetNearestArtifactsTool : Operation
         }
 
         var targetUtc = SessionReviewContext.ResolveTargetTimestamp(snapshot!, arguments, out var targetPayload, out errorMessage);
+
         if (!targetUtc.HasValue)
         {
             return Task.FromResult(ToolError(errorMessage ?? "Unable to resolve target timestamp."));
         }
 
         if (!ArgumentReader.TryReadPositiveLimit(
-                arguments,
-                "windowSeconds",
-                OperationDefaults.DefaultNearestArtifactWindowSeconds,
-                OperationDefaults.MaxNearestArtifactWindowSeconds,
-                out var windowSeconds,
-                out errorMessage)
+            arguments,
+            "windowSeconds",
+            OperationDefaults.DefaultNearestArtifactWindowSeconds,
+            OperationDefaults.MaxNearestArtifactWindowSeconds,
+            out var windowSeconds,
+            out errorMessage)
             || !ArgumentReader.TryReadPositiveLimit(
                 arguments,
                 "limitPerType",
@@ -66,6 +67,7 @@ internal sealed class GetNearestArtifactsTool : Operation
         var target = targetUtc.Value.ToUniversalTime();
         var window = TimeSpan.FromSeconds(windowSeconds);
         var liveSessionIds = sessionResolver.GetLiveSessionIds();
+
         return Task.FromResult(RequestResult.ToolResult(
             new JsonObject
             {
@@ -132,11 +134,12 @@ internal sealed class GetNearestArtifactsTool : Operation
             .ThenBy(tree => tree.SnapshotId, StringComparer.Ordinal)
             .Take(limit)
             .Select(tree =>
-            {
-                var payload = PayloadJson.BuildSessionVisualTreeSnapshotSummaryPayload(snapshot, tree);
-                payload["deltaMilliseconds"] = SessionReviewContext.CalculateDeltaMilliseconds(tree.CapturedAtUtc, targetUtc);
-                return (JsonNode?)payload;
-            }));
+                {
+                    var payload = PayloadJson.BuildSessionVisualTreeSnapshotSummaryPayload(snapshot, tree);
+                    payload["deltaMilliseconds"] = SessionReviewContext.CalculateDeltaMilliseconds(tree.CapturedAtUtc, targetUtc);
+
+                    return (JsonNode?)payload;
+                }));
     }
 
     private static JsonArray BuildNearestAnnotations(AppSessionSnapshot snapshot, DateTimeOffset targetUtc, TimeSpan window, int limit)
@@ -147,17 +150,19 @@ internal sealed class GetNearestArtifactsTool : Operation
             .ThenBy(annotation => annotation.AnnotationId, StringComparer.Ordinal)
             .Take(limit)
             .Select(annotation =>
-            {
-                var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
-                payload["deltaMilliseconds"] = (long)CalculateAnnotationDistance(annotation, targetUtc).TotalMilliseconds;
-                payload["isActiveAtTarget"] = annotation.StartUtc <= targetUtc && (annotation.EndUtc ?? annotation.StartUtc) >= targetUtc;
-                return (JsonNode?)payload;
-            }));
+                {
+                    var payload = PayloadJson.BuildSessionAnnotationPayload(annotation);
+                    payload["deltaMilliseconds"] = (long)CalculateAnnotationDistance(annotation, targetUtc).TotalMilliseconds;
+                    payload["isActiveAtTarget"] = annotation.StartUtc <= targetUtc && (annotation.EndUtc ?? annotation.StartUtc) >= targetUtc;
+
+                    return (JsonNode?)payload;
+                }));
     }
 
     private static JsonArray BuildNearestTelemetrySamples(AppSessionSnapshot snapshot, DateTimeOffset targetUtc, TimeSpan window, int limit)
     {
         var channelMap = snapshot.MetricChannels.ToDictionary(channel => channel.ChannelId);
+
         return PayloadJson.CreateJsonArray(snapshot.Metrics
             .Where(sample => IsInsideWindow(sample.CapturedAtUtc, targetUtc, window))
             .OrderBy(sample => SessionReviewContext.CalculateDeltaMilliseconds(sample.CapturedAtUtc, targetUtc))
@@ -166,6 +171,7 @@ internal sealed class GetNearestArtifactsTool : Operation
             .Select(sample =>
             {
                 channelMap.TryGetValue(sample.ChannelId, out var channel);
+
                 return (JsonNode?)new JsonObject
                 {
                     ["capturedAtUtc"] = sample.CapturedAtUtc,
@@ -218,6 +224,7 @@ internal sealed class GetNearestArtifactsTool : Operation
     private static TimeSpan CalculateAnnotationDistance(SessionAnnotation annotation, DateTimeOffset targetUtc)
     {
         var effectiveEndUtc = annotation.EndUtc ?? annotation.StartUtc;
+
         if (annotation.StartUtc <= targetUtc && effectiveEndUtc >= targetUtc)
         {
             return TimeSpan.Zero;

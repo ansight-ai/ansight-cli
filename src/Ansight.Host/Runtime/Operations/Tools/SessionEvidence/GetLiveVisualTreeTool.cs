@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Ansight.Host;
 using Ansight.Tools;
+using static Ansight.Host.Runtime.Operations.Tools.SessionEvidence.OptionalCaptureArguments;
 
 namespace Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 
@@ -74,6 +75,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
         var includeProperties = arguments?["includeProperties"]?.GetValue<bool>() ?? false;
         var includeBounds = arguments?["includeBounds"]?.GetValue<bool>() ?? true;
+
         if (NormalizeOptionalString(arguments?["toolId"]?.GetValue<string>()) is null
             && !includeProperties)
         {
@@ -91,6 +93,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                 maxNodes,
                 maxDepth,
                 ToolExecutionCancellation.Current);
+
             if (accessibilityResult.Capture is { } accessibilityCapture)
             {
                 var persisted = SessionVisualTreePersistence.Persist(
@@ -99,6 +102,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                     accessibilityCapture.ToolId,
                     accessibilityCapture.Payload);
                 var responsePayload = accessibilityCapture.Payload.DeepClone().AsObject();
+
                 if (!includeBounds)
                 {
                     RemoveNodeBounds(responsePayload["root"] as JsonObject);
@@ -128,12 +132,15 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         }
 
         if (snapshot!.CaptureSource == WorkspaceExecutionModes.Device)
+        {
             return ToolError("Device accessibility is unavailable or app-only tree details were requested. Use screenshot text; app trees require SDK mode.");
+        }
 
         var toolsResponse = await appToolBridge.QueryToolsAsync(
             snapshot!.SessionId,
             ToolExecutionCancellation.Current,
             new AppToolBridgeRequestContext("host-ui", Name, correlationId));
+
         if (!toolsResponse.Success || toolsResponse.Envelope is null)
         {
             return RequestResult.ToolResult(
@@ -159,6 +166,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         }
 
         var toolId = ResolveToolId(arguments, toolsResponse.Envelope.Payload);
+
         if (toolId is null)
         {
             return RequestResult.ToolResult(
@@ -175,6 +183,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         var effectiveArguments = arguments?.DeepClone().AsObject() ?? new JsonObject();
         effectiveArguments["maxNodes"] ??= 256;
         effectiveArguments["maxDepth"] ??= 32;
+
         if (!TryBuildVisualTreeArguments(effectiveArguments, toolId, out var remoteArguments, out var errorMessage))
         {
             return ToolError(errorMessage ?? "Invalid live visual-tree arguments.");
@@ -196,10 +205,11 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
     internal static string? ResolveToolId(JsonObject? arguments, JsonNode? catalogPayload)
     {
         var requestedToolId = NormalizeOptionalString(arguments?["toolId"]?.GetValue<string>());
+
         if (requestedToolId is not null)
         {
             return AppToolPayloadNormalizer.IsVisualTreeTool(requestedToolId)
-                   && RemoteAppToolCatalog.HasTool(catalogPayload, requestedToolId)
+                && RemoteAppToolCatalog.HasTool(catalogPayload, requestedToolId)
                 ? requestedToolId
                 : null;
         }
@@ -242,6 +252,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         }
 
         node.Remove("bounds");
+
         if (node["children"] is not JsonArray children)
         {
             return;
@@ -261,6 +272,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
     {
         remoteArguments = BuildDefaultVisualTreeArguments(toolId);
         errorMessage = null;
+
         if (arguments?["arguments"] is JsonObject suppliedArguments)
         {
             foreach (var pair in suppliedArguments)
@@ -284,6 +296,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         }
 
         var root = NormalizeOptionalString(arguments?["root"]?.GetValue<string>());
+
         if (root is not null)
         {
             remoteArguments["root"] = root;
@@ -297,6 +310,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
         ApplyReactPropertyAlias(toolId, arguments, remoteArguments);
         ApplyMauiDefaultMaxNodes(toolId, remoteArguments);
+
         return true;
     }
 
@@ -375,14 +389,16 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
     private static bool IsReactTreeTool(string toolId)
         => string.Equals(toolId, RemoteAppToolIds.ReactGetShadowTree, StringComparison.Ordinal)
-           || string.Equals(toolId, RemoteAppToolIds.ReactGetComponentTree, StringComparison.Ordinal);
+            || string.Equals(toolId, RemoteAppToolIds.ReactGetComponentTree, StringComparison.Ordinal);
 
     private static bool TryNormalizeMauiRootScope(JsonObject arguments, out string? errorMessage)
     {
         errorMessage = null;
+
         if (arguments["root"] is null)
         {
             arguments["root"] = MauiVisualTreeRootScope.Default;
+
             return true;
         }
 
@@ -390,16 +406,19 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
             || !rootValue.TryGetValue<string>(out var root))
         {
             errorMessage = MauiVisualTreeRootScope.ValidationMessage;
+
             return false;
         }
 
         if (!MauiVisualTreeRootScope.TryNormalize(root, out var normalizedRootScope))
         {
             errorMessage = MauiVisualTreeRootScope.ValidationMessage;
+
             return false;
         }
 
         arguments["root"] = normalizedRootScope;
+
         return true;
     }
 
@@ -420,8 +439,8 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
     private static bool ReadBoolean(JsonObject arguments, string propertyName)
         => arguments[propertyName] is JsonValue jsonValue
-           && jsonValue.TryGetValue<bool>(out var value)
-           && value;
+            && jsonValue.TryGetValue<bool>(out var value)
+            && value;
 
     private static bool TryApplyOptionalBoolean(
         JsonObject? arguments,
@@ -440,32 +459,5 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         }
 
         return true;
-    }
-
-    private static bool TryApplyOptionalInteger(
-        JsonObject? arguments,
-        JsonObject target,
-        string propertyName,
-        int minimum,
-        int maximum,
-        out string? errorMessage)
-    {
-        errorMessage = null;
-        if (arguments?[propertyName] is null)
-        {
-            return true;
-        }
-
-        if (arguments[propertyName] is JsonValue jsonValue
-            && jsonValue.TryGetValue<int>(out var value)
-            && value >= minimum
-            && value <= maximum)
-        {
-            target[propertyName] = value;
-            return true;
-        }
-
-        errorMessage = $"{propertyName} must be an integer between {minimum} and {maximum}.";
-        return false;
     }
 }

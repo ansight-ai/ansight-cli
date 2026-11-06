@@ -58,12 +58,12 @@ public sealed class ModelTransportOptionsTests
     public async Task InvalidAgentOptionsAreRejectedBeforeForwarding(string command)
     {
         foreach (var option in new[]
-                 {
-                     "--openai-transport=websocket",
-                     "--model-transport=invalid",
-                     "--model-transport=",
-                     "--model-transport"
-                 })
+        {
+            "--openai-transport=websocket",
+            "--model-transport=invalid",
+            "--model-transport=",
+            "--model-transport"
+        })
         {
             using var output = new StringWriter();
             var forwarded = false;
@@ -76,6 +76,7 @@ public sealed class ModelTransportOptionsTests
                 residentHostForwarder: (_, _, _) =>
                 {
                     forwarded = true;
+
                     return Task.FromResult<int?>(CliExitCodes.Success);
                 });
 
@@ -100,6 +101,7 @@ public sealed class ModelTransportOptionsTests
             residentHostForwarder: (arguments, _, _) =>
             {
                 forwarded = arguments;
+
                 return Task.FromResult<int?>(CliExitCodes.Success);
             });
 

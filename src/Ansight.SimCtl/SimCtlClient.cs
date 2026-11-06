@@ -16,6 +16,7 @@ public sealed partial class SimCtlClient
         ISimCtlProcessLauncher? processLauncher = null)
     {
         ArgumentNullException.ThrowIfNull(toolResolution);
+
         if (!toolResolution.IsFound)
         {
             throw new ArgumentException("A resolved SimCtl installation is required.", nameof(toolResolution));
@@ -34,12 +35,14 @@ public sealed partial class SimCtlClient
     public async Task<IReadOnlyList<SimCtlDevice>> GetDevicesAsync(CancellationToken cancellationToken = default)
     {
         var result = await RunXcrunAsync(["simctl", "list", "--json", "devices"], cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("enumerate simulators", result));
         }
 
         using var document = JsonDocument.Parse(result.StandardOutput);
+
         if (!document.RootElement.TryGetProperty("devices", out var runtimes)
             || runtimes.ValueKind != JsonValueKind.Object)
         {
@@ -47,6 +50,7 @@ public sealed partial class SimCtlClient
         }
 
         var devices = new List<SimCtlDevice>();
+
         foreach (var runtime in runtimes.EnumerateObject())
         {
             if (runtime.Value.ValueKind != JsonValueKind.Array)
@@ -57,6 +61,7 @@ public sealed partial class SimCtlClient
             foreach (var value in runtime.Value.EnumerateArray())
             {
                 var udid = GetString(value, "udid");
+
                 if (string.IsNullOrWhiteSpace(udid))
                 {
                     continue;
@@ -84,9 +89,11 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var result = await RunXcrunAsync(
             ["simctl", "listapps", deviceUdid],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("list installed simulator apps", result));
@@ -100,7 +107,9 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var result = await RunXcrunAsync(["simctl", "boot", deviceUdid], cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("start the simulator", result));
@@ -112,9 +121,11 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var result = await RunXcrunAsync(
             ["simctl", "bootstatus", deviceUdid, "-b"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -128,6 +139,7 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         cancellationToken.ThrowIfCancellationRequested();
+
         var request = CreateSimulatorOpenRequest(
             toolResolution.DeveloperDirectory,
             deviceUdid,
@@ -136,6 +148,7 @@ public sealed partial class SimCtlClient
 
         await using var process = processLauncher.Start(request);
         process.StandardInput.Dispose();
+
         using var outputReader = new StreamReader(process.StandardOutput);
         using var errorReader = new StreamReader(process.StandardError);
         var outputTask = outputReader.ReadToEndAsync(cancellationToken);
@@ -143,6 +156,7 @@ public sealed partial class SimCtlClient
         var exitCode = await process.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
         var output = await outputTask.ConfigureAwait(false);
         var error = await errorTask.ConfigureAwait(false);
+
         if (exitCode != 0)
         {
             var detail = string.IsNullOrWhiteSpace(error) ? output.Trim() : error.Trim();
@@ -183,7 +197,9 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var result = await RunXcrunAsync(["simctl", "shutdown", deviceUdid], cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("stop the simulator", result));
@@ -197,9 +213,11 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         ValidateBundleIdentifier(bundleIdentifier);
+
         var result = await RunXcrunAsync(
             ["simctl", "launch", deviceUdid, bundleIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(BuildFailureMessage("launch the simulator app", result));
@@ -213,7 +231,9 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationBundlePath);
+
         var fullBundlePath = Path.GetFullPath(applicationBundlePath);
+
         if (!Directory.Exists(fullBundlePath)
             || !Path.GetExtension(fullBundlePath).Equals(".app", StringComparison.OrdinalIgnoreCase))
         {
@@ -223,6 +243,7 @@ public sealed partial class SimCtlClient
         var result = await RunXcrunAsync(
             ["simctl", "install", deviceUdid, fullBundlePath],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -237,9 +258,11 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         ValidateBundleIdentifier(bundleIdentifier);
+
         var result = await RunXcrunAsync(
             ["simctl", "terminate", deviceUdid, bundleIdentifier],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess && !ReportsApplicationNotRunning(result))
         {
             throw new InvalidOperationException(BuildFailureMessage("terminate the simulator app", result));
@@ -249,9 +272,10 @@ public sealed partial class SimCtlClient
     internal static bool ReportsApplicationNotRunning(SimCtlCommandResult result)
     {
         var output = string.Concat(result.StandardOutput, "\n", result.StandardError);
+
         return output.Contains("is not running", StringComparison.OrdinalIgnoreCase)
-               || output.Contains("nothing to terminate", StringComparison.OrdinalIgnoreCase)
-               || output.Contains("no such process", StringComparison.OrdinalIgnoreCase);
+            || output.Contains("nothing to terminate", StringComparison.OrdinalIgnoreCase)
+            || output.Contains("no such process", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task SetLocationAsync(
@@ -262,12 +286,14 @@ public sealed partial class SimCtlClient
     {
         ValidateUdid(deviceUdid);
         ValidateCoordinate(latitude, longitude);
+
         var coordinate = string.Create(
             CultureInfo.InvariantCulture,
             $"{latitude:R},{longitude:R}");
         var result = await RunXcrunAsync(
             ["simctl", "location", deviceUdid, "set", coordinate],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -280,9 +306,11 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var result = await RunXcrunAsync(
             ["simctl", "location", deviceUdid, "clear"],
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess)
         {
             throw new InvalidOperationException(
@@ -296,6 +324,7 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         if (processId <= 0)
         {
             return false;
@@ -304,6 +333,7 @@ public sealed partial class SimCtlClient
         var result = await RunXcrunAsync(
             ["simctl", "spawn", deviceUdid, "launchctl", "procinfo", processId.ToString(CultureInfo.InvariantCulture)],
             cancellationToken).ConfigureAwait(false);
+
         return IsProcessInfoAvailable(result, deviceUdid);
     }
 
@@ -312,14 +342,17 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ValidateUdid(deviceUdid);
+
         var filePath = Path.Combine(
             Path.GetTempPath(),
             $"ansight-simctl-{Guid.NewGuid():N}.jpg");
+
         try
         {
             var result = await RunXcrunAsync(
                 ["simctl", "io", deviceUdid, "screenshot", "--type=jpeg", filePath],
                 cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess || !File.Exists(filePath))
             {
                 throw new InvalidOperationException(BuildFailureMessage("capture a simulator screenshot", result));
@@ -347,12 +380,13 @@ public sealed partial class SimCtlClient
     internal static bool IsProcessInfoAvailable(SimCtlCommandResult result, string deviceUdid)
     {
         var output = string.Concat(result.StandardOutput, "\n", result.StandardError);
+
         return result.IsSuccess
-               && !output.Contains("No such process", StringComparison.OrdinalIgnoreCase)
-               && !output.Contains("could not resolve path", StringComparison.OrdinalIgnoreCase)
-               && output.Contains("program path =", StringComparison.OrdinalIgnoreCase)
-               && (output.Contains($"SIMULATOR_UDID => {deviceUdid}", StringComparison.OrdinalIgnoreCase)
-                   || output.Contains($"/CoreSimulator/Devices/{deviceUdid}/", StringComparison.OrdinalIgnoreCase));
+            && !output.Contains("No such process", StringComparison.OrdinalIgnoreCase)
+            && !output.Contains("could not resolve path", StringComparison.OrdinalIgnoreCase)
+            && output.Contains("program path =", StringComparison.OrdinalIgnoreCase)
+            && (output.Contains($"SIMULATOR_UDID => {deviceUdid}", StringComparison.OrdinalIgnoreCase)
+                || output.Contains($"/CoreSimulator/Devices/{deviceUdid}/", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void ValidateCoordinate(double latitude, double longitude)
@@ -399,6 +433,7 @@ public sealed partial class SimCtlClient
             if (entryBundleIdentifier is null)
             {
                 var entryMatch = AppEntryPattern().Match(line);
+
                 if (!entryMatch.Success)
                 {
                     continue;
@@ -419,9 +454,11 @@ public sealed partial class SimCtlClient
             if (dictionaryDepth == 1)
             {
                 var propertyMatch = AppPropertyPattern().Match(line);
+
                 if (propertyMatch.Success)
                 {
                     var value = UnquoteOpenStepValue(propertyMatch.Groups["value"].Value);
+
                     switch (propertyMatch.Groups["key"].Value)
                     {
                         case "ApplicationType":
@@ -451,6 +488,7 @@ public sealed partial class SimCtlClient
             }
 
             dictionaryDepth += CountDictionaryDepthDelta(line);
+
             if (dictionaryDepth > 0)
             {
                 continue;
@@ -484,13 +522,16 @@ public sealed partial class SimCtlClient
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateUdid(request.DeviceUdid);
+
         if (request.ProcessId <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(request), "A positive process ID is required.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         var level = request.Level.Trim().ToLowerInvariant();
+
         if (level is not ("default" or "info" or "debug"))
         {
             throw new ArgumentException("The SimCtl log level must be default, info, or debug.", nameof(request));
@@ -526,6 +567,7 @@ public sealed partial class SimCtlClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         return await commandRunner.RunAsync(toolResolution, arguments, cancellationToken).ConfigureAwait(false);
     }
 
@@ -542,6 +584,7 @@ public sealed partial class SimCtlClient
     private static string UnquoteOpenStepValue(string value)
     {
         var trimmedValue = value.Trim();
+
         if (trimmedValue.Length < 2 || trimmedValue[0] != '"' || trimmedValue[^1] != '"')
         {
             return trimmedValue;
@@ -557,6 +600,7 @@ public sealed partial class SimCtlClient
         var depthDelta = 0;
         var isQuoted = false;
         var isEscaped = false;
+
         foreach (var character in line)
         {
             if (isEscaped)
@@ -564,16 +608,19 @@ public sealed partial class SimCtlClient
                 isEscaped = false;
                 continue;
             }
+
             if (isQuoted && character == '\\')
             {
                 isEscaped = true;
                 continue;
             }
+
             if (character == '"')
             {
                 isQuoted = !isQuoted;
                 continue;
             }
+
             if (isQuoted)
             {
                 continue;
@@ -603,6 +650,7 @@ public sealed partial class SimCtlClient
         var detail = string.IsNullOrWhiteSpace(result.StandardError)
             ? result.StandardOutput.Trim()
             : result.StandardError.Trim();
+
         return string.IsNullOrWhiteSpace(detail)
             ? $"SimCtl failed to {operation} with exit code {result.ExitCode}."
             : $"SimCtl failed to {operation}: {detail}";

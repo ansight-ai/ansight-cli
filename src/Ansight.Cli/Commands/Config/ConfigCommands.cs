@@ -15,6 +15,7 @@ internal static class ConfigCommands
         var settings = new LocalSettingsStore(
             CliRuntime.ResolveDataDirectory(arguments.GetOption("data-dir")));
         var command = arguments.RequirePositional(1, "config command").ToLowerInvariant();
+
         return command switch
         {
             "credentials" => CredentialSetupCommand.Run(arguments, output, input, interactive),
@@ -33,7 +34,9 @@ internal static class ConfigCommands
         LocalSettingsStore settings)
     {
         arguments.EnsurePositionalCount(3, "ansight config get <setting>");
+
         var settingName = RequireSetting(arguments, 2);
+
         return WriteSettings(arguments, output, settings, "get", settingName);
     }
 
@@ -43,12 +46,20 @@ internal static class ConfigCommands
         LocalSettingsStore settings)
     {
         arguments.EnsurePositionalCount(4, "ansight config set <setting> <value>");
+
         var settingName = RequireSetting(arguments, 2);
         var value = arguments.RequirePositional(3, "setting value");
+
         if (settingName == "android-sdk-root")
+        {
             throw new CliUsageException("Use 'ansight setup android --sdk-root <path>' to validate and save an Android SDK.");
+        }
+
         if (settingName is "credential-provider" or "secret-key-file" or "secret-store-file" or "android-sdk-root")
+        {
             throw new CliUsageException("Use 'ansight config credentials' to validate and save credential references together.");
+        }
+
         if (settingName == ExplorerPathSetting)
         {
             settings.SetExplorerPath(value);
@@ -67,9 +78,14 @@ internal static class ConfigCommands
         LocalSettingsStore settings)
     {
         arguments.EnsurePositionalCount(3, "ansight config unset <setting>");
+
         var settingName = RequireSetting(arguments, 2);
+
         if (settingName is "credential-provider" or "secret-key-file" or "secret-store-file" or "android-sdk-root")
+        {
             throw new CliUsageException("Credential references cannot be cleared independently. Preserve the existing key and migrate credentials explicitly.");
+        }
+
         if (settingName == ExplorerPathSetting)
         {
             settings.ClearExplorerPath();
@@ -132,20 +148,22 @@ internal static class ConfigCommands
         output.Write(
             result,
             () => action switch
-            {
-                "set" => $"Saved {selectedSetting.Name}: {FormatValue(selectedSetting)}\n"
-                         + "Restart the resident host for the new local explorer address to take effect.",
-                "unset" => BuildUnsetMessage(selectedSetting),
-                "get" => $"{FormatSetting(selectedSetting)}\nSettings: {settings.SettingsPath}",
-                _ => $"{string.Join('\n', configuredSettings.Select(FormatSetting))}\n"
-                     + $"Settings: {settings.SettingsPath}"
-            });
+{
+    "set" => $"Saved {selectedSetting.Name}: {FormatValue(selectedSetting)}\n"
+        + "Restart the resident host for the new local explorer address to take effect.",
+    "unset" => BuildUnsetMessage(selectedSetting),
+    "get" => $"{FormatSetting(selectedSetting)}\nSettings: {settings.SettingsPath}",
+    _ => $"{string.Join('\n', configuredSettings.Select(FormatSetting))}\n"
+        + $"Settings: {settings.SettingsPath}"
+});
+
         return CliExitCodes.Success;
     }
 
     private static string RequireSetting(CliArguments arguments, int index)
     {
         var setting = arguments.RequirePositional(index, "setting name").ToLowerInvariant();
+
         return setting switch
         {
             "credential-provider" or "secret-key-file" or "secret-store-file" or "android-sdk-root" => setting,
@@ -159,17 +177,17 @@ internal static class ConfigCommands
     private static string BuildUnsetMessage(CliConfigSetting setting)
         => setting.Name == ExplorerPathSetting
             ? "Cleared explorer-path; new explorers will use a random capability path.\n"
-              + "Restart the resident host for the change to take effect."
+                + "Restart the resident host for the change to take effect."
             : "Cleared explorer-port; new explorers will choose an available port.\n"
-              + "Restart the resident host for the change to take effect.";
+                + "Restart the resident host for the change to take effect.";
 
     private static string FormatSetting(CliConfigSetting setting)
         => $"{setting.Name}: {FormatValue(setting)} ({setting.Status})";
 
     private static string FormatValue(CliConfigSetting setting)
         => setting.Value?.ToString()
-           ?? (setting.Name == ExplorerPathSetting ? "random"
-               : setting.Name == ExplorerPortSetting ? "automatic" : "not configured");
+            ?? (setting.Name == ExplorerPathSetting ? "random"
+                : setting.Name == ExplorerPortSetting ? "automatic" : "not configured");
 
     private static string BuildHelp()
         => """

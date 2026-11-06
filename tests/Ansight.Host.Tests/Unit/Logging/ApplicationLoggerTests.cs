@@ -29,6 +29,7 @@ public sealed class ApplicationLoggerTests
         logger.Warning("captured");
 
         Assert.Equal(LogLevel.Warning, factory.MinimumLogLevel);
+
         var line = Assert.Single(
             MutableApplicationLogBuffer.Instance.Logs,
             log => log.Contains(tag, StringComparison.Ordinal));
@@ -84,6 +85,7 @@ public sealed class ApplicationLoggerTests
         using var temporaryDirectory = new TemporaryDirectory();
         var nestedLogsPath = Path.Combine(temporaryDirectory.RootPath, "host-operation-traffic");
         Directory.CreateDirectory(nestedLogsPath);
+
         var nowUtc = new DateTimeOffset(2026, 5, 22, 0, 0, 0, TimeSpan.Zero);
         var staleLegacyDesktopLogPath = CreateFile(
             Path.Combine(temporaryDirectory.RootPath, "legacy-desktop-old.log"),
@@ -110,15 +112,18 @@ public sealed class ApplicationLoggerTests
         Assert.True(File.Exists(staleNonLogPath));
     }
 
-    private sealed class CapturingApplicationLogger(
-        string tag,
-        ILogFilter filter,
-        int processId,
-        IMutableApplicationLogBuffer applicationLogBuffer)
-        : ApplicationLogger(tag, filter, processId, applicationLogBuffer)
+    private sealed class CapturingApplicationLogger : ApplicationLogger
     {
-        public int EventCount { get; private set; }
+        public CapturingApplicationLogger(
+            string tag,
+            ILogFilter filter,
+            int processId,
+            IMutableApplicationLogBuffer applicationLogBuffer)
+: base(tag, filter, processId, applicationLogBuffer)
+        {
+        }
 
+        public int EventCount { get; private set; }
         public string LastEventName { get; private set; } = string.Empty;
 
         protected override void OnEvent(string eventName, IReadOnlyDictionary<string, object?>? properties = null)
@@ -138,6 +143,7 @@ public sealed class ApplicationLoggerTests
     {
         File.WriteAllText(filePath, filePath);
         File.SetLastWriteTimeUtc(filePath, lastWriteTimeUtc.UtcDateTime);
+
         return filePath;
     }
 }

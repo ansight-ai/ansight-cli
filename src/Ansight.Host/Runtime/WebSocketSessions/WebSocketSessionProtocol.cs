@@ -19,6 +19,7 @@ internal static class WebSocketSessionProtocol
             if (requireCustomProperties)
             {
                 error = "Session properties payload must include a customProperties object.";
+
                 return false;
             }
 
@@ -28,16 +29,19 @@ internal static class WebSocketSessionProtocol
         if (customPropertiesNode is not JsonObject customPropertiesObject)
         {
             error = "customProperties must be a JSON object.";
+
             return false;
         }
 
         customProperties = NormalizeCustomProperties(customPropertiesObject);
+
         return true;
     }
 
     private static JsonObject? NormalizeCustomProperties(JsonObject customProperties)
     {
         var normalized = new JsonObject();
+
         foreach (var group in customProperties)
         {
             if (string.IsNullOrWhiteSpace(group.Key) || group.Value is not JsonObject groupObject)
@@ -46,6 +50,7 @@ internal static class WebSocketSessionProtocol
             }
 
             var normalizedGroup = new JsonObject();
+
             foreach (var property in groupObject)
             {
                 if (string.IsNullOrWhiteSpace(property.Key) || property.Value is JsonObject or JsonArray)
@@ -115,6 +120,7 @@ internal static class WebSocketSessionProtocol
     internal static DateTimeOffset? ParseControlChangedAtUtc(JsonObject? payload)
     {
         var value = payload?["changedAtUtc"]?.GetValue<string>();
+
         return DateTimeOffset.TryParse(value, out var parsed)
             ? parsed
             : null;
@@ -123,6 +129,7 @@ internal static class WebSocketSessionProtocol
     internal static AppLifecycleState? ParseControlAppLifecycleState(JsonObject? payload)
     {
         var value = payload?["state"]?.GetValue<string>();
+
         return value?.Trim().ToLowerInvariant() switch
         {
             "foreground" => AppLifecycleState.Foreground,

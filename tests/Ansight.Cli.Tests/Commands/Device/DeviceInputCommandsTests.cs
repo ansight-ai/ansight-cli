@@ -19,6 +19,7 @@ public sealed class DeviceInputCommandsTests
             {
                 Assert.Equal("com.example.app", app);
                 Assert.Equal("login.password", alias);
+
                 return value;
             });
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -33,7 +34,14 @@ public sealed class DeviceInputCommandsTests
         await DeviceInputCommands.RunAsync(CliArguments.Parse([
             "input", "text", "android", "emulator-5554", "--value", "@secret:com.example.app/password"]),
             new CliOutput(false, TextWriter.Null, TextWriter.Null), runtime, CancellationToken.None,
-            (appId, alias) => { Assert.Equal("com.example.app", appId); Assert.Equal("password", alias); return "test-password"; });
+            (appId, alias) =>
+            {
+                Assert.Equal("com.example.app", appId);
+                Assert.Equal("password", alias);
+
+                return "test-password";
+            }
+);
         Assert.Equal("test-password", runtime.LastText);
     }
 
@@ -158,11 +166,11 @@ public sealed class DeviceInputCommandsTests
     public void CreateTapRequest_RejectsCoordinateOutsideTargetViewport()
     {
         var exception = Assert.Throws<CliUsageException>(() =>
-            DeviceInputCommandRuntime.CreateTapRequest(
-                "simulator-udid",
-                new UiViewport(DevicePlatforms.Ios, 390, 844, "logical-points"),
-                390,
-                100));
+                DeviceInputCommandRuntime.CreateTapRequest(
+                    "simulator-udid",
+                    new UiViewport(DevicePlatforms.Ios, 390, 844, "logical-points"),
+                    390,
+                    100));
 
         Assert.Contains("--x must be between 0 and 389", exception.Message, StringComparison.Ordinal);
     }
@@ -218,6 +226,7 @@ public sealed class DeviceInputCommandsTests
             CancellationToken cancellationToken)
         {
             LastText = value;
+
             return Task.FromResult(DeviceOperationResult.Success("type-text", platform, deviceIdentifier, TextMessage));
         }
 
@@ -235,6 +244,7 @@ public sealed class DeviceInputCommandsTests
             int[] coordinates)
         {
             Invocations.Add(new InputInvocation(action, platform, deviceIdentifier, coordinates));
+
             return Task.FromResult(DeviceOperationResult.Success(
                 action,
                 platform,

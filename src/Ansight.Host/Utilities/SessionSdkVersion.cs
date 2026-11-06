@@ -8,13 +8,13 @@ internal static class SessionSdkVersion
     public static string? Resolve(string? sdkVersion, DeviceAppProfile? profile, string? profileJson)
     {
         return Normalize(sdkVersion)
-               ?? Resolve(profile, profileJson);
+            ?? Resolve(profile, profileJson);
     }
 
     public static string? Resolve(DeviceAppProfile? profile, string? profileJson)
     {
         return Normalize(profile?.Sdk?.Version)
-               ?? ResolveFromJson(profileJson);
+            ?? ResolveFromJson(profileJson);
     }
 
     private static string? ResolveFromJson(string? profileJson)
@@ -27,13 +27,14 @@ internal static class SessionSdkVersion
         try
         {
             var root = JsonNode.Parse(profileJson) as JsonObject;
+
             if (root is null)
             {
                 return null;
             }
 
             return ReadString(root["sdk"]?["version"])
-                   ?? ReadString(root["sdkVersion"]);
+                ?? ReadString(root["sdkVersion"]);
         }
         catch
         {

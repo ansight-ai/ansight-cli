@@ -72,6 +72,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             .WaitAsync(cancellationToken)
             .ConfigureAwait(false);
         var simCtl = iosCapabilities.SimCtl;
+
         return
         [
             new DeviceCapability(
@@ -89,7 +90,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 simCtl.IsFound ? simCtl.SimCtlPath : string.Empty,
                 simCtl.IsFound
                     ? simCtl.Message
-                      + " Physical iOS lifecycle uses xcrun devicectl; physical-device UI input uses Appium with XCUITest."
+                        + " Physical iOS lifecycle uses xcrun devicectl; physical-device UI input uses Appium with XCUITest."
                     : simCtl.Message),
             iosCapabilities.SimulatorHid
         ];
@@ -107,6 +108,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             .ConfigureAwait(false);
         using var data = SKData.CreateCopy(screenshot);
         using var codec = SKCodec.Create(data);
+
         if (codec is null || codec.Info.Width <= 0 || codec.Info.Height <= 0)
         {
             throw new InvalidOperationException(
@@ -122,6 +124,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         ArgumentNullException.ThrowIfNull(simCtl);
         ArgumentNullException.ThrowIfNull(simulatorHidProbe);
+
         if (!simCtl.IsFound)
         {
             return new DeviceCapability(
@@ -133,6 +136,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         }
 
         var compatibility = simulatorHidProbe(simCtl.DeveloperDirectory);
+
         return new DeviceCapability(
             IosSimulatorHidCapabilityName,
             compatibility.IsAvailable,
@@ -146,15 +150,16 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         Func<string, MacSimulatorHidCompatibility> simulatorHidProbe)
     {
         SimCtlToolResolution simCtl;
+
         try
         {
             simCtl = await SimCtlToolLocator.ResolveAsync(configuredXcodePath, CancellationToken.None)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or UnauthorizedAccessException
-                                           or System.ComponentModel.Win32Exception)
+            or InvalidOperationException
+            or UnauthorizedAccessException
+            or System.ComponentModel.Win32Exception)
         {
             simCtl = SimCtlToolResolution.NotFound(
                 $"Xcode tool discovery failed: {exception.Message}");
@@ -173,17 +178,20 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
         var androidCapability = capabilities.First(capability =>
             string.Equals(capability.Platform, DevicePlatforms.Android, StringComparison.Ordinal));
+
         if (androidCapability.IsAvailable)
         {
             try
             {
                 var adb = CreateAdbClient();
                 var connectedDevices = await adb.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
+
                 foreach (var device in connectedDevices)
                 {
                     var isEmulator = device.Serial.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase);
                     string? avdName = null;
                     string? formFactor = null;
+
                     if (isEmulator && device.IsConnected)
                     {
                         try
@@ -227,6 +235,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 }
 
                 var emulatorResolution = AndroidEmulatorToolLocator.Resolve(adb.AdbPath);
+
                 if (emulatorResolution.IsFound)
                 {
                     var virtualDeviceClient = new AndroidVirtualDeviceClient(emulatorResolution);
@@ -268,12 +277,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
         var iosCapability = capabilities.First(capability =>
             string.Equals(capability.Platform, DevicePlatforms.Ios, StringComparison.Ordinal));
+
         if (iosCapability.IsAvailable)
         {
             try
             {
                 var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
                 var simulators = await simCtl.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
+
                 lock (deviceKindGate)
                 {
                     foreach (var simulator in simulators)
@@ -281,6 +292,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                         knownIosSimulators[simulator.Udid] = simulator;
                     }
                 }
+
                 devices.AddRange(simulators.Select(static device => new DeviceDescriptor(
                     device.Udid,
                     device.Name,
@@ -309,8 +321,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                         device.Identifier,
                         device.Name,
                         DevicePlatforms.Ios,
-                        string.Join(' ', new[] { device.ProductType, device.OperatingSystemVersion }
-                            .Where(static value => !string.IsNullOrWhiteSpace(value))),
+                        string.Join(' ', new[] { device.ProductType, device.OperatingSystemVersion }.Where(static value => !string.IsNullOrWhiteSpace(value))),
                         device.State,
                         device.IsAvailable,
                         device.IsAvailable,
@@ -320,10 +331,10 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     }));
             }
             catch (Exception exception) when (exception is IOException
-                                               or InvalidOperationException
-                                               or AudioInjectionException
-            or PlatformNotSupportedException
-                                               or TimeoutException)
+                or InvalidOperationException
+                or AudioInjectionException
+                or PlatformNotSupportedException
+                or TimeoutException)
             {
                 warnings.Add($"Physical iOS device discovery failed: {exception.Message}");
             }
@@ -338,12 +349,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             .ThenByDescending(static device => device.IsBooted)
             .ThenBy(static device => device.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         lock (deviceKindGate)
         {
             foreach (var device in orderedDevices)
             {
                 knownDeviceKinds[device.Identifier] = device.Kind;
                 knownDevicePlatforms[device.Identifier] = device.Platform;
+
                 if (device.Platform == DevicePlatforms.Android &&
                     device.IsVirtual &&
                     !string.IsNullOrWhiteSpace(device.Name))
@@ -377,9 +390,11 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
+
         var headless = options.Headless || DeviceLaunchContext.Headless;
         var normalizedPlatform = NormalizePlatform(platform);
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
+
         try
         {
             if (normalizedPlatform == DevicePlatforms.Android)
@@ -387,6 +402,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 var adbResolution = AdbToolLocator.Resolve(configuredAdbPath);
                 var emulatorResolution = AndroidEmulatorToolLocator.Resolve(
                     adbResolution.IsFound ? adbResolution.AdbPath : configuredAdbPath);
+
                 if (!emulatorResolution.IsFound)
                 {
                     return Failure("start", normalizedPlatform, normalizedIdentifier, emulatorResolution.Message);
@@ -394,12 +410,13 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
                 var processId = await new AndroidVirtualDeviceClient(emulatorResolution)
                     .LaunchAsync(
-                        normalizedIdentifier,
-                        new AndroidVirtualDeviceLaunchOptions(Headless: headless),
-                        cancellationToken)
+                    normalizedIdentifier,
+                    new AndroidVirtualDeviceLaunchOptions(Headless: headless),
+                    cancellationToken)
                     .ConfigureAwait(false);
                 var serial = await CreateAdbClient().WaitForEmulatorBootAsync(
                     normalizedIdentifier, TimeSpan.FromMinutes(2), cancellationToken).ConfigureAwait(false);
+
                 return Success(
                     "start",
                     normalizedPlatform,
@@ -418,6 +435,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
             var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
             await StartSimulatorAsync(simCtl, normalizedIdentifier, headless, cancellationToken).ConfigureAwait(false);
+
             return Success("start", normalizedPlatform, normalizedIdentifier, "iOS Simulator booted.");
         }
         catch (Exception exception) when (IsOperationFailure(exception))
@@ -434,6 +452,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         await simCtl.BootAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
         await simCtl.WaitForBootAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
+
         if (!headless)
         {
             await simCtl.ShowSimulatorAsync(deviceIdentifier, cancellationToken).ConfigureAwait(false);
@@ -447,6 +466,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var normalizedPlatform = NormalizePlatform(platform);
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
+
         if (DeviceLaunchContext.Headless)
         {
             return Success("show-window", normalizedPlatform, normalizedIdentifier, "Headless launch; window left unchanged.");
@@ -474,6 +494,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
             var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
             await simCtl.ShowSimulatorAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false);
+
             return Success(
                 "show-window",
                 normalizedPlatform,
@@ -500,26 +521,28 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             platform,
             deviceIdentifier,
             async (normalizedPlatform, normalizedIdentifier) =>
-            {
-                if (normalizedPlatform == DevicePlatforms.Android)
                 {
-                    var result = await CreateAdbClient().RunAsync(
-                        ["-s", normalizedIdentifier, "emu", "kill"],
-                        cancellationToken).ConfigureAwait(false);
-                    EnsureAdbSuccess("shut down the Android emulator", result);
-                    return "Android emulator shutdown requested.";
-                }
+                    if (normalizedPlatform == DevicePlatforms.Android)
+                    {
+                        var result = await CreateAdbClient().RunAsync(
+                            ["-s", normalizedIdentifier, "emu", "kill"],
+                            cancellationToken).ConfigureAwait(false);
+                        EnsureAdbSuccess("shut down the Android emulator", result);
 
-                if (await IsPhysicalIosDeviceAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false))
-                {
-                    throw new PlatformNotSupportedException(
-                        "Ansight does not shut down physical iOS devices. Disconnect the device when it is no longer needed.");
-                }
+                        return "Android emulator shutdown requested.";
+                    }
 
-                var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
-                await simCtl.ShutdownAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false);
-                return "iOS Simulator shut down.";
-            }).ConfigureAwait(false);
+                    if (await IsPhysicalIosDeviceAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false))
+                    {
+                        throw new PlatformNotSupportedException(
+                            "Ansight does not shut down physical iOS devices. Disconnect the device when it is no longer needed.");
+                    }
+
+                    var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
+                    await simCtl.ShutdownAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false);
+
+                    return "iOS Simulator shut down.";
+                }).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<InstalledApplication>> ListApplicationsAsync(
@@ -529,12 +552,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var normalizedPlatform = NormalizePlatform(platform);
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             var result = await CreateAdbClient().RunAsync(
                 ["-s", normalizedIdentifier, "shell", "pm", "list", "packages", "-3"],
                 cancellationToken).ConfigureAwait(false);
             EnsureAdbSuccess("list installed Android applications", result);
+
             return result.StandardOutput
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(static line => line.StartsWith("package:", StringComparison.Ordinal)
@@ -556,6 +581,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
         var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
         var knownSimulator = GetKnownIosSimulator(normalizedIdentifier);
+
         if (knownSimulator is { IsBooted: false } && !string.IsNullOrWhiteSpace(knownSimulator.DataPath))
         {
             return await ReadInstalledSimulatorApplicationsAsync(knownSimulator.DataPath, cancellationToken)
@@ -563,6 +589,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         }
 
         IReadOnlyList<SimCtlInstalledApplication> applications;
+
         try
         {
             applications = await simCtl.GetInstalledApplicationsAsync(normalizedIdentifier, cancellationToken)
@@ -575,6 +602,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     device.Udid,
                     normalizedIdentifier,
                     StringComparison.OrdinalIgnoreCase));
+
             if (simulator is null || simulator.IsBooted || string.IsNullOrWhiteSpace(simulator.DataPath))
             {
                 throw;
@@ -584,9 +612,11 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             {
                 knownIosSimulators[simulator.Udid] = simulator;
             }
+
             return await ReadInstalledSimulatorApplicationsAsync(simulator.DataPath, cancellationToken)
                 .ConfigureAwait(false);
         }
+
         return applications
             .Select(static application => new InstalledApplication(
                 application.BundleIdentifier,
@@ -605,8 +635,12 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
         var normalizedApp = NormalizeRequired(applicationIdentifier, nameof(applicationIdentifier));
+
         if (!await IsPhysicalIosDeviceAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false))
+        {
             throw new ArgumentException("The selected device is not a physical iOS device.", nameof(deviceIdentifier));
+        }
+
         return await (await CreateCoreDeviceClientAsync(cancellationToken).ConfigureAwait(false))
             .GetRunningApplicationProcessIdentityAsync(normalizedIdentifier, normalizedApp, bundlePath, cancellationToken)
             .ConfigureAwait(false);
@@ -623,13 +657,15 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var normalizedApplicationIdentifier = NormalizeRequired(
             applicationIdentifier,
             nameof(applicationIdentifier));
+
         if (normalizedPlatform == DevicePlatforms.Android)
         {
             var application = await CreateAdbClient().GetInstalledApplicationAsync(
-                    normalizedIdentifier,
-                    normalizedApplicationIdentifier,
-                    cancellationToken)
+                normalizedIdentifier,
+                normalizedApplicationIdentifier,
+                cancellationToken)
                 .ConfigureAwait(false);
+
             return application is null
                 ? null
                 : new InstalledApplication(
@@ -643,9 +679,9 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         }
 
         return (await ListApplicationsAsync(
-                normalizedPlatform,
-                normalizedIdentifier,
-                cancellationToken).ConfigureAwait(false))
+            normalizedPlatform,
+            normalizedIdentifier,
+            cancellationToken).ConfigureAwait(false))
             .FirstOrDefault(application => string.Equals(
                 application.Identifier,
                 normalizedApplicationIdentifier,
@@ -661,22 +697,27 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             "Containers",
             "Bundle",
             "Application");
+
         if (!Directory.Exists(applicationsRoot))
         {
             return [];
         }
 
         var applications = new List<InstalledApplication>();
+
         foreach (var containerPath in Directory.EnumerateDirectories(applicationsRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             foreach (var applicationPath in Directory.EnumerateDirectories(
-                         containerPath,
-                         "*.app",
-                         SearchOption.TopDirectoryOnly))
+                containerPath,
+                "*.app",
+                SearchOption.TopDirectoryOnly))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var infoPlistPath = Path.Combine(applicationPath, "Info.plist");
+
                 if (!File.Exists(infoPlistPath))
                 {
                     continue;
@@ -686,6 +727,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 {
                     var data = await File.ReadAllBytesAsync(infoPlistPath, cancellationToken).ConfigureAwait(false);
                     var values = ReadPropertyListStrings(data);
+
                     if (!values.TryGetValue("CFBundleIdentifier", out var identifier)
                         || string.IsNullOrWhiteSpace(identifier))
                     {
@@ -709,9 +751,9 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                         ResolveBundleInstalledAtUtc(applicationPath)));
                 }
                 catch (Exception exception) when (exception is InvalidDataException
-                                                   or InvalidOperationException
-                                                   or IOException
-                                                   or UnauthorizedAccessException)
+                    or InvalidOperationException
+                    or IOException
+                    or UnauthorizedAccessException)
                 {
                     // A stale or partially removed app container should not hide the other installed apps.
                 }
@@ -738,9 +780,10 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var document = XDocument.Parse(preview.SourceText, LoadOptions.None);
         var dictionary = document.Root?
             .Elements()
-            .FirstOrDefault(static element => element.Name.LocalName == "dict");
+                .FirstOrDefault(static element => element.Name.LocalName == "dict");
         var elements = dictionary?.Elements().ToArray() ?? [];
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
+
         for (var index = 0; index + 1 < elements.Length; index += 2)
         {
             if (elements[index].Name.LocalName == "key"
@@ -764,6 +807,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var normalizedApplicationIdentifier = NormalizeRequired(
             applicationIdentifier,
             nameof(applicationIdentifier));
+
         if (normalizedPlatform != DevicePlatforms.Android)
         {
             return null;
@@ -773,6 +817,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             normalizedIdentifier,
             normalizedApplicationIdentifier,
             cancellationToken).ConfigureAwait(false);
+
         return checksum is null ? null : new ApplicationChecksum(checksum);
     }
 
@@ -784,6 +829,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var fullApplicationPath = Path.GetFullPath(
             NormalizeRequired(applicationPath, nameof(applicationPath)));
+
         return ExecuteAsync(
             "install-app",
             platform,
@@ -796,6 +842,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                         normalizedIdentifier,
                         fullApplicationPath,
                         cancellationToken).ConfigureAwait(false);
+
                     return $"Installed '{fullApplicationPath}'.";
                 }
 
@@ -804,6 +851,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     await (await CreateCoreDeviceClientAsync(cancellationToken).ConfigureAwait(false))
                         .InstallApplicationAsync(normalizedIdentifier, fullApplicationPath, cancellationToken)
                         .ConfigureAwait(false);
+
                     return $"Installed '{fullApplicationPath}' on the physical iOS device.";
                 }
 
@@ -812,6 +860,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     normalizedIdentifier,
                     fullApplicationPath,
                     cancellationToken).ConfigureAwait(false);
+
                 return $"Installed '{fullApplicationPath}'.";
             });
     }
@@ -854,6 +903,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var enrollmentPayload = string.IsNullOrWhiteSpace(launchOptions?.AnsightEnrollmentPayload)
             ? null
             : launchOptions.AnsightEnrollmentPayload.Trim();
+
         return ExecuteAsync(
             "launch-app",
             platform,
@@ -861,9 +911,11 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             async (normalizedPlatform, normalizedIdentifier) =>
             {
                 var audioRouteRecovered = false;
+
                 if (normalizedPlatform == DevicePlatforms.Android)
                 {
                     var adb = CreateAdbClient();
+
                     if (enrollmentPayload is null)
                     {
                         await adb.LaunchApplicationAsync(
@@ -887,16 +939,17 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     {
                         var processId = await (await CreateCoreDeviceClientAsync(cancellationToken).ConfigureAwait(false))
                             .LaunchApplicationAsync(
-                                normalizedIdentifier,
-                                normalizedApplicationIdentifier,
-                                enrollmentPayload is null
-                                    ? null
-                                    : new Dictionary<string, string>(StringComparer.Ordinal)
-                                    {
-                                        [IosEnrollmentEnvironmentVariable] = enrollmentPayload
-                                    },
-                                cancellationToken)
+                            normalizedIdentifier,
+                            normalizedApplicationIdentifier,
+                            enrollmentPayload is null
+                                ? null
+                                : new Dictionary<string, string>(StringComparer.Ordinal)
+                                {
+                                    [IosEnrollmentEnvironmentVariable] = enrollmentPayload
+                                },
+                            cancellationToken)
                             .ConfigureAwait(false);
+
                         if (processId.HasValue)
                         {
                             lock (physicalIosProcessGate)
@@ -910,6 +963,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     else
                     {
                         var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
+
                         if (iosAudioRecovery is not null)
                         {
                             audioRouteRecovered = await iosAudioRecovery.RecoverBeforeLaunchAsync(
@@ -919,22 +973,30 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                                     .Single(device => string.Equals(device.Udid, normalizedIdentifier, StringComparison.OrdinalIgnoreCase))
                                     .LastBootedUtc,
                                 async token =>
-                                {
-                                    var inventory = await simCtl.GetDevicesAsync(token).ConfigureAwait(false);
-                                    if (inventory.Any(device => device.IsBooted
-                                        && !string.Equals(device.Udid, normalizedIdentifier, StringComparison.OrdinalIgnoreCase)))
-                                    {
-                                        throw new InvalidOperationException("Simulator audio route is stale—restart required. Stop other booted simulators before starting a fresh run.");
-                                    }
+                                                        {
+                                                            var inventory = await simCtl.GetDevicesAsync(token).ConfigureAwait(false);
 
-                                    var target = inventory.Single(device => string.Equals(device.Udid, normalizedIdentifier, StringComparison.OrdinalIgnoreCase));
-                                    if (target.IsBooted)
-                                        await simCtl.ShutdownAsync(normalizedIdentifier, token).ConfigureAwait(false);
-                                    await simCtl.BootAsync(normalizedIdentifier, token).ConfigureAwait(false);
-                                    await simCtl.WaitForBootAsync(normalizedIdentifier, token).ConfigureAwait(false);
-                                    if (!DeviceLaunchContext.Headless)
-                                        await simCtl.ShowSimulatorAsync(normalizedIdentifier, token).ConfigureAwait(false);
-                                },
+                                                            if (inventory.Any(device => device.IsBooted
+                                                                && !string.Equals(device.Udid, normalizedIdentifier, StringComparison.OrdinalIgnoreCase)))
+                                                            {
+                                                                throw new InvalidOperationException("Simulator audio route is stale—restart required. Stop other booted simulators before starting a fresh run.");
+                                                            }
+
+                                                            var target = inventory.Single(device => string.Equals(device.Udid, normalizedIdentifier, StringComparison.OrdinalIgnoreCase));
+
+                                                            if (target.IsBooted)
+                                                            {
+                                                                await simCtl.ShutdownAsync(normalizedIdentifier, token).ConfigureAwait(false);
+                                                            }
+
+                                                            await simCtl.BootAsync(normalizedIdentifier, token).ConfigureAwait(false);
+                                                            await simCtl.WaitForBootAsync(normalizedIdentifier, token).ConfigureAwait(false);
+
+                                                            if (!DeviceLaunchContext.Headless)
+                                                            {
+                                                                await simCtl.ShowSimulatorAsync(normalizedIdentifier, token).ConfigureAwait(false);
+                                                            }
+                                                        },
                                 cancellationToken).ConfigureAwait(false);
                         }
 
@@ -960,6 +1022,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var normalizedApplicationIdentifier = NormalizeRequired(
             applicationIdentifier,
             nameof(applicationIdentifier));
+
         return ExecuteAsync(
             "terminate-app",
             platform,
@@ -981,6 +1044,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                             normalizedIdentifier,
                             normalizedApplicationIdentifier);
                         int? processId;
+
                         lock (physicalIosProcessGate)
                         {
                             processId = physicalIosProcessIds.TryGetValue(target, out var knownProcessId)
@@ -990,11 +1054,12 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
                         await (await CreateCoreDeviceClientAsync(cancellationToken).ConfigureAwait(false))
                             .TerminateApplicationAsync(
-                                normalizedIdentifier,
-                                normalizedApplicationIdentifier,
-                                processId,
-                                cancellationToken)
+                            normalizedIdentifier,
+                            normalizedApplicationIdentifier,
+                            processId,
+                            cancellationToken)
                             .ConfigureAwait(false);
+
                         lock (physicalIosProcessGate)
                         {
                             physicalIosProcessIds.Remove(target);
@@ -1026,19 +1091,30 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
+
         var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
         var simulator = (await simCtl.GetDevicesAsync(cancellationToken).ConfigureAwait(false))
             .FirstOrDefault(device => string.Equals(device.Udid, deviceUdid, StringComparison.OrdinalIgnoreCase));
+
         if (simulator is null)
+        {
             throw new PlatformNotSupportedException($"'{deviceUdid}' is not an iOS Simulator.");
+        }
+
         if (!simulator.IsBooted)
+        {
             throw new InvalidOperationException($"iOS Simulator '{deviceUdid}' must be booted to receive a shake.");
+        }
 
         var capability = GetIosSimulatorHidCapability();
+
         if (!capability.IsAvailable)
+        {
             throw new PlatformNotSupportedException(capability.Message);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
+
         using var session = new MacSimulatorHidSession(capability.Backend);
         session.SendShake(simulator.Udid);
     }
@@ -1080,7 +1156,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 }
 
                 return $"Location set to {latitude.ToString("R", CultureInfo.InvariantCulture)}, "
-                       + longitude.ToString("R", CultureInfo.InvariantCulture) + ".";
+                    + longitude.ToString("R", CultureInfo.InvariantCulture) + ".";
             });
 
     public Task<DeviceOperationResult> ClearLocationAsync(
@@ -1107,6 +1183,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
                 var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
                 await simCtl.ClearLocationAsync(normalizedIdentifier, cancellationToken).ConfigureAwait(false);
+
                 return "Simulated location cleared.";
             });
 
@@ -1155,9 +1232,13 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         => ExecuteAsync("type-text", platform, deviceIdentifier, async (normalizedPlatform, normalizedIdentifier) =>
         {
             if (normalizedPlatform != DevicePlatforms.Android)
+            {
                 throw new PlatformNotSupportedException("Direct DeviceService text input supports Android only.");
+            }
+
             await Ansight.Host.Devices.AndroidTextInput.SendAsync(normalizedIdentifier, value,
                 CreateAdbClient().RunWithStandardInputAsync, cancellationToken).ConfigureAwait(false);
+
             return "Android input operation 'type-text' completed.";
         });
 
@@ -1178,6 +1259,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             "volume-down" => "KEYCODE_VOLUME_DOWN",
             _ => throw new ArgumentException($"Unsupported Android button '{button}'.", nameof(button))
         };
+
         return ExecuteAndroidInputAsync(
             "press-button",
             platform,
@@ -1195,9 +1277,11 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         var normalizedPlatform = NormalizePlatform(platform);
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
         var fullOutputPath = Path.GetFullPath(NormalizeRequired(outputPath, nameof(outputPath)));
+
         try
         {
             byte[] bytes;
+
             if (normalizedPlatform == DevicePlatforms.Android)
             {
                 bytes = await CreateAdbClient().CaptureScreenshotPngAsync(
@@ -1219,12 +1303,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             }
 
             var parentPath = Path.GetDirectoryName(fullOutputPath);
+
             if (!string.IsNullOrWhiteSpace(parentPath))
             {
                 Directory.CreateDirectory(parentPath);
             }
 
             await File.WriteAllBytesAsync(fullOutputPath, bytes, cancellationToken).ConfigureAwait(false);
+
             return Success(
                 "screenshot",
                 normalizedPlatform,
@@ -1258,8 +1344,10 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
                 var arguments = new List<string> { "-s", normalizedIdentifier, "shell" };
                 arguments.AddRange(inputArguments);
+
                 var result = await CreateAdbClient().RunAsync(arguments, cancellationToken).ConfigureAwait(false);
                 EnsureAdbSuccess($"perform Android input operation '{operation}'", result);
+
                 return $"Android input operation '{operation}' completed.";
             });
 
@@ -1271,9 +1359,11 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var normalizedPlatform = NormalizePlatform(platform);
         var normalizedIdentifier = NormalizeRequired(deviceIdentifier, nameof(deviceIdentifier));
+
         try
         {
             var message = await action(normalizedPlatform, normalizedIdentifier).ConfigureAwait(false);
+
             return Success(operation, normalizedPlatform, normalizedIdentifier, message);
         }
         catch (Exception exception) when (IsOperationFailure(exception))
@@ -1285,6 +1375,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     private AdbClient CreateAdbClient()
     {
         var resolution = AdbToolLocator.Resolve(configuredAdbPath);
+
         if (!resolution.IsFound)
         {
             throw new InvalidOperationException(resolution.Message);
@@ -1297,6 +1388,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var resolution = await SimCtlToolLocator.ResolveAsync(configuredXcodePath, cancellationToken)
             .ConfigureAwait(false);
+
         if (!resolution.IsFound)
         {
             throw new PlatformNotSupportedException(resolution.Message);
@@ -1309,6 +1401,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         var resolution = await SimCtlToolLocator.ResolveAsync(configuredXcodePath, cancellationToken)
             .ConfigureAwait(false);
+
         if (!resolution.IsFound)
         {
             throw new PlatformNotSupportedException(resolution.Message);
@@ -1330,6 +1423,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         }
 
         Exception? physicalDiscoveryFailure = null;
+
         try
         {
             var physicalDevices = await (await CreateCoreDeviceClientAsync(cancellationToken).ConfigureAwait(false))
@@ -1339,6 +1433,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 device.Identifier,
                 deviceIdentifier,
                 StringComparison.OrdinalIgnoreCase));
+
             if (isPhysical)
             {
                 lock (deviceKindGate)
@@ -1351,20 +1446,21 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             }
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or AudioInjectionException
+            or InvalidOperationException
+            or AudioInjectionException
             or PlatformNotSupportedException
-                                           or TimeoutException)
+            or TimeoutException)
         {
             physicalDiscoveryFailure = exception;
         }
 
         var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
         var simulators = await simCtl.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
+
         if (simulators.Any(device => string.Equals(
-                device.Udid,
-                deviceIdentifier,
-                StringComparison.OrdinalIgnoreCase)))
+            device.Udid,
+            deviceIdentifier,
+            StringComparison.OrdinalIgnoreCase)))
         {
             lock (deviceKindGate)
             {
@@ -1379,7 +1475,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         {
             throw new InvalidOperationException(
                 $"Could not determine whether '{deviceIdentifier}' is a physical iOS device: "
-                + physicalDiscoveryFailure.Message,
+                    + physicalDiscoveryFailure.Message,
                 physicalDiscoveryFailure);
         }
 
@@ -1402,6 +1498,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
         platform = string.Empty;
         kind = DeviceKinds.Unknown;
+
         return false;
     }
 
@@ -1448,6 +1545,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     private static string NormalizePlatform(string platform)
     {
         var normalized = NormalizeRequired(platform, nameof(platform)).ToLowerInvariant();
+
         return normalized switch
         {
             "android" => DevicePlatforms.Android,
@@ -1461,6 +1559,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     private static string NormalizeRequired(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+
         return value.Trim();
     }
 
@@ -1478,13 +1577,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     internal static string? ResolveAppleFormFactor(string? name, string? productType)
     {
         var family = FirstNonEmpty(productType, name);
+
         if (family.StartsWith("iPad", StringComparison.OrdinalIgnoreCase))
         {
             return DeviceFormFactors.Tablet;
         }
 
         return family.StartsWith("iPhone", StringComparison.OrdinalIgnoreCase)
-               || family.StartsWith("iPod", StringComparison.OrdinalIgnoreCase)
+            || family.StartsWith("iPod", StringComparison.OrdinalIgnoreCase)
             ? DeviceFormFactors.Phone
             : null;
     }
@@ -1500,6 +1600,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         {
             var containerPath = Directory.GetParent(bundlePath)?.FullName ?? bundlePath;
             var createdUtc = Directory.GetCreationTimeUtc(containerPath);
+
             return createdUtc <= DateTime.UnixEpoch
                 ? null
                 : new DateTimeOffset(createdUtc, TimeSpan.Zero);
@@ -1512,7 +1613,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim()
-           ?? string.Empty;
+            ?? string.Empty;
 
     private sealed record IosDeviceCapabilities(
         SimCtlToolResolution SimCtl,

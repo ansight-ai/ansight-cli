@@ -74,8 +74,12 @@ public sealed class LocalSessionCaptureAnalyticsTests
         Assert.True(LocalSessionCaptureAnalytics.ShouldReportActivation("WebSocket Open", snapshot));
         Assert.Equal(outcome, LocalSessionCaptureAnalytics.CaptureUsageOutcome(snapshot));
         Assert.Equal(15d, LocalSessionCaptureAnalytics.CreateCompletionProperties(snapshot)["durationSeconds"]);
+
         foreach (var previous in new string?[] { null, "Awaiting WebSocket", status })
+        {
             Assert.False(LocalSessionCaptureAnalytics.ShouldReportRecordedCapture(previous, snapshot));
+        }
+
         Assert.False(LocalSessionCaptureAnalytics.ShouldReportRecordedCapture("WebSocket Open", CreateSnapshot(status, isHistorical: false)));
         Assert.False(LocalSessionCaptureAnalytics.ShouldReportActivation("WebSocket Open", CreateSnapshot(status, hasEvidence: false)));
     }
@@ -83,6 +87,7 @@ public sealed class LocalSessionCaptureAnalyticsTests
     private static AppSessionSnapshot CreateSnapshot(string status, bool isHistorical = true, bool hasEvidence = true)
     {
         var createdUtc = new DateTimeOffset(2026, 8, 6, 2, 0, 0, TimeSpan.Zero);
+
         return new AppSessionSnapshot
         {
             SessionId = "session-001",

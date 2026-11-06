@@ -13,6 +13,7 @@ public sealed class AudioService
     public async Task<AudioOperationResult> ExecuteAsync(AudioOperation operation, JsonObject? arguments, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         using var scope = ToolExecutionCancellation.Push(cancellationToken);
         var name = operation switch
         {
@@ -25,6 +26,7 @@ public sealed class AudioService
         var payload = (result.Payload?["structuredContent"] as JsonObject)?.DeepClone().AsObject() ?? new JsonObject();
         var failed = result.IsError || result.Payload?["isError"]?.GetValue<bool>() == true;
         var message = payload["message"]?.GetValue<string>() ?? result.ErrorMessage ?? (failed ? "Audio operation failed." : "Audio operation completed.");
+
         return new AudioOperationResult(operation, !failed, message, payload);
     }
 }

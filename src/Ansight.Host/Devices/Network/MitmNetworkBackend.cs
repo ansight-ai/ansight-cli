@@ -6,14 +6,6 @@ using Ansight.Host.Runtime.DeviceExecution;
 
 namespace Ansight.Host.Devices.Network;
 
-internal interface INetworkConditioningBackend : IAsyncDisposable
-{
-    string Name { get; }
-    DateTimeOffset ExpiresAtUtc { get; }
-    Task ApplyAsync(NetworkConditionProfile profile, IReadOnlyList<NetworkConditionStep> steps, CancellationToken cancellationToken);
-    JsonObject Status();
-}
-
 internal sealed class MitmNetworkBackend : INetworkConditioningBackend
 {
     private readonly string directory;
@@ -34,9 +26,15 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
     {
         directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
         configPath = Path.Combine(directory, "conditions.json");
         this.processId = processId;
+
         using var app = Process.GetProcessById(processId);
         processStart = app.StartTime;
         this.ports = ports;
@@ -47,7 +45,12 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
     internal static string? FindExecutable()
     {
         var configured = Environment.GetEnvironmentVariable("ANSIGHT_MITMDUMP_PATH");
-        if (!string.IsNullOrWhiteSpace(configured)) return Path.IsPathRooted(configured) && File.Exists(configured) ? configured : null;
+
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return Path.IsPathRooted(configured) && File.Exists(configured) ? configured : null;
+        }
+
         return (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
             .Concat(["/opt/homebrew/bin", "/usr/local/bin"])
             .Select(path => Path.Combine(path, OperatingSystem.IsWindows() ? "mitmdump.exe" : "mitmdump"))
@@ -56,22 +59,46 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
 
     internal static async Task<int> ResolveProcessAsync(NetworkConditionTarget target, IDeviceCommandRunner commands, CancellationToken token)
     {
-        if (!OperatingSystem.IsMacOS()) throw new PlatformNotSupportedException("Local conditioning currently requires a macOS host.");
+        if (!OperatingSystem.IsMacOS())
+        {
+            throw new PlatformNotSupportedException("Local conditioning currently requires a macOS host.");
+        }
+
         if (Regex.IsMatch(target.DeviceId, @"^emulator-[0-9]{4,5}$"))
         {
             var port = int.Parse(target.DeviceId[9..], System.Globalization.CultureInfo.InvariantCulture);
-            if (port is < 5554 or > 5682 || port % 2 != 0) throw new ArgumentException("Invalid emulator console port.");
+
+            if (port is < 5554 or > 5682 || port % 2 != 0)
+            {
+                throw new ArgumentException("Invalid emulator console port.");
+            }
+
             var listening = await commands.RunAsync("/usr/sbin/lsof", ["-nP", $"-iTCP:{port}", "-sTCP:LISTEN", "-t"], token).ConfigureAwait(false);
             var pids = listening.RequireText().Split('\n', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
-            if (pids.Length != 1 || !int.TryParse(pids[0], out var emulatorPid)) throw new InvalidOperationException("The emulator console process must resolve uniquely.");
+
+            if (pids.Length != 1 || !int.TryParse(pids[0], out var emulatorPid))
+            {
+                throw new InvalidOperationException("The emulator console process must resolve uniquely.");
+            }
+
             using var emulator = Process.GetProcessById(emulatorPid);
-            if (!emulator.ProcessName.StartsWith("qemu-system-", StringComparison.Ordinal)) throw new InvalidOperationException("The selected console listener is not an Android emulator process.");
+
+            if (!emulator.ProcessName.StartsWith("qemu-system-", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("The selected console listener is not an Android emulator process.");
+            }
+
             return emulatorPid;
         }
+
         if (!Guid.TryParse(target.DeviceId, out _)
             || !Regex.IsMatch(target.AppId, @"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$"))
+        {
             throw new PlatformNotSupportedException("mitmproxy local conditioning requires an exact iOS Simulator UDID and app bundle identifier on macOS.");
+        }
+
         var result = await commands.RunAsync("/usr/bin/xcrun", ["simctl", "spawn", target.DeviceId, "launchctl", "list"], token).ConfigureAwait(false);
+
         return ParseProcessId(result.RequireText(), target.AppId);
     }
 
@@ -79,16 +106,24 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
     {
         var matches = services.Split('\n').Select(line => line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
             .Where(parts => parts.Length >= 3 && parts[2].StartsWith("UIKitApplication:" + appId + "[", StringComparison.Ordinal)).ToArray();
+
         if (matches.Length != 1 || !int.TryParse(matches[0][0], out var pid) || pid <= 0)
+        {
             throw new InvalidOperationException("Launch the target app first; its simulator process must resolve uniquely.");
+        }
+
         return pid;
     }
 
     public async Task ApplyAsync(NetworkConditionProfile profile, IReadOnlyList<NetworkConditionStep> steps, CancellationToken cancellationToken)
     {
         using var app = Process.GetProcessById(processId);
+
         if (app.HasExited || app.StartTime != processStart)
+        {
             throw new InvalidOperationException("The target app restarted. Reset conditioning and start a new lease for its new process.");
+        }
+
         if (proxy is null)
         {
             // Establish local routing with a neutral profile before starting the
@@ -99,6 +134,7 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
             await WaitReadyAsync(cancellationToken).ConfigureAwait(false);
             expires = DateTimeOffset.UtcNow.Add(lifetime);
         }
+
         await WriteConfigAsync(profile, steps, cancellationToken).ConfigureAwait(false);
         await WaitReadyAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -107,11 +143,15 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
     {
         var value = new
         {
-            revision = ++revision, parentPid = Environment.ProcessId, targetPid = processId,
+            revision = ++revision,
+            parentPid = Environment.ProcessId,
+            targetPid = processId,
             targetStartedAtUnixSeconds = processStart.ToUnixTimeSeconds(),
             expiresAtUnixSeconds = expires.ToUnixTimeMilliseconds() / 1000d,
             startedAtUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000d,
-            profile, steps, destinationPorts = ports,
+            profile,
+            steps,
+            destinationPorts = ports,
             bypassPorts = Enumerable.Range(ProtocolDefaults.WebSocketSessionPortRangeStart,
                 ProtocolDefaults.WebSocketSessionPortRangeEnd - ProtocolDefaults.WebSocketSessionPortRangeStart + 1)
                 .Append(ProtocolDefaults.WebSocketPort).Append(ProtocolDefaults.DiscoveryPort).Distinct().ToArray()
@@ -127,12 +167,20 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
         {
             var addonPath = Path.Combine(directory, "conditioner.py");
             await File.WriteAllTextAsync(addonPath, EmbeddedTextResource.Read("Devices/Network/Resources/conditioner.py"), cancellationToken).ConfigureAwait(false);
+
             var start = new ProcessStartInfo(FindExecutable() ?? throw new IOException("Install mitmproxy: brew install --cask mitmproxy"))
             {
-                UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
             };
+
             foreach (var argument in new[] { "--mode", $"local:{processId}", "--ignore-hosts", ".*", "--set", "show_ignored_hosts=true", "--set", "flow_detail=0", "--set", "termlog_verbosity=warn", "--set", $"confdir={directory}", "-s", addonPath })
+            {
                 start.ArgumentList.Add(argument);
+            }
+
             start.Environment["ANSIGHT_NETWORK_CONFIG"] = configPath;
             proxy = Process.Start(start) ?? throw new IOException("mitmdump failed to start.");
             proxy.OutputDataReceived += (_, args) => RememberError(args.Data);
@@ -146,13 +194,23 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(15));
+
         try
         {
             while (true)
             {
-                if (proxy!.HasExited) throw new IOException("mitmdump could not establish local capture. " + error);
+                if (proxy!.HasExited)
+                {
+                    throw new IOException("mitmdump could not establish local capture. " + error);
+                }
+
                 var state = Status();
-                if (state["revision"]?.GetValue<int>() == revision && state["status"]?.GetValue<string>() == "ready") return;
+
+                if (state["revision"]?.GetValue<int>() == revision && state["status"]?.GetValue<string>() == "ready")
+                {
+                    return;
+                }
+
                 await Task.Delay(100, deadline.Token).ConfigureAwait(false);
             }
         }
@@ -164,7 +222,13 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
 
     private void RememberError(string? value)
     {
-        if (value is not null) lock (errorGate) error = (error + " " + value)[^Math.Min(4096, error.Length + value.Length + 1)..];
+        if (value is not null)
+        {
+            lock (errorGate)
+            {
+                error = (error + " " + value)[^Math.Min(4096, error.Length + value.Length + 1)..];
+            }
+        }
     }
 
     public JsonObject Status()
@@ -173,10 +237,21 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
         {
             var value = JsonNode.Parse(File.ReadAllText(Path.ChangeExtension(configPath, ".status.json")))!.AsObject();
             value["processId"] = processId;
-            if (proxy?.HasExited == true) value["status"] = "stopped";
+
+            if (proxy?.HasExited == true)
+            {
+                value["status"] = "stopped";
+            }
+
             return value;
         }
-        catch (Exception exception) when (exception is IOException or JsonException) { return new JsonObject { ["status"] = "starting" }; }
+        catch (Exception exception) when (exception is IOException or JsonException)
+        {
+            return new JsonObject
+            {
+                ["status"] = "starting"
+            };
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -185,16 +260,38 @@ internal sealed class MitmNetworkBackend : INetworkConditioningBackend
         {
             try
             {
-                if (!proxy.HasExited) proxy.Kill(entireProcessTree: true);
+                if (!proxy.HasExited)
+                {
+                    proxy.Kill(entireProcessTree: true);
+                }
             }
-            catch (InvalidOperationException) { } // Independent watchdog may have exited first.
+            catch (InvalidOperationException)
+            {
+            }
+
+            // Independent watchdog may have exited first.
+
             await proxy.WaitForExitAsync().ConfigureAwait(false);
             proxy.Dispose();
             proxy = null;
         }
+
         // This directory contains only this lease's addon/config and unused generated CA.
-        try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); }
-        catch (IOException) { } // Routing is already gone; leftover private temporary files cannot keep it active.
-        catch (UnauthorizedAccessException) { }
+
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+        }
+
+        // Routing is already gone; leftover private temporary files cannot keep it active.
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }

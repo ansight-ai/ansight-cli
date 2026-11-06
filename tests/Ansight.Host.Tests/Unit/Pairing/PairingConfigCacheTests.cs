@@ -23,6 +23,7 @@ public sealed class PairingConfigCacheTests
         using var hostIdentity = CreateHostIdentity();
         var cache = new PairingConfigCache(new InMemoryEncryptedStorage());
         cache.Add(CreateConfig("invite-1", "token-1", "app-1"));
+
         var attempt = CreateAttempt("invite-1", "token-1", "app-1", "device-1");
 
         var first = cache.AuthorizeConnection(attempt, hostIdentity);
@@ -48,6 +49,7 @@ public sealed class PairingConfigCacheTests
             "invite-any-app",
             "token-any-app",
             PairingConfig.AnyAppId));
+
         var attempt = CreateAttempt(
             "invite-any-app",
             "token-any-app",
@@ -134,6 +136,7 @@ public sealed class PairingConfigCacheTests
         Assert.True(second.Accepted, second.ReasonMessage);
         Assert.True(first.IsNewRegistration);
         Assert.False(second.IsNewRegistration);
+
         var firstGrant = Assert.IsType<PairingClientGrant>(first.Grant);
         var secondGrant = Assert.IsType<PairingClientGrant>(second.Grant);
         Assert.Equal(firstGrant.GrantId, secondGrant.GrantId);
@@ -164,6 +167,7 @@ public sealed class PairingConfigCacheTests
         var reconnect = cache.AuthorizeLocalConnection(attempt, hostIdentity);
 
         Assert.True(reconnect.Accepted, reconnect.ReasonMessage);
+
         var reconnectGrant = Assert.IsType<PairingClientGrant>(reconnect.Grant);
         Assert.Equal(first.Grant?.GrantId, reconnectGrant.GrantId);
         Assert.Equal("write", reconnectGrant.MaxToolPolicy);
@@ -237,6 +241,7 @@ public sealed class PairingConfigCacheTests
         var storage = new InMemoryEncryptedStorage();
         var cache = new PairingConfigCache(storage);
         cache.Add(CreateConfig("invite-1", "token-1", "app-1"));
+
         var enrollment = cache.AuthorizeConnection(
             CreateAttempt("invite-1", "token-1", "app-1", "device-1"),
             hostIdentity);
@@ -276,6 +281,7 @@ public sealed class PairingConfigCacheTests
         DateTimeOffset? expiresAt = null)
     {
         var expiry = expiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30);
+
         return new PairingConfig
         {
             Schema = PairingConfig.SchemaName,
@@ -306,6 +312,7 @@ public sealed class PairingConfigCacheTests
     private static RuntimeIdentity CreateHostIdentity()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
         return RuntimeIdentity.FromPrivateKey("Host", key.ExportPkcs8PrivateKey());
     }
 

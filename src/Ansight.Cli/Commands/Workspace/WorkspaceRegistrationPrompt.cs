@@ -10,6 +10,7 @@ internal static class WorkspaceRegistrationPrompt
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(output);
+
         if (!IsWorkspaceInitialization(arguments)
             || CliCommandHelp.IsRequested(arguments)
             || arguments.GetOption("app-id") is not null
@@ -24,7 +25,9 @@ internal static class WorkspaceRegistrationPrompt
 
         output.WritePrompt(
             "App ID to register for automatic session analysis (leave blank to skip): ");
+
         var appId = standardInput.ReadLine()?.Trim();
+
         if (string.IsNullOrWhiteSpace(appId))
         {
             return arguments;
@@ -33,11 +36,12 @@ internal static class WorkspaceRegistrationPrompt
         var enrichedArguments = arguments.OriginalArguments.ToList();
         enrichedArguments.Add("--app-id");
         enrichedArguments.Add(appId);
+
         return CliArguments.Parse(enrichedArguments);
     }
 
     private static bool IsWorkspaceInitialization(CliArguments arguments)
         => arguments.Positionals.Count >= 2
-           && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
-           && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize";
+            && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
+            && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize";
 }

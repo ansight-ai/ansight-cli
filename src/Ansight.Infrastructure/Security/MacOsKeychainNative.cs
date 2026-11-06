@@ -40,6 +40,7 @@ internal static class MacOsKeychainNative
     {
         var keyCallbacks = NativeLibrary.GetExport(coreFoundationHandle, "kCFTypeDictionaryKeyCallBacks");
         var valueCallbacks = NativeLibrary.GetExport(coreFoundationHandle, "kCFTypeDictionaryValueCallBacks");
+
         return CFDictionaryCreateMutable(0, 0, keyCallbacks, valueCallbacks);
     }
 
@@ -51,6 +52,7 @@ internal static class MacOsKeychainNative
     internal static void SetString(nint dictionary, nint key, string value)
     {
         var nativeValue = CFStringCreateWithCString(0, value, Utf8Encoding);
+
         if (nativeValue == 0)
         {
             throw new InvalidOperationException("Could not allocate a macOS Keychain string value.");
@@ -69,6 +71,7 @@ internal static class MacOsKeychainNative
     internal static void SetData(nint dictionary, nint key, byte[] value)
     {
         var nativeValue = CFDataCreate(0, value, value.Length);
+
         if (nativeValue == 0)
         {
             throw new InvalidOperationException("Could not allocate macOS Keychain data.");
@@ -87,12 +90,14 @@ internal static class MacOsKeychainNative
     internal static byte[] ReadData(nint data)
     {
         var length = CFDataGetLength(data);
+
         if (length < 0 || length > int.MaxValue)
         {
             throw new InvalidDataException("The macOS Keychain returned an invalid data length.");
         }
 
         var bytes = new byte[(int)length];
+
         if (bytes.Length > 0)
         {
             Marshal.Copy(CFDataGetBytePtr(data), bytes, 0, bytes.Length);

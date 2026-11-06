@@ -1,8 +1,13 @@
 namespace Ansight.Host.Tests.TestSupport;
 
-internal sealed class ManualCredentialTimeProvider(DateTimeOffset now) : TimeProvider
+internal sealed class ManualCredentialTimeProvider : TimeProvider
 {
-    public DateTimeOffset Now { get; set; } = now;
+    public ManualCredentialTimeProvider(DateTimeOffset now)
+    {
+        this.Now = now;
+    }
+
+    public DateTimeOffset Now { get; set; }
 
     public override DateTimeOffset GetUtcNow() => Now;
 }

@@ -86,6 +86,7 @@ internal sealed class ExportTouchSliceTool : Operation
         properties["includeAnnotations"] = ToolSchema.Boolean("Include annotations overlapping the exported time range. Defaults to true.", nullable: true);
         properties["includeVisualTrees"] = ToolSchema.Boolean("Include visual tree snapshot summaries in the exported time range. Defaults to true.", nullable: true);
         properties["includeArtifacts"] = ToolSchema.Boolean("Include artifact snapshot summaries in the exported time range. Defaults to true.", nullable: true);
+
         return properties;
     }
 }

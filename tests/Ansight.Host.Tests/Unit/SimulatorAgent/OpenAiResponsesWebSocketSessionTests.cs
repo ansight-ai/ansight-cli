@@ -13,15 +13,24 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         var connection = new FakeWebSocketConnection(CompletedEvent("resp_1"), CompletedEvent("resp_2"));
         await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
         await session.CreateResponseAsync(CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true), CancellationToken.None);
+
         var declaration = AgentToolCatalog.CreateAdditionalToolsInput(new JsonArray(new JsonObject
-            { ["type"] = "function", ["name"] = "ansight_find_ui", ["parameters"] = new JsonObject { ["type"] = "object" } }));
+        {
+            ["type"] = "function",
+            ["name"] = "ansight_find_ui",
+            ["parameters"] = new JsonObject { ["type"] = "object" }
+        }));
         var input = new JsonArray(declaration, new JsonObject { ["type"] = "function_call_output", ["call_id"] = "find", ["output"] = "private app evidence" });
         var response = await session.CreateResponseAsync(CreateRequest(input, input, false) with
-        { CaptureWireDiagnostics = true, ContextGeneration = 2 }, CancellationToken.None);
+        {
+            CaptureWireDiagnostics = true,
+            ContextGeneration = 2
+        }, CancellationToken.None);
         var attempt = Assert.Single(response.Transport!.Attempts);
         Assert.Equal(2, attempt.ContextGeneration);
         Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(connection.SentMessages[1]))), attempt.RequestSha256);
         Assert.Equal(new[] { "additional_tools", "function_call_output" }, attempt.InputItemTypes);
+
         var registration = Assert.Single(attempt.ToolRegistrations!, item => item.Name == "ansight_find_ui");
         Assert.Equal("input", registration.Location);
         Assert.Equal(64, registration.SchemaSha256.Length);
@@ -53,17 +62,20 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         Assert.Equal(new Uri("wss://api.openai.com/v1/responses"), connection.Endpoint);
         Assert.Equal("sk-local-test", connection.ApiKey);
         Assert.Equal(2, connection.SentMessages.Count);
+
         var firstPayload = ParseObject(connection.SentMessages[0]);
         Assert.Equal("response.create", firstPayload["type"]?.GetValue<string>());
         Assert.Equal("main", firstPayload["stream_id"]?.GetValue<string>());
         Assert.Null(firstPayload["previous_response_id"]);
         Assert.Equal("initial", firstPayload["input"]?[0]?.GetValue<string>());
+
         var secondPayload = ParseObject(connection.SentMessages[1]);
         Assert.Equal("resp_1", secondPayload["previous_response_id"]?.GetValue<string>());
         Assert.Single(secondPayload["input"]?.AsArray() ?? []);
         Assert.Equal("tool-result", secondPayload["input"]?[0]?.GetValue<string>());
         Assert.Equal("Test instructions", secondPayload["instructions"]?.GetValue<string>());
         Assert.Equal("full", Assert.Single(first.Transport!.Attempts).Mode);
+
         var timing = Assert.Single(first.Transport.Attempts);
         Assert.NotNull(timing.StartedUtc);
         Assert.True(timing.ConnectionSucceeded);
@@ -89,6 +101,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         await session.CreateResponseAsync(
             CreateRequest(new JsonArray("initial"), new JsonArray("initial"), startNewConversation: true),
             CancellationToken.None);
+
         var response = await session.CreateResponseAsync(
             CreateRequest(
                 new JsonArray("initial", "tool-result"),
@@ -98,8 +111,10 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
 
         Assert.Equal("resp_2", response.ResponseId);
         Assert.Equal(3, connection.SentMessages.Count);
+
         var failedContinuation = ParseObject(connection.SentMessages[1]);
         Assert.Equal("resp_1", failedContinuation["previous_response_id"]?.GetValue<string>());
+
         var replay = ParseObject(connection.SentMessages[2]);
         Assert.Null(replay["previous_response_id"]);
         Assert.Equal(2, replay["input"]?.AsArray().Count);
@@ -132,6 +147,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         Assert.True(closedConnection.IsDisposed);
         Assert.Single(closedConnection.SentMessages);
         Assert.Single(recoveredConnection.SentMessages);
+
         var replay = ParseObject(recoveredConnection.SentMessages[0]);
         Assert.Null(replay["previous_response_id"]);
         Assert.Equal("initial", replay["input"]?[0]?.GetValue<string>());
@@ -156,6 +172,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             CreateRequest(new JsonArray(initialInput, "result-1", "result-2"), new JsonArray("result-2"), false), CancellationToken.None);
 
         var responses = new[] { first, second, third };
+
         for (var index = 0; index < responses.Length; index++)
         {
             var attempt = Assert.Single(responses[index].Transport!.Attempts);
@@ -164,6 +181,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             Assert.True(attempt.DurationMilliseconds >= 0);
             Assert.Null(attempt.Error);
         }
+
         Assert.True(first.Transport!.Attempts[0].RequestBytes > second.Transport!.Attempts[0].RequestBytes * 2);
         Assert.Equal("resp_2", ParseObject(connection.SentMessages[2])["previous_response_id"]?.GetValue<string>());
         Assert.Equal("incremental", third.Transport!.Attempts[0].Mode);
@@ -178,53 +196,68 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
     {
         var loaderCall = new JsonObject
         {
-            ["type"] = "function_call", ["call_id"] = "load_1",
-            ["name"] = "ansight_load_tools", ["arguments"] = "{\"capability\":\"gestures\"}"
+            ["type"] = "function_call",
+            ["call_id"] = "load_1",
+            ["name"] = "ansight_load_tools",
+            ["arguments"] = "{\"capability\":\"gestures\"}"
         };
         var gestureCall = new JsonObject
         {
-            ["type"] = "function_call", ["call_id"] = "swipe_1",
-            ["name"] = "ansight_swipe_ui", ["arguments"] = "{\"direction\":\"up\"}"
+            ["type"] = "function_call",
+            ["call_id"] = "swipe_1",
+            ["name"] = "ansight_swipe_ui",
+            ["arguments"] = "{\"direction\":\"up\"}"
         };
         var receivedEvents = new List<string?>
         {
             CompletedEvent("resp_1", new JsonArray(loaderCall.DeepClone())),
             CompletedEvent("resp_2", new JsonArray(gestureCall.DeepClone()))
         };
+
         if (recovery == "previous-response-not-found")
         {
             receivedEvents.Add(ErrorEvent("previous_response_not_found", "Previous response unavailable."));
         }
+
         receivedEvents.Add(recovery == "reconnect" ? null : CompletedEvent("resp_3"));
+
         var connection = new FakeWebSocketConnection(receivedEvents.ToArray());
         var reconnected = new FakeWebSocketConnection(CompletedEvent("resp_3"));
         await using var session = new OpenAiResponsesWebSocketSession(
             new FakeWebSocketConnectionFactory(connection, reconnected));
         var coreTools = new JsonArray(new JsonObject
         {
-            ["type"] = "function", ["name"] = "ansight_load_tools",
+            ["type"] = "function",
+            ["name"] = "ansight_load_tools",
             ["parameters"] = new JsonObject { ["type"] = "object" }
         });
         var initialInput = new JsonArray(new JsonObject
         {
-            ["role"] = "user", ["content"] = "Scroll the current page down."
+            ["role"] = "user",
+            ["content"] = "Scroll the current page down."
         });
         var request = CreateRequest(initialInput, initialInput, true) with
         {
-            Model = "gpt-5.6-luna", Tools = coreTools, UsePromptCacheBreakpoint = true
+            Model = "gpt-5.6-luna",
+            Tools = coreTools,
+            UsePromptCacheBreakpoint = true
         };
         await session.CreateResponseAsync(request, CancellationToken.None);
+
         var loadedTools = new JsonObject
         {
-            ["type"] = "additional_tools", ["role"] = "developer",
+            ["type"] = "additional_tools",
+            ["role"] = "developer",
             ["tools"] = new JsonArray(new JsonObject
             {
-                ["type"] = "function", ["name"] = "ansight_swipe_ui",
+                ["type"] = "function",
+                ["name"] = "ansight_swipe_ui",
                 ["parameters"] = new JsonObject
                 {
                     ["type"] = "object",
                     ["properties"] = new JsonObject { ["direction"] = new JsonObject { ["type"] = "string" } },
-                    ["required"] = new JsonArray("direction"), ["additionalProperties"] = false
+                    ["required"] = new JsonArray("direction"),
+                    ["additionalProperties"] = false
                 }
             })
         };
@@ -234,27 +267,37 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             new JsonObject { ["role"] = "developer", ["content"] = "Swipe direction describes finger travel." });
         var fullInput = (JsonArray)initialInput.DeepClone();
         fullInput.Add(loaderCall.DeepClone());
+
         foreach (var item in loadedInput)
         {
             fullInput.Add(item!.DeepClone());
         }
+
         var loadedTurn = await session.CreateResponseAsync(request with
         {
-            Input = fullInput, IncrementalInput = loadedInput, StartNewConversation = false
+            Input = fullInput,
+            IncrementalInput = loadedInput,
+            StartNewConversation = false
         }, CancellationToken.None);
         var parsedGesture = Assert.Single(loadedTurn.FunctionCalls);
         Assert.Equal("ansight_swipe_ui", parsedGesture.Name);
         Assert.Equal("up", parsedGesture.Arguments["direction"]?.GetValue<string>());
+
         var gestureResult = new JsonObject
         {
-            ["type"] = "function_call_output", ["call_id"] = "swipe_1", ["output"] = "Swipe delivered."
+            ["type"] = "function_call_output",
+            ["call_id"] = "swipe_1",
+            ["output"] = "Swipe delivered."
         };
         fullInput.Add(gestureCall.DeepClone());
         fullInput.Add(gestureResult.DeepClone());
+
         var expectedHistory = fullInput.ToJsonString();
         await session.CreateResponseAsync(request with
         {
-            Input = fullInput, IncrementalInput = new JsonArray(gestureResult), StartNewConversation = false
+            Input = fullInput,
+            IncrementalInput = new JsonArray(gestureResult),
+            StartNewConversation = false
         }, CancellationToken.None);
 
         var sent = connection.SentMessages.Concat(reconnected.SentMessages).Select(ParseObject).ToArray();
@@ -264,18 +307,23 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         Assert.Equal("resp_1", sent[1]["previous_response_id"]?.GetValue<string>());
         Assert.True(JsonNode.DeepEquals(gestureResult, Assert.Single(sent[2]["input"]!.AsArray())));
         Assert.Equal("resp_2", sent[2]["previous_response_id"]?.GetValue<string>());
+
         if (recovery != "none")
         {
             var replay = sent[3];
             Assert.Null(replay["previous_response_id"]);
+
             var replayInput = replay["input"]!.AsArray();
             Assert.Equal(fullInput.Count + 1, replayInput.Count);
+
             for (var index = 0; index < fullInput.Count; index++)
             {
                 Assert.True(JsonNode.DeepEquals(fullInput[index], replayInput[index + 1]));
             }
+
             Assert.Single(replayInput.OfType<JsonObject>(), item => item["type"]?.GetValue<string>() == "additional_tools");
         }
+
         Assert.Equal(expectedHistory, fullInput.ToJsonString());
         Assert.Single(coreTools);
     }
@@ -293,6 +341,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         };
 
         await session.WarmupAsync(request, CancellationToken.None);
+
         var first = await session.CreateResponseAsync(request, CancellationToken.None);
         var second = await session.CreateResponseAsync(request with
         {
@@ -303,10 +352,12 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
 
         var warmup = ParseObject(connection.SentMessages[0]);
         Assert.False(warmup["generate"]!.GetValue<bool>());
+
         var developerMessage = Assert.Single(warmup["input"]!.AsArray())!.AsObject();
         Assert.Equal("developer", developerMessage["role"]?.GetValue<string>());
         Assert.Equal("Test instructions", developerMessage["content"]?[0]?["text"]?.GetValue<string>());
         Assert.Null(warmup["instructions"]);
+
         var generated = ParseObject(connection.SentMessages[1]);
         Assert.Null(generated["generate"]);
         Assert.Equal("resp_warmup", generated["previous_response_id"]?.GetValue<string>());
@@ -344,6 +395,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             CompactThresholdTokens = 32_000
         };
         await session.WarmupAsync(request, CancellationToken.None);
+
         var changed = changedSetting switch
         {
             "model" => request with { Model = "gpt-5.6-sol" },
@@ -374,12 +426,17 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             ErrorEvent("previous_response_not_found", "Warmup response unavailable."),
             CompletedEvent("resp_recovered"));
         await using var session = new OpenAiResponsesWebSocketSession(new FakeWebSocketConnectionFactory(connection));
-        var request = CreateRequest(new JsonArray("initial"), new JsonArray("delta"), true) with { UsePromptCacheBreakpoint = true };
+        var request = CreateRequest(new JsonArray("initial"), new JsonArray("delta"), true) with
+        {
+            UsePromptCacheBreakpoint = true
+        };
 
         await session.WarmupAsync(request, CancellationToken.None);
+
         var response = await session.CreateResponseAsync(request, CancellationToken.None);
 
         Assert.Equal("resp_warmup", ParseObject(connection.SentMessages[1])["previous_response_id"]?.GetValue<string>());
+
         var replay = ParseObject(connection.SentMessages[2]);
         Assert.Null(replay["previous_response_id"]);
         Assert.Equal("developer", replay["input"]?[0]?["role"]?.GetValue<string>());
@@ -401,9 +458,11 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         var request = CreateRequest(new JsonArray("initial"), new JsonArray("delta"), true);
 
         await session.WarmupAsync(request, CancellationToken.None);
+
         var response = await session.CreateResponseAsync(request, CancellationToken.None);
 
         Assert.True(failedConnection.IsDisposed);
+
         var generated = ParseObject(Assert.Single(recoveredConnection.SentMessages));
         Assert.Null(generated["previous_response_id"]);
         Assert.Equal("initial", generated["input"]?[0]?.GetValue<string>());
@@ -424,6 +483,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         var request = CreateRequest(new JsonArray("initial"), new JsonArray("delta"), true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.WarmupAsync(request, CancellationToken.None));
+
         var response = await session.CreateResponseAsync(request, CancellationToken.None);
 
         Assert.True(canceledConnection.IsDisposed);
@@ -548,6 +608,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
             new FakeWebSocketConnectionFactory(firstConnection, recoveredConnection));
         await session.CreateResponseAsync(CreateRequest(new JsonArray("initial"), new JsonArray("initial"), true),
             CancellationToken.None);
+
         var checkpoint = new JsonObject { ["type"] = "compaction", ["encrypted_content"] = "checkpoint" };
         var reasoning = new JsonObject { ["type"] = "reasoning", ["encrypted_content"] = "reasoning", ["summary"] = new JsonArray() };
         var call = new JsonObject { ["type"] = "function_call", ["call_id"] = "call-1", ["name"] = "inspect", ["arguments"] = "{}" };
@@ -564,10 +625,12 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         Assert.Null(replay["previous_response_id"]);
         Assert.Equal("developer", replay["input"]?[0]?["role"]?.GetValue<string>());
         Assert.Equal(5, replay["input"]!.AsArray().Count);
+
         for (var index = 0; index < input.Count; index++)
         {
             Assert.True(JsonNode.DeepEquals(input[index], replay["input"]?[index + 1]));
         }
+
         Assert.Equal("reconnect", response.Transport!.Attempts[1].ReplayReason);
         Assert.True(firstConnection.IsDisposed);
     }
@@ -625,36 +688,41 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
 
     private static JsonObject ParseObject(string value)
         => JsonNode.Parse(value) as JsonObject
-           ?? throw new InvalidOperationException("Expected a JSON object.");
+            ?? throw new InvalidOperationException("Expected a JSON object.");
 
-    private sealed class FakeWebSocketConnectionFactory(
-        params FakeWebSocketConnection[] connections) : IOpenAiWebSocketConnectionFactory
+    private sealed class FakeWebSocketConnectionFactory : IOpenAiWebSocketConnectionFactory
     {
-        private readonly Queue<FakeWebSocketConnection> remainingConnections = new(connections);
+        private readonly Queue<FakeWebSocketConnection> remainingConnections;
+
+        public FakeWebSocketConnectionFactory(
+            params FakeWebSocketConnection[] connections)
+        {
+            this.remainingConnections = new(connections);
+        }
 
         public IOpenAiWebSocketConnection Create()
-            => remainingConnections.Dequeue();
+                    => remainingConnections.Dequeue();
     }
 
-    private sealed class FakeWebSocketConnection(
-        params string?[] receivedMessages) : IOpenAiWebSocketConnection
+    private sealed class FakeWebSocketConnection : IOpenAiWebSocketConnection
     {
-        private readonly Queue<string?> remainingMessages = new(receivedMessages);
+        private readonly Queue<string?> remainingMessages;
 
-        public WebSocketState State { get; private set; } = WebSocketState.None;
+        public FakeWebSocketConnection(
+            params string?[] receivedMessages)
+        {
+            this.remainingMessages = new(receivedMessages);
+            this.State = WebSocketState.None;
+            this.SentMessages = [];
+        }
 
+        public WebSocketState State { get; private set; }
         public Uri? Endpoint { get; private set; }
-
         public string? ApiKey { get; private set; }
-
-        public List<string> SentMessages { get; } = [];
-
+        public List<string> SentMessages { get; }
         public bool IsDisposed { get; private set; }
-
         public Exception? ReceiveException { get; init; }
-
         public Exception? ConnectException { get; init; }
-
         public Action? OnReceive { get; init; }
 
         public Task ConnectAsync(
@@ -664,20 +732,28 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         {
             Endpoint = endpoint;
             ApiKey = apiKey;
-            if (ConnectException is not null) return Task.FromException(ConnectException);
+
+            if (ConnectException is not null)
+            {
+                return Task.FromException(ConnectException);
+            }
+
             State = WebSocketState.Open;
+
             return Task.CompletedTask;
         }
 
         public Task SendTextAsync(string message, CancellationToken cancellationToken)
         {
             SentMessages.Add(message);
+
             return Task.CompletedTask;
         }
 
         public Task<string?> ReceiveTextAsync(CancellationToken cancellationToken)
         {
             OnReceive?.Invoke();
+
             return ReceiveException is not null
                 ? Task.FromException<string?>(ReceiveException)
                 : Task.FromResult(remainingMessages.Dequeue());
@@ -687,6 +763,7 @@ public sealed partial class OpenAiResponsesWebSocketSessionTests
         {
             IsDisposed = true;
             State = WebSocketState.Closed;
+
             return ValueTask.CompletedTask;
         }
     }

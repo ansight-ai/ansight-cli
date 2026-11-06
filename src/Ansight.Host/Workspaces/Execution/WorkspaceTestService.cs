@@ -7,7 +7,7 @@ namespace Ansight.Host.Workspaces.Execution;
 
 public sealed partial class WorkspaceTestService
 {
-    private static readonly TimeSpan DefaultSessionWaitTimeout = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan defaultSessionWaitTimeout = TimeSpan.FromSeconds(45);
     private const int RequiredSessionConnectionSamples = 2;
     private readonly RuntimeCoordinator runtime;
     private readonly SimulatorAgentService simulatorAgent;
@@ -21,7 +21,6 @@ public sealed partial class WorkspaceTestService
     public WorkspaceTestTraceExporter TraceExports { get; }
     public WorkspaceTestHistoryService History { get; }
     public WorkspaceTestBatchRunner Batches { get; }
-
     internal IWorkspaceTestRunGateway? RunGateway => runGateway;
 
     internal WorkspaceTestService(RuntimeCoordinator runtime, SimulatorAgentService simulatorAgent)
@@ -64,6 +63,7 @@ public sealed partial class WorkspaceTestService
         CancellationToken cancellationToken = default)
     {
         var catalog = WorkspaceTestCatalog.Load(workspacePath, cancellationToken);
+
         return catalog;
     }
 
@@ -113,15 +113,22 @@ public sealed partial class WorkspaceTestService
         Action<WorkspaceTestTarget>? onTargetLaunched)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var launchTiming = new WorkspaceLaunchTiming(progress);
         progress = launchTiming;
+
         var deviceMode = WorkspaceExecutionModes.Normalize(target?.ExecutionMode) == WorkspaceExecutionModes.Device;
+
         if (deviceMode && !string.IsNullOrWhiteSpace(requestedSessionId))
+        {
             return WorkspaceAppSessionLaunchResult.Failure("Device execution launches a virtual target and cannot use an SDK session ID.");
+        }
+
         var normalizedAppId = appId.Trim();
         var launchStartedUtc = DateTimeOffset.UtcNow;
         var sessionClaim = reserveSession ? new WorkspaceTestSessionClaim(this) : null;
         var transferredSessionClaim = false;
+
         try
         {
             var launchResult = await targetLauncher.LaunchAsync(
@@ -129,35 +136,53 @@ public sealed partial class WorkspaceTestService
                 target,
                 progress,
                 cancellationToken).ConfigureAwait(false);
+
             if (!launchResult.IsSuccess || launchResult.Target is null)
             {
                 return WorkspaceAppSessionLaunchResult.Failure(
                     launchResult.Message,
-                    launchResult.Target) with { StartupSteps = launchTiming.Complete("failed") };
+                    launchResult.Target) with
+                {
+                    StartupSteps = launchTiming.Complete("failed")
+                };
             }
 
             var launchedTarget = launchResult.Target;
             DeviceRunSession? launchedDeviceSession = null;
+
             try
             {
                 if (launchResult.ExistingSession is { } monitoredSession)
                 {
                     var claim = reserveSession ? ReserveSession(monitoredSession) : null;
-                    try { onTargetLaunched?.Invoke(launchedTarget); }
-                    catch { claim?.Dispose(); throw; }
+
+                    try
+                    {
+                        onTargetLaunched?.Invoke(launchedTarget);
+                    }
+                    catch
+                    {
+                        claim?.Dispose();
+                        throw;
+                    }
+
                     return new WorkspaceAppSessionLaunchResult(true, "Monitored capture is ready.", monitoredSession, launchedTarget)
                     {
                         SessionClaim = claim,
                         StartupSteps = launchTiming.Complete()
                     };
                 }
+
                 // Transfer cleanup ownership before waiting, which can time out or be cancelled.
+
                 onTargetLaunched?.Invoke(launchedTarget);
+
                 if (deviceMode)
                 {
                     var deviceSession = launchedDeviceSession = await runtime.StartDeviceSessionAsync(
                         launchedTarget, launchResult.DeviceClaim, cancellationToken).ConfigureAwait(false);
                     progress?.Report(new WorkspaceTestRunProgress("device.session", $"Capturing device session '{deviceSession.Session.SessionId}'."));
+
                     return new WorkspaceAppSessionLaunchResult(true, "Device capture is ready.", deviceSession.Session, launchedTarget)
                     {
                         DeviceSession = deviceSession,
@@ -165,42 +190,54 @@ public sealed partial class WorkspaceTestService
                         StartupSteps = launchTiming.Complete()
                     };
                 }
+
                 var sessionTarget = string.IsNullOrWhiteSpace(requestedSessionId)
                     ? $"'{normalizedAppId}'"
                     : $"session '{requestedSessionId.Trim()}'";
                 progress?.Report(new WorkspaceTestRunProgress(
                     "session.wait",
                     $"Waiting for {sessionTarget} to connect to the Ansight host."));
+
                 var session = await WaitForSessionAsync(
                     normalizedAppId,
                     requestedSessionId,
                     launchedTarget,
                     launchStartedUtc,
-                    sessionWaitTimeout ?? DefaultSessionWaitTimeout,
+                    sessionWaitTimeout ?? defaultSessionWaitTimeout,
                     cancellationToken,
                     sessionClaim).ConfigureAwait(false);
+
                 if (session is null)
                 {
                     return WorkspaceAppSessionLaunchResult.Failure(
                         $"Launched '{normalizedAppId}' on '{launchedTarget.DeviceName}', but it did not connect to Ansight before the timeout. "
-                        + "Confirm the installed app includes and starts the Ansight SDK.",
-                        launchedTarget) with { StartupSteps = launchTiming.Complete("timed-out") };
+                            + "Confirm the installed app includes and starts the Ansight SDK.",
+                        launchedTarget) with
+                    {
+                        StartupSteps = launchTiming.Complete("timed-out")
+                    };
                 }
 
                 progress?.Report(new WorkspaceTestRunProgress(
                     "session.selected",
                     $"Using Ansight session '{session.SessionId}' for '{normalizedAppId}'."));
+
                 var result = WorkspaceAppSessionLaunchResult.Success(session, launchedTarget) with
                 {
                     StartupSteps = launchTiming.Complete(),
                     SessionClaim = sessionClaim
                 };
                 transferredSessionClaim = true;
+
                 return result;
             }
             catch
             {
-                if (launchedDeviceSession is not null) await launchedDeviceSession.DisposeAsync().ConfigureAwait(false);
+                if (launchedDeviceSession is not null)
+                {
+                    await launchedDeviceSession.DisposeAsync().ConfigureAwait(false);
+                }
+
                 launchResult.DeviceClaim?.Dispose();
                 throw;
             }
@@ -228,8 +265,8 @@ public sealed partial class WorkspaceTestService
             () => RunMeasuredCoreAsync(request, progress, cancellationToken),
             result => result.IsSuccess ? "succeeded"
                 : result.IsSkipped ? "skipped"
-                : result.WasCancelled ? "cancelled"
-                : result.RunAudit is null ? "blocked" : "failed");
+                    : result.WasCancelled ? "cancelled"
+                        : result.RunAudit is null ? "blocked" : "failed");
 
     private async Task<WorkspaceTestRunResult> RunMeasuredCoreAsync(
         WorkspaceTestRunRequest request,
@@ -237,6 +274,7 @@ public sealed partial class WorkspaceTestService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         using var startParticipant = request.StartParticipant;
         var deviceMode = WorkspaceExecutionModes.Normalize(request.Target?.ExecutionMode) == WorkspaceExecutionModes.Device;
         var catalog = WorkspaceTestCatalog.Load(request.WorkspacePath, cancellationToken);
@@ -248,14 +286,22 @@ public sealed partial class WorkspaceTestService
             candidate.TestId,
             request.TestId,
             StringComparison.OrdinalIgnoreCase));
+
         if (test is null)
         {
             return WorkspaceTestRunResult.Failure(
                 BuildMissingTestMessage(catalog, request.TestId));
         }
 
-        if (request.Video is not null) test = test with { Video = request.Video };
-        using var captureBusiness = Ansight.Analytics.CaptureBusinessAttribution.Select(
+        if (request.Video is not null)
+        {
+            test = test with
+            {
+                Video = request.Video
+            };
+        }
+
+        using var captureBusiness = Ansight.Infrastructure.Analytics.CaptureBusinessAttribution.Select(
             runtime.BaseFolderPath, test.AppId, request.TeamId);
 
         // Explicit draft runs are how an author verifies a test before enabling it
@@ -268,7 +314,9 @@ public sealed partial class WorkspaceTestService
         }
 
         if (test.IsTaskOnly && !request.EnableWorkspaceTools)
+        {
             return WorkspaceTestRunResult.Failure("Task-only tests require workspace tools to be enabled.", test);
+        }
 
         using var draftTaskScope = string.IsNullOrWhiteSpace(request.DraftTaskRootPath)
             ? null
@@ -279,6 +327,7 @@ public sealed partial class WorkspaceTestService
             var workspaceConnection = runtime.Apps.ConfigureRepositoryWorkspace(
                 test.AppId,
                 catalog.WorkspacePath);
+
             if (!workspaceConnection.IsSuccess)
             {
                 return WorkspaceTestRunResult.Failure(
@@ -288,20 +337,28 @@ public sealed partial class WorkspaceTestService
         }
 
         var referencedTaskIds = test.GetReferencedTaskIds();
+
         if (referencedTaskIds.Count > 0)
         {
             if (!request.EnableWorkspaceTools)
+            {
                 return WorkspaceTestRunResult.Failure("Prompt task references require workspace tools to be enabled.", test);
+            }
+
             var referencedTasks = runtime.InspectRepositoryTasks(test.AppId,
                 RepositoryTaskWorkspaceScope.Resolve(test.AppId, catalog.WorkspacePath));
             var unavailable = referencedTaskIds.Where(id => !referencedTasks.Tasks.Any(task =>
                 task.Enabled && string.Equals(task.TaskId, id, StringComparison.Ordinal))).ToArray();
+
             if (unavailable.Length > 0)
+            {
                 return WorkspaceTestRunResult.Failure(
                     $"Unknown or disabled prompt task reference(s): {string.Join(", ", unavailable.Select(id => "@task/" + id))}.", test);
+            }
         }
 
         RepositoryTask? declaredTask = null;
+
         if (!string.IsNullOrWhiteSpace(test.TaskId))
         {
             var taskCatalog = runtime.InspectRepositoryTasks(test.AppId,
@@ -310,24 +367,31 @@ public sealed partial class WorkspaceTestService
                 candidate.TaskId,
                 test.TaskId,
                 test.IsTaskOnly ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase));
+
             if (declaredTask is null)
             {
                 var warningDetails = taskCatalog.Warnings.Count == 0
                     ? string.Empty
                     : $" Loader warnings: {string.Join(" ", taskCatalog.Warnings)}";
+
                 return WorkspaceTestRunResult.Failure(
                     $"Workspace test '{test.TestId}' references repository task '{test.TaskId}', but that task was not loaded."
-                    + warningDetails,
+                        + warningDetails,
                     test);
             }
 
             if (test.IsTaskOnly)
             {
                 if (!declaredTask.Enabled)
+                {
                     return WorkspaceTestRunResult.Failure($"Repository task '{declaredTask.TaskId}' is disabled.", test);
+                }
+
                 if (!RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
-                        declaredTask.InputSchema, test.TaskInput, out _, out var inputError))
+                    declaredTask.InputSchema, test.TaskInput, out _, out var inputError))
+                {
                     return WorkspaceTestRunResult.Failure(inputError, test);
+                }
             }
 
             if (!SupportsRequestedTarget(declaredTask, request.Target))
@@ -339,7 +403,10 @@ public sealed partial class WorkspaceTestService
 
             if (string.IsNullOrWhiteSpace(request.SessionId))
             {
-                request = request with { Target = ApplyTaskTargetMetadata(declaredTask, request.Target) };
+                request = request with
+                {
+                    Target = ApplyTaskTargetMetadata(declaredTask, request.Target)
+                };
             }
         }
 
@@ -349,6 +416,7 @@ public sealed partial class WorkspaceTestService
                 alias,
                 request.SecretResolver) is null)
             .ToArray();
+
         if (missingSecrets.Length > 0)
         {
             return WorkspaceTestRunResult.Failure(
@@ -358,25 +426,37 @@ public sealed partial class WorkspaceTestService
         }
 
         var runnerPrompt = test.BuildRunnerPrompt();
+
         if (runnerPrompt.Length > SimulatorAgentService.MaximumInstructionCharacters)
         {
             return WorkspaceTestRunResult.Failure(
                 $"The expanded runner instruction contains {runnerPrompt.Length:N0} characters; "
-                + $"the maximum is {SimulatorAgentService.MaximumInstructionCharacters:N0}.",
+                    + $"the maximum is {SimulatorAgentService.MaximumInstructionCharacters:N0}.",
                 test);
         }
 
         var session = deviceMode && string.IsNullOrWhiteSpace(request.SessionId)
             ? null : FindConnectedSession(test.AppId, request.SessionId);
+
         if (deviceMode && session is not null && session.CaptureSource != WorkspaceExecutionModes.Device)
+        {
             return WorkspaceTestRunResult.Failure("The selected session is not an external device capture.", test, session.SessionId);
+        }
+
         var attachedDeviceSession = session?.CaptureSource == WorkspaceExecutionModes.Device;
+
         if (attachedDeviceSession)
         {
             deviceMode = true;
+
             var targetError = await ValidateAttachedDeviceTargetAsync(session!, request.Target, cancellationToken).ConfigureAwait(false);
-            if (targetError is not null) return WorkspaceTestRunResult.Failure(targetError, test, session!.SessionId);
+
+            if (targetError is not null)
+            {
+                return WorkspaceTestRunResult.Failure(targetError, test, session!.SessionId);
+            }
         }
+
         if (session is not null && declaredTask is not null && !SupportsSession(declaredTask, session))
         {
             return WorkspaceTestRunResult.Skipped(
@@ -384,6 +464,7 @@ public sealed partial class WorkspaceTestService
                 test,
                 session.SessionId);
         }
+
         if (session is not null && RequiresExplicitHostTargetBinding(session))
         {
             if (!string.IsNullOrWhiteSpace(request.SessionId)
@@ -391,7 +472,7 @@ public sealed partial class WorkspaceTestService
             {
                 return WorkspaceTestRunResult.Failure(
                     "A physical iOS session requires a host device target for UI input. "
-                    + "Also pass --device-id <identifier> when selecting the session.",
+                        + "Also pass --device-id <identifier> when selecting the session.",
                     test,
                     request.SessionId);
             }
@@ -403,11 +484,13 @@ public sealed partial class WorkspaceTestService
 
         var launchTiming = new WorkspaceLaunchTiming(progress);
         progress = launchTiming;
+
         WorkspaceTestTarget? launchedTarget = null;
         IDisposable? deviceClaim = null;
         DeviceRunSession? deviceSession = null;
         await using var preparationScope = new WorkspaceRunPreparationScope(runGateway, cancellationToken,
             message => progress?.Report(new WorkspaceTestRunProgress("metering.failed", message)));
+
         Task<WorkspaceTestRunPreparation> PrepareRunAsync() => preparationScope.PrepareAsync(token =>
             runGateway is null
                 ? Task.FromResult(WorkspaceTestRunPreparation.Failure(
@@ -415,7 +498,10 @@ public sealed partial class WorkspaceTestService
                 : runGateway.PrepareAsync(new WorkspaceTestRunPreparationRequest(
                     request.TeamId, request.WorkspacePath, test.TestId, test.Name, test.AppId,
                     request.Model, test.Validation.Assertions.Count, InstructionCount: 1)
-                    { Reasoning = request.Reasoning }, token));
+                {
+                    Reasoning = request.Reasoning
+                }, token));
+
         string? enrollmentInviteId = null;
         DateTimeOffset? targetLaunchStartedUtc = null;
         using var sessionClaim = new WorkspaceTestSessionClaim(this);
@@ -425,24 +511,36 @@ public sealed partial class WorkspaceTestService
         TestVideoCapture? videoCapture = null;
         DateTimeOffset? executionCompletedUtc = null;
         var targetStopped = false;
+
         async Task StopExecutionCaptureAsync()
         {
             executionCompletedUtc ??= DateTimeOffset.UtcNow;
-            if (videoCapture is not null) await videoCapture.StopAsync().ConfigureAwait(false);
+
+            if (videoCapture is not null)
+            {
+                await videoCapture.StopAsync().ConfigureAwait(false);
+            }
+
             if (!targetStopped && launchedTarget?.ApplicationLaunched == true)
             {
                 targetStopped = true;
                 await StopTargetAfterTestAsync(launchedTarget, progress).ConfigureAwait(false);
             }
         }
+
         try
         {
             if (!attachedDeviceSession && ((session is null && string.IsNullOrWhiteSpace(request.SessionId))
                 || HasExplicitTarget(request.Target)))
             {
                 // Brokering only needs the validated definition, not a connected session.
-                if (!test.IsTaskOnly && runGateway is not null) _ = PrepareRunAsync();
+                if (!test.IsTaskOnly && runGateway is not null)
+                {
+                    _ = PrepareRunAsync();
+                }
+
                 targetLaunchStartedUtc = DateTimeOffset.UtcNow;
+
                 var launchResult = await targetLauncher.LaunchAsync(
                     test.AppId,
                     request.Target,
@@ -451,10 +549,12 @@ public sealed partial class WorkspaceTestService
                 launchedTarget = launchResult.Target;
                 enrollmentInviteId = launchResult.EnrollmentInviteId;
                 deviceClaim = launchResult.DeviceClaim;
+
                 if (!launchResult.IsSuccess)
                 {
                     return WorkspaceTestRunResult.Failure(launchResult.Message, test, target: launchedTarget);
                 }
+
                 session = launchResult.ExistingSession;
                 attachedDeviceSession = session is not null;
             }
@@ -471,6 +571,7 @@ public sealed partial class WorkspaceTestService
                     return WorkspaceTestRunResult.Failure(exception.Message, test, target: launchedTarget);
                 }
             }
+
             if (session is null)
             {
                 var sessionTarget = string.IsNullOrWhiteSpace(request.SessionId)
@@ -479,6 +580,7 @@ public sealed partial class WorkspaceTestService
                 progress?.Report(new WorkspaceTestRunProgress(
                     "session.wait",
                     $"Waiting for {sessionTarget} to connect to the Ansight host."));
+
                 try
                 {
                     session = await WaitForSessionAsync(
@@ -486,7 +588,7 @@ public sealed partial class WorkspaceTestService
                         request.SessionId,
                         launchedTarget,
                         targetLaunchStartedUtc,
-                        request.SessionWaitTimeout ?? DefaultSessionWaitTimeout,
+                        request.SessionWaitTimeout ?? defaultSessionWaitTimeout,
                         cancellationToken,
                         sessionClaim).ConfigureAwait(false);
                 }
@@ -504,7 +606,8 @@ public sealed partial class WorkspaceTestService
                 var launchGuidance = launchedTarget is null
                     ? string.Empty
                     : " The app was launched, but it did not connect to Ansight. "
-                      + "Confirm this installed app includes and starts the Ansight SDK.";
+                        + "Confirm this installed app includes and starts the Ansight SDK.";
+
                 return WorkspaceTestRunResult.Failure(
                     $"Timed out waiting for {sessionDescription}.{launchGuidance}",
                     test,
@@ -522,9 +625,11 @@ public sealed partial class WorkspaceTestService
             }
 
             if (!runtime.IsSessionLive(session.SessionId) || sessionClaim.Select([session]) is null)
+            {
                 return WorkspaceTestRunResult.Failure(
                     $"Session '{session.SessionId}' is no longer live or is already reserved by another execution.",
                     test, session.SessionId, target: launchedTarget);
+            }
 
             sessionRun = new SessionUiTestRun(test.TestId, test.Name, Guid.NewGuid().ToString("N"),
                 "running", test.IsTaskOnly ? "task" : "agent", DateTimeOffset.UtcNow,
@@ -539,26 +644,31 @@ public sealed partial class WorkspaceTestService
             {
                 videoCapture = await StartRunVideoAsync(test.Video, session, launchedTarget, sessionRun.RunId,
                     progress, cancellationToken).ConfigureAwait(false);
+
                 if (startParticipant is not null)
                 {
                     progress?.Report(new WorkspaceTestRunProgress("run.ready",
                         $"Ready to start '{test.Name}' on session '{session.SessionId}'; waiting for the other targets."));
                     await startParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
                 }
+
                 sessionRunResult = await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
                     launchedTarget, sessionRun.RunId, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
                 await StopExecutionCaptureAsync().ConfigureAwait(false);
                 sessionRunResult = await CompleteTestVideoAsync(videoCapture, sessionRunResult, progress).ConfigureAwait(false);
+
                 return sessionRunResult;
             }
 
             var preparation = await PrepareRunAsync().ConfigureAwait(false);
+
             if (preparation.HasResolvedTeam)
             {
                 progress?.Report(new WorkspaceTestRunProgress(
                     "organisation.selected",
                     $"Hosted test execution resolved to '{preparation.TeamName}' ({preparation.TeamId:D})."));
             }
+
             if (!preparation.IsSuccess)
             {
                 return WorkspaceTestRunResult.Failure(
@@ -569,9 +679,14 @@ public sealed partial class WorkspaceTestService
             }
 
             if (preparation.HasResolvedTeam && preparation.TeamId is { } activeBusiness)
+            {
                 runtime.Analytics.RecordBusinessActivity(activeBusiness);
+            }
 
-            sessionRun = sessionRun with { RunId = (preparation.TrackingRunId ?? Guid.Parse(sessionRun.RunId)).ToString("N") };
+            sessionRun = sessionRun with
+            {
+                RunId = (preparation.TrackingRunId ?? Guid.Parse(sessionRun.RunId)).ToString("N")
+            };
             runtime.SessionEditing.SetUiTestRun(session.SessionId, sessionRun);
 
             var maximumRoundTrips = Math.Min(
@@ -582,6 +697,7 @@ public sealed partial class WorkspaceTestService
                 maximumRoundTrips);
             videoCapture = await StartRunVideoAsync(test.Video, session, launchedTarget, sessionRun.RunId,
                 progress, cancellationToken).ConfigureAwait(false);
+
             if (startParticipant is not null)
             {
                 progress?.Report(new WorkspaceTestRunProgress(
@@ -589,8 +705,10 @@ public sealed partial class WorkspaceTestService
                     $"Ready to start '{test.Name}' on session '{session.SessionId}'; waiting for the other targets."));
                 await startParticipant.ArriveAndWaitAsync(cancellationToken).ConfigureAwait(false);
             }
+
             var stopwatch = Stopwatch.StartNew();
             WorkspaceTestRunResult runResult;
+
             try
             {
                 var reasoningConfiguration = preparation.ReasoningConfiguration
@@ -640,9 +758,9 @@ public sealed partial class WorkspaceTestService
                     launchedTarget);
             }
             catch (Exception exception) when (exception is ArgumentException
-                                               or InvalidOperationException
-                                               or IOException
-                                               or UnauthorizedAccessException)
+                or InvalidOperationException
+                or IOException
+                or UnauthorizedAccessException)
             {
                 runResult = WorkspaceTestRunResult.Failure(
                     exception.Message,
@@ -655,10 +773,12 @@ public sealed partial class WorkspaceTestService
             await StopExecutionCaptureAsync().ConfigureAwait(false);
             runResult = await CompleteTestVideoAsync(videoCapture, runResult, progress).ConfigureAwait(false);
             sessionRunResult = runResult;
+
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
                 var audit = runResult.AgentResult?.Audit;
                 preparationScope.MarkCompletionHandled();
+
                 var completion = await runGateway!.CompleteAsync(
                     new WorkspaceTestRunMeterCompletion(
                         trackingRunId,
@@ -671,18 +791,22 @@ public sealed partial class WorkspaceTestService
                         preparation.ModelTransport is not null ? audit?.Tokens : null,
                         preparation.ModelTransport is not null ? audit?.CreateModelPassUsages() : null),
                     CancellationToken.None).ConfigureAwait(false);
+
                 if (!completion.IsSuccess)
                 {
                     runResult = runResult with
                     {
                         Message = runResult.Message
-                                  + $" Organisation metering completion failed: {completion.Message}"
+                            + $" Organisation metering completion failed: {completion.Message}"
                     };
                 }
                 else if (completion.Cost is { } cost
-                         && runResult.AgentResult is { } agentResult)
+                    && runResult.AgentResult is { } agentResult)
                 {
-                    var costedAudit = agentResult.Audit with { CalculatedCost = cost };
+                    var costedAudit = agentResult.Audit with
+                    {
+                        CalculatedCost = cost
+                    };
                     var persistence = simulatorAgent.PersistRunAudit(costedAudit);
                     runResult = runResult with
                     {
@@ -691,7 +815,7 @@ public sealed partial class WorkspaceTestService
                             Audit = costedAudit,
                             AuditFilePath = persistence.FilePath ?? agentResult.AuditFilePath,
                             AuditPersistenceError = persistence.ErrorMessage
-                                                    ?? agentResult.AuditPersistenceError
+                                ?? agentResult.AuditPersistenceError
                         }
                     };
                 }
@@ -717,8 +841,13 @@ public sealed partial class WorkspaceTestService
         finally
         {
             await StopExecutionCaptureAsync().ConfigureAwait(false);
+
             // Cancellation and unexpected exceptions must still finalize and retain available video.
-            if (videoCapture is not null) await videoCapture.CompleteAsync(testPassed: false).ConfigureAwait(false);
+            if (videoCapture is not null)
+            {
+                await videoCapture.CompleteAsync(testPassed: false).ConfigureAwait(false);
+            }
+
             if (sessionRun is not null)
             {
                 runtime.SessionEditing.SetUiTestRun(session!.SessionId, sessionRun with
@@ -730,28 +859,27 @@ public sealed partial class WorkspaceTestService
                     CompletedUtc = executionCompletedUtc
                 });
             }
+
             runtime.Pairing.RevokeUnconsumedEnrollment(enrollmentInviteId, test.AppId);
+
             try
             {
                 if (!targetStopped && launchedTarget?.ApplicationLaunched == true)
+                {
                     await StopTargetAfterTestAsync(launchedTarget, progress).ConfigureAwait(false);
+                }
             }
             finally
             {
-                if (deviceSession is not null) await deviceSession.DisposeAsync().ConfigureAwait(false);
+                if (deviceSession is not null)
+                {
+                    await deviceSession.DisposeAsync().ConfigureAwait(false);
+                }
+
                 deviceClaim?.Dispose();
             }
         }
     }
-
-}
-
-
-
-
-
-public sealed partial class WorkspaceTestService
-{
 
     private async Task<AppSessionSnapshot?> WaitForSessionAsync(
         string appId,
@@ -768,15 +896,18 @@ public sealed partial class WorkspaceTestService
         var boundedTimeout = timeout < TimeSpan.Zero ? TimeSpan.Zero : timeout;
         var timeoutAtUtc = DateTimeOffset.UtcNow.Add(boundedTimeout);
         var connectionTracker = new WorkspaceSessionConnectionTracker(RequiredSessionConnectionSamples);
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var session = FindConnectedSession(
                 appId,
                 normalizedSessionId,
                 launchedTarget,
                 targetLaunchStartedUtc,
                 sessionClaim);
+
             if (session is not null)
             {
                 if (connectionTracker.Observe(session.SessionId))
@@ -817,6 +948,7 @@ public sealed partial class WorkspaceTestService
                 || MatchesLaunchedTarget(candidate, launchedTarget, targetLaunchStartedUtc))
             .OrderByDescending(static candidate => candidate.LastUpdatedUtc)
             .ToArray();
+
         return sessionClaim is null
             ? candidates.FirstOrDefault()
             : sessionClaim.Select(candidates);
@@ -828,10 +960,11 @@ public sealed partial class WorkspaceTestService
         DateTimeOffset? targetLaunchStartedUtc)
     {
         var nativeDeviceIdentifier = DeviceLifecycleTool.ResolveNativeDeviceIdentifier(candidate);
+
         if (string.Equals(
-                nativeDeviceIdentifier,
-                target.DeviceIdentifier,
-                StringComparison.OrdinalIgnoreCase))
+            nativeDeviceIdentifier,
+            target.DeviceIdentifier,
+            StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -856,7 +989,7 @@ public sealed partial class WorkspaceTestService
         AppSessionSnapshot candidate,
         DateTimeOffset targetLaunchStartedUtc)
         => candidate.CreatedUtc >= targetLaunchStartedUtc
-           || candidate.AppStateChangedUtc >= targetLaunchStartedUtc;
+            || candidate.AppStateChangedUtc >= targetLaunchStartedUtc;
 
     private static bool MatchesSessionPlatform(string platform, string? osName)
     {
@@ -875,16 +1008,16 @@ public sealed partial class WorkspaceTestService
 
     private static bool RequiresExplicitHostTargetBinding(AppSessionSnapshot session)
         => session.DeviceProfile?.Device is { } device
-           && device.IsVirtual != true
-           && device.IsEmulator != true
-           && device.OsName?.Contains("ios", StringComparison.OrdinalIgnoreCase) == true;
+            && device.IsVirtual != true
+            && device.IsEmulator != true
+            && device.OsName?.Contains("ios", StringComparison.OrdinalIgnoreCase) == true;
 
     private static bool HasExplicitTarget(WorkspaceTestTargetRequest? target)
         => target is not null
-           && (!string.IsNullOrWhiteSpace(target.Platform)
-               || !string.IsNullOrWhiteSpace(target.DeviceIdentifier)
-               || !string.IsNullOrWhiteSpace(target.ApplicationPath)
-               || !string.IsNullOrWhiteSpace(target.DeviceKind));
+            && (!string.IsNullOrWhiteSpace(target.Platform)
+                || !string.IsNullOrWhiteSpace(target.DeviceIdentifier)
+                || !string.IsNullOrWhiteSpace(target.ApplicationPath)
+                || !string.IsNullOrWhiteSpace(target.DeviceKind));
 
     private static WorkspaceTestTargetRequest? ApplyTaskTargetMetadata(
         RepositoryTask task,
@@ -899,6 +1032,7 @@ public sealed partial class WorkspaceTestService
         var deviceKind = string.IsNullOrWhiteSpace(target?.DeviceKind) && task.DeviceKinds.Count == 1
             ? task.DeviceKinds[0]
             : target?.DeviceKind;
+
         if (target is null && platform is null && deviceKind is null)
         {
             return null;
@@ -919,15 +1053,16 @@ public sealed partial class WorkspaceTestService
         }
 
         var platformSupported = task.Platforms.Count == 0
-                                || string.IsNullOrWhiteSpace(target.Platform)
-                                || task.Platforms.Contains(target.Platform.Trim(), StringComparer.OrdinalIgnoreCase);
+            || string.IsNullOrWhiteSpace(target.Platform)
+            || task.Platforms.Contains(target.Platform.Trim(), StringComparer.OrdinalIgnoreCase);
         var deviceKindSupported = task.DeviceKinds.Count == 0
-                                  || string.IsNullOrWhiteSpace(target.DeviceKind)
-                                  || task.DeviceKinds.Any(kind => DeviceKinds.Matches(kind, target.DeviceKind));
+            || string.IsNullOrWhiteSpace(target.DeviceKind)
+            || task.DeviceKinds.Any(kind => DeviceKinds.Matches(kind, target.DeviceKind));
         var frameworkSupportsPlatform = task.Frameworks.Count == 0
-                                        || string.IsNullOrWhiteSpace(target.Platform)
-                                        || task.Frameworks.Any(framework =>
+            || string.IsNullOrWhiteSpace(target.Platform)
+            || task.Frameworks.Any(framework =>
                                             RepositoryTaskTargets.FrameworkSupportsPlatform(framework, target.Platform));
+
         return platformSupported && deviceKindSupported && frameworkSupportsPlatform;
     }
 
@@ -945,14 +1080,15 @@ public sealed partial class WorkspaceTestService
                 ? null
                 : DeviceKinds.Physical;
         var frameworks = SessionCapabilities.FromPublishedTools(
-                platform,
-                session.AppToolCatalog?.ToolCatalog)
+            platform,
+            session.AppToolCatalog?.ToolCatalog)
             .NavigationFrameworks;
+
         return (task.Platforms.Count == 0
-                || platform is not null && task.Platforms.Contains(platform, StringComparer.OrdinalIgnoreCase))
-               && (task.DeviceKinds.Count == 0
-                   || deviceKind is not null && task.DeviceKinds.Any(kind => DeviceKinds.Matches(kind, deviceKind)))
-               && RepositoryTaskTargets.SupportsAnyFramework(task.Frameworks, frameworks, platform);
+            || platform is not null && task.Platforms.Contains(platform, StringComparer.OrdinalIgnoreCase))
+            && (task.DeviceKinds.Count == 0
+                || deviceKind is not null && task.DeviceKinds.Any(kind => DeviceKinds.Matches(kind, deviceKind)))
+            && RepositoryTaskTargets.SupportsAnyFramework(task.Frameworks, frameworks, platform);
     }
 
     private static string BuildUnsupportedTargetMessage(
@@ -962,10 +1098,10 @@ public sealed partial class WorkspaceTestService
     {
         var requested = string.Join(
             " ",
-            new[] { target?.Platform, target?.DeviceKind }
-                .Where(static value => !string.IsNullOrWhiteSpace(value)));
+            new[] { target?.Platform, target?.DeviceKind }.Where(static value => !string.IsNullOrWhiteSpace(value)));
+
         return $"Workspace test '{test.TestId}' was skipped because repository task '{task.TaskId}' "
-               + $"does not support target '{requested}'. {BuildConstraintDescription(task)}";
+            + $"does not support target '{requested}'. {BuildConstraintDescription(task)}";
     }
 
     private static string BuildUnsupportedSessionMessage(
@@ -973,34 +1109,43 @@ public sealed partial class WorkspaceTestService
         RepositoryTask task,
         AppSessionSnapshot session)
         => $"Workspace test '{test.TestId}' was skipped because repository task '{task.TaskId}' "
-           + $"does not support session '{session.SessionId}' "
-           + $"({session.DeviceProfile?.Device?.OsName ?? "unknown platform"}). "
-           + BuildConstraintDescription(task);
+            + $"does not support session '{session.SessionId}' "
+            + $"({session.DeviceProfile?.Device?.OsName ?? "unknown platform"}). "
+            + BuildConstraintDescription(task);
 
     private static string BuildConstraintDescription(RepositoryTask task)
     {
         var platforms = task.Platforms.Count == 0 ? "any platform" : string.Join(" or ", task.Platforms);
         var deviceKinds = task.DeviceKinds.Count == 0 ? "any device kind" : string.Join(" or ", task.DeviceKinds);
         var frameworks = task.Frameworks.Count == 0 ? "any framework" : string.Join(" or ", task.Frameworks);
+
         return $"Supported targets: {platforms}; {deviceKinds}; {frameworks}.";
     }
 
-    private sealed class WorkspaceTestSessionClaim(WorkspaceTestService owner) : IDisposable
+    private sealed class WorkspaceTestSessionClaim : IDisposable
     {
+        private readonly WorkspaceTestService owner;
         private string? sessionId;
         private bool disposed;
+
+        public WorkspaceTestSessionClaim(WorkspaceTestService owner)
+        {
+            this.owner = owner;
+        }
 
         public AppSessionSnapshot? Select(IReadOnlyList<AppSessionSnapshot> candidates)
         {
             lock (owner.sessionClaimGate)
             {
                 ObjectDisposedException.ThrowIf(disposed, this);
+
                 if (sessionId is not null)
                 {
                     var existing = candidates.FirstOrDefault(candidate => string.Equals(
                         candidate.SessionId,
                         sessionId,
                         StringComparison.Ordinal));
+
                     if (existing is not null)
                     {
                         return existing;
@@ -1015,6 +1160,7 @@ public sealed partial class WorkspaceTestService
                     if (owner.claimedSessionIds.Add(candidate.SessionId))
                     {
                         sessionId = candidate.SessionId;
+
                         return candidate;
                     }
                 }
@@ -1033,6 +1179,7 @@ public sealed partial class WorkspaceTestService
                 }
 
                 disposed = true;
+
                 if (sessionId is not null)
                 {
                     owner.claimedSessionIds.Remove(sessionId);
@@ -1055,7 +1202,9 @@ public sealed partial class WorkspaceTestService
             resolvedTarget.Platform,
             resolvedTarget.DeviceIdentifier,
             Headless: requestedTarget?.Headless ?? false)
-        { ExecutionMode = resolvedTarget.ExecutionMode };
+        {
+            ExecutionMode = resolvedTarget.ExecutionMode
+        };
     }
 
     internal static string BuildMissingTestMessage(
@@ -1063,6 +1212,7 @@ public sealed partial class WorkspaceTestService
         string requestedTestId)
     {
         ArgumentNullException.ThrowIfNull(catalog);
+
         var availableTestIds = catalog.Tests
             .Select(static test => test.TestId)
             .OrderBy(static testId => testId, StringComparer.OrdinalIgnoreCase)
@@ -1072,6 +1222,7 @@ public sealed partial class WorkspaceTestService
             $"Workspace test '{requestedTestId}' was not found beneath '{catalog.WorkspacePath}'."
         };
         var closestTestId = FindClosestTestId(requestedTestId, availableTestIds);
+
         if (closestTestId is not null)
         {
             lines.Add($"Did you mean '{closestTestId}'?");
@@ -1080,6 +1231,7 @@ public sealed partial class WorkspaceTestService
         lines.Add(availableTestIds.Length == 0
             ? "No workspace tests are available."
             : $"Available tests: {string.Join(", ", availableTestIds)}.");
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -1090,14 +1242,16 @@ public sealed partial class WorkspaceTestService
         var normalizedRequest = requestedTestId.Trim().ToLowerInvariant();
         string? closestTestId = null;
         var closestDistance = int.MaxValue;
+
         foreach (var availableTestId in availableTestIds)
         {
             var distance = CalculateEditDistance(
                 normalizedRequest,
                 availableTestId.ToLowerInvariant());
+
             if (distance < closestDistance
                 || distance == closestDistance
-                && string.Compare(availableTestId, closestTestId, StringComparison.OrdinalIgnoreCase) < 0)
+                    && string.Compare(availableTestId, closestTestId, StringComparison.OrdinalIgnoreCase) < 0)
             {
                 closestTestId = availableTestId;
                 closestDistance = distance;
@@ -1112,6 +1266,7 @@ public sealed partial class WorkspaceTestService
         var maximumDistance = Math.Max(
             2,
             Math.Max(normalizedRequest.Length, closestTestId.Length) / 3);
+
         return closestDistance <= maximumDistance
             ? closestTestId
             : null;
@@ -1121,9 +1276,11 @@ public sealed partial class WorkspaceTestService
     {
         var previous = Enumerable.Range(0, right.Length + 1).ToArray();
         var current = new int[right.Length + 1];
+
         for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
         {
             current[0] = leftIndex;
+
             for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
             {
                 var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
@@ -1152,6 +1309,7 @@ public sealed partial class WorkspaceTestService
         progress?.Report(new WorkspaceTestRunProgress(
             "app.stop",
             $"Stopping '{target.ApplicationIdentifier}' on '{target.DeviceName}' after the test."));
+
         try
         {
             var result = await targetLauncher.StopAsync(target, CancellationToken.None).ConfigureAwait(false);
@@ -1167,44 +1325,5 @@ public sealed partial class WorkspaceTestService
                 "app.stop",
                 $"Failed to stop '{target.ApplicationIdentifier}' on '{target.DeviceName}' after the test: {exception.Message}"));
         }
-    }
-}
-
-internal sealed class WorkspaceSessionConnectionTracker
-{
-    private readonly int requiredSamples;
-    private string? sessionId;
-    private int successfulSamples;
-
-    public WorkspaceSessionConnectionTracker(int requiredSamples)
-    {
-        if (requiredSamples < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(requiredSamples));
-        }
-
-        this.requiredSamples = requiredSamples;
-    }
-
-    public bool Observe(string observedSessionId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(observedSessionId);
-        if (string.Equals(sessionId, observedSessionId, StringComparison.Ordinal))
-        {
-            successfulSamples++;
-        }
-        else
-        {
-            sessionId = observedSessionId;
-            successfulSamples = 1;
-        }
-
-        return successfulSamples >= requiredSamples;
-    }
-
-    public void Reset()
-    {
-        sessionId = null;
-        successfulSamples = 0;
     }
 }

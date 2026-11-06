@@ -11,6 +11,7 @@ internal sealed partial class RuntimeState
     public SessionAnnotationMutationResult MutateSessionAnnotation(string sessionId, SessionAnnotationMutation mutation)
     {
         ArgumentNullException.ThrowIfNull(mutation);
+
         if (string.IsNullOrWhiteSpace(sessionId) || !EnsureSessionLoaded(sessionId.Trim()))
         {
             return SessionAnnotationMutationResult.Failure("The selected session was not found.");
@@ -19,6 +20,7 @@ internal sealed partial class RuntimeState
         var selectedSessionId = sessionId.Trim();
         SessionAnnotationMutationResult result;
         var changed = false;
+
         lock (gate)
         {
             if (!sessionsById.TryGetValue(selectedSessionId, out var session))
@@ -30,14 +32,17 @@ internal sealed partial class RuntimeState
             var existingIndex = session.Annotations.FindIndex(annotation =>
                 string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
             var existing = existingIndex < 0 ? null : session.Annotations[existingIndex];
+
             if (mutation.Kind == SessionAnnotationMutationKind.Create && existing is not null)
             {
                 return SessionAnnotationMutationResult.Failure($"Annotation '{annotationId}' already exists in this session.");
             }
+
             if (mutation.Kind != SessionAnnotationMutationKind.Create && existing is null)
             {
                 return SessionAnnotationMutationResult.Failure($"Annotation '{annotationId}' was not found in this session.");
             }
+
             if (mutation.ExpectedSource is not null && !string.Equals(mutation.ExpectedSource, existing?.Source, StringComparison.Ordinal))
             {
                 return SessionAnnotationMutationResult.Failure($"Annotation '{annotationId}' source does not match expectedSource.");
@@ -45,6 +50,7 @@ internal sealed partial class RuntimeState
 
             var isRemoval = mutation.Kind == SessionAnnotationMutationKind.Remove;
             SessionAnnotation annotation;
+
             if (isRemoval)
             {
                 annotation = existing!;
@@ -65,12 +71,14 @@ internal sealed partial class RuntimeState
                 ["annotationId"] = annotation.AnnotationId,
                 [isRemoval ? "deletedAnnotation" : "annotation"] = PayloadJson.BuildSessionAnnotationPayload(annotation)
             };
+
             if (payload.ToJsonString(JsonUtil.Compact).Length > MaximumAnnotationMutationResultCharacters)
             {
                 return SessionAnnotationMutationResult.Failure("The annotation result exceeds the task response limit. No changes were applied.");
             }
 
             result = SessionAnnotationMutationResult.Success(payload);
+
             if (isRemoval)
             {
                 session.Annotations.RemoveAt(existingIndex);
@@ -86,6 +94,7 @@ internal sealed partial class RuntimeState
                 session.Annotations[existingIndex] = annotation;
                 changed = true;
             }
+
             if (changed)
             {
                 session.Annotations.Sort(CompareAnnotations);
@@ -98,6 +107,7 @@ internal sealed partial class RuntimeState
             PersistAndBroadcast(selectedSessionId);
             log.Info($"session_annotation_mutated sessionId={selectedSessionId} annotationId={result.Payload!["annotationId"]} operation={mutation.Kind}");
         }
+
         return result;
     }
 
@@ -111,27 +121,34 @@ internal sealed partial class RuntimeState
     {
         annotation = null;
         error = null;
+
         var label = mutation.Label ?? existing?.Label;
+
         if (string.IsNullOrWhiteSpace(label))
         {
             error = "Annotation label must not be empty.";
+
             return false;
         }
 
         var defaultStartUtc = session.LastUpdatedUtc > DateTimeOffset.MinValue ? session.LastUpdatedUtc : DateTimeOffset.UtcNow;
         var startUtc = (mutation.StartUtc ?? existing?.StartUtc ?? defaultStartUtc).ToUniversalTime();
         var endUtc = (mutation.HasEndUtc ? mutation.EndUtc : existing?.EndUtc)?.ToUniversalTime();
+
         if (endUtc < startUtc)
         {
             error = "endUtc must not precede startUtc.";
+
             return false;
         }
+
         if (endUtc == startUtc)
         {
             endUtc = null;
         }
 
         IReadOnlyList<SessionAnnotationGeometry> geometries;
+
         if (mutation.Geometries is null)
         {
             geometries = existing?.Geometry.Select(SessionSnapshotCloner.CloneAnnotationGeometry).ToArray() ?? [];
@@ -143,6 +160,7 @@ internal sealed partial class RuntimeState
 
         var source = existing?.Source ?? mutation.Source ?? OperationDefaults.DefaultInjectedAnnotationSource;
         var target = SessionSnapshotCloner.CloneAnnotationTarget(existing?.Target);
+
         if (mutation.HasTarget)
         {
             if (mutation.Target is null)
@@ -171,6 +189,7 @@ internal sealed partial class RuntimeState
             Geometry = geometries,
             Target = target
         };
+
         return true;
     }
 }

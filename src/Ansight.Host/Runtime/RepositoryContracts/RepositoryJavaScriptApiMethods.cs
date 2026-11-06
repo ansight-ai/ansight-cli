@@ -147,9 +147,9 @@ internal static class RepositoryJavaScriptApiMethods
                 Suite(new StandardApiMethod("measure", "ansight_record_host_span"))))
             .Concat(taskCompositionSuites)
             .ToDictionary(
-                suite => suite.Key,
-                suite => suite.Value,
-                StringComparer.Ordinal);
+            suite => suite.Key,
+            suite => suite.Value,
+            StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> standardAppToolSuites =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
@@ -267,6 +267,7 @@ internal static class RepositoryJavaScriptApiMethods
     public static RepositoryHostApiMethod ResolveHostApiMethod(string toolName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+
         return standardHostMethodsByToolName.TryGetValue(toolName, out var method)
             ? method
             : throw new InvalidOperationException(
@@ -281,8 +282,3 @@ internal static class RepositoryJavaScriptApiMethods
 
     private readonly record struct StandardApiMethod(string MethodName, string ToolId);
 }
-
-internal sealed record RepositoryHostApiMethod(
-    string FeatureName,
-    string MethodName,
-    string ToolName);

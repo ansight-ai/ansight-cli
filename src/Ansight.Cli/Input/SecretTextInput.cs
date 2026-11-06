@@ -28,6 +28,7 @@ internal static class SecretTextInput
         => TypeUiAsync(arguments, supplied =>
         {
             var session = runtime.ResolveLiveUiSession(supplied);
+
             return new Target(session.SessionId, session.AppId);
         }, (appId, alias) => ReadValue(runtime, appId, alias), runtime.Ui.ExecuteAsync, cancellationToken);
 
@@ -39,11 +40,16 @@ internal static class SecretTextInput
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var alias = arguments["secretAlias"]!.GetValue<string>();
         var target = resolveTarget(arguments);
+
         if (arguments["secretAppId"]?.GetValue<string>() is { } secretAppId
             && !string.Equals(secretAppId, target.AppId, StringComparison.Ordinal))
+        {
             throw new CliUsageException("The secret reference's app ID does not match the selected session's app.");
+        }
+
         var value = readValue(target.AppId, alias);
         var input = arguments.DeepClone().AsObject();
         input.Remove("secretAlias");
@@ -52,7 +58,9 @@ internal static class SecretTextInput
         input["sessionId"] = target.SessionId;
         input["value"] = value;
         input["includeScreenshot"] = false;
+
         bool succeeded;
+
         try
         {
             var result = await execute(UiAutomationOperation.Type, input, cancellationToken).ConfigureAwait(false);
@@ -72,6 +80,7 @@ internal static class SecretTextInput
         var message = succeeded
             ? $"Secret '{alias}' was typed successfully."
             : $"Could not type secret '{alias}'. Inspect the app before retrying.";
+
         return new UiAutomationResult(UiAutomationOperation.Type, succeeded, message, new JsonObject
         {
             ["sessionId"] = target.SessionId,

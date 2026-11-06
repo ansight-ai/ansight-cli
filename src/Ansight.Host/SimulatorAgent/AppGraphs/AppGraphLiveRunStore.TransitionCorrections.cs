@@ -26,6 +26,7 @@ internal sealed partial class AppGraphLiveRunStore
                 && run.Nodes.ContainsKey(from)
                 && run.Nodes.ContainsKey(to)
                 && evidence is not null;
+
             if (!valid)
             {
                 return "A transition correction requires a retained edge ID, known source/destination IDs, and observed evidence of the attribution error.";
@@ -36,8 +37,10 @@ internal sealed partial class AppGraphLiveRunStore
                 var sameCorrectedTransition = candidate.Id != id
                     && candidate.To == to
                     && HasSameTransitionAction(candidate, from, edge!.AutomationId, edge.Selector);
+
                 return sameCorrectedTransition;
             });
+
             if (duplicate is not null)
             {
                 run.Edges.Remove(id);
@@ -50,7 +53,10 @@ internal sealed partial class AppGraphLiveRunStore
                 To = to,
                 SemanticMeaning = evidence!,
                 NavigationContext = edge.NavigationContext is { } context
-                    ? context with { ReturnDestinationId = to } : null,
+                    ? context with
+                    {
+                        ReturnDestinationId = to
+                    } : null,
                 UpdatedUtc = now
             };
         }

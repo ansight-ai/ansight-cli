@@ -8,11 +8,12 @@ internal static class VisualTreeSearch
     public static JsonArray Search(AppSessionSnapshot session, VisualTreeSearchCriteria criteria)
     {
         var matches = new List<JsonNode?>();
+
         foreach (var snapshot in session.VisualTreeSnapshots
-                     .Where(snapshot => string.IsNullOrWhiteSpace(criteria.SnapshotId)
-                                        || string.Equals(snapshot.SnapshotId, criteria.SnapshotId, StringComparison.Ordinal))
-                     .OrderBy(snapshot => snapshot.CapturedAtUtc)
-                     .ThenBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal))
+            .Where(snapshot => string.IsNullOrWhiteSpace(criteria.SnapshotId)
+                || string.Equals(snapshot.SnapshotId, criteria.SnapshotId, StringComparison.Ordinal))
+            .OrderBy(snapshot => snapshot.CapturedAtUtc)
+            .ThenBy(snapshot => snapshot.SnapshotId, StringComparer.Ordinal))
         {
             if (snapshot.Payload["root"] is not JsonObject root)
             {
@@ -21,6 +22,7 @@ internal static class VisualTreeSearch
 
             var typeRegistry = VisualTreeTypeRegistry.FromPayload(snapshot.Payload);
             SearchNode(snapshot, root, criteria, typeRegistry, depth: 0, path: string.Empty, matches);
+
             if (matches.Count >= criteria.Limit)
             {
                 break;
@@ -48,6 +50,7 @@ internal static class VisualTreeSearch
         var currentPath = string.IsNullOrWhiteSpace(path)
             ? nodeId ?? "root"
             : $"{path}/{nodeId ?? depth.ToString(CultureInfo.InvariantCulture)}";
+
         if (MatchesNode(node, criteria, typeRegistry))
         {
             matches.Add(BuildMatchPayload(snapshot, node, typeRegistry, depth, currentPath));
@@ -79,10 +82,10 @@ internal static class VisualTreeSearch
         if (criteria.HasPoint)
         {
             hasMatch |= TryReadNormalizedBounds(node, out var bounds)
-                        && criteria.NormalizedX!.Value >= bounds.X
-                        && criteria.NormalizedX.Value <= bounds.X + bounds.Width
-                        && criteria.NormalizedY!.Value >= bounds.Y
-                        && criteria.NormalizedY.Value <= bounds.Y + bounds.Height;
+                && criteria.NormalizedX!.Value >= bounds.X
+                && criteria.NormalizedX.Value <= bounds.X + bounds.Width
+                && criteria.NormalizedY!.Value >= bounds.Y
+                && criteria.NormalizedY.Value <= bounds.Y + bounds.Height;
         }
 
         return hasMatch;
@@ -127,10 +130,11 @@ internal static class VisualTreeSearch
         }
 
         var normalizedQuery = query.Trim();
+
         return Contains(ReadNodeString(node, "id"), normalizedQuery)
-               || Contains(typeRegistry.Resolve(node), normalizedQuery)
-               || Contains(ReadNodeString(node, "label"), normalizedQuery)
-               || Contains(ReadNodeString(node, "automationId"), normalizedQuery);
+            || Contains(typeRegistry.Resolve(node), normalizedQuery)
+            || Contains(ReadNodeString(node, "label"), normalizedQuery)
+            || Contains(ReadNodeString(node, "automationId"), normalizedQuery);
     }
 
     private static bool MatchesExact(JsonObject node, string propertyName, string? expected)
@@ -155,7 +159,7 @@ internal static class VisualTreeSearch
 
     private static bool Contains(string? value, string query)
         => !string.IsNullOrWhiteSpace(value)
-           && value.Contains(query, StringComparison.OrdinalIgnoreCase);
+            && value.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadNodeString(JsonObject node, string propertyName)
         => node[propertyName]?.GetValue<string>();
@@ -176,6 +180,7 @@ internal static class VisualTreeSearch
     private static bool TryReadNormalizedBounds(JsonObject node, out NormalizedBounds bounds)
     {
         bounds = default;
+
         if (node["normalizedBounds"] is JsonObject normalizedBounds
             && TryReadBoundsObject(normalizedBounds, out bounds))
         {
@@ -183,16 +188,18 @@ internal static class VisualTreeSearch
         }
 
         return node["bounds"] is JsonObject boundsObject
-               && TryReadBoundsObject(boundsObject, out bounds);
+            && TryReadBoundsObject(boundsObject, out bounds);
     }
 
     private static bool TryReadBoundsObject(JsonObject boundsObject, out NormalizedBounds bounds)
     {
         bounds = default;
+
         var xNode = boundsObject["x"] ?? boundsObject["absoluteX"];
         var yNode = boundsObject["y"] ?? boundsObject["absoluteY"];
         var widthNode = boundsObject["width"] ?? boundsObject["absoluteWidth"];
         var heightNode = boundsObject["height"] ?? boundsObject["absoluteHeight"];
+
         if (!TryReadDouble(xNode, out var x)
             || !TryReadDouble(yNode, out var y)
             || !TryReadDouble(widthNode, out var width)
@@ -208,18 +215,20 @@ internal static class VisualTreeSearch
             Math.Clamp(y, 0d, 1d),
             Math.Clamp(width, 0d, 1d),
             Math.Clamp(height, 0d, 1d));
+
         return true;
     }
 
     private static bool TryReadDouble(JsonNode? node, out double value)
     {
         value = 0d;
+
         if (node is not JsonValue jsonValue)
         {
             return false;
         }
 
         return jsonValue.TryGetValue<double>(out value)
-               || double.TryParse(jsonValue.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+            || double.TryParse(jsonValue.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 }

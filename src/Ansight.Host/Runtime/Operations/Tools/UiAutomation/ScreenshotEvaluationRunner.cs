@@ -5,19 +5,10 @@ using SkiaSharp;
 
 namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
-internal sealed record ScreenshotEvaluationRequest(string AppId, string WorkspaceRoot, InspectionImage Image,
-    InspectionImage? Reference, JsonArray Criteria, string Reasoning, Guid? TeamId);
-internal sealed record ScreenshotEvaluationResponse(string Text, string Model, string Reasoning, string ConfigurationRevision,
-    string? ResponseId, SimulatorAgentTokenUsage Tokens);
-
-internal interface IScreenshotEvaluator
+internal sealed class ScreenshotEvaluationRunner : IScreenshotEvaluator
 {
-    Task<ScreenshotEvaluationResponse> EvaluateAsync(ScreenshotEvaluationRequest request, CancellationToken token);
-}
-
-internal sealed class ScreenshotEvaluationRunner(IWorkspaceTestRunGateway gateway,
-    Func<IOpenAiClient>? createClient = null) : IScreenshotEvaluator
-{
+    private readonly IWorkspaceTestRunGateway gateway;
+    private readonly Func<IOpenAiClient>? createClient;
     internal const string Instructions = """
         Evaluate only the supplied ACTUAL image against the user's criteria. An optional REFERENCE image is the expected
         appearance. Use it only as reference evidence; all object bounds and region IDs must describe the ACTUAL image.
@@ -39,40 +30,71 @@ internal sealed class ScreenshotEvaluationRunner(IWorkspaceTestRunGateway gatewa
         Return at most 64 objects. If that limit prevents complete evidence, mark affected criteria inconclusive.
         """;
 
+    public ScreenshotEvaluationRunner(IWorkspaceTestRunGateway gateway,
+        Func<IOpenAiClient>? createClient = null)
+    {
+        this.gateway = gateway;
+        this.createClient = createClient;
+    }
+
     public async Task<ScreenshotEvaluationResponse> EvaluateAsync(ScreenshotEvaluationRequest request, CancellationToken token)
     {
         var defaults = AgentReasoningConfiguration.CreateDefault(request.Reasoning);
         var preparation = await gateway.PrepareAsync(new WorkspaceTestRunPreparationRequest(request.TeamId,
             request.WorkspaceRoot, "image-assessment-" + Guid.NewGuid().ToString("N"), "Screenshot assessment",
             request.AppId, defaults.Model, request.Criteria.Count, 1, IsDefinition: false)
-        { Reasoning = request.Reasoning }, token).ConfigureAwait(false);
-        if (!preparation.IsSuccess) throw new InvalidOperationException(preparation.Message);
+        {
+            Reasoning = request.Reasoning
+        }, token).ConfigureAwait(false);
+
+        if (!preparation.IsSuccess)
+        {
+            throw new InvalidOperationException(preparation.Message);
+        }
+
         var configuration = preparation.ReasoningConfiguration ?? defaults;
         var timer = Stopwatch.StartNew();
         OpenAiTurn? turn = null;
         var status = "failed";
+
         try
         {
             var transport = preparation.ModelTransport
                 ?? throw new InvalidOperationException("Screenshot evaluation requires a configured model provider.");
             var accessKey = await transport.ResolveAccessKeyAsync(token).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(accessKey)) throw new InvalidOperationException("Screenshot evaluation could not be authorized.");
+
+            if (string.IsNullOrWhiteSpace(accessKey))
+            {
+                throw new InvalidOperationException("Screenshot evaluation could not be authorized.");
+            }
+
             using var client = createClient?.Invoke() ?? new OpenAiResponsesClient();
             turn = await client.CreateResponseAsync(new OpenAiRequest(accessKey, configuration.Model, Instructions,
                 BuildInput(request), new JsonArray(), configuration.ReasoningEffort,
-                "ansight-image-assessment", 8_000) { Transport = transport }, token).ConfigureAwait(false);
+                "ansight-image-assessment", 8_000)
+            {
+                Transport = transport
+            }, token).ConfigureAwait(false);
             status = "succeeded";
+
             return new ScreenshotEvaluationResponse(turn.AssistantText, turn.ResponseModel ?? configuration.Model,
                 configuration.Reasoning, configuration.Revision, turn.ResponseId, turn.Tokens);
         }
-        catch (OperationCanceledException) { status = "cancelled"; throw; }
+        catch (OperationCanceledException)
+        {
+            status = "cancelled";
+            throw;
+        }
         finally
         {
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } runId)
             {
                 var passes = turn?.ResponseId is { Length: > 0 } responseId
-                    ? new[] { new SimulatorAgentModelPassUsage(responseId, turn.ResponseModel ?? configuration.Model,
-                        turn.ResponseServiceTier, DateTimeOffset.UtcNow, turn.Tokens) } : [];
+                    ? new[]
+                    {
+                        new SimulatorAgentModelPassUsage(responseId, turn.ResponseModel ?? configuration.Model,
+                            turn.ResponseServiceTier, DateTimeOffset.UtcNow, turn.Tokens)
+                    } : [];
                 using var completionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 await gateway.CompleteAsync(new WorkspaceTestRunMeterCompletion(runId, status, timer.ElapsedMilliseconds,
                     1, passes.Length, 0, 0, turn?.Tokens, passes), completionTimeout.Token).ConfigureAwait(false);
@@ -82,10 +104,19 @@ internal sealed class ScreenshotEvaluationRunner(IWorkspaceTestRunGateway gatewa
 
     internal static JsonArray BuildInput(ScreenshotEvaluationRequest request)
     {
-        var content = new JsonArray(new JsonObject { ["type"] = "input_text",
-            ["text"] = "Evaluate these criteria against ACTUAL:\n" + request.Criteria.ToJsonString() });
-        if (request.Reference is not null) AppendImage(content, "REFERENCE (expected)", request.Reference);
+        var content = new JsonArray(new JsonObject
+        {
+            ["type"] = "input_text",
+            ["text"] = "Evaluate these criteria against ACTUAL:\n" + request.Criteria.ToJsonString()
+        });
+
+        if (request.Reference is not null)
+        {
+            AppendImage(content, "REFERENCE (expected)", request.Reference);
+        }
+
         AppendImage(content, "ACTUAL (all returned object bounds refer to this image)", request.Image);
+
         return new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
     }
 
@@ -98,7 +129,11 @@ internal sealed class ScreenshotEvaluationRunner(IWorkspaceTestRunGateway gatewa
             new SKSamplingOptions(SKFilterMode.Linear));
         using var encoded = resized!.Encode(SKEncodedImageFormat.Png, 100);
         content.Add(new JsonObject { ["type"] = "input_text", ["text"] = label });
-        content.Add(new JsonObject { ["type"] = "input_image", ["detail"] = "high",
-            ["image_url"] = "data:image/png;base64," + Convert.ToBase64String(encoded.ToArray()) });
+        content.Add(new JsonObject
+        {
+            ["type"] = "input_image",
+            ["detail"] = "high",
+            ["image_url"] = "data:image/png;base64," + Convert.ToBase64String(encoded.ToArray())
+        });
     }
 }

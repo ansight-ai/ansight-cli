@@ -32,12 +32,14 @@ internal sealed class ImportSessionArchiveTool : Operation
     public override Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         var archiveFilePath = NormalizeOptionalString(arguments?["archiveFilePath"]?.GetValue<string>());
+
         if (archiveFilePath is null)
         {
             return Task.FromResult(ToolError("archiveFilePath is required."));
         }
 
         var result = StandardSessionArchiveExporter.Import(runtimeState, archiveFilePath, BuildReplaySource(arguments));
+
         if (!result.IsSuccess || result.ImportedSession is null)
         {
             return Task.FromResult(RequestResult.ToolResult(
@@ -71,6 +73,7 @@ internal sealed class ImportSessionArchiveTool : Operation
         var displayName = NormalizeOptionalString(arguments?["replaySourceDisplayName"]?.GetValue<string>());
         var detail = NormalizeOptionalString(arguments?["replaySourceDetail"]?.GetValue<string>());
         var sourceId = NormalizeOptionalString(arguments?["replaySourceId"]?.GetValue<string>());
+
         if (kind is null && displayName is null && detail is null && sourceId is null)
         {
             return null;
@@ -87,5 +90,5 @@ internal sealed class ImportSessionArchiveTool : Operation
 
     private static string ResolveImportedAppName(AppSessionSnapshot snapshot)
         => snapshot.DeviceProfile?.App?.AppName
-           ?? snapshot.ClientName;
+            ?? snapshot.ClientName;
 }

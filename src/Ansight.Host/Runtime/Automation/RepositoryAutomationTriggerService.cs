@@ -37,6 +37,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         RepositoryAutomationRunStore? runStore = null)
     {
         ArgumentNullException.ThrowIfNull(repositoryPaths);
+
         if (repositoryPaths.Count > MaximumRepositoryCount)
         {
             throw new ArgumentOutOfRangeException(
@@ -46,6 +47,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         }
 
         this.repositoryPaths = repositoryPaths.ToArray();
+
         if (defaultFunctionTimeout < TimeSpan.FromMilliseconds(10)
             || defaultFunctionTimeout > TimeSpan.FromSeconds(1))
         {
@@ -102,12 +104,13 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
 
     public IReadOnlyList<AutomationRunCompletedEvent> GetRecentRuns(string appId, int limit)
         => runStore?.GetRecent(appId, limit)
-           ?? Array.Empty<AutomationRunCompletedEvent>();
+            ?? Array.Empty<AutomationRunCompletedEvent>();
 
     public Task<RepositoryAutomationTriggerServiceStartResult> StartAsync(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var loadResult = RepositoryAutomationTriggerLoader.Load(
             repositoryPaths,
             defaultFunctionTimeout,
@@ -129,6 +132,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
                 FullMode = BoundedChannelFullMode.Wait
             });
             lifetimeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
             var currentQueue = executionQueue;
             var currentLifetimeToken = lifetimeCts.Token;
             workers = Enumerable.Range(0, maximumConcurrentRuns)
@@ -147,6 +151,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     {
         var load = LoadRepository(repositoryRootPath, appId);
         var isConnected = false;
+
         lock (gate)
         {
             isConnected = connectedRepositoryTriggers.ContainsKey(load.Key);
@@ -166,9 +171,11 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         string appId)
     {
         var load = LoadRepository(repositoryRootPath, appId);
+
         if (!load.IsSuccess)
         {
             DisconnectRepository(load.Key.AppId);
+
             return new RepositoryAutomationRepositoryConnectionResult(
                 false,
                 false,
@@ -183,7 +190,8 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         lock (gate)
         {
             var replacesExistingAppConnection = connectedRepositoryTriggers.Keys.Any(existing =>
-                string.Equals(existing.AppId, key.AppId, StringComparison.Ordinal));
+                        string.Equals(existing.AppId, key.AppId, StringComparison.Ordinal));
+
             if (!connectedRepositoryTriggers.ContainsKey(key)
                 && !replacesExistingAppConnection
                 && repositoryPaths.Count + connectedRepositoryTriggers.Count >= MaximumRepositoryCount)
@@ -199,9 +207,9 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
             }
 
             foreach (var existingKey in connectedRepositoryTriggers.Keys
-                         .Where(existing => string.Equals(existing.AppId, key.AppId, StringComparison.Ordinal)
-                                            && !existing.Equals(key))
-                         .ToArray())
+                .Where(existing => string.Equals(existing.AppId, key.AppId, StringComparison.Ordinal)
+                    && !existing.Equals(key))
+                .ToArray())
             {
                 connectedRepositoryTriggers.Remove(existingKey);
             }
@@ -222,13 +230,15 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     public bool DisconnectRepository(string appId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
         var removed = false;
+
         lock (gate)
         {
             foreach (var key in connectedRepositoryTriggers.Keys
-                         .Where(existing => string.Equals(existing.AppId, normalizedAppId, StringComparison.Ordinal))
-                         .ToArray())
+                .Where(existing => string.Equals(existing.AppId, normalizedAppId, StringComparison.Ordinal))
+                .ToArray())
             {
                 removed |= connectedRepositoryTriggers.Remove(key);
             }
@@ -253,8 +263,10 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     public void Publish(AutomationEventEnvelope envelope)
     {
         ArgumentNullException.ThrowIfNull(envelope);
+
         RepositoryAutomationCatalog currentCatalog;
         ChannelWriter<RepositoryAutomationExecutionRequest>? writer;
+
         lock (gate)
         {
             currentCatalog = catalog;
@@ -273,7 +285,12 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
                 trigger,
                 envelope,
                 DateTimeOffset.UtcNow);
-            if (envelope.SessionId is { } sessionId) pendingSessions[request.RunId] = sessionId;
+
+            if (envelope.SessionId is { } sessionId)
+            {
+                pendingSessions[request.RunId] = sessionId;
+            }
+
             if (!writer.TryWrite(request))
             {
                 PublishRejected(request, "The repository automation execution queue is full.");
@@ -284,7 +301,9 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     internal async Task DrainSessionAsync(string sessionId, CancellationToken cancellationToken)
     {
         while (pendingSessions.Values.Contains(sessionId, StringComparer.Ordinal))
+        {
             await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task StopAsync()
@@ -293,6 +312,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         CancellationTokenSource? currentLifetimeCts;
         Task[] currentWorkers;
         Task[] currentRetryTasks;
+
         lock (gate)
         {
             queue = executionQueue;
@@ -306,6 +326,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
 
         queue?.Writer.TryComplete();
         currentLifetimeCts?.Cancel();
+
         try
         {
             await Task.WhenAll(currentWorkers.Concat(currentRetryTasks)).ConfigureAwait(false);
@@ -331,6 +352,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRootPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         return new RepositoryAutomationRepositoryConnectionKey(
             Path.GetFullPath(repositoryRootPath.Trim()),
             appId.Trim());
@@ -352,6 +374,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
             .OrderBy(trigger => trigger.TriggerId, StringComparer.Ordinal)
             .ToArray();
         var warnings = loadResult.Warnings.ToList();
+
         if (warnings.Count == 0 && triggers.Length == 0)
         {
             warnings.Add(
@@ -388,6 +411,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
             await foreach (var request in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 RepositoryAutomationExecutionResult result;
+
                 try
                 {
                     result = await executor.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
@@ -440,9 +464,10 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
     {
         var retryPolicy = request.Trigger.Automation.RetryPolicy;
         var willRetry = ShouldRetry(result.Status)
-                        && request.AttemptNumber < retryPolicy.MaximumAttempts
-                        && !cancellationToken.IsCancellationRequested;
+            && request.AttemptNumber < retryPolicy.MaximumAttempts
+            && !cancellationToken.IsCancellationRequested;
         DateTimeOffset? nextAttemptAtUtc = null;
+
         if (willRetry)
         {
             var retryDelay = retryPolicy.GetDelayBeforeAttempt(request.AttemptNumber + 1);
@@ -450,6 +475,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         }
 
         PublishCompleted(request, result, willRetry, nextAttemptAtUtc);
+
         if (!willRetry)
         {
             return;
@@ -471,6 +497,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         var retryTask = Task.Run(
             () => DelayAndEnqueueRetryAsync(retryRequest, scheduledAtUtc, cancellationToken),
             CancellationToken.None);
+
         lock (gate)
         {
             pendingRetryTasks.Add(retryTask);
@@ -502,6 +529,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         try
         {
             var delay = scheduledAtUtc - DateTimeOffset.UtcNow;
+
             if (delay > TimeSpan.Zero)
             {
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
@@ -513,6 +541,7 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         }
 
         ChannelWriter<RepositoryAutomationExecutionRequest>? writer;
+
         lock (gate)
         {
             writer = executionQueue?.Writer;
@@ -523,7 +552,10 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
             return;
         }
 
-        if (writer.TryWrite(retryRequest with { EnqueuedAtUtc = DateTimeOffset.UtcNow }))
+        if (writer.TryWrite(retryRequest with
+        {
+            EnqueuedAtUtc = DateTimeOffset.UtcNow
+        }))
         {
             return;
         }
@@ -543,39 +575,44 @@ internal sealed class RepositoryAutomationTriggerService : IAsyncDisposable
         bool willRetry,
         DateTimeOffset? nextAttemptAtUtc)
     {
-        if (!willRetry) pendingSessions.TryRemove(request.RunId, out _);
+        if (!willRetry)
+        {
+            pendingSessions.TryRemove(request.RunId, out _);
+        }
+
         try
         {
             var completedEvent = new AutomationRunCompletedEvent(
-                    request.RunId,
-                    request.AttemptNumber,
-                    request.Trigger.Automation.RetryPolicy.MaximumAttempts,
-                    willRetry,
-                    nextAttemptAtUtc,
-                    request.Trigger.RepositoryRootPath,
-                    request.Event.AppId,
-                    request.Event.SessionId,
-                    request.Trigger.TriggerId,
-                    request.Trigger.Automation.AutomationId,
-                    request.Trigger.Automation.ActionKindName,
-                    request.Trigger.Automation.ActionTarget,
-                    request.Event.EventId,
-                    request.Event.CorrelationId,
-                    result.Status,
-                    result.StartedAtUtc,
-                    result.CompletedAtUtc,
-                    result.ExitCode,
-                    result.Message,
-                    result.Output,
-                    result.StandardError,
-                    request.Event);
+                request.RunId,
+                request.AttemptNumber,
+                request.Trigger.Automation.RetryPolicy.MaximumAttempts,
+                willRetry,
+                nextAttemptAtUtc,
+                request.Trigger.RepositoryRootPath,
+                request.Event.AppId,
+                request.Event.SessionId,
+                request.Trigger.TriggerId,
+                request.Trigger.Automation.AutomationId,
+                request.Trigger.Automation.ActionKindName,
+                request.Trigger.Automation.ActionTarget,
+                request.Event.EventId,
+                request.Event.CorrelationId,
+                result.Status,
+                result.StartedAtUtc,
+                result.CompletedAtUtc,
+                result.ExitCode,
+                result.Message,
+                result.Output,
+                result.StandardError,
+                request.Event);
+
             try
             {
                 runStore?.Append(completedEvent);
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException)
+                or UnauthorizedAccessException
+                or JsonException)
             {
                 log.Exception(exception);
             }

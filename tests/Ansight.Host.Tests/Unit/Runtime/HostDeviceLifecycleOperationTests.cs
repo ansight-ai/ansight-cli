@@ -23,18 +23,17 @@ public sealed class HostDeviceLifecycleOperationTests
             IsHistorical = false,
             DeviceProfileJson = """{"device":{"nativeDeviceId":"Pixel_9a"}}""",
             LogStreams =
-            [
-                new SessionLogStream
-                {
-                    StreamId = SessionLogStreamIds.AndroidLogcat,
-                    Kind = "native",
-                    DisplayName = "Android logcat",
-                    Metadata = new Dictionary<string, string>
+                [
+                    new SessionLogStream
                     {
-                        ["deviceSerial"] = "emulator-5554"
-                    }
-                }
-            ],
+                        StreamId = SessionLogStreamIds.AndroidLogcat,
+                        Kind = "native",
+                        DisplayName = "Android logcat",
+                        Metadata = new Dictionary<string, string>
+                        {
+                            ["deviceSerial"] = "emulator-5554"
+                        }
+                    }            ],
             MetricChannels = [],
             Metrics = []
         };
@@ -60,6 +59,7 @@ public sealed class HostDeviceLifecycleOperationTests
             sessionId,
             profile: null,
             profileJson: """{"device":{"nativeDeviceId":"IOS-DEVICE-001"}}""");
+
         var driver = new FakeLifecycleDriver();
         var catalog = CreateToolCatalog(runtimeState, environment, bridge, driver);
 
@@ -96,6 +96,7 @@ public sealed class HostDeviceLifecycleOperationTests
             profile: null,
             profileJson: """{"device":{"nativeDeviceId":"IOS-DEVICE-001"}}""");
         bridge.ConnectedSessionIds.Add(sessionId);
+
         var driver = new FakeLifecycleDriver();
         var catalog = CreateToolCatalog(runtimeState, environment, bridge, driver);
 
@@ -171,6 +172,7 @@ public sealed class HostDeviceLifecycleOperationTests
     {
         var lifecycleRouter = new DeviceLifecycleRouter();
         lifecycleRouter.Configure(driver);
+
         return new ToolCatalog(
             runtimeState,
             environment.ApplicationPaths,
@@ -188,17 +190,15 @@ public sealed class HostDeviceLifecycleOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
     private sealed class FakeLifecycleDriver : IDeviceLifecycleDriver
     {
         public string? LastLaunchDeviceIdentifier { get; private set; }
-
         public string? LastLaunchBundleIdentifier { get; private set; }
-
         public string? LastBackgroundDeviceIdentifier { get; private set; }
-
         public string? LastBackgroundBundleIdentifier { get; private set; }
 
         public Task<IReadOnlyList<DeviceLifecycleDevice>> ListDevicesAsync(
@@ -217,6 +217,7 @@ public sealed class HostDeviceLifecycleOperationTests
         {
             LastLaunchDeviceIdentifier = deviceIdentifier;
             LastLaunchBundleIdentifier = bundleIdentifier;
+
             return Task.FromResult(Success("launchApplication", deviceIdentifier, bundleIdentifier));
         }
 
@@ -233,6 +234,7 @@ public sealed class HostDeviceLifecycleOperationTests
         {
             LastBackgroundDeviceIdentifier = deviceIdentifier;
             LastBackgroundBundleIdentifier = bundleIdentifier;
+
             return Task.FromResult(Success("backgroundApplication", deviceIdentifier, bundleIdentifier));
         }
 
@@ -255,8 +257,12 @@ public sealed class HostDeviceLifecycleOperationTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => ConnectedSessionIds.ToArray();
@@ -284,7 +290,7 @@ public sealed class HostDeviceLifecycleOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache

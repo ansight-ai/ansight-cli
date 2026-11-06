@@ -12,6 +12,7 @@ public sealed class MacOsKeychainEncryptedStorageTests
 
         var service = $"Ansight.Host.Tests.{Guid.NewGuid():N}";
         var storage = new MacOsKeychainEncryptedStorage(service);
+
         try
         {
             storage.Set("first", "alpha");

@@ -80,4 +80,4 @@ global using Ansight.Cli.HostConnection;
 global using Ansight.Cli.SessionVideo;
 global using Ansight.Host.Explorer;
 
-global using Ansight.Analytics;
+global using Ansight.Infrastructure.Analytics;

@@ -2,23 +2,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Ansight.Host.Trends;
 
-internal sealed record WorkspaceTrendsHistoryBaselineData(
-    IReadOnlyList<double> Values,
-    WorkspaceTrendsHistoryStatus? PreviousStatus,
-    int ConsecutiveBreachCount,
-    string? BaselineAppVersion);
-
-internal sealed record WorkspaceTrendsHistoryRebuildScope(
-    string AppId,
-    string? AppVersion,
-    bool HasAppVersionFilter,
-    string? DecisionId);
-
-internal sealed record WorkspaceTrendsHistoryRebuildRow(
-    WorkspaceTrendsRunContext Context,
-    WorkspaceTrendsHistoryDecision Result,
-    bool IsBreach);
-
 internal sealed class WorkspaceTrendsHistoryStore
 {
     private static readonly Lock providerGate = new();
@@ -30,6 +13,7 @@ internal sealed class WorkspaceTrendsHistoryStore
     public WorkspaceTrendsHistoryStore(IApplicationPaths applicationPaths)
     {
         ArgumentNullException.ThrowIfNull(applicationPaths);
+
         var applicationDataPath = applicationPaths.ApplicationDataPath;
         databasePath = Path.Combine(
             applicationDataPath,
@@ -46,15 +30,18 @@ internal sealed class WorkspaceTrendsHistoryStore
     public int DeleteSession(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         if (!File.Exists(databasePath))
         {
             return 0;
         }
 
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var transaction = connection.BeginTransaction();
         var removedRows = 0;
+
         foreach (var tableName in new[] { "trends_history", "trends_metrics" })
         {
             using var command = connection.CreateCommand();
@@ -65,6 +52,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         }
 
         transaction.Commit();
+
         return removedRows;
     }
 
@@ -75,24 +63,29 @@ internal sealed class WorkspaceTrendsHistoryStore
         string? spanGroup = null)
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         var filters = new List<string>();
+
         if (!string.IsNullOrWhiteSpace(appId))
         {
             filters.Add("app_id = $app_id");
             command.Parameters.AddWithValue("$app_id", appId.Trim());
         }
+
         if (!string.IsNullOrWhiteSpace(metricKey))
         {
             filters.Add("metric_key = $metric_key");
             command.Parameters.AddWithValue("$metric_key", metricKey.Trim());
         }
+
         if (!string.IsNullOrWhiteSpace(spanGroup))
         {
             filters.Add("span_group = $span_group");
             command.Parameters.AddWithValue("$span_group", spanGroup.Trim());
         }
+
         var whereClause = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         command.CommandText = $"""
             SELECT evaluation_id, run_id, session_id, app_id, app_version, build_number,
@@ -105,8 +98,10 @@ internal sealed class WorkspaceTrendsHistoryStore
             LIMIT $limit;
             """;
         command.Parameters.AddWithValue("$limit", limit);
+
         var entries = new List<WorkspaceTrendsMetricHistoryEntry>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             entries.Add(new WorkspaceTrendsMetricHistoryEntry(
@@ -133,21 +128,26 @@ internal sealed class WorkspaceTrendsHistoryStore
                 MetricDefinitionHash = reader.GetString(15)
             });
         }
+
         return entries;
     }
 
     public IReadOnlyList<string> LoadMetricAppIds()
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT DISTINCT app_id FROM trends_metrics ORDER BY app_id;";
+
         var appIds = new List<string>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             appIds.Add(reader.GetString(0));
         }
+
         return appIds;
     }
 
@@ -156,6 +156,7 @@ internal sealed class WorkspaceTrendsHistoryStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -168,8 +169,10 @@ internal sealed class WorkspaceTrendsHistoryStore
             ORDER BY evaluated_at_utc ASC, evaluation_id ASC, instance_index ASC;
             """;
         command.Parameters.AddWithValue("$app_id", appId.Trim());
+
         var entries = new List<WorkspaceTrendsMetricHistoryEntry>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             entries.Add(new WorkspaceTrendsMetricHistoryEntry(
@@ -196,6 +199,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                 MetricDefinitionHash = reader.GetString(15)
             });
         }
+
         return entries;
     }
 
@@ -207,24 +211,29 @@ internal sealed class WorkspaceTrendsHistoryStore
         bool limitPerSeries = false)
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         var filters = new List<string>();
+
         if (!string.IsNullOrWhiteSpace(appId))
         {
             filters.Add("app_id = $app_id");
             command.Parameters.AddWithValue("$app_id", appId.Trim());
         }
+
         if (!string.IsNullOrWhiteSpace(decisionId))
         {
             filters.Add("decision_id = $decision_id");
             command.Parameters.AddWithValue("$decision_id", decisionId.Trim());
         }
+
         if (!string.IsNullOrWhiteSpace(spanGroup))
         {
             filters.Add("span_group = $span_group");
             command.Parameters.AddWithValue("$span_group", spanGroup.Trim());
         }
+
         var whereClause = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         var historySource = limitPerSeries
             ? $"""
@@ -256,8 +265,10 @@ internal sealed class WorkspaceTrendsHistoryStore
             {(limitPerSeries ? string.Empty : "LIMIT $limit")};
             """;
         command.Parameters.AddWithValue("$limit", limit);
+
         var entries = new List<WorkspaceTrendsHistoryEntry>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             entries.Add(new WorkspaceTrendsHistoryEntry(
@@ -294,6 +305,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                 SeriesKey = reader.GetString(29)
             });
         }
+
         return entries;
     }
 
@@ -302,8 +314,10 @@ internal sealed class WorkspaceTrendsHistoryStore
         IReadOnlyList<WorkspaceTrendsCheckResult> checks)
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var transaction = connection.BeginTransaction();
+
         foreach (var check in checks)
         {
             foreach (var metric in check.Metrics.Where(static result => result.Value.HasValue))
@@ -335,6 +349,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                 command.ExecuteNonQuery();
             }
         }
+
         transaction.Commit();
     }
 
@@ -345,13 +360,14 @@ internal sealed class WorkspaceTrendsHistoryStore
         WorkspaceTrendsHistoryComparison comparison)
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         var baselineAppVersion = comparison switch
         {
             WorkspaceTrendsHistoryComparison.UnversionedReference => context.AppVersion,
             WorkspaceTrendsHistoryComparison.PreviousVersion when !string.IsNullOrWhiteSpace(context.AppVersion)
                 => FindPinnedBaselineAppVersion(connection, context, metric, historyDefinition)
-                   ?? FindBaselineAppVersion(connection, context, metric, historyDefinition),
+                    ?? FindBaselineAppVersion(connection, context, metric, historyDefinition),
             _ => null
         };
         using var command = connection.CreateCommand();
@@ -359,17 +375,19 @@ internal sealed class WorkspaceTrendsHistoryStore
         var versionClause = comparison switch
         {
             WorkspaceTrendsHistoryComparison.UnversionedReference when baselineAppVersion is null
-                => "AND app_version IS NULL",
+                        => "AND app_version IS NULL",
             WorkspaceTrendsHistoryComparison.UnversionedReference
                 => "AND app_version = $baseline_app_version",
             WorkspaceTrendsHistoryComparison.PreviousVersion when baselineAppVersion is not null
                 => "AND app_version = $baseline_app_version",
             _ => "AND 1 = 0"
         };
+
         if (baselineAppVersion is not null)
         {
             command.Parameters.AddWithValue("$baseline_app_version", baselineAppVersion);
         }
+
         var baselineOrder = comparison == WorkspaceTrendsHistoryComparison.UnversionedReference ? "ASC" : "DESC";
         command.CommandText = $"""
             WITH comparable AS (
@@ -398,7 +416,9 @@ internal sealed class WorkspaceTrendsHistoryStore
         command.Parameters.AddWithValue("$span_group", NormalizeSpanGroup(metric.SpanGroup));
         command.Parameters.AddWithValue("$evaluation_id", context.EvaluationId);
         command.Parameters.AddWithValue("$run_limit", historyDefinition.Baseline.Runs);
+
         var values = new List<double>();
+
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
@@ -432,8 +452,10 @@ internal sealed class WorkspaceTrendsHistoryStore
         statusCommand.Parameters.AddWithValue("$comparison", comparison.ToString());
         AddNullable(statusCommand, "$current_app_version", context.AppVersion);
         AddNullable(statusCommand, "$baseline_app_version", baselineAppVersion);
+
         WorkspaceTrendsHistoryStatus? previousStatus = null;
         var consecutiveBreachCount = 0;
+
         using (var reader = statusCommand.ExecuteReader())
         {
             if (reader.Read())
@@ -442,9 +464,11 @@ internal sealed class WorkspaceTrendsHistoryStore
                 {
                     previousStatus = parsedStatus;
                 }
+
                 consecutiveBreachCount = reader.GetInt32(1);
             }
         }
+
         return new WorkspaceTrendsHistoryBaselineData(
             values,
             previousStatus,
@@ -458,6 +482,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         bool isBreach)
     {
         EnsureDatabase();
+
         using var connection = OpenConnection();
         InsertHistoryDecision(connection, transaction: null, context, result, isBreach);
     }
@@ -469,25 +494,31 @@ internal sealed class WorkspaceTrendsHistoryStore
         ArgumentNullException.ThrowIfNull(scopes);
         ArgumentNullException.ThrowIfNull(rows);
         EnsureDatabase();
+
         using var connection = OpenConnection();
         using var transaction = connection.BeginTransaction();
         var removedCount = 0;
+
         foreach (var scope in scopes)
         {
             using var delete = connection.CreateCommand();
             delete.Transaction = transaction;
+
             var filters = new List<string> { "app_id = $app_id" };
             delete.Parameters.AddWithValue("$app_id", scope.AppId);
+
             if (scope.HasAppVersionFilter)
             {
                 filters.Add("COALESCE(app_version, '') = COALESCE($app_version, '')");
                 AddNullable(delete, "$app_version", scope.AppVersion);
             }
+
             if (!string.IsNullOrWhiteSpace(scope.DecisionId))
             {
                 filters.Add("decision_id = $decision_id");
                 delete.Parameters.AddWithValue("$decision_id", scope.DecisionId.Trim());
             }
+
             delete.CommandText = $"DELETE FROM trends_history WHERE {string.Join(" AND ", filters)};";
             removedCount += delete.ExecuteNonQuery();
         }
@@ -496,7 +527,9 @@ internal sealed class WorkspaceTrendsHistoryStore
         {
             InsertHistoryDecision(connection, transaction, row.Context, row.Result, row.IsBreach);
         }
+
         transaction.Commit();
+
         return removedCount;
     }
 
@@ -504,26 +537,32 @@ internal sealed class WorkspaceTrendsHistoryStore
     {
         ArgumentNullException.ThrowIfNull(scopes);
         EnsureDatabase();
+
         using var connection = OpenConnection();
         var count = 0;
+
         foreach (var scope in scopes)
         {
             using var command = connection.CreateCommand();
             var filters = new List<string> { "app_id = $app_id" };
             command.Parameters.AddWithValue("$app_id", scope.AppId);
+
             if (scope.HasAppVersionFilter)
             {
                 filters.Add("COALESCE(app_version, '') = COALESCE($app_version, '')");
                 AddNullable(command, "$app_version", scope.AppVersion);
             }
+
             if (!string.IsNullOrWhiteSpace(scope.DecisionId))
             {
                 filters.Add("decision_id = $decision_id");
                 command.Parameters.AddWithValue("$decision_id", scope.DecisionId.Trim());
             }
+
             command.CommandText = $"SELECT COUNT(*) FROM trends_history WHERE {string.Join(" AND ", filters)};";
             count += Convert.ToInt32(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
         }
+
         return count;
     }
 
@@ -601,13 +640,17 @@ internal sealed class WorkspaceTrendsHistoryStore
         EnsureProviderInitialized();
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
         MigrateLegacyDatabaseFileIfNeeded();
+
         using var connection = OpenConnection();
+
         using (var pragmaCommand = connection.CreateCommand())
         {
             pragmaCommand.CommandText = "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;";
             pragmaCommand.ExecuteNonQuery();
         }
+
         MigrateLegacySchema(connection);
+
         using var command = connection.CreateCommand();
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS trends_metrics (
@@ -672,6 +715,7 @@ internal sealed class WorkspaceTrendsHistoryStore
             );
             """;
         command.ExecuteNonQuery();
+
         using var indexCommand = connection.CreateCommand();
         indexCommand.CommandText = """
             CREATE INDEX IF NOT EXISTS ix_trends_history_series
@@ -682,6 +726,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                     app_id, decision_id, span_group, comparison, series_key, evaluated_at_utc DESC);
             """;
         indexCommand.ExecuteNonQuery();
+
         using var versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "PRAGMA user_version = 3;";
         versionCommand.ExecuteNonQuery();
@@ -714,23 +759,28 @@ internal sealed class WorkspaceTrendsHistoryStore
     private static void MigrateLegacySchema(SqliteConnection connection)
     {
         using var command = connection.CreateCommand();
+
         if (TableExists(connection, "performance_metrics"))
         {
             command.CommandText = "ALTER TABLE performance_metrics RENAME TO trends_metrics;";
             command.ExecuteNonQuery();
         }
+
         if (TableExists(connection, "performance_history"))
         {
             command.CommandText = "ALTER TABLE performance_history RENAME TO trends_history;";
             command.ExecuteNonQuery();
         }
+
         if (TableExists(connection, "trends_metrics") && ColumnExists(connection, "trends_metrics", "performance_id"))
         {
             command.CommandText = "ALTER TABLE trends_metrics RENAME COLUMN performance_id TO trends_id;";
             command.ExecuteNonQuery();
         }
+
         RenameLegacyGroupColumn(connection, command, "trends_metrics");
         RenameLegacyGroupColumn(connection, command, "trends_history");
+
         if (!TableExists(connection, "trends_metrics")
             || (!ColumnExists(connection, "trends_metrics", "test_id")
                 && !ColumnExists(connection, "trends_metrics", "functional_succeeded")))
@@ -784,6 +834,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         string tableName)
     {
         const string legacyColumnName = "window_group";
+
         if (!TableExists(connection, tableName)
             || !ColumnExists(connection, tableName, legacyColumnName)
             || ColumnExists(connection, tableName, "span_group"))
@@ -800,6 +851,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = $name);";
         command.Parameters.AddWithValue("$name", tableName);
+
         return Convert.ToInt32(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) == 1;
     }
 
@@ -807,7 +859,9 @@ internal sealed class WorkspaceTrendsHistoryStore
     {
         using var command = connection.CreateCommand();
         command.CommandText = $"PRAGMA table_info({tableName});";
+
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
@@ -815,6 +869,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                 return true;
             }
         }
+
         return false;
     }
 
@@ -828,6 +883,7 @@ internal sealed class WorkspaceTrendsHistoryStore
             Pooling = true
         }.ToString());
         connection.Open();
+
         return connection;
     }
 
@@ -837,12 +893,14 @@ internal sealed class WorkspaceTrendsHistoryStore
         IReadOnlyList<string> cohort)
     {
         var clauses = new List<string>();
+
         foreach (var dimension in cohort.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var mapping = ResolveCohortDimension(dimension, context);
             clauses.Add($"AND COALESCE({mapping.ColumnName}, '') = COALESCE({mapping.ParameterName}, '')");
             AddNullable(command, mapping.ParameterName, mapping.Value);
         }
+
         return string.Join(Environment.NewLine, clauses);
     }
 
@@ -874,6 +932,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         command.Parameters.AddWithValue("$span_group", NormalizeSpanGroup(metric.SpanGroup));
         command.Parameters.AddWithValue("$evaluation_id", context.EvaluationId);
         command.Parameters.AddWithValue("$app_version", context.AppVersion);
+
         return command.ExecuteScalar() as string;
     }
 
@@ -907,6 +966,7 @@ internal sealed class WorkspaceTrendsHistoryStore
         command.Parameters.AddWithValue("$span_group", NormalizeSpanGroup(metric.SpanGroup));
         command.Parameters.AddWithValue("$comparison", WorkspaceTrendsHistoryComparison.PreviousVersion.ToString());
         command.Parameters.AddWithValue("$app_version", context.AppVersion!);
+
         return command.ExecuteScalar() as string;
     }
 
@@ -978,6 +1038,7 @@ internal sealed class WorkspaceTrendsHistoryStore
             {
                 return;
             }
+
             try
             {
                 _ = SQLitePCL.raw.sqlite3_libversion();
@@ -990,6 +1051,7 @@ internal sealed class WorkspaceTrendsHistoryStore
                 SQLitePCL.raw.SetProvider(provider);
                 SQLitePCL.raw.FreezeProvider();
             }
+
             providerInitialized = true;
         }
     }

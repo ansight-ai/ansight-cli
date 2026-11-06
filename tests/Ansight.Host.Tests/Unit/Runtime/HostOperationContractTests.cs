@@ -29,6 +29,7 @@ public sealed class HostOperationContractTests
 
         Assert.False(response.IsError);
         Assert.Equal(!success, response.Payload!["isError"]!.GetValue<bool>());
+
         var payload = response.Payload["structuredContent"]!.AsObject();
         var defaults = payload["appliedHostDefaults"]!.AsObject();
         Assert.Equal("jpeg", defaults["format"]!.GetValue<string>());
@@ -64,11 +65,27 @@ public sealed class HostOperationContractTests
             cloudSessionSharingService: null,
             new SessionResolver(state, bridge));
 
-    private sealed class RecordingAppToolBridge(string sessionId, bool success) : IAppToolBridge
+    private sealed class RecordingAppToolBridge : IAppToolBridge
     {
-        public JsonObject? LastArguments { get; private set; }
+        private readonly string sessionId;
+        private readonly bool success;
 
-        public event EventHandler? ConnectionsChanged { add { } remove { } }
+        public RecordingAppToolBridge(string sessionId, bool success)
+        {
+            this.sessionId = sessionId;
+            this.success = success;
+        }
+
+        public JsonObject? LastArguments { get; private set; }
+        public event EventHandler? ConnectionsChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
 
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
 
@@ -85,6 +102,7 @@ public sealed class HostOperationContractTests
             AppToolBridgeRequestContext? requestContext = null)
         {
             LastArguments = arguments?.DeepClone().AsObject();
+
             return Task.FromResult(success
                 ? AppToolBridgeResponse.FromSuccess("OK", new ToolProtocolEnvelope
                 {
@@ -100,15 +118,23 @@ public sealed class HostOperationContractTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache
     {
-        public void Add(PairingConfig config) { }
-        public void Add(CachedPairingConfig config) { }
+        public void Add(PairingConfig config)
+        {
+        }
+
+        public void Add(CachedPairingConfig config)
+        {
+        }
+
         public IReadOnlyList<CachedPairingConfig> GetSnapshot() => [];
+
         public CachedPairingConfig? Find(string configId) => null;
+
         public bool Remove(string configId) => false;
     }
 }

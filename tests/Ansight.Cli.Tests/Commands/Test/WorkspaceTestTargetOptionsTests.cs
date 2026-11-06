@@ -17,12 +17,12 @@ public sealed partial class WorkspaceTestTargetOptionsTests
     {
         var arguments = CliArguments.Parse(
             [
-                "test", "run", "/workspace", "test-id",
+                    "test", "run", "/workspace", "test-id",
                 "--platform", "ios",
                 "--device-id", "DEVICE-1",
                 "--device-kind", "physical",
                 "--app", "/tmp/Target.app"
-            ]);
+                ]);
 
         var result = WorkspaceTestTargetOptions.Resolve(arguments);
 
@@ -49,11 +49,11 @@ public sealed partial class WorkspaceTestTargetOptionsTests
     public void Resolve_RejectsConflictingDeviceOptions()
     {
         var arguments = CliArguments.Parse(
-        [
-            "test", "run-all", "/workspace",
+            [
+                "test", "run-all", "/workspace",
             "--device", "DEVICE-1",
             "--device-id", "DEVICE-2"
-        ]);
+            ]);
 
         var exception = Assert.Throws<CliUsageException>(() => WorkspaceTestTargetOptions.Resolve(arguments));
 
@@ -64,13 +64,13 @@ public sealed partial class WorkspaceTestTargetOptionsTests
     public void ResolveMany_ExpandsRepeatedDeviceIdentifiersWithSharedTargetOptions()
     {
         var arguments = CliArguments.Parse(
-        [
-            "test", "run-all", "/workspace",
+            [
+                "test", "run-all", "/workspace",
             "--platform", "ios",
             "--device-id", "DEVICE-1",
             "--device-id", "DEVICE-2",
             "--app", "/tmp/Target.app"
-        ]);
+            ]);
 
         var targets = WorkspaceTestTargetOptions.ResolveMany(arguments);
 
@@ -100,12 +100,12 @@ public sealed partial class WorkspaceTestTargetOptionsTests
     public void ResolveMany_AppliesHeadlessToEverySelectedDevice()
     {
         var arguments = CliArguments.Parse(
-        [
-            "test", "run-all", "/workspace",
+            [
+                "test", "run-all", "/workspace",
             "--device-id", "DEVICE-1",
             "--device-id", "DEVICE-2",
             "--headless"
-        ]);
+            ]);
 
         var targets = WorkspaceTestTargetOptions.ResolveMany(arguments);
 
@@ -118,10 +118,10 @@ public sealed partial class WorkspaceTestTargetOptionsTests
     {
         var arguments = CliArguments.Parse(
             [
-                "test", "run", "/workspace", "test-id",
+                    "test", "run", "/workspace", "test-id",
                 "--app", "/tmp/Target.app",
                 "--ipa", "/tmp/Target.ipa"
-            ]);
+                ]);
 
         var exception = Assert.Throws<CliUsageException>(() => WorkspaceTestTargetOptions.Resolve(arguments));
 

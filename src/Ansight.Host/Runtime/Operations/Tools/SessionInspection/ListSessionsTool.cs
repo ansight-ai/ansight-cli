@@ -37,6 +37,7 @@ internal sealed class ListSessionsTool : Operation
             ["limit"] = ToolSchema.Integer("Maximum number of sessions to return. Defaults to 100, max 1000.", nullable: true)
         };
         SessionListingFilters.AddProperties(properties);
+
         return properties;
     }
 }

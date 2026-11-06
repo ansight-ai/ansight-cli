@@ -32,6 +32,7 @@ internal static class TestResultExporter
             ? Guid.NewGuid().ToString("N")
             : SanitizeFileName(runId);
         var fileName = $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss-fff}-{safeName}-{safeRunId}.json";
+
         return Path.Combine(dataDirectory, "data", ResultDirectoryName, fileName);
     }
 
@@ -39,9 +40,11 @@ internal static class TestResultExporter
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ArgumentNullException.ThrowIfNull(result);
+
         var fullPath = Path.GetFullPath(filePath);
         var directoryPath = Path.GetDirectoryName(fullPath)
             ?? throw new InvalidOperationException("The test result path has no parent directory.");
+
         if (pruneGeneratedResults)
         {
             PrivateStorageDirectory.Ensure(directoryPath);
@@ -50,17 +53,22 @@ internal static class TestResultExporter
         {
             Directory.CreateDirectory(directoryPath);
         }
+
         var temporaryPath = $"{fullPath}.{Guid.NewGuid():N}.tmp";
+
         try
         {
             File.WriteAllText(temporaryPath, JsonSerializer.Serialize(result, jsonOptions));
             TryRestrictFilePermissions(temporaryPath);
+
             if (pruneGeneratedResults && new FileInfo(temporaryPath).Length > MaximumGeneratedResultBytes)
             {
                 throw new InvalidDataException("The generated test result exceeds the local result cache limit.");
             }
+
             File.Move(temporaryPath, fullPath, overwrite: true);
             TryRestrictFilePermissions(fullPath);
+
             if (pruneGeneratedResults)
             {
                 PruneGeneratedResults(directoryPath, fullPath);
@@ -83,6 +91,7 @@ internal static class TestResultExporter
             .ToArray();
         var totalBytes = files.Sum(static file => file.Length);
         var remainingCount = files.Length;
+
         for (var index = files.Length - 1; index >= 0; index--)
         {
             if (remainingCount <= MaximumGeneratedResults && totalBytes <= MaximumGeneratedResultBytes)
@@ -91,6 +100,7 @@ internal static class TestResultExporter
             }
 
             var file = files[index];
+
             if (string.Equals(file.FullName, currentFilePath, StringComparison.Ordinal))
             {
                 continue;
@@ -108,6 +118,7 @@ internal static class TestResultExporter
         var normalized = new string(value.Trim()
             .Select(character => invalid.Contains(character) || char.IsWhiteSpace(character) ? '-' : character)
             .ToArray());
+
         return string.IsNullOrWhiteSpace(normalized) ? "test" : normalized;
     }
 
@@ -123,8 +134,8 @@ internal static class TestResultExporter
             File.SetUnixFileMode(filePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch (Exception exception) when (exception is IOException
-                                           or UnauthorizedAccessException
-                                           or PlatformNotSupportedException)
+            or UnauthorizedAccessException
+            or PlatformNotSupportedException)
         {
         }
     }

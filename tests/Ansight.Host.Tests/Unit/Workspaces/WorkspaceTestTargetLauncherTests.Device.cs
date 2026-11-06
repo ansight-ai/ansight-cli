@@ -13,12 +13,21 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         using var monitorClaim = DeviceExecutionClaim.Acquire(device);
         var devices = new FakeHostDeviceService { Inventory = new DeviceInventory([], [device], []) };
         devices.SetApplications(device.Identifier, new InstalledApplication("com.example.target", "Target"));
+
         var session = new AppSessionSnapshot
         {
-            SessionId = "monitored", AppId = "com.example.target", CaptureSource = "device", ClientName = "Target",
-            RemoteAddress = "host-device", ConfigId = null, CreatedUtc = DateTimeOffset.UtcNow,
-            LastUpdatedUtc = DateTimeOffset.UtcNow, Status = "Capturing", IsHistorical = false,
-            MetricChannels = [], Metrics = []
+            SessionId = "monitored",
+            AppId = "com.example.target",
+            CaptureSource = "device",
+            ClientName = "Target",
+            RemoteAddress = "host-device",
+            ConfigId = null,
+            CreatedUtc = DateTimeOffset.UtcNow,
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            Status = "Capturing",
+            IsHistorical = false,
+            MetricChannels = [],
+            Metrics = []
         };
         var launcher = new WorkspaceTestTargetLauncher(devices, findMonitoredSession: (selected, appId) =>
             selected.Identifier == device.Identifier && appId == session.AppId ? session : null);
@@ -51,21 +60,29 @@ public sealed partial class WorkspaceTestTargetLauncherTests
             Inventory = new DeviceInventory([], [Device(id, id, platform, true)], [])
         };
         devices.SetApplications(id, new InstalledApplication("com.example.target", "Target"));
+
         var issuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, issuer);
         var request = new WorkspaceTestTargetRequest(DeviceIdentifier: id) { ExecutionMode = "device" };
         var result = await launcher.LaunchAsync("com.example.target", request, null, CancellationToken.None);
+
         using (result.DeviceClaim)
         {
             Assert.True(result.IsSuccess, result.Message);
             Assert.Equal("device", result.Target?.ExecutionMode);
             Assert.Null(issuer.IssuedAppId);
+
             var competing = await launcher.LaunchAsync("com.example.target", request, null, CancellationToken.None);
             Assert.False(competing.IsSuccess);
             Assert.Contains("active device execution", competing.Message);
         }
+
         var next = await launcher.LaunchAsync("com.example.target", request, null, CancellationToken.None);
-        using (next.DeviceClaim) Assert.True(next.IsSuccess, next.Message);
+
+        using (next.DeviceClaim)
+        {
+            Assert.True(next.IsSuccess, next.Message);
+        }
     }
 
     [Theory]
@@ -94,18 +111,30 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         using var monitorClaim = DeviceExecutionClaim.Acquire(device);
         var devices = new FakeHostDeviceService { Inventory = new DeviceInventory([], [device], []) };
         devices.SetApplications(device.Identifier, new InstalledApplication("com.example.target", "Target"));
+
         var session = new AppSessionSnapshot
         {
-            SessionId = "physical-android-monitor", AppId = "com.example.target", CaptureSource = "device",
-            ClientName = "Target", RemoteAddress = "host-device", ConfigId = null,
-            CreatedUtc = DateTimeOffset.UtcNow, LastUpdatedUtc = DateTimeOffset.UtcNow,
-            Status = "Capturing", IsHistorical = false, MetricChannels = [], Metrics = []
+            SessionId = "physical-android-monitor",
+            AppId = "com.example.target",
+            CaptureSource = "device",
+            ClientName = "Target",
+            RemoteAddress = "host-device",
+            ConfigId = null,
+            CreatedUtc = DateTimeOffset.UtcNow,
+            LastUpdatedUtc = DateTimeOffset.UtcNow,
+            Status = "Capturing",
+            IsHistorical = false,
+            MetricChannels = [],
+            Metrics = []
         };
         var issuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, issuer,
             (selected, appId) => selected.Identifier == device.Identifier && appId == session.AppId ? session : null);
         var request = new WorkspaceTestTargetRequest(Platform: DevicePlatforms.Android,
-            DeviceIdentifier: device.Identifier) { ExecutionMode = "device" };
+            DeviceIdentifier: device.Identifier)
+        {
+            ExecutionMode = "device"
+        };
 
         var result = await launcher.LaunchAsync(session.AppId, request, null, CancellationToken.None);
 
@@ -122,12 +151,17 @@ public sealed partial class WorkspaceTestTargetLauncherTests
         var device = Device("R58N124", "Pixel", DevicePlatforms.Android, true, DeviceKinds.Device);
         var devices = new FakeHostDeviceService { Inventory = new DeviceInventory([], [device], []) };
         devices.SetApplications(device.Identifier, new InstalledApplication("com.example.target", "Target"));
+
         var issuer = new FakeEnrollmentIssuer();
         var launcher = new WorkspaceTestTargetLauncher(devices, issuer);
         var request = new WorkspaceTestTargetRequest(Platform: DevicePlatforms.Android,
-            DeviceIdentifier: device.Identifier) { ExecutionMode = "device" };
+            DeviceIdentifier: device.Identifier)
+        {
+            ExecutionMode = "device"
+        };
 
         var result = await launcher.LaunchAsync("com.example.target", request, null, CancellationToken.None);
+
         using (result.DeviceClaim)
         {
             Assert.True(result.IsSuccess, result.Message);

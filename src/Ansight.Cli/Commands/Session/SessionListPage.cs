@@ -8,11 +8,3 @@ internal sealed record SessionListPage(
     bool IsTruncated,
     string? NextCursor,
     IReadOnlyList<SessionListPageItem> Items);
-
-internal sealed record SessionListPageItem(
-    AppSessionSnapshot Session,
-    bool IsConnected);
-
-internal sealed record SessionListCursor(
-    DateTimeOffset LastUpdatedUtc,
-    string SessionId);

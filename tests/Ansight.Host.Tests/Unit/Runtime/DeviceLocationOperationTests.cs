@@ -19,6 +19,7 @@ public sealed partial class DeviceLocationOperationTests
         Assert.Contains("ansight_play_device_location", toolNames);
         Assert.Contains("ansight_set_device_location", toolNames);
         Assert.Contains("ansight_clear_device_location", toolNames);
+
         var setTool = tools
             .Select(tool => tool!.AsObject())
             .Single(tool => tool["name"]!.GetValue<string>() == "ansight_set_device_location");
@@ -104,6 +105,7 @@ public sealed partial class DeviceLocationOperationTests
             profile: null,
             profileJson: """{"device":{"nativeDeviceId":"emulator-5554"}}""");
         bridge.Connect(sessionId);
+
         var driver = new FakeLocationDriver();
         var catalog = CreateToolCatalog(runtimeState, environment, bridge, driver);
 
@@ -139,11 +141,11 @@ public sealed partial class DeviceLocationOperationTests
         {
             ["name"] = toolName,
             ["arguments"] = toolName == "ansight_set_device_location"
-                ? new JsonObject { ["latitude"] = 37.7749, ["longitude"] = -122.4194 }
-                : new JsonObject()
+                ? new JsonObject { ["latitude"] = 37.7749, ["longitude"] = -122.4194 } : new JsonObject()
         });
 
         var payload = GetStructuredContent(response);
+
         if (toolName == "ansight_set_device_location")
         {
             Assert.NotNull(driver.LastSetRequest);
@@ -154,6 +156,7 @@ public sealed partial class DeviceLocationOperationTests
             Assert.NotNull(driver.LastClearRequest);
             Assert.Null(driver.LastClearRequest!.DeviceIdentifier);
         }
+
         Assert.Equal("hostSelection", payload["targetSource"]!.GetValue<string>());
     }
 
@@ -192,8 +195,12 @@ public sealed partial class DeviceLocationOperationTests
     {
         var locationRouter = new DeviceLocationRouter();
         locationRouter.Configure(driver);
+
         if (playback is not null)
+        {
             locationRouter.ConfigurePlayback(playback, devices!);
+        }
+
         return new ToolCatalog(
             runtimeState,
             environment.ApplicationPaths,
@@ -212,13 +219,13 @@ public sealed partial class DeviceLocationOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.True(expectedToolError == response.Payload!["isError"]!.GetValue<bool>(), response.Payload.ToJsonString());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
     private sealed class FakeLocationDriver : IDeviceLocationDriver
     {
         public SetDeviceLocationRequest? LastSetRequest { get; private set; }
-
         public ClearDeviceLocationRequest? LastClearRequest { get; private set; }
 
         public Task<DeviceLocationResult> SetLocationAsync(
@@ -226,6 +233,7 @@ public sealed partial class DeviceLocationOperationTests
             CancellationToken cancellationToken = default)
         {
             LastSetRequest = request;
+
             return Task.FromResult(new DeviceLocationResult(
                 true,
                 "simctl",
@@ -240,6 +248,7 @@ public sealed partial class DeviceLocationOperationTests
             CancellationToken cancellationToken = default)
         {
             LastClearRequest = request;
+
             return Task.FromResult(new DeviceLocationResult(
                 true,
                 "simctl",
@@ -291,7 +300,7 @@ public sealed partial class DeviceLocationOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache

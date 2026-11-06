@@ -11,12 +11,19 @@ internal static class RepositoryTaskTraceScope
     {
         var scope = new Scope(enabled.Value);
         enabled.Value = captureTrace;
+
         return scope;
     }
 
-    private sealed class Scope(bool previousValue) : IDisposable
+    private sealed class Scope : IDisposable
     {
+        private readonly bool previousValue;
         private bool disposed;
+
+        public Scope(bool previousValue)
+        {
+            this.previousValue = previousValue;
+        }
 
         public void Dispose()
         {

@@ -14,6 +14,5 @@ internal sealed record OpenAiTurn(
     SimulatorAgentTokenUsage Tokens)
 {
     public string? ResponseServiceTier { get; init; }
-
     public SimulatorAgentTransportDiagnostics? Transport { get; init; }
 }

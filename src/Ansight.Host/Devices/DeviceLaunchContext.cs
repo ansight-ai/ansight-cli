@@ -14,12 +14,19 @@ public static class DeviceLaunchContext
     {
         var previous = DeviceLaunchContext.headless.Value;
         DeviceLaunchContext.headless.Value = headless;
+
         return new Scope(previous);
     }
 
-    private sealed class Scope(bool previous) : IDisposable
+    private sealed class Scope : IDisposable
     {
+        private readonly bool previous;
         private bool disposed;
+
+        public Scope(bool previous)
+        {
+            this.previous = previous;
+        }
 
         public void Dispose()
         {

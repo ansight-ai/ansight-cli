@@ -26,15 +26,18 @@ public sealed class SimCtlFrameSource : ISimulatorFrameSource, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceUdid);
         await captureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         var outputPath = Path.Combine(
             Path.GetTempPath(),
             $"ansight-simulator-frame-{Guid.NewGuid():N}.jpg");
+
         try
         {
             var result = await commandRunner.RunAsync(
                 toolResolution,
                 ["simctl", "io", deviceUdid, "screenshot", "--type=jpeg", outputPath],
                 cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 throw new InvalidOperationException($"Simulator screenshot failed: {result.StandardError.Trim()}");
@@ -46,6 +49,7 @@ public sealed class SimCtlFrameSource : ISimulatorFrameSource, IDisposable
             }
 
             var frame = await File.ReadAllBytesAsync(outputPath, cancellationToken).ConfigureAwait(false);
+
             if (!IsJpeg(frame))
             {
                 throw new InvalidOperationException("Simulator screenshot did not produce a valid JPEG image.");
@@ -64,10 +68,10 @@ public sealed class SimCtlFrameSource : ISimulatorFrameSource, IDisposable
 
     private static bool IsJpeg(byte[] frame)
         => frame.Length >= 4
-           && frame[0] == 0xFF
-           && frame[1] == 0xD8
-           && frame[^2] == 0xFF
-           && frame[^1] == 0xD9;
+            && frame[0] == 0xFF
+            && frame[1] == 0xD8
+            && frame[^2] == 0xFF
+            && frame[^1] == 0xD9;
 
     private static void TryDelete(string path)
     {
@@ -91,6 +95,6 @@ public sealed class SimCtlFrameSource : ISimulatorFrameSource, IDisposable
             SimCtlToolResolution resolution,
             IReadOnlyList<string> arguments,
             CancellationToken cancellationToken = default)
-            => new SimCtlClient(resolution).RunXcrunAsync(arguments, cancellationToken);
+                => new SimCtlClient(resolution).RunXcrunAsync(arguments, cancellationToken);
     }
 }

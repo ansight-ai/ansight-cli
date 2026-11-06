@@ -9,6 +9,7 @@ public static class PairingConfigExchange
     public static string Serialize(CachedPairingConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+
         if (!PairingProtocolPolicy.IsEnabled(config.Config))
         {
             throw new NotSupportedException("Only the current enrollment-invite schema is supported.");
@@ -32,9 +33,11 @@ public static class PairingConfigExchange
         }
 
         var schema = TryReadSchema(json);
+
         if (string.Equals(schema, PairingConfigExportDocument.SchemaName, StringComparison.Ordinal))
         {
             var result = TryDeserialize(json);
+
             return !result.IsSuccess || result.Config is null
                 ? PairingConfigImportParseResult.Failure(result.Message)
                 : PairingConfigImportParseResult.Success(
@@ -46,6 +49,7 @@ public static class PairingConfigExchange
             || string.Equals(schema, InviteDocumentSchemaName, StringComparison.Ordinal))
         {
             var invite = PublicPairingConfigJson.TryDeserialize(json);
+
             if (invite is null)
             {
                 return PairingConfigImportParseResult.Failure(
@@ -79,6 +83,7 @@ public static class PairingConfigExchange
         }
 
         PairingConfigExportDocument? document;
+
         try
         {
             document = JsonSerializer.Deserialize<PairingConfigExportDocument>(json, JsonUtil.Compact);
@@ -121,10 +126,12 @@ public static class PairingConfigExchange
             || string.IsNullOrWhiteSpace(invite.Enrollment.Secret))
         {
             message = "The enrollment invite is incomplete or uses an unsupported protocol.";
+
             return false;
         }
 
         message = string.Empty;
+
         return true;
     }
 
@@ -133,8 +140,9 @@ public static class PairingConfigExchange
         try
         {
             using var document = JsonDocument.Parse(json);
+
             return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty("schema", out var schema)
+                && document.RootElement.TryGetProperty("schema", out var schema)
                 ? schema.GetString()
                 : null;
         }

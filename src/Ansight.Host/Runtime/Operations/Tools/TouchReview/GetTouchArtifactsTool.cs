@@ -43,6 +43,7 @@ internal sealed class GetTouchArtifactsTool : Operation
         }
 
         var touches = TouchReviewFiltering.GetFilteredTouches(snapshot!, filters).ToArray();
+
         if (touches.Length == 0)
         {
             return Task.FromResult(ToolError($"Session '{snapshot!.SessionId}' has no matching touch input."));
@@ -75,6 +76,7 @@ internal sealed class GetTouchArtifactsTool : Operation
         properties["timestampUtc"] = ToolSchema.String("Optional timestamp in ISO-8601 UTC to use as the artifact target.", nullable: true, format: "date-time");
         properties["windowSeconds"] = ToolSchema.Integer("Seconds around the target used to collect nearby artifacts. Defaults to 10, max 3600.", nullable: true);
         properties["limitPerType"] = ToolSchema.Integer("Maximum nearest entries per artifact type. Defaults to 5, max 50.", nullable: true);
+
         return properties;
     }
 }

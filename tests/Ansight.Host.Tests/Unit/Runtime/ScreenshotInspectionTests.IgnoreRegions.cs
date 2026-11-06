@@ -31,15 +31,18 @@ public sealed partial class ScreenshotInspectionTests
         Assert.Equal(100 * 765 / (8100d * 4), result["meanChannelDifference"]!.GetValue<double>(), 10);
         // Dividing by the full image would incorrectly pass at the default 1% threshold.
         Assert.False(result["passed"]!.GetValue<bool>());
+
         var region = Assert.Single(result["regions"]!.AsArray())!;
         Assert.Equal(0.5, region["geometry"]!["x"]!.GetValue<double>());
         Assert.Equal(0.5, region["geometry"]!["y"]!.GetValue<double>());
         Assert.Equal(100, region["differentPixelCount"]!.GetValue<int>());
         Assert.True(JsonNode.DeepEquals(masks, result["ignoreRegions"]));
+
         var evidence = Assert.Single(fixture.Snapshot.ArtifactSnapshots);
         using var overlay = SKBitmap.Decode(fixture.ArtifactPath(evidence, "overlay.png"));
         Assert.Equal(SKColors.Black, overlay.GetPixel(50, 5)); // Masked changes aren't painted.
         Assert.NotEqual(SKColors.Black, overlay.GetPixel(50, 50));
+
         var saved = JsonNode.Parse(await File.ReadAllTextAsync(fixture.ArtifactPath(evidence, "result.json")))!;
         Assert.True(JsonNode.DeepEquals(masks, saved["ignoreRegions"]));
         Assert.Equal(1900, saved["ignoredPixelCount"]!.GetValue<long>());
@@ -51,14 +54,22 @@ public sealed partial class ScreenshotInspectionTests
         using var fixture = new Fixture();
         var reference = await fixture.Frame(Png(100, 100));
         var actual = await fixture.Frame(Png(100, 100, canvas =>
-        { using var paint = new SKPaint { Color = SKColors.Black }; canvas.DrawRect(80, 0, 20, 5, paint); }));
-        var args = new JsonObject { ["image"] = new JsonObject { ["frameId"] = actual.FrameId },
-            ["reference"] = new JsonObject { ["frameId"] = reference.FrameId }, ["maxDifferenceRatio"] = 0d };
+        {
+            using var paint = new SKPaint { Color = SKColors.Black };
+            canvas.DrawRect(80, 0, 20, 5, paint);
+        }));
+        var args = new JsonObject
+        {
+            ["image"] = new JsonObject { ["frameId"] = actual.FrameId },
+            ["reference"] = new JsonObject { ["frameId"] = reference.FrameId },
+            ["maxDifferenceRatio"] = 0d
+        };
         var unmasked = await fixture.Call(false, args);
         Assert.False(unmasked["passed"]!.GetValue<bool>());
         Assert.Equal(0, unmasked["ignoredPixelCount"]!.GetValue<long>());
         Assert.Empty(unmasked["ignoreRegions"]!.AsArray());
         args["ignoreRegions"] = JsonNode.Parse("""[{"x":0.8,"y":0,"width":0.2,"height":0.05}]""");
+
         var result = await fixture.Call(false, args);
         Assert.True(result["passed"]!.GetValue<bool>());
         Assert.Equal(100, result["ignoredPixelCount"]!.GetValue<long>());
@@ -74,12 +85,17 @@ public sealed partial class ScreenshotInspectionTests
         using var fixture = new Fixture();
         var reference = await fixture.Frame(Png(200, 200));
         var actual = await fixture.Frame(Png(400, 200, canvas =>
-        { using var paint = new SKPaint { Color = SKColors.Black }; canvas.DrawRect(200, 0, 200, 100, paint); }));
+        {
+            using var paint = new SKPaint { Color = SKColors.Black };
+            canvas.DrawRect(200, 0, 200, 100, paint);
+        }));
         var result = await fixture.Call(false, new JsonObject
         {
             ["image"] = new JsonObject { ["frameId"] = actual.FrameId },
             ["reference"] = new JsonObject { ["frameId"] = reference.FrameId },
-            ["resizeToReference"] = true, ["maxWidth"] = 100, ["maxDifferenceRatio"] = 0d,
+            ["resizeToReference"] = true,
+            ["maxWidth"] = 100,
+            ["maxDifferenceRatio"] = 0d,
             ["ignoreRegions"] = JsonNode.Parse("""[{"x":0.5,"y":0,"width":0.5,"height":0.5}]""")
         });
         Assert.True(result["passed"]!.GetValue<bool>());
@@ -110,6 +126,7 @@ public sealed partial class ScreenshotInspectionTests
         item["x"] = double.PositiveInfinity;
         Assert.Throws<ArgumentException>(() => ScreenshotIgnoreRegions.Read(new JsonArray(item.DeepClone())));
         item["x"] = 0;
+
         var regions = new JsonArray(Enumerable.Range(0, 65).Select(_ => item.DeepClone()).ToArray());
         Assert.Throws<ArgumentException>(() => ScreenshotIgnoreRegions.Read(regions));
     }
@@ -155,6 +172,7 @@ public sealed partial class ScreenshotInspectionTests
         var current = Path.Combine(fixture.Environment.RootPath, "current.png");
         File.WriteAllBytes(baseline, Png(100, 100));
         File.WriteAllBytes(current, Png(100, 100, canvas => canvas.Clear(SKColors.Black)));
+
         var masks = ScreenshotIgnoreRegions.Read(JsonNode.Parse("""[{"x":0,"y":0,"width":0.5,"height":1}]"""));
         var result = ScreenshotDifferenceCalculator.Compare(baseline, current, 100, 16, masks);
         Assert.Equal(5000, result.IgnoredPixelCount);

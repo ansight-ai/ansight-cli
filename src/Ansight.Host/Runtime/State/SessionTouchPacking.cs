@@ -44,6 +44,7 @@ internal static class SessionTouchPacking
         }
 
         var touches = new List<SessionTouchInputRecord>();
+
         for (var batchIndex = 0; batchIndex < batches.Count; batchIndex++)
         {
             var batch = batches[batchIndex];
@@ -57,6 +58,7 @@ internal static class SessionTouchPacking
             for (var rowIndex = 0; rowIndex < batch.Rows.Count; rowIndex++)
             {
                 var row = batch.Rows[rowIndex];
+
                 if (!TryReadLong(row, 0, out var deltaMs)
                     || !TryReadInt(row, 1, out var action)
                     || !TryReadLong(row, 2, out var pointerId)
@@ -121,6 +123,7 @@ internal static class SessionTouchPacking
             .ToArray();
         var t0 = touches[0].CapturedAtUtc.ToUniversalTime();
         var rows = new List<List<object?>>(touches.Length);
+
         foreach (var touch in touches)
         {
             var deltaMs = (long)Math.Round(
@@ -134,6 +137,7 @@ internal static class SessionTouchPacking
                 touch.X,
                 touch.Y
             };
+
             if (touch.PointerIndex != 0 || touch.PointerCount != 1 || touch.Details is not null)
             {
                 row.Add(touch.PointerIndex);
@@ -185,6 +189,7 @@ internal static class SessionTouchPacking
     private static string EncodeUnit(string? coordinateUnit)
     {
         var normalized = coordinateUnit?.Trim();
+
         return normalized?.ToLowerInvariant() switch
         {
             "pixels" or "pixel" or "px" => PixelUnitCode,
@@ -267,6 +272,7 @@ internal static class SessionTouchPacking
         }
 
         var resolvedSurfaceLength = surfaceLength.GetValueOrDefault();
+
         return resolvedSurfaceLength > 0d
             ? Math.Clamp(value / resolvedSurfaceLength, 0d, 1d)
             : null;
@@ -275,6 +281,7 @@ internal static class SessionTouchPacking
     private static bool TryReadInt(IReadOnlyList<object?> values, int index, out int value)
     {
         value = 0;
+
         if (!TryReadLong(values, index, out var longValue))
         {
             return false;
@@ -285,12 +292,14 @@ internal static class SessionTouchPacking
             : longValue < int.MinValue
                 ? int.MinValue
                 : (int)longValue;
+
         return true;
     }
 
     private static bool TryReadLong(IReadOnlyList<object?> values, int index, out long value)
     {
         value = 0;
+
         if (index < 0 || index >= values.Count)
         {
             return false;
@@ -302,6 +311,7 @@ internal static class SessionTouchPacking
     private static bool TryReadDouble(IReadOnlyList<object?> values, int index, out double value)
     {
         value = 0d;
+
         if (index < 0 || index >= values.Count)
         {
             return false;
@@ -313,6 +323,7 @@ internal static class SessionTouchPacking
     private static bool TryReadLong(object? rawValue, out long value)
     {
         value = 0;
+
         switch (rawValue)
         {
             case null:
@@ -344,6 +355,7 @@ internal static class SessionTouchPacking
     private static bool TryReadDouble(object? rawValue, out double value)
     {
         value = 0d;
+
         switch (rawValue)
         {
             case null:
@@ -365,12 +377,12 @@ internal static class SessionTouchPacking
                 return !double.IsNaN(value) && !double.IsInfinity(value);
             case JsonElement element when element.ValueKind == JsonValueKind.String:
                 return double.TryParse(element.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                       && !double.IsNaN(value)
-                       && !double.IsInfinity(value);
+                    && !double.IsNaN(value)
+                    && !double.IsInfinity(value);
             case string stringValue:
                 return double.TryParse(stringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                       && !double.IsNaN(value)
-                       && !double.IsInfinity(value);
+                    && !double.IsNaN(value)
+                    && !double.IsInfinity(value);
             default:
                 return false;
         }
@@ -380,5 +392,4 @@ internal static class SessionTouchPacking
     {
         return $"touch-{t0.UtcTicks:x}-{deltaMs:x}-{pointerId:x}-{batchIndex:x}-{rowIndex:x}";
     }
-
 }

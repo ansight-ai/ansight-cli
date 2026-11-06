@@ -15,11 +15,14 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         context.Manager.ConfigurePhysicalIosCapture((_, _, _) =>
         {
             Interlocked.Increment(ref calls);
+
             return Task.FromResult(context.Bytes);
         });
+
         try
         {
             await context.AttachAsync();
+
             using var first = context.Manager.SuspendPeriodicCapture(context.SessionId);
             using var second = context.Manager.SuspendPeriodicCapture(context.SessionId);
             using var test = context.Manager.BeginTestRun(context.SessionId);
@@ -37,7 +40,10 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             Assert.False(context.Manager.IsPeriodicCaptureSuspended(context.SessionId));
             await TestWait.UntilAsync(() => Volatile.Read(ref calls) > 2);
         }
-        finally { await context.Manager.StopAsync(context.SessionId, "test complete"); }
+        finally
+        {
+            await context.Manager.StopAsync(context.SessionId, "test complete");
+        }
     }
 
     [Fact]
@@ -48,9 +54,12 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         context.Manager.ConfigurePhysicalIosCapture((_, _, _) =>
         {
             Interlocked.Increment(ref calls);
+
             return Task.FromResult(context.Bytes);
         });
+
         using var video = context.Manager.SuspendPeriodicCapture(context.SessionId);
+
         try
         {
             await context.AttachAsync(100);
@@ -61,7 +70,10 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             video.Dispose();
             await TestWait.UntilAsync(() => context.Snapshot.Images.Count > 0);
         }
-        finally { await context.Manager.StopAsync(context.SessionId, "test complete"); }
+        finally
+        {
+            await context.Manager.StopAsync(context.SessionId, "test complete");
+        }
     }
 
     [Fact]
@@ -73,15 +85,22 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         var calls = 0;
         context.Manager.ConfigurePhysicalIosCapture(async (_, _, _) =>
         {
-            if (Interlocked.Increment(ref calls) == 1) return context.Bytes;
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                return context.Bytes;
+            }
+
             started.TrySetResult();
             await release.Task;
+
             return context.ChangedBytes;
         });
+
         try
         {
             await context.AttachAsync(100);
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
             using var video = context.Manager.SuspendPeriodicCapture(context.SessionId);
             release.TrySetResult();
             await Task.Delay(350);
@@ -109,17 +128,21 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
                 firstProbeStarted.TrySetResult();
                 await releaseFirstProbe.Task;
             }
+
             return context.Bytes;
         });
 
         var firstAttach = context.AttachAsync();
+
         try
         {
             await firstProbeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
             var secondPolicy = await context.AttachAsync();
             Assert.Equal("host", secondPolicy.Mode);
             await TestWait.UntilAsync(() => context.Snapshot.Images.Count == 1);
             releaseFirstProbe.TrySetResult();
+
             var firstPolicy = await firstAttach.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal("app", firstPolicy.Mode);
@@ -145,15 +168,18 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         {
             probeStarted.TrySetResult();
             await releaseProbe.Task; // Model a device command that completes despite cancellation.
+
             return context.Bytes;
         });
 
         var attach = context.AttachAsync();
+
         try
         {
             await probeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await context.Manager.StopAsync(context.SessionId, "Live app connection closed.");
             releaseProbe.TrySetResult();
+
             var policy = await attach.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Equal("app", policy.Mode);
@@ -183,8 +209,10 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             {
                 frameStarted.TrySetResult();
                 await releaseFrame.Task;
+
                 return context.ChangedBytes;
             }
+
             return context.Bytes;
         });
 
@@ -193,20 +221,33 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             await context.AttachAsync(100);
             await frameStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await TestWait.UntilAsync(() => context.Snapshot.Images.Count == 1);
+
             if (disconnectSession)
+            {
                 context.State.SetSessionStatus(context.SessionId, "WebSocket Closed");
+            }
+
             var endUtc = context.Snapshot.LastUpdatedUtc;
             var stopping = disconnectSession ? Task.CompletedTask
                 : context.Manager.StopAsync(context.SessionId, "Live app connection closed.");
             releaseFrame.TrySetResult();
             await stopping.WaitAsync(TimeSpan.FromSeconds(5));
+
             // A historical session must stop its own pump, even before finalization reaches it.
             if (disconnectSession)
             {
                 await TestWait.UntilAsync(() =>
                 {
-                    try { using var scope = context.Manager.BeginTestRun(context.SessionId); return false; }
-                    catch (InvalidOperationException) { return true; }
+                    try
+                    {
+                        using var scope = context.Manager.BeginTestRun(context.SessionId);
+
+                        return false;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return true;
+                    }
                 }, timeout: TimeSpan.FromSeconds(5));
             }
 
@@ -247,19 +288,28 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         var manager = new ExternalSessionScreenshotCaptureManager(state, preferences);
         using var bitmap = new SKBitmap(20, 40);
         bitmap.Erase(SKColors.White);
+
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         var bytes = data.ToArray();
         var sessionId = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "test-phone", "iPhone",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Physical,
+            ExecutionMode = "device"
+        });
         state.SetSessionAppState(sessionId, AppLifecycleState.Foreground);
+
         var observedAt = DateTimeOffset.UtcNow;
         var backgroundRecorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         state.RuntimeEventOccurred += (_, runtimeEvent) =>
         {
             if (runtimeEvent is RuntimeClientAppStateChangedEvent)
+            {
                 backgroundRecorded.TrySetResult();
+            }
         };
+
         var captureCount = 0;
         var background = true;
         var failureCount = 0;
@@ -269,11 +319,16 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             if (Interlocked.Increment(ref captureCount) > 1)
             {
                 if (Volatile.Read(ref background))
+                {
                     throw new ExternalSessionScreenshotCaptureManager.AppBackgroundedException(observedAt);
+                }
+
                 resumed.TrySetResult();
             }
+
             return Task.FromResult(bytes);
         });
+
         try
         {
             Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
@@ -294,7 +349,10 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.True(state.IsDeviceSessionActive(sessionId));
         }
-        finally { await manager.StopAsync(sessionId, "test completed"); }
+        finally
+        {
+            await manager.StopAsync(sessionId, "test completed");
+        }
     }
 
     [Fact]
@@ -306,18 +364,30 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             new FilePreferencesStore(Path.Combine(environment.RootPath, "preferences.json"))));
         using var bitmap = new SKBitmap(20, 40);
         bitmap.Erase(SKColors.White);
+
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         var bytes = data.ToArray();
         var captureCount = 0;
         manager.ConfigurePhysicalIosCapture((_, _, _) =>
         {
-            if (Interlocked.Increment(ref captureCount) > 1) throw new IOException("ADB disconnected.");
+            if (Interlocked.Increment(ref captureCount) > 1)
+            {
+                throw new IOException("ADB disconnected.");
+            }
+
             return Task.FromResult(bytes);
         });
+
         var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         manager.CaptureFailed += (_, _) => failed.TrySetResult();
+
         var sessionId = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "test-phone", "iPhone",
-            "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+            "test.app", false, false, false)
+        {
+            DeviceKind = DeviceKinds.Physical,
+            ExecutionMode = "device"
+        });
+
         try
         {
             Assert.True(state.TryGetSessionSnapshot(sessionId, out var session));
@@ -329,7 +399,10 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             Assert.Equal("Failed", session!.Status);
             Assert.DoesNotContain(session.ApplicationEvents, item => item.Label == "lifecycle.background");
         }
-        finally { await manager.StopAsync(sessionId, "test completed"); }
+        finally
+        {
+            await manager.StopAsync(sessionId, "test completed");
+        }
     }
 
     [Fact]
@@ -342,6 +415,7 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         var manager = new ExternalSessionScreenshotCaptureManager(state, preferences);
         using var bitmap = new SKBitmap(20, 40);
         bitmap.Erase(SKColors.White);
+
         using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         var bytes = data.ToArray();
         var captures = 0;
@@ -349,16 +423,22 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         manager.ConfigurePhysicalIosCapture((_, appId, _) =>
         {
             if (appId == "test.app" && Interlocked.Increment(ref captures) > 1)
+            {
                 nextFrame.TrySetResult();
+            }
+
             return Task.FromResult(bytes);
         });
+
         var firstId = CreateSession("test.app");
         var otherId = CreateSession("other.app");
+
         try
         {
             foreach (var id in new[] { firstId, otherId })
             {
                 Assert.True(state.TryGetSessionSnapshot(id, out var session));
+
                 var policy = await manager.AttachAsync(id, session!.DeviceProfile, session.DeviceProfileJson,
                     new ExternalSessionScreenshotCaptureRequest(1024, 60_000));
                 Assert.Equal(60_000, policy.IntervalMilliseconds);
@@ -379,8 +459,13 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
 
         string CreateSession(string appId)
             => state.CreateDeviceSession(new WorkspaceTestTarget("ios", Guid.NewGuid().ToString(), "iPhone",
-                appId, false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+                appId, false, false, false)
+            {
+                DeviceKind = DeviceKinds.Physical,
+                ExecutionMode = "device"
+            });
     }
+
     private sealed class CaptureTestContext : IDisposable
     {
         private readonly TestEnvironment environment = new();
@@ -391,7 +476,11 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             Manager = new ExternalSessionScreenshotCaptureManager(State, new UserPreferences(
                 new FilePreferencesStore(Path.Combine(environment.RootPath, "preferences.json"))));
             SessionId = State.CreateDeviceSession(new WorkspaceTestTarget("ios", "test-phone", "iPhone",
-                "test.app", false, false, false) { DeviceKind = DeviceKinds.Physical, ExecutionMode = "device" });
+                "test.app", false, false, false)
+            {
+                DeviceKind = DeviceKinds.Physical,
+                ExecutionMode = "device"
+            });
             Bytes = CreateImage(SKColors.White);
             ChangedBytes = CreateImage(SKColors.Blue);
         }
@@ -406,6 +495,7 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
             get
             {
                 Assert.True(State.TryGetSessionSnapshot(SessionId, out var snapshot));
+
                 return snapshot!;
             }
         }
@@ -420,7 +510,9 @@ public sealed class ExternalSessionScreenshotCaptureManagerTests
         {
             using var bitmap = new SKBitmap(20, 40);
             bitmap.Erase(color);
+
             using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+
             return data.ToArray();
         }
     }

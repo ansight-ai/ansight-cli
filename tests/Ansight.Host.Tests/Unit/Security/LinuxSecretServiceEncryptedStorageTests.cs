@@ -10,6 +10,7 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         secrets.Put("Ansight.Studio", "old", "legacy-value");
         secrets.Put("Ansight.Studio", "updated", "outdated-value");
         secrets.Put("Ansight.Cli", "updated", "current-value");
+
         var storage = new LinuxSecretServiceEncryptedStorage(secrets.Run);
 
         storage.MigrateLegacyEntries();
@@ -30,6 +31,7 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         var secrets = new FakeSecretTool();
         secrets.Put("Ansight.Studio", "__ansight_studio_keys", "[\"token\"]");
         secrets.Put("Ansight.Studio", "token", "legacy-value");
+
         var storage = new LinuxSecretServiceEncryptedStorage(secrets.Run);
 
         Assert.Equal("legacy-value", storage.Get("token"));
@@ -50,6 +52,7 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         var secrets = new FakeSecretTool();
         secrets.Put("Ansight.Studio", "__ansight_studio_keys", "[\"old\"]");
         secrets.Put("Ansight.Studio", "old", "legacy-value");
+
         var storage = new LinuxSecretServiceEncryptedStorage(secrets.Run);
         storage.Set("new", "new-value");
 
@@ -66,6 +69,7 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         var secrets = new FakeSecretTool();
         secrets.Put("Ansight.Studio", "__ansight_studio_keys", "invalid-json");
         secrets.Put("Ansight.Studio", "token", "legacy-value");
+
         var storage = new LinuxSecretServiceEncryptedStorage(secrets.Run);
 
         Assert.Throws<InvalidOperationException>(storage.MigrateLegacyEntries);
@@ -87,6 +91,7 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         {
             var service = ValueAfter(arguments, "service");
             var account = ValueAfter(arguments, "account");
+
             return arguments[0] switch
             {
                 "lookup" => Get(service, account) is { } value ? value + "\n" : null,
@@ -99,12 +104,14 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
         private string? Store(string service, string account, string value)
         {
             Put(service, account, value);
+
             return string.Empty;
         }
 
         private string? Clear(string service, string account)
         {
             Values.Remove(new SecretIdentity(service, account));
+
             return string.Empty;
         }
 
@@ -113,7 +120,9 @@ public sealed class LinuxSecretServiceEncryptedStorageTests
             for (var index = 0; index < arguments.Count - 1; index++)
             {
                 if (arguments[index] == name)
+                {
                     return arguments[index + 1];
+                }
             }
 
             throw new InvalidOperationException($"Missing secret-tool argument '{name}'.");

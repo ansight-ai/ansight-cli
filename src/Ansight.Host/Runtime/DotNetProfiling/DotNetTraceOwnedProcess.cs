@@ -36,6 +36,7 @@ internal sealed class DotNetTraceOwnedProcess : IAsyncDisposable
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         foreach (var argument in request.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -54,6 +55,7 @@ internal sealed class DotNetTraceOwnedProcess : IAsyncDisposable
             StartInfo = startInfo,
             EnableRaisingEvents = true
         };
+
         if (!process.Start())
         {
             process.Dispose();
@@ -72,6 +74,7 @@ internal sealed class DotNetTraceOwnedProcess : IAsyncDisposable
 
         disposed = true;
         TryKill();
+
         try
         {
             await process.WaitForExitAsync(CancellationToken.None);
@@ -81,6 +84,7 @@ internal sealed class DotNetTraceOwnedProcess : IAsyncDisposable
         }
 
         outputCancellation.Cancel();
+
         try
         {
             await Task.WhenAll(outputTask, errorTask);
@@ -115,6 +119,7 @@ internal sealed class DotNetTraceOwnedProcess : IAsyncDisposable
         while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
+
             if (line is null)
             {
                 return;

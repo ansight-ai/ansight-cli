@@ -9,6 +9,5 @@ internal sealed class PairingConfigExportDocument
     public DateTimeOffset ExportedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 
     public required PairingConfig Config { get; set; }
-
     public bool Consumed { get; set; }
 }

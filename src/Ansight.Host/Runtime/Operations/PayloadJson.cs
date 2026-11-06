@@ -176,9 +176,9 @@ internal static class PayloadJson
         var matchedSamples = string.Equals(normalizedType, "all", StringComparison.OrdinalIgnoreCase)
             ? snapshot.Metrics
             : snapshot.Metrics.Where(metric => string.Equals(
-                    ResolveTelemetryType(metric.ChannelId, channelMap),
-                    normalizedType,
-                    StringComparison.OrdinalIgnoreCase))
+                ResolveTelemetryType(metric.ChannelId, channelMap),
+                normalizedType,
+                StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 
         var grouped = matchedSamples
@@ -188,6 +188,7 @@ internal static class PayloadJson
             .Select(group =>
             {
                 channelMap.TryGetValue(group.Key, out var channel);
+
                 return (JsonNode?)new JsonObject
                 {
                     ["channelId"] = group.Key,
@@ -282,6 +283,7 @@ internal static class PayloadJson
         payload["sessionId"] = session.SessionId;
         payload["appId"] = session.AppId;
         payload["resourceUri"] = BuildSessionVisualTreeSnapshotResourceUri(session.SessionId, snapshot.SnapshotId);
+
         return payload;
     }
 
@@ -326,6 +328,7 @@ internal static class PayloadJson
         CopyVisualTreeSummaryProperty(root, summary, "label");
         CopyVisualTreeSummaryProperty(root, summary, "automationId");
         CopyVisualTreeSummaryProperty(root, summary, "childCount");
+
         return summary.Count == 0 ? null : summary;
     }
 
@@ -352,6 +355,7 @@ internal static class PayloadJson
     public static string BuildSessionResourceName(AppSessionSnapshot snapshot)
     {
         var appName = snapshot.DeviceProfile?.App?.AppName ?? snapshot.ClientName;
+
         return $"{appName} ({snapshot.SessionId})";
     }
 
@@ -413,6 +417,7 @@ internal static class PayloadJson
     public static JsonArray CreateJsonArray(IEnumerable<JsonNode?> values)
     {
         var array = new JsonArray();
+
         foreach (var value in values)
         {
             array.Add(value);
@@ -424,7 +429,7 @@ internal static class PayloadJson
     public static bool MatchesTimestamp(DateTimeOffset timestampUtc, DateTimeOffset? startUtc, DateTimeOffset? endUtc)
     {
         return (!startUtc.HasValue || timestampUtc >= startUtc.Value)
-               && (!endUtc.HasValue || timestampUtc <= endUtc.Value);
+            && (!endUtc.HasValue || timestampUtc <= endUtc.Value);
     }
 
     public static bool MatchesMinimumVerbosity(LogPriority priority, LogPriority minimumVerbosity)
@@ -443,8 +448,8 @@ internal static class PayloadJson
         IReadOnlySet<string> channelNameFilters)
     {
         return channelMap.TryGetValue(channelId, out var channel)
-               && !string.IsNullOrWhiteSpace(channel.Name)
-               && channelNameFilters.Contains(channel.Name.Trim());
+            && !string.IsNullOrWhiteSpace(channel.Name)
+            && channelNameFilters.Contains(channel.Name.Trim());
     }
 
     public static string ResolveTelemetryType(byte channelId, IReadOnlyDictionary<byte, SessionMetricChannel> channelMap)
@@ -453,6 +458,7 @@ internal static class PayloadJson
     public static JsonObject BuildSessionAnnotationPayload(SessionAnnotation annotation)
     {
         var effectiveEndUtc = annotation.EndUtc ?? annotation.StartUtc;
+
         return new JsonObject
         {
             ["annotationId"] = annotation.AnnotationId,
@@ -556,18 +562,21 @@ internal static class PayloadJson
         var y = geometry.Points.Min(point => point.Y);
         var width = geometry.Points.Max(point => point.X) - x;
         var height = geometry.Points.Max(point => point.Y) - y;
+
         if (width <= 0d && height <= 0d)
         {
             return null;
         }
 
         var arrowInference = TryBuildArrowInferencePayload(geometry.Points, x, y, width, height);
+
         if (arrowInference is not null)
         {
             return arrowInference;
         }
 
         var lineInference = TryBuildLineInferencePayload(geometry.Points, x, y, width, height);
+
         if (lineInference is not null)
         {
             return lineInference;
@@ -582,6 +591,7 @@ internal static class PayloadJson
         var last = geometry.Points[^1];
         var closureX = (last.X - first.X) / width;
         var closureY = (last.Y - first.Y) / height;
+
         if (Math.Sqrt((closureX * closureX) + (closureY * closureY)) > maximumClosureDistance)
         {
             return null;
@@ -589,6 +599,7 @@ internal static class PayloadJson
 
         var rectangleError = 0d;
         var ellipseError = 0d;
+
         foreach (var point in geometry.Points)
         {
             var normalizedX = Math.Clamp((point.X - x) / width, 0d, 1d);
@@ -604,8 +615,10 @@ internal static class PayloadJson
 
         rectangleError /= geometry.Points.Count;
         ellipseError /= geometry.Points.Count;
+
         var inferredKind = ellipseError < rectangleError ? "oval" : "rectangle";
         var inferenceError = Math.Min(rectangleError, ellipseError);
+
         if (inferenceError > maximumInferenceError)
         {
             return null;
@@ -632,6 +645,7 @@ internal static class PayloadJson
         var first = points[0];
         var last = points[^1];
         var lineLength = CalculateDistance(first, last);
+
         if (lineLength < minimumLineLength)
         {
             return null;
@@ -640,6 +654,7 @@ internal static class PayloadJson
         var pathLength = 0d;
         var totalDeviation = 0d;
         var greatestDeviation = 0d;
+
         for (var index = 0; index < points.Count; index++)
         {
             if (index > 0)
@@ -654,6 +669,7 @@ internal static class PayloadJson
 
         var averageDeviation = totalDeviation / points.Count;
         var pathStretch = Math.Max(0d, (pathLength / lineLength) - 1d);
+
         if (averageDeviation > maximumAverageDeviation
             || greatestDeviation > maximumPointDeviation
             || pathStretch > maximumPathStretch)
@@ -666,6 +682,7 @@ internal static class PayloadJson
             Math.Max(
                 greatestDeviation / maximumPointDeviation,
                 pathStretch / maximumPathStretch));
+
         return CreateInferredShapePayload(
             "line",
             x,
@@ -692,6 +709,7 @@ internal static class PayloadJson
         var inference = forwardInference is null || reverseInference?.Confidence > forwardInference.Confidence
             ? reverseInference
             : forwardInference;
+
         if (inference is null)
         {
             return null;
@@ -711,9 +729,11 @@ internal static class PayloadJson
     private static ArrowInference? FindArrowInference(IReadOnlyList<SessionAnnotationGeometryPoint> points)
     {
         ArrowInference? bestInference = null;
+
         for (var focalIndex = 1; focalIndex <= points.Count - 3; focalIndex++)
         {
             var candidate = EvaluateArrowInference(points, focalIndex);
+
             if (candidate is not null && candidate.Confidence > (bestInference?.Confidence ?? -1d))
             {
                 bestInference = candidate;
@@ -743,6 +763,7 @@ internal static class PayloadJson
         var shaftX = focalPoint.X - shaftStart.X;
         var shaftY = focalPoint.Y - shaftStart.Y;
         var shaftLength = Math.Sqrt((shaftX * shaftX) + (shaftY * shaftY));
+
         if (shaftLength < minimumShaftLength)
         {
             return null;
@@ -754,9 +775,11 @@ internal static class PayloadJson
         var totalShaftDeviation = 0d;
         var greatestShaftDeviation = 0d;
         var previousProgress = 0d;
+
         for (var index = 0; index <= focalIndex; index++)
         {
             var point = points[index];
+
             if (index > 0)
             {
                 shaftPathLength += CalculateDistance(points[index - 1], point);
@@ -765,12 +788,14 @@ internal static class PayloadJson
             var pointX = point.X - shaftStart.X;
             var pointY = point.Y - shaftStart.Y;
             var progress = ((pointX * unitX) + (pointY * unitY)) / shaftLength;
+
             if (progress < -0.05d || progress > 1.05d || progress + 0.08d < previousProgress)
             {
                 return null;
             }
 
             previousProgress = Math.Max(previousProgress, progress);
+
             var deviation = Math.Abs((unitX * pointY) - (unitY * pointX)) / shaftLength;
             totalShaftDeviation += deviation;
             greatestShaftDeviation = Math.Max(greatestShaftDeviation, deviation);
@@ -778,6 +803,7 @@ internal static class PayloadJson
 
         var averageShaftDeviation = totalShaftDeviation / (focalIndex + 1);
         var shaftStretch = Math.Max(0d, (shaftPathLength / shaftLength) - 1d);
+
         if (averageShaftDeviation > maximumAverageShaftDeviation
             || greatestShaftDeviation > maximumShaftPointDeviation
             || shaftStretch > maximumShaftStretch)
@@ -788,12 +814,14 @@ internal static class PayloadJson
         var positiveWingLength = 0d;
         var negativeWingLength = 0d;
         var invalidHeadPointCount = 0;
+
         for (var index = focalIndex + 1; index < points.Count; index++)
         {
             var pointX = points[index].X - focalPoint.X;
             var pointY = points[index].Y - focalPoint.Y;
             var pointLength = Math.Sqrt((pointX * pointX) + (pointY * pointY));
             var pointLengthRatio = pointLength / shaftLength;
+
             if (pointLengthRatio < minimumWingLengthRatio)
             {
                 continue;
@@ -808,6 +836,7 @@ internal static class PayloadJson
             var backwardProjectionRatio = -((pointX * unitX) + (pointY * unitY)) / pointLength;
             var lateral = (unitX * pointY) - (unitY * pointX);
             var lateralRatio = Math.Abs(lateral) / pointLength;
+
             if (backwardProjectionRatio < minimumBackwardProjectionRatio
                 || backwardProjectionRatio > maximumBackwardProjectionRatio
                 || lateralRatio < minimumLateralRatio)
@@ -827,6 +856,7 @@ internal static class PayloadJson
         }
 
         var headPointCount = points.Count - focalIndex - 1;
+
         if (positiveWingLength <= 0d
             || negativeWingLength <= 0d
             || invalidHeadPointCount > Math.Max(2, headPointCount / 3))
@@ -835,7 +865,8 @@ internal static class PayloadJson
         }
 
         var wingSymmetry = Math.Min(positiveWingLength, negativeWingLength)
-                           / Math.Max(positiveWingLength, negativeWingLength);
+            / Math.Max(positiveWingLength, negativeWingLength);
+
         if (wingSymmetry < minimumWingSymmetry)
         {
             return null;
@@ -847,14 +878,15 @@ internal static class PayloadJson
                 greatestShaftDeviation / maximumShaftPointDeviation,
                 shaftStretch / maximumShaftStretch));
         var invalidHeadFraction = (double)invalidHeadPointCount / headPointCount;
+
         return new ArrowInference
         {
             FocalX = focalPoint.X,
             FocalY = focalPoint.Y,
             Confidence = Math.Clamp(
                 1d - ((shaftError * 0.55d)
-                      + ((1d - wingSymmetry) * 0.25d)
-                      + (invalidHeadFraction * 0.2d)),
+                    + ((1d - wingSymmetry) * 0.25d)
+                    + (invalidHeadFraction * 0.2d)),
                 0d,
                 1d)
         };
@@ -901,6 +933,7 @@ internal static class PayloadJson
     {
         var x = second.X - first.X;
         var y = second.Y - first.Y;
+
         return Math.Sqrt((x * x) + (y * y));
     }
 
@@ -912,6 +945,7 @@ internal static class PayloadJson
         var segmentX = segmentEnd.X - segmentStart.X;
         var segmentY = segmentEnd.Y - segmentStart.Y;
         var segmentLengthSquared = (segmentX * segmentX) + (segmentY * segmentY);
+
         if (segmentLengthSquared <= 0d)
         {
             return CalculateDistance(point, segmentStart);
@@ -927,15 +961,14 @@ internal static class PayloadJson
         var closestY = segmentStart.Y + (projection * segmentY);
         var distanceX = point.X - closestX;
         var distanceY = point.Y - closestY;
+
         return Math.Sqrt((distanceX * distanceX) + (distanceY * distanceY));
     }
 
     private sealed class ArrowInference
     {
         public required double FocalX { get; init; }
-
         public required double FocalY { get; init; }
-
         public required double Confidence { get; init; }
     }
 
@@ -948,5 +981,4 @@ internal static class PayloadJson
             _ => "unknown"
         };
     }
-
 }

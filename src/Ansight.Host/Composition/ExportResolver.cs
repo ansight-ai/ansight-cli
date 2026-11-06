@@ -26,12 +26,13 @@ internal sealed class ExportResolver : AssemblyCompositionExportResolver
     {
         registrar.RegisterSingleton(applicationPaths);
         registrar.RegisterSingleton(encryptedStorage);
+
         var hostRuntimeOptions = new RuntimeOptions();
         registrar.RegisterSingleton(hostRuntimeOptions);
+
         // Keep the established filename so older hosts and rollback share the same settings.
         var preferencesStore = new FilePreferencesStore(Path.Combine(applicationPaths.ApplicationDataPath, "studio-preferences.json"));
         registrar.RegisterSingleton<IPreferencesStore>(preferencesStore);
         registrar.RegisterSingleton<IUserPreferences>(new UserPreferences(preferencesStore));
-
     }
 }

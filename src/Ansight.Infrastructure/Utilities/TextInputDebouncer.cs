@@ -37,9 +37,9 @@ public class TextInputDebouncer
 
             await Task.Delay(TimeSpan.FromMilliseconds(debounceMilliseconds), currentToken.Token)
                 .ContinueWith(async task => await Filter(text),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnRanToCompletion,
-                    TaskScheduler.FromCurrentSynchronizationContext());
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.FromCurrentSynchronizationContext());
         }
         catch (TaskCanceledException)
         {

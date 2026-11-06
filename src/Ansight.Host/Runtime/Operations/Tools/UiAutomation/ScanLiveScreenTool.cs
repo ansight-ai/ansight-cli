@@ -62,12 +62,14 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
             "current",
             correlationId,
             CancellationToken.None, afterScreenUpdates: true, externalScreenshots: externalScreenshots);
+
         if (screenshot is null || !File.Exists(screenshot.ArtifactPath))
         {
             return ToolError("A current rendered screenshot was unavailable for screen-content scanning.");
         }
 
         SessionScreenshotOcrResult scan;
+
         try
         {
             scan = await Task.Run(
@@ -75,8 +77,8 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
                 CancellationToken.None);
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or UnauthorizedAccessException)
+            or InvalidOperationException
+            or UnauthorizedAccessException)
         {
             return ToolError($"Screenshot OCR failed: {exception.Message}");
         }
@@ -87,6 +89,7 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
         }
 
         using var bitmap = SKBitmap.Decode(screenshot.ArtifactPath);
+
         if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
         {
             return ToolError("The current screenshot could not be decoded for OCR coordinates.");
@@ -171,6 +174,7 @@ internal sealed class ScanLiveScreenTool : RemoteAppOperation
                 ["height"] = Math.Clamp(block.Bounds.Height / imageHeight, 0, 1)
             }
         };
+
         if (includeTapHint)
         {
             result["tapHint"] = new JsonObject

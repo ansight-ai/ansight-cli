@@ -9,5 +9,6 @@ internal interface ISessionArchiveEntry
     string Name { get; }
     string FullName { get; }
     long Length { get; }
+
     Stream Open();
 }

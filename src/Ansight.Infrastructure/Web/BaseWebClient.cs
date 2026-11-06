@@ -72,6 +72,7 @@ public abstract class BaseWebClient
             if (!response.IsSuccessStatusCode)
             {
                 log.Warning($"Web request failed for '{request.RequestUri}'. StatusCode: {response.StatusCode}. Message: {content}");
+
                 return WebClientResult<T>.Failure(content, response.StatusCode);
             }
 
@@ -81,6 +82,7 @@ public abstract class BaseWebClient
             }
 
             var value = JsonSerializer.Deserialize<T>(content);
+
             return WebClientResult<T>.Success(value, response.StatusCode);
         }
         catch (OperationCanceledException)
@@ -90,16 +92,19 @@ public abstract class BaseWebClient
         catch (HttpRequestException ex)
         {
             log.Exception(ex);
+
             return WebClientResult<T>.Failure(ex.Message, ex.StatusCode);
         }
         catch (JsonException ex)
         {
             log.Exception(ex);
+
             return WebClientResult<T>.Failure("Unable to parse the server response.");
         }
         catch (Exception ex)
         {
             log.Exception(ex);
+
             return WebClientResult<T>.Failure("An unknown error occurred while processing the request.");
         }
     }

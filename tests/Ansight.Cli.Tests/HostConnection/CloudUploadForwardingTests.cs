@@ -57,6 +57,7 @@ public sealed class CloudUploadForwardingTests
         await using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         await CliRuntime.WriteRecoveryMetadataAsync(directory.Path, null, null, timeout.Token, pipeName);
+
         var response = ReplyAsOlderHostAsync(pipe, timeout.Token);
         using var output = new StringWriter();
 
@@ -75,6 +76,7 @@ public sealed class CloudUploadForwardingTests
     private static async Task ReplyAsOlderHostAsync(NamedPipeServerStream pipe, CancellationToken cancellationToken)
     {
         await pipe.WaitForConnectionAsync(cancellationToken);
+
         using var reader = new StreamReader(pipe, leaveOpen: true);
         await using var writer = new StreamWriter(pipe, leaveOpen: true);
         var request = JsonSerializer.Deserialize<ControlRequest>((await reader.ReadLineAsync(cancellationToken))!,
@@ -82,6 +84,7 @@ public sealed class CloudUploadForwardingTests
         Assert.Equal(ControlProtocol.AccountUploadRequestSchema, request!.Schema);
         Assert.Null(request.RunnerAiCredentials);
         Assert.Equal("test-user", request.CallerUserId);
+
         var response = new ControlResponse(ControlProtocol.ResponseSchema, CliExitCodes.Failure,
             "", "The CLI control request has an unsupported schema.");
         await writer.WriteLineAsync(JsonSerializer.Serialize(response,

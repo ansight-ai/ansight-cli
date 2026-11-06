@@ -20,6 +20,7 @@ public sealed class RoutedSimulatorFrameSource : ISimulatorFrameSource
         CancellationToken cancellationToken = default)
     {
         var platform = ResolvePlatform(deviceUdid);
+
         if (!sourcesByPlatform.TryGetValue(platform, out var source))
         {
             throw new InvalidOperationException($"Frame capture is unavailable for {platform} runtimes.");
@@ -31,5 +32,5 @@ public sealed class RoutedSimulatorFrameSource : ISimulatorFrameSource
     private string ResolvePlatform(string deviceUdid)
         => runtimeSource.Current.Devices.FirstOrDefault(device =>
                 string.Equals(device.Identifier, deviceUdid, StringComparison.OrdinalIgnoreCase))?.Platform
-           ?? throw new InvalidOperationException("The selected runtime is no longer available.");
+            ?? throw new InvalidOperationException("The selected runtime is no longer available.");
 }

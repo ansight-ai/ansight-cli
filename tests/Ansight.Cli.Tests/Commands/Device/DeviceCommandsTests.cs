@@ -169,6 +169,7 @@ public sealed class DeviceCommandsTests
             (device, _) =>
             {
                 inspectedIdentifiers.Add(device.Identifier);
+
                 return Task.FromResult<IReadOnlyList<InstalledApplication>>(
                     [new InstalledApplication("com.example.app", "Example")]);
             },
@@ -197,6 +198,7 @@ public sealed class DeviceCommandsTests
             (device, _) =>
             {
                 inspectedIdentifiers.Add(device.Identifier);
+
                 return Task.FromResult<IReadOnlyList<InstalledApplication>>(
                     device.Identifier == "ios-simulator-shutdown"
                         ? [new InstalledApplication("com.example.app", "Example")]
@@ -235,7 +237,7 @@ public sealed class DeviceCommandsTests
         Assert.Contains(
             result.Failures,
             static failure => failure.DeviceIdentifier == "ios-simulator-shutdown"
-                              && failure.Message == "Target is offline.");
+                && failure.Message == "Target is offline.");
     }
 
     [Fact]
@@ -247,7 +249,7 @@ public sealed class DeviceCommandsTests
             candidates,
             "com.example.app",
             (device, _) => Task.FromResult<IReadOnlyList<InstalledApplication>>(
-            [
+                [
                 new InstalledApplication(
                     "com.example.app",
                     "Example",
@@ -260,6 +262,7 @@ public sealed class DeviceCommandsTests
 
         var device = Assert.Single(result.Devices);
         Assert.Equal("ios-simulator", device.Identifier);
+
         var match = Assert.Single(result.Matches);
         Assert.Equal("2.0", match.Application.Version);
         Assert.Equal("42", match.Application.BuildVersion);
@@ -280,7 +283,7 @@ public sealed class DeviceCommandsTests
             candidates,
             "com.example.app",
             (device, _) => Task.FromResult<IReadOnlyList<InstalledApplication>>(
-            [
+                [
                 new InstalledApplication(
                     "com.example.app",
                     "Example",
@@ -312,11 +315,11 @@ public sealed class DeviceCommandsTests
     {
         var arguments = CliArguments.Parse(
             [
-                "devices",
+                    "devices",
                 "--app-id", "com.example.app",
                 "--version", "2.10.*",
                 "--app-version", "2.10.*"
-            ]);
+                ]);
 
         var exception = Assert.Throws<CliUsageException>(() =>
             DeviceCommands.ResolveApplicationVersionFilter(arguments, "com.example.app"));
@@ -330,15 +333,15 @@ public sealed class DeviceCommandsTests
         var inventory = new DeviceInventory(
             [],
             [
-                new DeviceDescriptor(
-                    "2A201FDH200BXX",
-                    "Pixel 7",
-                    DevicePlatforms.Android,
-                    string.Empty,
-                    "device",
-                    IsBooted: true,
-                    IsAvailable: true,
-                    "device"),
+                    new DeviceDescriptor(
+                        "2A201FDH200BXX",
+                        "Pixel 7",
+                        DevicePlatforms.Android,
+                        string.Empty,
+                        "device",
+                        IsBooted: true,
+                        IsAvailable: true,
+                        "device"),
                 new DeviceDescriptor(
                     "E84FF6CC-835C-4BE4-904C-541357C05F6C",
                     "Codex Work App iPad A 20260604-100118",
@@ -348,7 +351,7 @@ public sealed class DeviceCommandsTests
                     IsBooted: true,
                     IsAvailable: true,
                     "simulator")
-            ],
+                ],
             []);
 
         var rendered = DeviceCommands.RenderInventory(

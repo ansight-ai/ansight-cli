@@ -1,4 +1,4 @@
-﻿namespace Ansight.Infrastructure.Utilities;
+namespace Ansight.Infrastructure.Utilities;
 
 /// <summary>
 /// A helper class for working with attributes on <see cref="Type"/>.
@@ -23,6 +23,7 @@ public static class AttributeHelper
         var enumType = value.GetType();
         var name = Enum.GetName(enumType, value);
         var field = name is null ? null : enumType.GetField(name);
+
         return field?.GetCustomAttributes(inherit).OfType<TAttribute>().FirstOrDefault();
     }
 
@@ -55,6 +56,7 @@ public static class AttributeHelper
         var enumType = value.GetType();
         var name = Enum.GetName(enumType, value);
         var field = name is null ? null : enumType.GetField(name);
+
         return field?.GetCustomAttributes(inherit).OfType<TAttribute>().ToList() ?? [];
     }
 }

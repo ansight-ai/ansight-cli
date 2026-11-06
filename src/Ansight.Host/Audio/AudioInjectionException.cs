@@ -2,8 +2,14 @@ using System.Text.Json.Nodes;
 
 namespace Ansight.Host.Audio;
 
-internal sealed class AudioInjectionException(string code, string message, JsonObject? diagnostics = null) : Exception(message)
+internal sealed class AudioInjectionException : Exception
 {
-    public string Code { get; } = code;
-    public JsonObject? Diagnostics { get; } = diagnostics;
+    public AudioInjectionException(string code, string message, JsonObject? diagnostics = null) : base(message)
+    {
+        this.Code = code;
+        this.Diagnostics = diagnostics;
+    }
+
+    public string Code { get; }
+    public JsonObject? Diagnostics { get; }
 }

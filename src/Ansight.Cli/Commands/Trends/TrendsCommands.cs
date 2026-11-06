@@ -17,6 +17,7 @@ internal static class TrendsCommands
         }
 
         var subcommand = arguments.RequirePositional(1, "trends subcommand").ToLowerInvariant();
+
         return subcommand switch
         {
             "history" => Task.FromResult(History(arguments, output)),
@@ -29,6 +30,7 @@ internal static class TrendsCommands
     private static int History(CliArguments arguments, CliOutput output)
     {
         arguments.EnsurePositionalCount(2, "ansight trends history [filters]");
+
         var options = CliRuntime.ResolveOptions(arguments);
         var result = WorkspaceTrendsService.LoadHistory(
             new DataToolApplicationPaths(options.DataDirectory),
@@ -40,6 +42,7 @@ internal static class TrendsCommands
         output.Write(
             new TrendsHistoryOutput("ansight.trends-history/v1", result),
             () => RenderHistory(result));
+
         return CliExitCodes.Success;
     }
 
@@ -49,13 +52,16 @@ internal static class TrendsCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(2, "ansight trends rebuild [filters]");
+
         var appId = arguments.GetOption("app-id");
         var appVersion = arguments.GetOption("app-version");
         var workspacePath = arguments.GetOption("workspace");
+
         if (!string.IsNullOrWhiteSpace(appVersion) && string.IsNullOrWhiteSpace(appId))
         {
             throw new CliUsageException("--app-version requires --app-id so the rebuild target is unambiguous.");
         }
+
         if (!string.IsNullOrWhiteSpace(workspacePath) && string.IsNullOrWhiteSpace(appId))
         {
             throw new CliUsageException("--workspace requires --app-id and overrides that app's registered codebase.");
@@ -77,6 +83,7 @@ internal static class TrendsCommands
         output.Write(
             new TrendsRebuildOutput("ansight.trends-rebuild/v1", result),
             () => RenderRebuild(result));
+
         return result.Apps.Count == 0 && !string.IsNullOrWhiteSpace(appId)
             ? CliExitCodes.Failure
             : CliExitCodes.Success;
@@ -91,18 +98,19 @@ internal static class TrendsCommands
         };
         lines.AddRange(result.Metrics.Select(metric =>
             $"METRIC\t{metric.EvaluatedAtUtc:O}\t{metric.AppId}\t"
-            + $"{metric.MetricKey}\t{metric.Value:0.###} {metric.Unit}\t"
-            + $"{metric.Status}\tspan-group={metric.SpanGroup ?? "ungrouped"}"
-            + $"\tapp-version={metric.AppVersion ?? "unknown"}"));
+                + $"{metric.MetricKey}\t{metric.Value:0.###} {metric.Unit}\t"
+                + $"{metric.Status}\tspan-group={metric.SpanGroup ?? "ungrouped"}"
+                + $"\tapp-version={metric.AppVersion ?? "unknown"}"));
         lines.AddRange(result.History.Select(entry =>
             $"HISTORY\t{entry.EvaluatedAtUtc:O}\t{entry.AppId}\t{entry.DecisionId}\t"
-            + $"{entry.Status}\tcurrent={entry.CurrentValue:0.###}\t"
-            + $"baseline={(entry.BaselineValue.HasValue ? entry.BaselineValue.Value.ToString("0.###") : "warmup")}"
-            + $"\tbaseline-runs={entry.BaselineRunCount}/{entry.MinimumBaselineRunCount}"
-            + $"\tspan-group={entry.SpanGroup ?? "ungrouped"}"
-            + $"\tcomparison={entry.Comparison}"
-            + $"\tapp-version={entry.AppVersion ?? "unknown"}"
-            + $"\tbaseline-app-version={entry.BaselineAppVersion ?? "none"}"));
+                + $"{entry.Status}\tcurrent={entry.CurrentValue:0.###}\t"
+                + $"baseline={(entry.BaselineValue.HasValue ? entry.BaselineValue.Value.ToString("0.###") : "warmup")}"
+                + $"\tbaseline-runs={entry.BaselineRunCount}/{entry.MinimumBaselineRunCount}"
+                + $"\tspan-group={entry.SpanGroup ?? "ungrouped"}"
+                + $"\tcomparison={entry.Comparison}"
+                + $"\tapp-version={entry.AppVersion ?? "unknown"}"
+                + $"\tbaseline-app-version={entry.BaselineAppVersion ?? "none"}"));
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -112,14 +120,15 @@ internal static class TrendsCommands
         var lines = new List<string>
         {
             $"{verb} {result.RebuiltHistoryResultCount:N0} trends comparison(s) across {result.Apps.Count:N0} app(s); "
-            + $"{(result.DryRun ? "would replace" : "replaced")} {result.RemovedHistoryResultCount:N0} stored result(s).",
+                + $"{(result.DryRun ? "would replace" : "replaced")} {result.RemovedHistoryResultCount:N0} stored result(s).",
             $"Database: {result.DatabasePath}"
         };
         lines.AddRange(result.Apps.Select(app =>
             $"APP\t{app.AppId}\tmetrics={app.MetricCount:N0}\t"
-            + $"rules={app.HistoryDefinitionCount:N0}\tresults={app.HistoryResultCount:N0}\t"
-            + $"workspace={app.WorkspacePath}"));
+                + $"rules={app.HistoryDefinitionCount:N0}\tresults={app.HistoryResultCount:N0}\t"
+                + $"workspace={app.WorkspacePath}"));
         lines.AddRange(result.SkippedApps.Select(app => $"SKIPPED\t{app.AppId}\t{app.Reason}"));
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -154,11 +163,3 @@ internal static class TrendsCommands
              --silent                     Suppress output
            """;
 }
-
-internal sealed record TrendsHistoryOutput(
-    string Schema,
-    WorkspaceTrendsHistoryResult History);
-
-internal sealed record TrendsRebuildOutput(
-    string Schema,
-    WorkspaceTrendsHistoryRebuildResult Rebuild);

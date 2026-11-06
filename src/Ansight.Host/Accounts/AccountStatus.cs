@@ -11,8 +11,3 @@ public sealed record AccountStatus(
     DateTimeOffset? AuthenticatedAtUtc,
     DateTimeOffset? AccessTokenExpiresAtUtc,
     bool CanRefresh);
-
-public sealed record AccountOperationResult(
-    bool IsSuccess,
-    string Message,
-    AccountStatus Status);

@@ -7,7 +7,9 @@ internal readonly record struct Endpoint(int Port)
     public static Endpoint Resolve(string deviceSerial)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceSerial);
+
         const string emulatorPrefix = "emulator-";
+
         if (!deviceSerial.StartsWith(emulatorPrefix, StringComparison.OrdinalIgnoreCase)
             || !int.TryParse(deviceSerial.AsSpan(emulatorPrefix.Length), out var consolePort)
             || consolePort is < 1024 or > 62535)

@@ -291,25 +291,26 @@ public sealed class CommandHelpTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(".NET EventPipe traces (BETA)", result.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("BETA FEATURE", result.StandardOutput, StringComparison.Ordinal);
+
         foreach (var command in new[]
-                 {
-                     "tools",
-                     "start",
-                     "status",
-                     "cancel",
-                     "list",
-                     "manifest",
-                     "import",
-                     "speedscope",
-                     "overview",
-                     "startup",
-                     "cpu",
-                     "call-tree",
-                     "threads",
-                     "gc",
-                     "jit",
-                     "exceptions"
-                 })
+        {
+            "tools",
+            "start",
+            "status",
+            "cancel",
+            "list",
+            "manifest",
+            "import",
+            "speedscope",
+            "overview",
+            "startup",
+            "cpu",
+            "call-tree",
+            "threads",
+            "gc",
+            "jit",
+            "exceptions"
+        })
         {
             Assert.Contains(
                 $"ansight profile dotnet {command}",
@@ -329,6 +330,7 @@ public sealed class CommandHelpTests
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains("BETA FEATURE", result.StandardOutput, StringComparison.Ordinal);
+
         foreach (var command in new[] { "tools", "start", "status", "cancel", "list", "manifest" })
         {
             Assert.Contains(
@@ -351,10 +353,17 @@ public sealed class CommandHelpTests
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains("BETA FEATURE", result.StandardOutput, StringComparison.Ordinal);
         Assert.Contains("/usr/bin/sample", result.StandardOutput, StringComparison.Ordinal);
+
         foreach (var command in new[]
-                 {
-                     "tools", "start", "status", "cancel", "list", "manifest", "artifact"
-                 })
+        {
+            "tools",
+            "start",
+            "status",
+            "cancel",
+            "list",
+            "manifest",
+            "artifact"
+        })
         {
             Assert.Contains(
                 $"ansight profile sample {command}",
@@ -398,6 +407,7 @@ public sealed class CommandHelpTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(
             exitCode,
             standardOutput.ToString(),

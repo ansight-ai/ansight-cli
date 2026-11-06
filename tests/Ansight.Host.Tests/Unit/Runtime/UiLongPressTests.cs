@@ -13,13 +13,14 @@ public sealed class UiLongPressTests
     {
         using var fixture = new Fixture();
         var arguments = coordinates
-            ? new JsonObject { ["normalizedX"] = 0.3, ["normalizedY"] = 0.6, ["durationMs"] = duration }
-            : new JsonObject { ["automationId"] = "card" };
+            ? new JsonObject { ["normalizedX"] = 0.3, ["normalizedY"] = 0.6, ["durationMs"] = duration } : new JsonObject { ["automationId"] = "card" };
         var result = await fixture.Call("ansight_long_press_ui", arguments);
         Assert.False(result.Payload!["isError"]!.GetValue<bool>());
+
         var content = result.Payload["structuredContent"]!;
         Assert.True(content["performed"]!.GetValue<bool>());
         Assert.Equal("ui.long_press", content["capability"]!.GetValue<string>());
+
         var request = Assert.Single(fixture.Driver.Holds);
         Assert.Equal(duration, request.DurationMilliseconds);
         Assert.Equal(coordinates ? 0.3 : 0.5, request.NormalizedX, 6);
@@ -28,17 +29,23 @@ public sealed class UiLongPressTests
         Assert.Equal("test.app", request.ApplicationIdentifier);
         Assert.Equal("simulator-001", request.DeviceIdentifier);
         Assert.True(fixture.State.TryGetSessionSnapshot(fixture.SessionId, out var snapshot));
+
         var recorded = Assert.Single(snapshot!.ApplicationEvents.Select(HostInputAction.Read).OfType<HostInputAction>());
         Assert.Equal("longPress", recorded.Kind);
         Assert.Equal(duration, recorded.DurationMilliseconds);
         Assert.Equal(content["actionId"]!.GetValue<string>(), recorded.EvidenceActionId);
         Assert.Contains(snapshot.VisualTreeSnapshots, tree => tree.ActionId == recorded.EvidenceActionId);
+
         var extracted = TimelineTaskExtractor.Extract(snapshot, snapshot.CreatedUtc, DateTimeOffset.UtcNow.AddSeconds(1),
             "Hold card", includeCoordinateFallbackTaps: true);
         Assert.Single(extracted.ReplaySteps);
         Assert.Contains("ansight_long_press_ui", extracted.ReplaySteps[0].Instruction);
         Assert.Contains($"\"durationMs\":{duration}", extracted.ReplaySteps[0].Instruction);
-        if (!coordinates) Assert.Contains("ansight.ui.longPress", extracted.Source);
+
+        if (!coordinates)
+        {
+            Assert.Contains("ansight.ui.longPress", extracted.Source);
+        }
     }
 
     [Theory]
@@ -67,12 +74,17 @@ public sealed class UiLongPressTests
         {
             ["actions"] = new JsonArray(new JsonObject
             {
-                ["kind"] = "longPress", ["normalizedX"] = 0.2, ["normalizedY"] = 0.7, ["durationMs"] = 2400
-            }), ["settleMs"] = 0
+                ["kind"] = "longPress",
+                ["normalizedX"] = 0.2,
+                ["normalizedY"] = 0.7,
+                ["durationMs"] = 2400
+            }),
+            ["settleMs"] = 0
         };
         var result = await fixture.Call("ansight_run_ui_sequence", arguments);
         Assert.False(result.Payload!["isError"]!.GetValue<bool>());
         Assert.Equal(2400, Assert.Single(fixture.Driver.Holds).DurationMilliseconds);
+
         var actions = arguments["actions"]!.AsArray();
         var invalid = actions[0]!.DeepClone();
         invalid["durationMs"] = 10001;
@@ -88,7 +100,15 @@ public sealed class UiLongPressTests
         var phases = new List<MacSimulatorPointerPhase>();
         using var cancellation = new CancellationTokenSource();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => HeadlessHostDeviceDriver.HoldSimulatorPointerAsync(
-            phase => { phases.Add(phase); if (phase == MacSimulatorPointerPhase.Down) cancellation.Cancel(); },
+            phase =>
+            {
+                phases.Add(phase);
+
+                if (phase == MacSimulatorPointerPhase.Down)
+                {
+                    cancellation.Cancel();
+                }
+            },
             10_000, cancellation.Token));
         Assert.Equal([MacSimulatorPointerPhase.Down, MacSimulatorPointerPhase.Up], phases);
         phases.Clear();
@@ -110,9 +130,11 @@ public sealed class UiLongPressTests
             State = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
             SessionId = State.CreateSession("test.app", "Long press", IPAddress.Loopback, null, null);
             State.SetSessionDeviceProfile(SessionId, null, """{"device":{"nativeDeviceId":"simulator-001"}}""");
+
             var router = new UiInputRouter();
             router.Configure(Driver);
             router.ConfigureAccessibility(Driver);
+
             var bridge = new Bridge(SessionId);
             var composition = new MefHostComposition(environment.ApplicationPaths,
                 new FileBackedEncryptedStorage(environment.SecureStorageFilePath));
@@ -126,6 +148,7 @@ public sealed class UiLongPressTests
             arguments = arguments.DeepClone().AsObject();
             arguments["sessionId"] = SessionId;
             arguments["includeScreenshot"] = false;
+
             return catalog.HandleToolsCallAsync(new JsonObject { ["name"] = name, ["arguments"] = arguments });
         }
 
@@ -135,17 +158,26 @@ public sealed class UiLongPressTests
     private sealed class Driver : IUiInputDriver, IUiAccessibilityDriver
     {
         public List<UiLongPressRequest> Holds { get; } = [];
+
         public UiInputAvailability GetAvailability(string deviceIdentifier) => new(true, "test", "Ready");
+
         public Task<UiInputResult> LongPressAsync(UiLongPressRequest request, CancellationToken cancellationToken = default)
         {
             Holds.Add(request);
+
             return Task.FromResult(new UiInputResult(true, "test", "Held"));
         }
+
         public Task<UiInputResult> TapAsync(UiTapRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> SwipeAsync(UiSwipeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> PinchAsync(UiPinchRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> TypeTextAsync(UiTextRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiInputResult> PressButtonAsync(UiButtonRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<UiAccessibilityResult> CaptureAccessibilityAsync(UiAccessibilityRequest request, CancellationToken cancellationToken = default)
             => Task.FromResult(new UiAccessibilityResult(true, "test", "Captured", JsonNode.Parse("""
                 {
@@ -159,19 +191,40 @@ public sealed class UiLongPressTests
                 """)!.AsObject()));
     }
 
-    private sealed class Bridge(string sessionId) : IAppToolBridge
+    private sealed class Bridge : IAppToolBridge
     {
-        public event EventHandler? ConnectionsChanged { add { } remove { } }
+        private readonly string sessionId;
+
+        public Bridge(string sessionId)
+        {
+            this.sessionId = sessionId;
+        }
+
+        public event EventHandler? ConnectionsChanged
+        {
+            add
+            {
+            }
+            remove
+            {
+            }
+        }
+
         public IReadOnlyList<string> GetConnectedSessionIds() => [sessionId];
+
         public bool IsSessionConnected(string candidateSessionId) => candidateSessionId == sessionId;
+
         public OperationResult ForceDisconnectSession(string candidateSessionId) => OperationResult.Failure("Unsupported");
+
         public Task<AppToolBridgeResponse> QueryToolsAsync(string candidateSessionId, CancellationToken cancellationToken,
             AppToolBridgeRequestContext? requestContext = null)
             => Task.FromResult(AppToolBridgeResponse.FromSuccess("Catalog", new ToolProtocolEnvelope
             {
-                Type = ToolProtocolMessageTypes.CatalogType, Id = "catalog",
+                Type = ToolProtocolMessageTypes.CatalogType,
+                Id = "catalog",
                 Payload = new JsonObject { ["tools"] = new JsonArray() }
             }));
+
         public Task<AppToolBridgeResponse> CallToolAsync(string candidateSessionId, string toolId, JsonObject? arguments,
             CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
             => Task.FromResult(AppToolBridgeResponse.FromFailure("No app tools"));

@@ -37,7 +37,6 @@ internal sealed class LiveSessionConnection
     public string SessionId => sessionId;
 
     public PairingSessionAuthorization Authorization { get; }
-
     internal AppToolCatalogCache ToolCatalogCache { get; } = new();
 
     internal SemaphoreSlim ToolCatalogQueryLock { get; } = new(1, 1);
@@ -53,7 +52,6 @@ internal sealed class LiveSessionConnection
             }
         }
     }
-
     public string? DisconnectReason
     {
         get
@@ -88,6 +86,7 @@ internal sealed class LiveSessionConnection
         ArgumentNullException.ThrowIfNull(envelope);
 
         var responseSource = new TaskCompletionSource<ToolBridgeResponseReceipt>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         lock (gate)
         {
             if (!sentRequestIds.Add(envelope.Id))
@@ -101,6 +100,7 @@ internal sealed class LiveSessionConnection
         try
         {
             await sendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
             try
             {
                 if (socket.State != WebSocketState.Open)
@@ -118,6 +118,7 @@ internal sealed class LiveSessionConnection
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
+
             return await responseSource.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
@@ -145,6 +146,7 @@ internal sealed class LiveSessionConnection
         }
 
         TaskCompletionSource<ToolBridgeResponseReceipt>? responseSource;
+
         lock (gate)
         {
             if (!pendingResponses.TryGetValue(envelope.ReplyTo, out responseSource))
@@ -166,6 +168,7 @@ internal sealed class LiveSessionConnection
     public bool CanQueryTools(out string? reason)
     {
         reason = null;
+
         return true;
     }
 
@@ -208,6 +211,7 @@ internal sealed class LiveSessionConnection
                 reason = hasQueriedToolCatalog
                     ? $"Tool '{toolId}' was not exposed by the last authenticated tool catalog."
                     : $"Query the authenticated tool catalog before invoking tool '{toolId}'.";
+
                 return false;
             }
 
@@ -215,18 +219,21 @@ internal sealed class LiveSessionConnection
             {
                 requiresCatalogQuery = false;
                 reason = descriptor.DenialReason ?? $"Tool '{descriptor.ToolId}' is not executable in the current session.";
+
                 return false;
             }
         }
 
         requiresCatalogQuery = false;
         reason = null;
+
         return true;
     }
 
     public void FailPendingRequests(string reason)
     {
         TaskCompletionSource<ToolBridgeResponseReceipt>[] pendingResponseSources;
+
         lock (gate)
         {
             pendingResponseSources = pendingResponses.Values.ToArray();
@@ -234,6 +241,7 @@ internal sealed class LiveSessionConnection
         }
 
         var exception = new IOException(reason);
+
         foreach (var responseSource in pendingResponseSources)
         {
             responseSource.TrySetException(exception);
@@ -270,7 +278,9 @@ internal sealed class LiveSessionConnection
         lock (gate)
         {
             hasQueriedToolCatalog = true;
+
             var revision = ReadString(payload["revision"]);
+
             if (!string.IsNullOrWhiteSpace(revision))
             {
                 toolCatalogRevision = revision;
@@ -290,14 +300,17 @@ internal sealed class LiveSessionConnection
                 ReadString(payload["detail"]),
                 "definitions",
                 StringComparison.Ordinal);
+
             if (!isDefinitionProjection)
             {
                 toolsById.Clear();
             }
+
             foreach (var tool in tools.OfType<JsonObject>())
             {
                 var id = ReadString(tool["id"]);
                 var policy = ReadString(tool["policy"]);
+
                 if (string.IsNullOrWhiteSpace(id) || !PairingToolPolicy.TryParse(policy, out _))
                 {
                     continue;
@@ -324,6 +337,7 @@ internal sealed class LiveSessionConnection
                         ["reason"] = evaluation.DenialReason
                     };
                 }
+
                 tool["executable"] = evaluation.IsExecutable;
                 toolsById[id] = new AuthorizedToolDescriptor(
                     id,
@@ -344,6 +358,7 @@ internal sealed class LiveSessionConnection
         if (!Authorization.AllowsPolicy(policy))
         {
             var reason = $"Tool policy '{PairingToolPolicy.Normalize(policy)}' exceeds the authenticated client grant '{Authorization.MaxToolPolicy}'.";
+
             return ToolExecutionEvaluation.Denied("tool_policy_not_granted", reason);
         }
 
@@ -351,8 +366,8 @@ internal sealed class LiveSessionConnection
         {
             return ToolExecutionEvaluation.Denied(
                 ReadString(runtime?["code"])
-                ?? ReadString(runtime?["reasonCode"])
-                ?? "tool_unavailable",
+                    ?? ReadString(runtime?["reasonCode"])
+                    ?? "tool_unavailable",
                 ReadString(runtime?["reason"]) ?? "The tool is not available in the current app state.");
         }
 

@@ -39,8 +39,8 @@ internal static class RepositoryAutomationTriggerLoader
         var warnings = new List<string>();
 
         foreach (var configuredPath in repositoryPaths
-                     .Where(path => !string.IsNullOrWhiteSpace(path))
-                     .Distinct(StringComparer.Ordinal))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.Ordinal))
         {
             try
             {
@@ -51,10 +51,10 @@ internal static class RepositoryAutomationTriggerLoader
                     appId));
             }
             catch (Exception exception) when (exception is IOException
-                                               or UnauthorizedAccessException
-                                               or JsonException
-                                               or InvalidDataException
-                                               or ArgumentException)
+                or UnauthorizedAccessException
+                or JsonException
+                or InvalidDataException
+                or ArgumentException)
             {
                 warnings.Add($"Repository triggers were not loaded from '{configuredPath}': {exception.Message}");
             }
@@ -72,12 +72,14 @@ internal static class RepositoryAutomationTriggerLoader
         string? scopedAppId)
     {
         var repositoryRootPath = Path.GetFullPath(configuredPath.Trim());
+
         if (!Directory.Exists(repositoryRootPath))
         {
             throw new DirectoryNotFoundException($"Repository root '{repositoryRootPath}' does not exist.");
         }
 
         var triggerDirectoryPath = Path.Combine(repositoryRootPath, "ansight", "triggers");
+
         if (!Directory.Exists(triggerDirectoryPath))
         {
             throw new DirectoryNotFoundException(
@@ -91,6 +93,7 @@ internal static class RepositoryAutomationTriggerLoader
                 StringComparison.OrdinalIgnoreCase))
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
+
         if (modulePaths.Length > MaximumTriggersPerRepository)
         {
             throw new InvalidDataException(
@@ -105,6 +108,7 @@ internal static class RepositoryAutomationTriggerLoader
 
         var triggers = new List<RepositoryAutomationTriggerDefinition>(modulePaths.Length);
         var triggerIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var modulePath in modulePaths)
         {
             triggers.Add(LoadTrigger(
@@ -130,6 +134,7 @@ internal static class RepositoryAutomationTriggerLoader
         HashSet<string> triggerIds)
     {
         var fileInfo = new FileInfo(modulePath);
+
         if (fileInfo.Length > MaximumModuleBytes)
         {
             throw new InvalidDataException(
@@ -137,6 +142,7 @@ internal static class RepositoryAutomationTriggerLoader
         }
 
         var triggerId = CreateTriggerId(triggerDirectoryPath, modulePath);
+
         if (!triggerIds.Add(triggerId))
         {
             throw new InvalidDataException($"Trigger id '{triggerId}' is duplicated.");
@@ -153,6 +159,7 @@ internal static class RepositoryAutomationTriggerLoader
             triggerJson) ?? throw new InvalidDataException($"Trigger module '{modulePath}' has an empty descriptor.");
         var schemaVersion = ResolveSchemaVersion(definition.SchemaVersion, triggerId);
         definition.Requires?.Validate();
+
         var appId = ResolveAppId(definition.AppId, scopedAppId, triggerId);
         var eventKind = NormalizeRequiredValue(definition.EventKind, $"Trigger '{triggerId}' eventKind");
         var eventSchema = LoadEventSchema(triggerId, definition.EventSchema);
@@ -196,6 +203,7 @@ internal static class RepositoryAutomationTriggerLoader
     private static int ResolveSchemaVersion(int? declaredVersion, string triggerId)
     {
         var version = declaredVersion ?? 1;
+
         if (version != 1)
         {
             throw new InvalidDataException(
@@ -227,6 +235,7 @@ internal static class RepositoryAutomationTriggerLoader
         IReadOnlyList<RepositoryAutomationConditionDefinition>? entries)
     {
         entries ??= [];
+
         if (entries.Count > MaximumConditionsPerTrigger)
         {
             throw new InvalidDataException(
@@ -244,6 +253,7 @@ internal static class RepositoryAutomationTriggerLoader
             var field = NormalizeRequiredValue(
                 entry.Field,
                 $"Trigger '{triggerId}' condition {index + 1} field");
+
             if (!RepositoryAutomationTriggerCondition.IsSupportedField(field))
             {
                 throw new InvalidDataException(
@@ -253,6 +263,7 @@ internal static class RepositoryAutomationTriggerLoader
             var conditionOperator = NormalizeRequiredValue(
                 entry.Operator,
                 $"Trigger '{triggerId}' condition {index + 1} operator");
+
             if (!RepositoryAutomationTriggerCondition.IsSupportedOperator(conditionOperator))
             {
                 throw new InvalidDataException(
@@ -284,6 +295,7 @@ internal static class RepositoryAutomationTriggerLoader
     {
         var normalizedDeclared = string.IsNullOrWhiteSpace(declaredAppId) ? null : declaredAppId.Trim();
         var normalizedScoped = string.IsNullOrWhiteSpace(scopedAppId) ? null : scopedAppId.Trim();
+
         if (normalizedScoped is not null
             && normalizedDeclared is not null
             && !string.Equals(normalizedScoped, normalizedDeclared, StringComparison.Ordinal))
@@ -293,9 +305,9 @@ internal static class RepositoryAutomationTriggerLoader
         }
 
         return normalizedScoped
-               ?? normalizedDeclared
-               ?? throw new InvalidDataException(
-                   $"Trigger '{triggerId}' must declare appId when it is loaded outside an Ansight app workspace.");
+            ?? normalizedDeclared
+            ?? throw new InvalidDataException(
+                $"Trigger '{triggerId}' must declare appId when it is loaded outside an Ansight app workspace.");
     }
 
     private static string CreateTriggerId(string triggerDirectoryPath, string modulePath)
@@ -305,6 +317,7 @@ internal static class RepositoryAutomationTriggerLoader
         var id = withoutExtension
             .Replace(Path.DirectorySeparatorChar, '.')
             .Replace(Path.AltDirectorySeparatorChar, '.');
+
         return NormalizeRequiredIdentifier(id, "Trigger file name");
     }
 
@@ -322,7 +335,7 @@ internal static class RepositoryAutomationTriggerLoader
         {
             throw new InvalidDataException(
                 $"Trigger '{triggerId}' functionTimeoutMs must be between "
-                + $"{MinimumFunctionTimeoutMilliseconds} and {MaximumFunctionTimeoutMilliseconds}.");
+                    + $"{MinimumFunctionTimeoutMilliseconds} and {MaximumFunctionTimeoutMilliseconds}.");
         }
 
         return TimeSpan.FromMilliseconds(timeoutMilliseconds.Value);
@@ -357,6 +370,7 @@ internal static class RepositoryAutomationTriggerLoader
         }
 
         var maximumAttempts = definition.MaxAttempts ?? 1;
+
         if (maximumAttempts is < 1 or > MaximumRetryAttempts)
         {
             throw new InvalidDataException(
@@ -377,14 +391,16 @@ internal static class RepositoryAutomationTriggerLoader
         }
 
         var initialDelayMilliseconds = definition.InitialDelayMs ?? 250;
+
         if (initialDelayMilliseconds is < MinimumRetryDelayMilliseconds or > MaximumRetryDelayMilliseconds)
         {
             throw new InvalidDataException(
                 $"Trigger '{triggerId}' retry.initialDelayMs must be between "
-                + $"{MinimumRetryDelayMilliseconds} and {MaximumRetryDelayMilliseconds}.");
+                    + $"{MinimumRetryDelayMilliseconds} and {MaximumRetryDelayMilliseconds}.");
         }
 
         var backoffMultiplier = definition.BackoffMultiplier ?? 2;
+
         if (backoffMultiplier is < 1 or > 10)
         {
             throw new InvalidDataException(
@@ -394,12 +410,13 @@ internal static class RepositoryAutomationTriggerLoader
         var maximumDelayMilliseconds = definition.MaxDelayMs ?? Math.Min(
             MaximumRetryDelayMilliseconds,
             initialDelayMilliseconds * 8);
+
         if (maximumDelayMilliseconds < initialDelayMilliseconds
             || maximumDelayMilliseconds > MaximumRetryDelayMilliseconds)
         {
             throw new InvalidDataException(
                 $"Trigger '{triggerId}' retry.maxDelayMs must be at least retry.initialDelayMs and no more than "
-                + $"{MaximumRetryDelayMilliseconds}.");
+                    + $"{MaximumRetryDelayMilliseconds}.");
         }
 
         return new RepositoryAutomationRetryPolicy(
@@ -412,6 +429,7 @@ internal static class RepositoryAutomationTriggerLoader
     private static string NormalizeRequiredIdentifier(string? value, string description)
     {
         var normalized = NormalizeRequiredValue(value, description);
+
         if (normalized.Length > 120
             || normalized.Any(character => !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.')))
         {

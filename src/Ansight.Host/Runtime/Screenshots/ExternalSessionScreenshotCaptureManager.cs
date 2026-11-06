@@ -39,23 +39,30 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
 
     public bool IsPeriodicCaptureSuspended(string sessionId)
     {
-        lock (captureGate) return periodicCaptureSuspensions.ContainsKey(sessionId);
+        lock (captureGate)
+        {
+            return periodicCaptureSuspensions.ContainsKey(sessionId);
+        }
     }
 
     public IDisposable SuspendPeriodicCapture(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         lock (captureGate)
         {
             periodicCaptureSuspensions.TryGetValue(sessionId, out var count);
             periodicCaptureSuspensions[sessionId] = count + 1;
+
             if (capturesBySessionId.TryGetValue(sessionId, out var handle))
             {
                 handle.PeriodicCaptureVersion++;
                 handle.SignalProfileChanged();
             }
         }
+
         PeriodicCaptureChanged?.Invoke(this, sessionId);
+
         return new PeriodicCaptureScope(this, sessionId);
     }
 
@@ -63,11 +70,26 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     {
         lock (captureGate)
         {
-            if (!periodicCaptureSuspensions.TryGetValue(sessionId, out var count)) return;
-            if (count > 1) periodicCaptureSuspensions[sessionId] = count - 1;
-            else periodicCaptureSuspensions.Remove(sessionId);
-            if (capturesBySessionId.TryGetValue(sessionId, out var handle)) handle.SignalProfileChanged();
+            if (!periodicCaptureSuspensions.TryGetValue(sessionId, out var count))
+            {
+                return;
+            }
+
+            if (count > 1)
+            {
+                periodicCaptureSuspensions[sessionId] = count - 1;
+            }
+            else
+            {
+                periodicCaptureSuspensions.Remove(sessionId);
+            }
+
+            if (capturesBySessionId.TryGetValue(sessionId, out var handle))
+            {
+                handle.SignalProfileChanged();
+            }
         }
+
         PeriodicCaptureChanged?.Invoke(this, sessionId);
     }
 
@@ -86,11 +108,13 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         if (string.IsNullOrWhiteSpace(sessionId) || profile is null)
         {
             await StopAsync(sessionId, "External screenshot target changed.").ConfigureAwait(false);
+
             return ExternalSessionScreenshotCapturePolicy.App("The session did not provide a device profile.");
         }
 
         using var probeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         CaptureHandle? previousHandle;
+
         lock (captureGate)
         {
             previousHandle = DetachCapture(sessionId);
@@ -101,6 +125,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         try
         {
             await StopCaptureAsync(sessionId, previousHandle, "External screenshot target changed.").ConfigureAwait(false);
+
             return await AttachCoreAsync(sessionId, profile, profileJson, captureRequest, probeCancellation,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -110,7 +135,9 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             {
                 if (pendingAttachmentsBySessionId.TryGetValue(sessionId, out var pending)
                     && ReferenceEquals(pending, probeCancellation))
+                {
                     pendingAttachmentsBySessionId.Remove(sessionId);
+                }
             }
         }
     }
@@ -128,10 +155,14 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         var physicalIosDeviceSession = isPhysicalDevice
             && string.Equals(osName, "ios", StringComparison.OrdinalIgnoreCase)
             && runtimeState.IsDeviceSessionActive(sessionId);
+
         if (isPhysicalDevice && string.Equals(osName, "ios", StringComparison.OrdinalIgnoreCase)
             && !physicalIosDeviceSession)
+        {
             return ExternalSessionScreenshotCapturePolicy.App(
                 "Physical iOS SDK sessions use app-managed screenshot capture.");
+        }
+
         if (isPhysicalDevice
             && !string.Equals(osName, "android", StringComparison.OrdinalIgnoreCase)
             && physicalIosCapture is null)
@@ -144,7 +175,9 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         {
             probeCancellation.Token.ThrowIfCancellationRequested();
             probeCancellation.CancelAfter(captureTimeout);
+
             CaptureTarget? target;
+
             if (physicalIosDeviceSession)
             {
                 var deviceId = ResolveNativeDeviceId(profileJson);
@@ -159,6 +192,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                     ? await ResolveDeviceRunTargetAsync(profile, profileJson, probeCancellation.Token).ConfigureAwait(false)
                     : await ResolveTargetAsync(profile, profileJson, probeCancellation.Token).ConfigureAwait(false);
             }
+
             if (target is null)
             {
                 return ExternalSessionScreenshotCapturePolicy.App(
@@ -166,16 +200,23 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             }
 
             var probe = await target.CaptureAsync(probeCancellation.Token).ConfigureAwait(false);
+
             lock (captureGate)
             {
                 probeCancellation.Token.ThrowIfCancellationRequested();
+
                 if (!pendingAttachmentsBySessionId.TryGetValue(sessionId, out var pending)
                     || !ReferenceEquals(pending, probeCancellation)
                     || !IsSessionActive(sessionId))
+                {
                     return ExternalSessionScreenshotCapturePolicy.App("External screenshot capture was stopped.");
+                }
 
                 if (!IsPeriodicCaptureSuspended(sessionId))
+                {
                     AddFrame(sessionId, probe, ExternalSessionScreenshotCaptureProfile.Standard(captureRequest));
+                }
+
                 var handle = new CaptureHandle(new CancellationTokenSource(), target, captureRequest);
                 pendingAttachmentsBySessionId.Remove(sessionId);
                 capturesBySessionId[sessionId] = handle;
@@ -183,6 +224,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             }
 
             log.Info($"external_session_screenshot_started sessionId={sessionId} source={target.Source}");
+
             return ExternalSessionScreenshotCapturePolicy.Host(target.Source, captureRequest.MaxWidth,
                 captureRequest.IntervalMilliseconds);
         }
@@ -197,6 +239,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         catch (Exception ex)
         {
             log.Warning($"external_session_screenshot_probe_failed sessionId={sessionId} reason=\"{ex.Message}\"");
+
             return ExternalSessionScreenshotCapturePolicy.App($"Ansight external capture probe failed: {ex.Message}");
         }
     }
@@ -205,18 +248,25 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     {
         CaptureHandle? handle;
         CancellationTokenSource deadline;
+
         lock (captureGate)
         {
             if (!capturesBySessionId.TryGetValue(sessionId, out handle)
                 || handle.Task?.IsCompleted != false)
+            {
                 return null;
+            }
+
             deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, handle.Cancellation.Token);
         }
+
         using (deadline)
         {
             deadline.CancelAfter(captureTimeout);
+
             var bytes = await handle.Target.CaptureAsync(deadline.Token).ConfigureAwait(false);
             deadline.Token.ThrowIfCancellationRequested();
+
             return bytes;
         }
     }
@@ -224,8 +274,10 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     public IDisposable BeginTestRun(string sessionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
         var normalizedSessionId = sessionId.Trim();
         CaptureHandle handle;
+
         lock (captureGate)
         {
             if (!capturesBySessionId.TryGetValue(normalizedSessionId, out handle!)
@@ -235,6 +287,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                 if (CanUseAppManagedCapture(normalizedSessionId))
                 {
                     log.Info($"app_managed_screenshot_test_profile_started sessionId={normalizedSessionId}");
+
                     return AppManagedTestRunScope.Instance;
                 }
 
@@ -247,27 +300,35 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         }
 
         log.Info($"external_session_screenshot_test_profile_started sessionId={normalizedSessionId}");
+
         return new TestRunScope(this, normalizedSessionId);
     }
 
     private bool CanUseAppManagedCapture(string sessionId)
     {
         return runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
-               && snapshot is { IsHistorical: false }
-               && (snapshot.CaptureSource == WorkspaceExecutionModes.Sdk
-                   && (snapshot.DeviceProfile is not null || !string.IsNullOrWhiteSpace(snapshot.DeviceProfileJson))
-                   || snapshot.DeviceProfile?.Device is { } device
-                   && device.IsVirtual != true
-                   && device.IsEmulator != true);
+            && snapshot is { IsHistorical: false } && (snapshot.CaptureSource == WorkspaceExecutionModes.Sdk
+                && (snapshot.DeviceProfile is not null || !string.IsNullOrWhiteSpace(snapshot.DeviceProfileJson))
+                || snapshot.DeviceProfile?.Device is { } device
+                    && device.IsVirtual != true
+                    && device.IsEmulator != true);
     }
 
     public void SetInterval(string sessionId, int intervalMilliseconds)
     {
         AppWatchDefinition.ValidateScreenshotInterval(intervalMilliseconds);
+
         lock (captureGate)
         {
-            if (!capturesBySessionId.TryGetValue(sessionId, out var handle)) return;
-            handle.CaptureRequest = handle.CaptureRequest with { IntervalMilliseconds = intervalMilliseconds };
+            if (!capturesBySessionId.TryGetValue(sessionId, out var handle))
+            {
+                return;
+            }
+
+            handle.CaptureRequest = handle.CaptureRequest with
+            {
+                IntervalMilliseconds = intervalMilliseconds
+            };
             handle.SignalProfileChanged();
         }
     }
@@ -275,6 +336,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     public async Task StopAsync(string sessionId, string reason)
     {
         CaptureHandle? handle;
+
         lock (captureGate)
         {
             handle = DetachCapture(sessionId);
@@ -287,16 +349,26 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     private CaptureHandle? DetachCapture(string sessionId)
     {
         if (pendingAttachmentsBySessionId.Remove(sessionId, out var pending))
+        {
             pending.Cancel();
+        }
+
         if (!capturesBySessionId.Remove(sessionId, out var handle))
+        {
             return null;
+        }
+
         handle.Cancellation.Cancel();
+
         return handle;
     }
 
     private static async Task StopCaptureAsync(string sessionId, CaptureHandle? handle, string reason)
     {
-        if (handle is null) return;
+        if (handle is null)
+        {
+            return;
+        }
 
         if (handle.Task is not null && Task.CurrentId != handle.Task.Id)
         {
@@ -319,6 +391,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
     {
         var consecutiveFailures = 0;
         var lastCaptureStarted = Stopwatch.GetTimestamp();
+
         try
         {
             while (!handle.Cancellation.IsCancellationRequested)
@@ -326,10 +399,11 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                 var profile = ResolveCaptureProfile(handle);
                 var remaining = IsPeriodicCaptureSuspended(sessionId) ? Timeout.InfiniteTimeSpan
                     : profile.Interval - Stopwatch.GetElapsedTime(lastCaptureStarted);
+
                 if (await handle.ProfileChanged
-                        .WaitAsync(remaining == Timeout.InfiniteTimeSpan || remaining > TimeSpan.Zero
-                            ? remaining : TimeSpan.Zero, handle.Cancellation.Token)
-                        .ConfigureAwait(false))
+                    .WaitAsync(remaining == Timeout.InfiniteTimeSpan || remaining > TimeSpan.Zero
+                        ? remaining : TimeSpan.Zero, handle.Cancellation.Token)
+                    .ConfigureAwait(false))
                 {
                     continue;
                 }
@@ -343,34 +417,53 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                         continue;
                     }
                 }
-                else break;
+                else
+                {
+                    break;
+                }
 
                 try
                 {
                     long captureVersion;
+
                     lock (captureGate)
                     {
-                        if (IsPeriodicCaptureSuspended(sessionId)) continue;
+                        if (IsPeriodicCaptureSuspended(sessionId))
+                        {
+                            continue;
+                        }
+
                         captureVersion = handle.PeriodicCaptureVersion;
                     }
+
                     lastCaptureStarted = Stopwatch.GetTimestamp();
+
                     using var captureCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                         handle.Cancellation.Token);
                     captureCancellation.CancelAfter(captureTimeout);
+
                     var bytes = await handle.Target
                         .CaptureAsync(captureCancellation.Token)
                         .ConfigureAwait(false);
+
                     lock (captureGate)
                     {
                         if (handle.Cancellation.IsCancellationRequested
                             || !capturesBySessionId.TryGetValue(sessionId, out var current)
                             || !ReferenceEquals(current, handle)
                             || !IsSessionActive(sessionId))
+                        {
                             break;
+                        }
+
                         // A command already in flight may finish after recording starts.
+
                         if (!IsPeriodicCaptureSuspended(sessionId) && captureVersion == handle.PeriodicCaptureVersion)
+                        {
                             AddFrame(sessionId, bytes, ResolveCaptureProfile(handle));
+                        }
                     }
+
                     consecutiveFailures = 0;
                 }
                 catch (OperationCanceledException) when (handle.Cancellation.IsCancellationRequested)
@@ -392,8 +485,10 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                         consecutiveFailures = 0;
                         continue;
                     }
+
                     consecutiveFailures++;
                     log.Warning($"external_session_screenshot_failed sessionId={sessionId} count={consecutiveFailures} reason=\"{ex.Message}\"");
+
                     if (consecutiveFailures >= maximumConsecutiveFailures)
                     {
                         if (IsTestRunActive(handle) && !runtimeState.IsDeviceSessionActive(sessionId))
@@ -406,6 +501,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
                             runtimeState.EndDeviceSession(sessionId);
                             runtimeState.SetSessionStatus(sessionId, "Failed", "Host screenshot capture failed.");
                         }
+
                         CaptureFailed?.Invoke(
                             this,
                             new ExternalSessionScreenshotCaptureFailedEventArgs(
@@ -431,7 +527,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
 
     private bool IsSessionActive(string sessionId)
         => runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
-           && snapshot is { IsHistorical: false };
+            && snapshot is { IsHistorical: false };
 
     private ExternalSessionScreenshotCaptureProfile ResolveCaptureProfile(CaptureHandle handle)
     {
@@ -482,6 +578,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         CancellationToken cancellationToken)
     {
         var osName = profile.Device?.OsName?.Trim().ToLowerInvariant();
+
         if (string.Equals(osName, "android", StringComparison.Ordinal))
         {
             return await ResolveAndroidTargetAsync(profile, cancellationToken).ConfigureAwait(false);
@@ -499,33 +596,55 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         DeviceAppProfile profile, string? profileJson, CancellationToken cancellationToken)
     {
         var identifier = ResolveNativeDeviceId(profileJson);
-        if (identifier is null) return null;
+
+        if (identifier is null)
+        {
+            return null;
+        }
+
         if (string.Equals(profile.Device?.OsName, "android", StringComparison.OrdinalIgnoreCase))
         {
             var tool = AdbToolLocator.Resolve(userPreferences.AdbPath);
-            if (!tool.IsFound) return null;
+
+            if (!tool.IsFound)
+            {
+                return null;
+            }
+
             var client = new AdbClient(tool.AdbPath);
             var devices = await client.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
             var physical = profile.Device?.IsVirtual != true && profile.Device?.IsEmulator != true;
             var commands = new DeviceCommandRunner();
+
             return HasConnectedAndroidDevice(devices, identifier)
                 ? new CaptureTarget("adb", async token =>
                 {
                     if (physical)
                     {
                         var activities = await commands.RunAsync(tool.AdbPath, ["-s", identifier, "shell",
-                            "dumpsys activity activities"], token).ConfigureAwait(false);
+                                            "dumpsys activity activities"], token).ConfigureAwait(false);
+
                         if (!AndroidForegroundActivity.IsForeground(activities.RequireText(), profile.App?.AppId ?? string.Empty))
+                        {
                             throw new AppBackgroundedException(DateTimeOffset.UtcNow);
+                        }
                     }
+
                     return await client.CaptureScreenshotPngAsync(identifier, token).ConfigureAwait(false);
                 })
                 : null;
         }
+
         var simctl = await SimCtlToolLocator.ResolveAsync(userPreferences.XcodePath, cancellationToken).ConfigureAwait(false);
-        if (!simctl.IsFound) return null;
+
+        if (!simctl.IsFound)
+        {
+            return null;
+        }
+
         var simulator = new SimCtlClient(simctl);
         var simulators = await simulator.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
+
         return simulators.Any(device => device.IsBooted && string.Equals(device.Udid, identifier, StringComparison.OrdinalIgnoreCase))
             ? new CaptureTarget("simctl", token => simulator.CaptureScreenshotJpegAsync(identifier, token))
             : null;
@@ -535,10 +654,15 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         => devices.Any(device => device.IsConnected
             && string.Equals(device.Serial, identifier, StringComparison.Ordinal));
 
-    internal sealed class AppBackgroundedException(DateTimeOffset observedAtUtc)
-        : IOException("The watched Android app is no longer in the foreground.")
+    internal sealed class AppBackgroundedException : IOException
     {
-        public DateTimeOffset ObservedAtUtc { get; } = observedAtUtc;
+        public AppBackgroundedException(DateTimeOffset observedAtUtc)
+: base("The watched Android app is no longer in the foreground.")
+        {
+            this.ObservedAtUtc = observedAtUtc;
+        }
+
+        public DateTimeOffset ObservedAtUtc { get; }
     }
 
     private async Task<CaptureTarget?> ResolveAndroidTargetAsync(
@@ -546,12 +670,14 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         CancellationToken cancellationToken)
     {
         var packageIdentifier = profile.App?.AppId?.Trim();
+
         if (string.IsNullOrWhiteSpace(packageIdentifier))
         {
             return null;
         }
 
         var tool = AdbToolLocator.Resolve(userPreferences.AdbPath);
+
         if (!tool.IsFound)
         {
             return null;
@@ -560,13 +686,15 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         var client = new AdbClient(tool.AdbPath);
         var reportedProcessId = profile.App?.ProcessId;
         var matches = new List<AdbDevice>();
+
         foreach (var device in (await client.GetDevicesAsync(cancellationToken).ConfigureAwait(false))
-                     .Where(device => device.IsConnected))
+            .Where(device => device.IsConnected))
         {
             var processIds = await client.GetProcessIdsAsync(
                 device.Serial,
                 packageIdentifier,
                 cancellationToken).ConfigureAwait(false);
+
             if (processIds.Count > 0
                 && (!reportedProcessId.HasValue || processIds.Contains(reportedProcessId.Value)))
             {
@@ -587,6 +715,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         CancellationToken cancellationToken)
     {
         var processId = profile.App?.ProcessId;
+
         if (!processId.HasValue || processId.Value <= 0)
         {
             return null;
@@ -595,6 +724,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         var tool = await SimCtlToolLocator.ResolveAsync(
             userPreferences.XcodePath,
             cancellationToken).ConfigureAwait(false);
+
         if (!tool.IsFound)
         {
             return null;
@@ -605,12 +735,14 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
             .Where(device => device.IsBooted)
             .ToArray();
         var nativeDeviceId = ResolveNativeDeviceId(profileJson);
+
         if (!string.IsNullOrWhiteSpace(nativeDeviceId))
         {
             var explicitTarget = bootedDevices.FirstOrDefault(
                 device => string.Equals(device.Udid, nativeDeviceId, StringComparison.OrdinalIgnoreCase));
+
             return explicitTarget is not null
-                   && await client.ProcessExistsAsync(explicitTarget.Udid, processId.Value, cancellationToken).ConfigureAwait(false)
+                && await client.ProcessExistsAsync(explicitTarget.Udid, processId.Value, cancellationToken).ConfigureAwait(false)
                 ? new CaptureTarget(
                     "simctl",
                     token => client.CaptureScreenshotJpegAsync(explicitTarget.Udid, token))
@@ -618,6 +750,7 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         }
 
         var matches = new List<SimCtlDevice>();
+
         foreach (var device in bootedDevices)
         {
             if (await client.ProcessExistsAsync(device.Udid, processId.Value, cancellationToken).ConfigureAwait(false))
@@ -643,8 +776,9 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         try
         {
             using var document = JsonDocument.Parse(profileJson);
+
             return document.RootElement.TryGetProperty("device", out var device)
-                   && device.ValueKind == JsonValueKind.Object
+                && device.ValueKind == JsonValueKind.Object
                 ? JsonUtil.TryGetString(device, "nativeDeviceId")?.Trim()
                 : null;
         }
@@ -654,23 +788,25 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         }
     }
 
-    private sealed class CaptureHandle(
-        CancellationTokenSource cancellation,
-        CaptureTarget target,
-        ExternalSessionScreenshotCaptureRequest captureRequest)
+    private sealed class CaptureHandle
     {
-        public CancellationTokenSource Cancellation { get; } = cancellation;
+        public CaptureHandle(
+            CancellationTokenSource cancellation,
+            CaptureTarget target,
+            ExternalSessionScreenshotCaptureRequest captureRequest)
+        {
+            this.Cancellation = cancellation;
+            this.Target = target;
+            this.CaptureRequest = captureRequest;
+            this.ProfileChanged = new(0, 1);
+        }
 
-        public CaptureTarget Target { get; } = target;
-
-        public ExternalSessionScreenshotCaptureRequest CaptureRequest { get; set; } = captureRequest;
-
-        public SemaphoreSlim ProfileChanged { get; } = new(0, 1);
-
+        public CancellationTokenSource Cancellation { get; }
+        public CaptureTarget Target { get; }
+        public ExternalSessionScreenshotCaptureRequest CaptureRequest { get; set; }
+        public SemaphoreSlim ProfileChanged { get; }
         public int TestRunCount { get; set; }
-
         public long PeriodicCaptureVersion { get; set; }
-
         public Task? Task { get; set; }
 
         public void SignalProfileChanged()
@@ -691,27 +827,49 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         }
     }
 
-    private sealed class CaptureTarget(
-        string source,
-        Func<CancellationToken, Task<byte[]>> captureAsync)
+    private sealed class CaptureTarget
     {
-        public string Source { get; } = source;
+        private readonly Func<CancellationToken, Task<byte[]>> captureAsync;
 
-        private readonly SemaphoreSlim captureLock = new(1, 1);
+        public CaptureTarget(
+            string source,
+            Func<CancellationToken, Task<byte[]>> captureAsync)
+        {
+            this.captureAsync = captureAsync;
+            this.Source = source;
+            this.captureLock = new(1, 1);
+        }
+
+        public string Source { get; }
+        private readonly SemaphoreSlim captureLock;
 
         public async Task<byte[]> CaptureAsync(CancellationToken cancellationToken)
         {
             await captureLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try { return await captureAsync(cancellationToken).ConfigureAwait(false); }
-            finally { captureLock.Release(); }
+
+            try
+            {
+                return await captureAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                captureLock.Release();
+            }
         }
     }
 
-    private sealed class TestRunScope(
-        ExternalSessionScreenshotCaptureManager owner,
-        string sessionId) : IDisposable
+    private sealed class TestRunScope : IDisposable
     {
-        private ExternalSessionScreenshotCaptureManager? owner = owner;
+        private readonly string sessionId;
+        private ExternalSessionScreenshotCaptureManager? owner;
+
+        public TestRunScope(
+            ExternalSessionScreenshotCaptureManager owner,
+            string sessionId)
+        {
+            this.sessionId = sessionId;
+            this.owner = owner;
+        }
 
         public void Dispose()
         {
@@ -719,9 +877,17 @@ internal sealed class ExternalSessionScreenshotCaptureManager : IExternalSession
         }
     }
 
-    private sealed class PeriodicCaptureScope(ExternalSessionScreenshotCaptureManager owner, string sessionId) : IDisposable
+    private sealed class PeriodicCaptureScope : IDisposable
     {
-        private ExternalSessionScreenshotCaptureManager? owner = owner;
+        private readonly string sessionId;
+        private ExternalSessionScreenshotCaptureManager? owner;
+
+        public PeriodicCaptureScope(ExternalSessionScreenshotCaptureManager owner, string sessionId)
+        {
+            this.sessionId = sessionId;
+            this.owner = owner;
+        }
+
         public void Dispose() => Interlocked.Exchange(ref owner, null)?.ResumePeriodicCapture(sessionId);
     }
 }

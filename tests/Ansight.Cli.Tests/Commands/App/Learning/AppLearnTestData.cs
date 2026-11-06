@@ -24,19 +24,22 @@ internal static class AppLearnTestData
     public static JsonObject Evidence(JsonObject definition) => new()
     {
         ["bindingCandidates"] = new JsonArray(definition["edges"]!.AsArray().OfType<JsonObject>().Select(edge =>
-            (JsonNode)new JsonObject
-            {
-                ["edgeId"] = edge["id"]!.DeepClone(), ["mechanism"] = "ui_action",
-                ["configuration"] = new JsonObject
+                (JsonNode)new JsonObject
                 {
-                    ["action"] = "tap", ["selector"] = new JsonObject { ["automationId"] = edge["action"]!["automationId"]!.DeepClone() }
-                }
-            }).ToArray())
+                    ["edgeId"] = edge["id"]!.DeepClone(),
+                    ["mechanism"] = "ui_action",
+                    ["configuration"] = new JsonObject
+                    {
+                        ["action"] = "tap",
+                        ["selector"] = new JsonObject { ["automationId"] = edge["action"]!["automationId"]!.DeepClone() }
+                    }
+                }).ToArray())
     };
 
     public static AppLearnCandidate Candidate()
     {
         var graph = Definition();
+
         return AppLearnPlanner.Build(graph, Evidence(graph), new HashSet<string>(), 1).Candidates.Single();
     }
 

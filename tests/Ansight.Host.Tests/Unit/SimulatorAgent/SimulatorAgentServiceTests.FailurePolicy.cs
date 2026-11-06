@@ -9,7 +9,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         const string failure = "Simulator HID delivery failed: Mach port invalid, device disconnected";
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("tap-first", "ansight_tap_ui", new JsonObject
             {
                 ["normalizedX"] = 0.4,
@@ -77,6 +77,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(8, gateway.Calls.Count);
         Assert.Contains("8 consecutive read-only", result.Instructions[0].Summary, StringComparison.Ordinal);
         Assert.Equal(continueAfterFailure, result.Audit.ContinueAfterInstructionFailure);
+
         if (continueAfterFailure)
         {
             Assert.Equal(SimulatorAgentInstructionStatus.Succeeded, result.Instructions[1].Status);

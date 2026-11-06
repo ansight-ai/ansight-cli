@@ -2,29 +2,6 @@ using Ansight.Adb;
 
 namespace Ansight.Host.Runtime.NativeProfiling;
 
-internal interface IAndroidProfileLauncher
-{
-    Task LaunchAsync(
-        string adbPath,
-        string deviceId,
-        string appId,
-        CancellationToken cancellationToken);
-}
-
-internal sealed class AndroidProfileLauncher : IAndroidProfileLauncher
-{
-    public async Task LaunchAsync(
-        string adbPath,
-        string deviceId,
-        string appId,
-        CancellationToken cancellationToken)
-    {
-        var adb = new AdbClient(adbPath);
-        await adb.LaunchApplicationForProfilingAsync(deviceId, appId, cancellationToken)
-            .ConfigureAwait(false);
-    }
-}
-
 internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapter
 {
     private const int Android10ApiLevel = 29;
@@ -63,6 +40,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         var resolution = adbPathOverride is null
             ? AdbToolLocator.Resolve()
             : AdbToolResolution.Found(adbPathOverride, "configured");
+
         if (!resolution.IsFound)
         {
             return new NativeProfileToolchain(
@@ -83,6 +61,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
                 TimeSpan.FromSeconds(15)),
             outputReceived: null,
             cancellationToken).ConfigureAwait(false);
+
         return new NativeProfileToolchain(
             Platform,
             Engine,
@@ -100,6 +79,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
+
         var adbPath = context.CaptureToolPath;
         var apiLevel = await GetAndroidApiLevelAsync(
             adbPath,
@@ -107,6 +87,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
             context.CapturePath,
             cancellationToken).ConfigureAwait(false);
         ValidatePresetRequirements(context.Preset, apiLevel);
+
         var configPath = Path.Combine(context.CapturePath, "diagnostics", "perfetto-config.pbtxt");
         var tracePath = Path.Combine(context.CapturePath, "raw", "capture.perfetto-trace");
         var remoteTracePath = $"/data/misc/perfetto-traces/ansight-{context.CaptureId}.perfetto-trace";
@@ -119,6 +100,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         try
         {
             var launchBeforeCapture = context.Preset == NativeProfilePresets.ManagedHeap;
+
             if (launchBeforeCapture)
             {
                 context.Log($"Launching '{context.AppId}' before the ART heap snapshot.");
@@ -133,6 +115,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
             context.Log(launchBeforeCapture
                 ? "Starting Perfetto ART heap capture for the running application."
                 : "Starting Perfetto before the measured application launch.");
+
             using var captureCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var captureTask = RunAdbAsync(
                 adbPath,
@@ -152,6 +135,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
                 context.Log,
                 captureCancellation.Token,
                 config);
+
             try
             {
                 if (!launchBeforeCapture)
@@ -184,6 +168,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
                     TimeSpan.FromSeconds(60),
                     context.Log,
                     cancellationToken).ConfigureAwait(false));
+
             if (!File.Exists(tracePath) || new FileInfo(tracePath).Length == 0)
             {
                 throw new InvalidOperationException(
@@ -250,8 +235,8 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
                 CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException
-                                           or InvalidOperationException
-                                           or System.ComponentModel.Win32Exception)
+            or InvalidOperationException
+            or System.ComponentModel.Win32Exception)
         {
         }
     }
@@ -281,6 +266,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
             outputReceived: null,
             cancellationToken).ConfigureAwait(false);
         EnsureSuccess("read the Android API level", result);
+
         if (!int.TryParse(result.StandardOutput.Trim(), out var apiLevel))
         {
             throw new InvalidOperationException(
@@ -296,14 +282,14 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         {
             throw new InvalidOperationException(
                 $"Android native profiling requires Android 10 (API {Android10ApiLevel}) or newer; "
-                + $"the selected device reports API {apiLevel}.");
+                    + $"the selected device reports API {apiLevel}.");
         }
 
         if (preset == NativeProfilePresets.ManagedHeap && apiLevel < Android11ApiLevel)
         {
             throw new InvalidOperationException(
                 $"The managed-heap preset requires Android 11 (API {Android11ApiLevel}) or newer; "
-                + $"the selected device reports API {apiLevel}.");
+                    + $"the selected device reports API {apiLevel}.");
         }
     }
 
@@ -474,6 +460,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         {
             "Perfetto Trace Processor analysis is not yet bundled; this beta capture retains the raw trace."
         };
+
         switch (preset)
         {
             case NativeProfilePresets.NativeHeap:
@@ -498,6 +485,7 @@ internal sealed class PerfettoProfileCaptureAdapter : INativeProfileCaptureAdapt
         var output = string.IsNullOrWhiteSpace(result.StandardOutput)
             ? result.StandardError
             : result.StandardOutput;
+
         return result.IsSuccess && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
     }
 

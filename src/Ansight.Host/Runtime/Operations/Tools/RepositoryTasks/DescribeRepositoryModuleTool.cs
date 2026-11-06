@@ -9,6 +9,7 @@ internal sealed class DescribeRepositoryModuleTool : RepositoryTaskTool
 {
     private static readonly TimeSpan defaultFunctionTimeout = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan defaultActionTimeout = TimeSpan.FromSeconds(30);
+
     public DescribeRepositoryModuleTool(OperationServices services)
         : base(services)
     {
@@ -45,18 +46,19 @@ internal sealed class DescribeRepositoryModuleTool : RepositoryTaskTool
     public override Task<RequestResult> ExecuteAsync(JsonObject? arguments, string? correlationId)
     {
         if (!TryResolveRepository(
-                arguments,
-                requireLiveSession: false,
-                out _,
-                out var app,
-                out var taskLoadResult,
-                out var errorMessage))
+            arguments,
+            requireLiveSession: false,
+            out _,
+            out var app,
+            out var taskLoadResult,
+            out var errorMessage))
         {
             return Task.FromResult(ToolError(errorMessage));
         }
 
         var moduleType = NormalizeOptionalString(arguments?["moduleType"]?.GetValue<string>());
         var moduleId = NormalizeOptionalString(arguments?["moduleId"]?.GetValue<string>());
+
         if (moduleId is null)
         {
             return Task.FromResult(ToolError("moduleId is required."));
@@ -65,12 +67,14 @@ internal sealed class DescribeRepositoryModuleTool : RepositoryTaskTool
         var includeDefinitions = arguments?["includeDefinitions"]?.GetValue<bool>() ?? true;
         var warnings = new List<string>(taskLoadResult!.Warnings);
         JsonObject description;
+
         if (string.Equals(moduleType, "task", StringComparison.Ordinal))
         {
             var task = taskLoadResult.Tasks.FirstOrDefault(candidate => string.Equals(
                 candidate.TaskId,
                 moduleId,
                 StringComparison.Ordinal));
+
             if (task is null)
             {
                 return Task.FromResult(ToolError($"No connected repository task named '{moduleId}' exists for app '{app!.AppId}'."));
@@ -86,10 +90,12 @@ internal sealed class DescribeRepositoryModuleTool : RepositoryTaskTool
                 defaultActionTimeout,
                 app.AppId);
             warnings.AddRange(triggerLoadResult.Warnings);
+
             var trigger = triggerLoadResult.Catalog.Triggers.FirstOrDefault(candidate => string.Equals(
                 candidate.TriggerId,
                 moduleId,
                 StringComparison.Ordinal));
+
             if (trigger is null)
             {
                 return Task.FromResult(ToolError($"No connected repository trigger named '{moduleId}' exists for app '{app.AppId}'."));
@@ -105,6 +111,7 @@ internal sealed class DescribeRepositoryModuleTool : RepositoryTaskTool
         description["appId"] = app!.AppId;
         description["warnings"] = new JsonArray(
             warnings.Distinct(StringComparer.Ordinal).Select(warning => (JsonNode?)warning).ToArray());
+
         return Task.FromResult(RequestResult.ToolResult(description, isError: false));
     }
 }

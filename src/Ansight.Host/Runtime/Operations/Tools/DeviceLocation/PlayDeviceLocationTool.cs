@@ -22,32 +22,57 @@ internal sealed class PlayDeviceLocationTool : DeviceHostTargetOperation
         try
         {
             var content = arguments?["routeContent"]?.GetValue<string>();
+
             if (string.IsNullOrWhiteSpace(content))
+            {
                 return ToolError("routeContent must contain GPX or KML XML.");
+            }
+
             var sourceFileName = NormalizeOptionalString(arguments?["sourceFileName"]?.GetValue<string>()) ?? "track.gpx";
             var mode = arguments?["mode"]?.GetValue<string>() ?? "recorded";
+
             if (mode is not ("recorded" or "fixed-speed"))
+            {
                 return ToolError("mode must be recorded or fixed-speed.");
+            }
+
             var speed = arguments?["speed"]?.Deserialize<double>() ?? 1d;
             var fixedSpeedKph = arguments?["fixedSpeedKph"]?.Deserialize<double>() ?? 30d;
+
             if (!double.IsFinite(speed) || speed is < 0.1d or > 100d)
+            {
                 return ToolError("speed must be between 0.1 and 100.");
+            }
+
             if (!double.IsFinite(fixedSpeedKph) || fixedSpeedKph is < 0.5d or > 500d)
+            {
                 return ToolError("fixedSpeedKph must be between 0.5 and 500.");
+            }
+
             var loop = arguments?["loop"]?.GetValue<bool>() ?? false;
+
             if (!TryResolveTarget(arguments, out var target, out var targetError))
+            {
                 return ToolError(targetError);
+            }
+
             if (target.DeviceIdentifier is null)
+            {
                 return ToolError("Provide a live session or explicit deviceId for location playback.");
+            }
 
             var result = await deviceLocationRouter.PlayLocationAsync(new DeviceLocationPlaybackRequest(
                 string.Empty, target.DeviceIdentifier, sourceFileName, content,
                 mode == "recorded" ? DeviceLocationPlaybackMode.RecordedTiming : DeviceLocationPlaybackMode.FixedSpeed,
                 speed, fixedSpeedKph, loop), ToolExecutionCancellation.Current).ConfigureAwait(false);
+
             if (!result.IsSuccess)
+            {
                 return ToolError(result.Message);
+            }
 
             var playback = result.Playback;
+
             return RequestResult.ToolResult(new JsonObject
             {
                 ["isSuccess"] = true,
@@ -79,6 +104,7 @@ internal sealed class PlayDeviceLocationTool : DeviceHostTargetOperation
         properties["speed"] = ToolSchema.Number("Recorded-timing speed multiplier, 0.1–100. Defaults to 1; does not change fixed speed.");
         properties["fixedSpeedKph"] = ToolSchema.Number("Fixed or fallback speed in km/h, 0.5–500. Defaults to 30.");
         properties["loop"] = ToolSchema.Boolean("Repeat until stopped or replaced. Defaults to false.");
+
         return properties;
     }
 }

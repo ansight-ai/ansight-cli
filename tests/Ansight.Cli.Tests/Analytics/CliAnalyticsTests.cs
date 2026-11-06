@@ -10,6 +10,7 @@ public sealed class CliAnalyticsTests
     {
         using var directory = TestDirectory.Create();
         EnableSignedInDetails(directory.Path);
+
         var analytics = new CliAnalytics(
             directory.Path,
             () => new DateTimeOffset(2026, 8, 21, 2, 0, 0, TimeSpan.Zero));
@@ -23,6 +24,7 @@ public sealed class CliAnalyticsTests
             .Select(body => JsonNode.Parse(body)!.AsObject())
             .ToArray();
         Assert.Equal(4, events.Length);
+
         var detailed = Assert.Single(
             events,
             item => item["eventName"]!.GetValue<string>() == "cli_command_completed");
@@ -41,6 +43,7 @@ public sealed class CliAnalyticsTests
         using var directory = TestDirectory.Create();
         var settings = new AnalyticsSettingsStore(directory.Path);
         settings.SetDetailedTrackingEnabled(false);
+
         var outbox = new EventOutbox(settings.AnalyticsDirectoryPath);
         outbox.TryStore(new EventEnvelope(
             "queued-detail",
@@ -49,6 +52,7 @@ public sealed class CliAnalyticsTests
             EventLevel.Detailed,
             new Dictionary<string, object?>(),
             DateTimeOffset.UtcNow));
+
         var analytics = new CliAnalytics(
             directory.Path,
             () => new DateTimeOffset(2026, 8, 21, 2, 0, 0, TimeSpan.Zero));
@@ -104,6 +108,7 @@ public sealed class CliAnalyticsTests
 
         await analytics.TrackInvocationAsync(CliArguments.Parse(["session", "list"]));
         await analytics.TrackInvocationAsync(CliArguments.Parse(["ui", "snapshot"]));
+
         var events = ReadQueuedEvents(directory.Path).Select(body => JsonNode.Parse(body)!.AsObject()).ToArray();
         Assert.Equal(3, events.Length);
         Assert.Single(events, item => item["eventName"]!.GetValue<string>() == "local_engaged_hourly");
@@ -125,6 +130,7 @@ public sealed class CliAnalyticsTests
         Assert.False(settings.IsDetailedTrackingEnabled);
         Assert.Throws<InvalidOperationException>(() => settings.SetDetailedTrackingEnabled(true));
         Assert.False(settings.IsDetailedTrackingActive);
+
         var unsignedAnalytics = new CliAnalytics(directory.Path);
         await unsignedAnalytics.TrackInvocationAsync(CliArguments.Parse(["device", "list"]));
         Assert.DoesNotContain(ReadQueuedEvents(directory.Path), body => body.Contains("cli_command_completed", StringComparison.Ordinal));
@@ -132,6 +138,7 @@ public sealed class CliAnalyticsTests
         AnalyticsAccount.Update(directory.Path, Guid.NewGuid().ToString("D"));
         settings.SetDetailedTrackingEnabled(true);
         Assert.True(settings.IsDetailedTrackingActive);
+
         var signedInAnalytics = new CliAnalytics(directory.Path);
         await signedInAnalytics.TrackInvocationAsync(CliArguments.Parse(["session", "list"]));
         Assert.Contains(ReadQueuedEvents(directory.Path), body => body.Contains("cli_command_completed", StringComparison.Ordinal));
@@ -147,10 +154,15 @@ public sealed class CliAnalyticsTests
 
         await analytics.TrackInvocationAsync(CliArguments.Parse(["device", "list"]));
         Assert.Equal(2, outbox.Load(20).Count);
-        foreach (var item in outbox.Load(20)) outbox.Remove(item.Path);
+
+        foreach (var item in outbox.Load(20))
+        {
+            outbox.Remove(item.Path);
+        }
 
         now = now.AddMinutes(2);
         await analytics.TrackInvocationAsync(CliArguments.Parse(["session", "list"]));
+
         var afterMidnight = Assert.Single(outbox.Load(20));
         Assert.Equal("cli_daily_active", afterMidnight.Envelope.EventName);
         outbox.Remove(afterMidnight.Path);
@@ -165,8 +177,10 @@ public sealed class CliAnalyticsTests
     {
         using var directory = TestDirectory.Create();
         EnableSignedInDetails(directory.Path);
+
         var analytics = new CliAnalytics(directory.Path);
         await analytics.TrackInvocationAsync(CliArguments.Parse(["device", "list"]));
+
         var outbox = new EventOutbox(new AnalyticsSettingsStore(directory.Path).AnalyticsDirectoryPath);
         Assert.Contains(outbox.Load(20), item => item.Envelope.Level == EventLevel.Detailed);
 
@@ -184,6 +198,7 @@ public sealed class CliAnalyticsTests
     {
         using var directory = TestDirectory.Create();
         EnableSignedInDetails(directory.Path);
+
         var analytics = new CliAnalytics(directory.Path);
         await analytics.TrackCompletionAsync(CliArguments.Parse(["session", action, "private-id"]),
             CliExitCodes.Success, TimeSpan.FromMilliseconds(25));
@@ -202,6 +217,7 @@ public sealed class CliAnalyticsTests
             ["analytics", "detailed", "disable", "--json", "--data-dir", directory.Path]);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         var payload = JsonNode.Parse(result.StandardOutput)!.AsObject();
         Assert.True(payload["dailyUseTrackingEnabled"]!.GetValue<bool>());
         Assert.False(payload["detailedTrackingEnabled"]!.GetValue<bool>());
@@ -223,8 +239,10 @@ public sealed class CliAnalyticsTests
 
         var queued = ReadQueuedEvents(directory.Path).ToArray();
         Assert.Single(queued);
+
         var request = Assert.Single(queued, body => JsonNode.Parse(body)!["eventName"]!.GetValue<string>() == "cli_installed");
         Assert.DoesNotContain(queued, body => body.Contains("cli_daily_active", StringComparison.Ordinal));
+
         var payload = JsonNode.Parse(request)!.AsObject();
         Assert.Equal("cli_installed", payload["eventName"]!.GetValue<string>());
         Assert.Equal("public", payload["properties"]!["channel"]!.GetValue<string>());
@@ -245,6 +263,7 @@ public sealed class CliAnalyticsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(exitCode, standardOutput.ToString(), standardError.ToString());
     }
 

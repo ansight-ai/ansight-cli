@@ -33,6 +33,7 @@ internal sealed class ListDevicesTool : Operation
             ["includeHistorical"] = ToolSchema.Boolean("Include disconnected and persisted sessions.", nullable: true)
         };
         SessionListingFilters.AddProperties(properties);
+
         return properties;
     }
 }

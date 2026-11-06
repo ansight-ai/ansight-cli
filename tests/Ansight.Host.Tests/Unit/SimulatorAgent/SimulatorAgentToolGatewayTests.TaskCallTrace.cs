@@ -17,7 +17,10 @@ public sealed partial class SimulatorAgentToolGatewayTests
         var input = new RepositoryTaskCallPayload("{\"selector\":\"account\"}", 22, false, "input-hash");
         var output = new RepositoryTaskCallPayload("{\"visible\":true}", 16, false, "output-hash");
         var assertion = new RepositoryTaskAssertion("visible", true, "Account is visible", JsonValue.Create(true), JsonValue.Create(true))
-        { Matcher = "expect.toBe", CompletedAtUtc = started };
+        {
+            Matcher = "expect.toBe",
+            CompletedAtUtc = started
+        };
         var child = new RepositoryTaskToolCall(1, "ansight_wait_for_ui", started, 123, false, "Found account.")
         {
             Arguments = input,
@@ -39,6 +42,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
                 {
                     cancellation.Cancel();
                 }
+
                 return RequestResult.ToolResult(new JsonObject
                 {
                     ["sourceTrace"] = JsonSerializer.SerializeToNode(source, JsonUtil.Compact),
@@ -61,6 +65,7 @@ public sealed partial class SimulatorAgentToolGatewayTests
         Assert.DoesNotContain("sourceTrace", result.ModelOutput!);
         Assert.DoesNotContain("// captured", result.Output);
         Assert.Equal(child, retained);
+
         var retainedAssertion = Assert.Single(result.TaskAssertions!);
         Assert.True(retainedAssertion.Actual!.GetValue<bool>());
         Assert.Equal("expect.toBe", retainedAssertion.Matcher);

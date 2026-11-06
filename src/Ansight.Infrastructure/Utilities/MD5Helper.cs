@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 
 // ReSharper disable MemberCanBePrivate.Global
@@ -24,6 +24,7 @@ public static class MD5Helper
         using (var md5 = MD5.Create())
         {
             var data = Encoding.UTF8.GetBytes(@string);
+
             return BitConverter.ToString(md5.ComputeHash(data));
         }
     }
@@ -41,7 +42,6 @@ public static class MD5Helper
         return Task.Run(() => FromString(@string));
     }
 
-
     /// <summary>
     /// Creates a MD5 hash for the given <paramref name="stream"/>.
     /// </summary>
@@ -57,7 +57,6 @@ public static class MD5Helper
             return BitConverter.ToString(md5.ComputeHash(stream));
         }
     }
-
 
     /// <summary>
     /// Asynchronoulsy creates a new MD5 hash for the given <paramref name="stream"/>.

@@ -38,11 +38,13 @@ public static class WorkspaceTestRefiner
         {
             throw new InvalidDataException($"Generation notes cannot exceed {MaximumGenerationNotesCharacters:N0} characters.");
         }
+
         var reasoning = AgentReasoningModes.Normalize(reasoningMode);
         var requestedModel = string.IsNullOrWhiteSpace(modelOverride)
             ? AgentReasoningConfiguration.CreateDefault(reasoning).Model
             : modelOverride.Trim();
         var workspacePath = workspaceOverride ?? runtime.Apps.Get(snapshot.AppId)?.CodebasePath;
+
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
             throw new InvalidDataException($"App '{snapshot.AppId}' must be linked to a workspace before generating an Ansight test.");
@@ -51,6 +53,7 @@ public static class WorkspaceTestRefiner
         var gateway = runtime.WorkspaceTests.RunGateway
             ?? throw new InvalidOperationException("AI test generation is unavailable on this host.");
         reportProgress?.Invoke("Preparing model access…");
+
         var preparation = await gateway.PrepareAsync(
             new WorkspaceTestRunPreparationRequest(
                 TeamId: null,
@@ -65,17 +68,23 @@ public static class WorkspaceTestRefiner
             {
                 Reasoning = reasoning
             }, cancellationToken).ConfigureAwait(false);
-        if (!preparation.IsSuccess) throw new InvalidOperationException(preparation.Message);
+
+        if (!preparation.IsSuccess)
+        {
+            throw new InvalidOperationException(preparation.Message);
+        }
 
         var transport = preparation.ModelTransport
             ?? throw new InvalidOperationException("AI test generation requires a model transport.");
         var accessKey = await transport.ResolveAccessKeyAsync(cancellationToken).ConfigureAwait(false);
+
         if (string.IsNullOrWhiteSpace(accessKey))
         {
             throw new InvalidOperationException("AI test generation could not be authorized.");
         }
 
         reportProgress?.Invoke("Model access ready. Selecting UI evidence from the selected period…");
+
         var configuration = preparation.ReasoningConfiguration
             ?? AgentReasoningConfiguration.CreateDefault(reasoning, requestedModel);
         var selectedIds = taskSectionIds?.ToHashSet(StringComparer.Ordinal) ?? [];
@@ -97,6 +106,7 @@ public static class WorkspaceTestRefiner
             })
             .ToArray();
         reportProgress?.Invoke($"Selected {sections.Length} annotated section(s), {trees.Length} UI tree(s), and {selectors.Length} visible control(s).");
+
         var prompt = $"""
             Create a reviewable Ansight workspace test YAML from this recorded session.
             The entire selected replay period defines the journey. Preserve its recorded actions in order,
@@ -143,10 +153,12 @@ public static class WorkspaceTestRefiner
             sections.Select(static section => section.EndUtc).Where(static end => end.HasValue).Select(static end => end!.Value),
             content, cancellationToken).ConfigureAwait(false);
         reportProgress?.Invoke($"Added {screenshotCount} visual frame(s) to the AI request.");
+
         var input = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = content });
         var stopwatch = Stopwatch.StartNew();
         OpenAiTurn? turn = null;
         var outcome = "failed";
+
         try
         {
             using var client = new OpenAiResponsesClient();
@@ -165,9 +177,11 @@ public static class WorkspaceTestRefiner
                     Transport = transport
                 }, cancellationToken).ConfigureAwait(false);
             reportProgress?.Invoke("AI response received. Checking the YAML, app ID, title, and actions…");
+
             var source = StripCodeFence(turn.AssistantText).Trim() + "\n";
             var definition = ValidateRefinedSource(source, snapshot.AppId);
             outcome = "succeeded";
+
             return seed with
             {
                 SuggestedName = definition.TestId,
@@ -179,16 +193,19 @@ public static class WorkspaceTestRefiner
         finally
         {
             stopwatch.Stop();
+
             if (preparation.UsesExternalTransport && preparation.TrackingRunId is { } trackingRunId)
             {
                 var passes = turn?.ResponseId is { Length: > 0 } responseId
-                    ? new[] { new SimulatorAgentModelPassUsage(
-                        responseId,
-                        turn.ResponseModel ?? configuration.Model,
-                        turn.ResponseServiceTier,
-                        DateTimeOffset.UtcNow,
-                        turn.Tokens) }
-                    : [];
+                    ? new[]
+                    {
+                        new SimulatorAgentModelPassUsage(
+                            responseId,
+                            turn.ResponseModel ?? configuration.Model,
+                            turn.ResponseServiceTier,
+                            DateTimeOffset.UtcNow,
+                            turn.Tokens)
+                    } : [];
                 await gateway.CompleteAsync(
                     new WorkspaceTestRunMeterCompletion(
                         trackingRunId,
@@ -217,10 +234,12 @@ public static class WorkspaceTestRefiner
         }
 
         var definition = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/draft.yaml", source);
+
         if (!string.Equals(definition.AppId, appId, StringComparison.Ordinal))
         {
             throw new InvalidDataException("AI-generated Ansight test must preserve the recorded app ID.");
         }
+
         if (!Regex.IsMatch(definition.TestId, "^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant)
             || definition.TestId.Length > 80
             || definition.TestId is "draft" or "test"
@@ -234,6 +253,7 @@ public static class WorkspaceTestRefiner
         {
             throw new InvalidDataException("AI-generated Ansight test needs a short journey name and a lowercase kebab-case ID.");
         }
+
         if (source.Contains("ansight_swipe_ui", StringComparison.Ordinal)
             || source.Contains("ansight_tap_ui", StringComparison.Ordinal)
             || source.Contains("startNormalizedX", StringComparison.Ordinal)
@@ -241,21 +261,29 @@ public static class WorkspaceTestRefiner
         {
             throw new InvalidDataException("AI-generated Ansight test contains raw replay instructions.");
         }
+
         if (definition.Prompt.StartsWith($"In the {appId} app", StringComparison.OrdinalIgnoreCase)
             || definition.Prompt.Contains("complete this journey using the visible UI", StringComparison.OrdinalIgnoreCase)
             || definition.Prompt.Contains("adapt to minor layout changes", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("AI-generated Ansight test must begin with the actual journey, without generic runner boilerplate.");
         }
+
         return definition;
     }
 
     private static string StripCodeFence(string source)
     {
         var trimmed = source.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal)) return trimmed;
+
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
         var firstNewline = trimmed.IndexOf('\n');
         var closingFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+
         return firstNewline >= 0 && closingFence > firstNewline
             ? trimmed[(firstNewline + 1)..closingFence].Trim()
             : trimmed;

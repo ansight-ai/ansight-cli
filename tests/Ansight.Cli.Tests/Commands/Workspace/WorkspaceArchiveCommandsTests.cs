@@ -14,8 +14,10 @@ public sealed class WorkspaceArchiveCommandsTests
         var destination = Path.Combine(directory.Path, "imported");
         var zip = Path.Combine(directory.Path, "workspace.zip");
         Assert.True(new WorkspaceAuthoringService().Initialize(new(source)).IsSuccess);
+
         var exported = await Run("workspace", "export", source, "--output", zip, "--json");
         Assert.Equal(CliExitCodes.Success, exported.ExitCode);
+
         var exportPayload = JsonNode.Parse(exported.Output)!;
         Assert.Equal("ansight.workspace-archive/v1", exportPayload["schema"]!.GetValue<string>());
         Assert.Equal("export", exportPayload["action"]!.GetValue<string>());
@@ -27,6 +29,7 @@ public sealed class WorkspaceArchiveCommandsTests
         Assert.Equal(CliExitCodes.Success, imported.ExitCode);
         Assert.Equal("import", JsonNode.Parse(imported.Output)!["action"]!.GetValue<string>());
         Assert.True(File.Exists(Path.Combine(destination, "ansight", "package.json")));
+
         var refused = await Run("workspace", "import", zip, destination, "--json");
         Assert.Equal(CliExitCodes.Failure, refused.ExitCode);
         Assert.False(JsonNode.Parse(refused.Output)!["result"]!["isSuccess"]!.GetValue<bool>());
@@ -43,6 +46,7 @@ public sealed class WorkspaceArchiveCommandsTests
         var storagePath = Path.Combine(dataDirectory, "secure-storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
+
         await using var runtime = new RuntimeCoordinator(new RuntimeOptions
         {
             BaseFolderPath = dataDirectory,
@@ -52,10 +56,12 @@ public sealed class WorkspaceArchiveCommandsTests
         Assert.True(new WorkspaceAuthoringService().Initialize(new(workspace)).IsSuccess);
         Assert.True(runtime.Apps.Register(new("com.example.linked", "Linked", workspace)).IsSuccess);
         Assert.True(runtime.Apps.Register(new("com.example.unlinked", "Unlinked")).IsSuccess);
+
         using var context = CliCommandContext.Push(runtime, dataDirectory, null);
 
         var exported = await Run("workspace", "export", "--app-id", "com.example.linked", "--output", zip, "--data-dir", dataDirectory, "--json");
         Assert.Equal(CliExitCodes.Success, exported.ExitCode);
+
         var payload = JsonNode.Parse(exported.Output)!;
         Assert.Equal("com.example.linked", payload["appId"]!.GetValue<string>());
         Assert.Equal(workspace, payload["result"]!["workspacePath"]!.GetValue<string>());
@@ -64,6 +70,7 @@ public sealed class WorkspaceArchiveCommandsTests
         var missing = await Run("workspace", "export", "--app-id", "missing", "--output", zip, "--data-dir", dataDirectory);
         Assert.Equal(CliExitCodes.Usage, missing.ExitCode);
         Assert.Contains("was not found", missing.Error);
+
         var unlinked = await Run("workspace", "export", "--app-id", "com.example.unlinked", "--output", zip, "--data-dir", dataDirectory);
         Assert.Equal(CliExitCodes.Usage, unlinked.ExitCode);
         Assert.Contains("no linked workspace", unlinked.Error);
@@ -91,9 +98,15 @@ public sealed class WorkspaceArchiveCommandsTests
     {
         var callerDirectory = Path.Combine(Path.GetTempPath(), "workspace-export-caller");
         var values = new List<string> { command, "export", "--app-id", "com.example.app", outputOption };
-        if (outputValue is not null) values.Add(outputValue);
+
+        if (outputValue is not null)
+        {
+            values.Add(outputValue);
+        }
+
         var arguments = CliArguments.Parse(values);
         Assert.True(ControlClient.ShouldForward(arguments));
+
         var forwarded = CliArguments.Parse(ControlClient.CreateForwardedArguments(arguments, callerDirectory));
         Assert.Equal(Path.Combine(callerDirectory, "exports", "workspace.zip"), forwarded.GetOption("output"));
         Assert.Equal("com.example.app", forwarded.GetOption("app-id"));
@@ -108,6 +121,7 @@ public sealed class WorkspaceArchiveCommandsTests
         using var error = new StringWriter();
         var exitCode = await CliApplication.RunParsedAsync(arguments, new CliOutput(arguments.IsJson, output, error),
             CancellationToken.None, accessAuthorizer: TestAccessAuthorizer.Allow, allowResidentHostForwarding: false);
+
         return new(exitCode, output.ToString(), error.ToString());
     }
 

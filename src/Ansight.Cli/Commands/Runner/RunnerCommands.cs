@@ -12,7 +12,9 @@ internal static class RunnerCommands
     public static Task<int> RunAsync(CliArguments arguments, CliOutput output, CancellationToken cancellationToken, TextReader? standardInput = null, bool standardInputIsInteractive = false)
     {
         if (CliCommandHelp.IsRequested(arguments) || arguments.Positionals.Count == 1)
+        {
             return Task.FromResult(CliCommandHelp.Write(output, Help));
+        }
 
         return Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("RunnerCommands.RunAsync", [arguments, output, cancellationToken, standardInput, standardInputIsInteractive]);
     }
@@ -122,5 +124,4 @@ internal static class RunnerCommands
         Once registered, `ansight runner machines` uses the local organisation automatically.
         Machines are also visible in the web portal under Account > Runners.
         """;
-
 }

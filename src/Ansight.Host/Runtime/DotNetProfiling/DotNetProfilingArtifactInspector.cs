@@ -19,16 +19,18 @@ internal static class DotNetProfilingArtifactInspector
         var json = Directory.Exists(package.InstallPath)
             ? TryReadApplicationBundle(package.InstallPath)
             : TryReadAndroidPackage(package.InstallPath);
+
         if (json is null)
         {
             return null;
         }
 
         DotNetProfilingApplicationManifest manifest;
+
         try
         {
             manifest = JsonSerializer.Deserialize<DotNetProfilingApplicationManifest>(json)
-                       ?? throw new InvalidDataException("The Ansight profiling manifest is empty.");
+                ?? throw new InvalidDataException("The Ansight profiling manifest is empty.");
         }
         catch (JsonException exception)
         {
@@ -36,6 +38,7 @@ internal static class DotNetProfilingArtifactInspector
         }
 
         Validate(manifest);
+
         return manifest;
     }
 
@@ -66,15 +69,16 @@ internal static class DotNetProfilingArtifactInspector
         {
             throw new InvalidOperationException(
                 $"The profiling artifact was built for '{manifest.Target}', but the selected target requires "
-                + $"'{expectedTarget}'. Rebuild the app with AnsightProfilingTarget={expectedTarget}.");
+                    + $"'{expectedTarget}'. Rebuild the app with AnsightProfilingTarget={expectedTarget}.");
         }
 
         var actualConfiguration = manifest.BuildDiagnosticConfiguration();
+
         if (!string.Equals(actualConfiguration, expectedConfiguration, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The profiling artifact declares DiagnosticConfiguration='{actualConfiguration}', "
-                + $"but the selected target requires '{expectedConfiguration}'.");
+                    + $"but the selected target requires '{expectedConfiguration}'.");
         }
     }
 
@@ -83,12 +87,14 @@ internal static class DotNetProfilingArtifactInspector
         var manifestPath = Path.Combine(
             applicationPath,
             ManifestRelativePath.Replace('/', Path.DirectorySeparatorChar));
+
         if (!File.Exists(manifestPath))
         {
             return null;
         }
 
         var fileInfo = new FileInfo(manifestPath);
+
         if (fileInfo.Length > MaximumManifestBytes)
         {
             throw new InvalidDataException(
@@ -110,6 +116,7 @@ internal static class DotNetProfilingArtifactInspector
             candidate.FullName.Replace('\\', '/'),
             AndroidManifestEntryPath,
             StringComparison.OrdinalIgnoreCase));
+
         if (entry is null)
         {
             return null;
@@ -123,19 +130,20 @@ internal static class DotNetProfilingArtifactInspector
 
         using var stream = entry.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
         return reader.ReadToEnd();
     }
 
     private static void Validate(DotNetProfilingApplicationManifest manifest)
     {
         if (!string.Equals(
-                manifest.Schema,
-                DotNetProfilingApplicationManifest.CurrentSchema,
-                StringComparison.Ordinal))
+            manifest.Schema,
+            DotNetProfilingApplicationManifest.CurrentSchema,
+            StringComparison.Ordinal))
         {
             throw new InvalidDataException(
                 $"Unsupported Ansight profiling manifest schema '{manifest.Schema}'. "
-                + $"Expected '{DotNetProfilingApplicationManifest.CurrentSchema}'.");
+                    + $"Expected '{DotNetProfilingApplicationManifest.CurrentSchema}'.");
         }
 
         if (manifest.Target is not ("android-emulator" or "android-device" or "ios-simulator" or "ios-device"))
@@ -159,9 +167,9 @@ internal static class DotNetProfilingArtifactInspector
         }
 
         if (!string.Equals(
-                manifest.StartupProvider,
-                DotNetStartupMarker.ProviderName,
-                StringComparison.Ordinal)
+            manifest.StartupProvider,
+            DotNetStartupMarker.ProviderName,
+            StringComparison.Ordinal)
             || !string.Equals(
                 manifest.StartupEvent,
                 DotNetStartupMarker.EventName,

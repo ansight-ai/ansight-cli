@@ -26,7 +26,7 @@ internal sealed class RepositoryTaskRouter
     public RepositoryTaskRouter(IApplicationPaths applicationPaths)
         : this(
             applicationPaths?.ApplicationDataPath
-            ?? throw new ArgumentNullException(nameof(applicationPaths)),
+                ?? throw new ArgumentNullException(nameof(applicationPaths)),
             ProductAnalytics.For(applicationPaths))
     {
         activity = SessionActivityService.For(applicationPaths);
@@ -45,6 +45,7 @@ internal sealed class RepositoryTaskRouter
     public void ConfigureToolExecutor(Func<string, JsonObject, string?, OperationExecutionContext?, Task<RequestResult>> executor)
     {
         ArgumentNullException.ThrowIfNull(executor);
+
         lock (gate)
         {
             toolExecutor = executor;
@@ -54,6 +55,7 @@ internal sealed class RepositoryTaskRouter
     public void ConfigureHostToolRegistry(OperationRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
+
         lock (gate)
         {
             foreach (var descriptor in registry.GetRepositoryTaskTools())
@@ -79,7 +81,7 @@ internal sealed class RepositoryTaskRouter
                 {
                     throw new InvalidOperationException(
                         $"Repository task API method '{descriptor.ApiFeatureName}.{descriptor.ApiMethodName}' maps to both " +
-                        $"'{existingToolName}' and '{descriptor.ToolName}'.");
+                                        $"'{existingToolName}' and '{descriptor.ToolName}'.");
                 }
 
                 hostToolsByName.Add(descriptor.ToolName, descriptor);
@@ -94,6 +96,7 @@ internal sealed class RepositoryTaskRouter
     {
         bool validationConfigured;
         IReadOnlyDictionary<string, RepositoryTaskHostToolDescriptor> currentHostTools;
+
         lock (gate)
         {
             validationConfigured = hostToolValidationConfigured;
@@ -118,6 +121,7 @@ internal sealed class RepositoryTaskRouter
     public void ConfigureRuntime(string executablePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+
         lock (gate)
         {
             runtime = JavaScriptRuntimeResolver.Resolve(executablePath.Trim());
@@ -142,9 +146,12 @@ internal sealed class RepositoryTaskRouter
             [task.TaskId],
             RepositoryTaskTraceScope.IsEnabled,
             cancellationToken, context, secretValues, requestedRunId, batchRunId), result => result.Status.ToString().ToLowerInvariant() switch
-            {
-                "succeeded" => "succeeded", "cancelled" => "cancelled", "rejected" => "blocked", _ => "failed"
-            });
+{
+    "succeeded" => "succeeded",
+    "cancelled" => "cancelled",
+    "rejected" => "blocked",
+    _ => "failed"
+});
 
     private async Task<RepositoryTaskRunResult> ExecuteCoreAsync(
         RepositoryTaskDefinition task,
@@ -167,6 +174,7 @@ internal sealed class RepositoryTaskRouter
         Func<string, JsonObject, string?, OperationExecutionContext?, Task<RequestResult>>? currentToolExecutor;
         JavaScriptRuntimeResolution currentRuntime;
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> currentHostApiSuites;
+
         lock (gate)
         {
             currentToolExecutor = toolExecutor;
@@ -183,6 +191,7 @@ internal sealed class RepositoryTaskRouter
         using var callerScope = SessionActivityContext.ExecuteAs("automation", "repository-task", runId, batchRunId ?? context?.BatchRunId);
         using var operation = activity.Begin("task." + task.TaskId, "task", sessionId, task.AppId, correlationId);
         RepositoryTaskRunResult result;
+
         if (!task.Enabled)
         {
             var now = DateTimeOffset.UtcNow;
@@ -232,43 +241,54 @@ internal sealed class RepositoryTaskRouter
                 currentHostApiSuites,
                 ExecuteTaskApiAsync,
                 currentHostApiSuites.ContainsKey("capabilities") ? async (id, token) =>
-                {
-                    using var scope = ToolExecutionCancellation.Push(token);
-                    var resolved = await currentToolExecutor("ansight_get_execution_capabilities",
-                        new JsonObject { ["sessionId"] = id }, correlationId, context).ConfigureAwait(false);
-                    return resolved.Payload?["structuredContent"]?.DeepClone().AsObject()
-                        ?? throw new InvalidOperationException(resolved.ErrorMessage ?? "Execution capabilities are unavailable.");
-                } : null);
+                        {
+                            using var scope = ToolExecutionCancellation.Push(token);
+                            var resolved = await currentToolExecutor("ansight_get_execution_capabilities",
+                                new JsonObject { ["sessionId"] = id }, correlationId, context).ConfigureAwait(false);
+
+                            return resolved.Payload?["structuredContent"]?.DeepClone().AsObject()
+                                ?? throw new InvalidOperationException(resolved.ErrorMessage ?? "Execution capabilities are unavailable.");
+                        }
+            : null);
             PublishEvent?.Invoke(sessionId, "task.started", "host.task.started", task.TaskId);
             result = await executor.ExecuteAsync(
-                    new RepositoryTaskExecutionRequest(
-                        runId,
-                        task,
-                        sessionId.Trim(),
-                        input.DeepClone().AsObject(),
-                        string.IsNullOrWhiteSpace(correlationId)
-                            ? $"repository-task-{runId}"
-                            : correlationId.Trim())
-                    {
-                        TaskCallChain = taskCallChain.ToArray(),
-                        CaptureTrace = captureTrace,
-                        OperationContext = context,
-                        BatchRunId = batchRunId ?? context?.BatchRunId,
-                        SecretValues = secretValues ?? new Dictionary<string, string>()
-                    },
-                    cancellationToken)
+                new RepositoryTaskExecutionRequest(
+                    runId,
+                    task,
+                    sessionId.Trim(),
+                    input.DeepClone().AsObject(),
+                    string.IsNullOrWhiteSpace(correlationId)
+                        ? $"repository-task-{runId}"
+                        : correlationId.Trim())
+                {
+                    TaskCallChain = taskCallChain.ToArray(),
+                    CaptureTrace = captureTrace,
+                    OperationContext = context,
+                    BatchRunId = batchRunId ?? context?.BatchRunId,
+                    SecretValues = secretValues ?? new Dictionary<string, string>()
+                },
+                cancellationToken)
                 .ConfigureAwait(false);
+
             var outcome = result.Status is RepositoryTaskRunStatus.Passed or RepositoryTaskRunStatus.Inconclusive
                 ? "completed" : result.Status.ToString().ToLowerInvariant();
             PublishEvent?.Invoke(sessionId, "task." + outcome, "host.task." + outcome, task.TaskId);
         }
 
-        result = result with { TraceId = operation.TraceId, OperationId = operation.OperationId };
+        result = result with
+        {
+            TraceId = operation.TraceId,
+            OperationId = operation.OperationId
+        };
         operation.Complete(result.Status switch
         {
-            RepositoryTaskRunStatus.Passed => "succeeded", RepositoryTaskRunStatus.Cancelled => "cancelled",
-            RepositoryTaskRunStatus.Rejected => "rejected", RepositoryTaskRunStatus.Inconclusive => "inconclusive", _ => "failed"
+            RepositoryTaskRunStatus.Passed => "succeeded",
+            RepositoryTaskRunStatus.Cancelled => "cancelled",
+            RepositoryTaskRunStatus.Rejected => "rejected",
+            RepositoryTaskRunStatus.Inconclusive => "inconclusive",
+            _ => "failed"
         });
+
         try
         {
             runStore.Append(result);
@@ -298,11 +318,13 @@ internal sealed class RepositoryTaskRouter
         var loadResult = Load(
             parentRequest.Task.RepositoryRootPath,
             parentRequest.Task.AppId);
+
         if (string.Equals(methodName, "list", StringComparison.Ordinal))
         {
             var query = NormalizeOptionalString(arguments["query"]);
             var feature = NormalizeOptionalString(arguments["feature"]);
             var maximumResults = ReadMaximumResults(arguments["maxResults"]);
+
             return new RepositoryTaskApiResult(RequestResult.ToolResult(
                 RepositoryTaskProtocol.BuildDiscoveryResult(
                     loadResult,
@@ -320,15 +342,19 @@ internal sealed class RepositoryTaskRouter
         }
 
         var taskId = NormalizeOptionalString(arguments["taskId"]);
+
         if (taskId is null)
         {
             return TaskApiError("taskId is required.");
         }
+
         if (parentRequest.TaskCallChain.Contains(taskId, StringComparer.Ordinal))
         {
             var cycle = string.Join(" -> ", parentRequest.TaskCallChain.Append(taskId));
+
             return TaskApiError($"Recursive repository task call rejected: {cycle}.");
         }
+
         if (parentRequest.TaskCallChain.Count >= MaximumTaskCallDepth)
         {
             return TaskApiError(
@@ -339,34 +365,38 @@ internal sealed class RepositoryTaskRouter
             candidate.TaskId,
             taskId,
             StringComparison.Ordinal));
+
         if (task is null)
         {
             return TaskApiError(
                 $"No repository task named '{taskId}' exists in '{parentRequest.Task.RepositoryRootPath}'.");
         }
+
         if (arguments["input"] is not null and not JsonObject)
         {
             return TaskApiError("Task input must be a JSON object.");
         }
+
         if (!RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
-                task.InputSchema,
-                arguments["input"] as JsonObject,
-                out var input,
-                out var errorMessage))
+            task.InputSchema,
+            arguments["input"] as JsonObject,
+            out var input,
+            out var errorMessage))
         {
             return TaskApiError(errorMessage);
         }
 
         var result = await ExecuteCoreAsync(
-                task,
-                parentRequest.SessionId,
-                input,
-                correlationId,
-                parentRequest.TaskCallChain.Append(taskId).ToArray(),
-                parentRequest.CaptureTrace,
-                cancellationToken, parentRequest.OperationContext, parentRequest.SecretValues,
-                batchRunId: parentRequest.BatchRunId)
+            task,
+            parentRequest.SessionId,
+            input,
+            correlationId,
+            parentRequest.TaskCallChain.Append(taskId).ToArray(),
+            parentRequest.CaptureTrace,
+            cancellationToken, parentRequest.OperationContext, parentRequest.SecretValues,
+            batchRunId: parentRequest.BatchRunId)
             .ConfigureAwait(false);
+
         // Trace payloads are retained separately so tracing cannot grow the JavaScript
         // response past its runtime limit or change a composed task's behavior.
         return new RepositoryTaskApiResult(
@@ -396,6 +426,7 @@ internal sealed class RepositoryTaskRouter
         {
             return RepositoryTaskProtocol.DefaultMaximumDiscoveryResults;
         }
+
         if (value is not JsonValue jsonValue || !jsonValue.TryGetValue<int>(out var maximumResults))
         {
             return RepositoryTaskProtocol.DefaultMaximumDiscoveryResults;

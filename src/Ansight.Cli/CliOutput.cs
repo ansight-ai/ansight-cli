@@ -5,7 +5,7 @@ namespace Ansight.Cli;
 
 internal sealed class CliOutput
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         MaxDepth = 256,
@@ -34,7 +34,11 @@ internal sealed class CliOutput
 
     public void WriteJsonLine(object value)
     {
-        if (silent) return;
+        if (silent)
+        {
+            return;
+        }
+
         standardOutput.WriteLine(JsonSerializer.Serialize(value, InteractionProtocol.jsonOptions));
         standardOutput.Flush();
     }
@@ -48,7 +52,8 @@ internal sealed class CliOutput
 
         if (json)
         {
-            standardOutput.WriteLine(JsonSerializer.Serialize(value, JsonOptions));
+            standardOutput.WriteLine(JsonSerializer.Serialize(value, jsonOptions));
+
             return;
         }
 
@@ -147,5 +152,4 @@ internal sealed class CliOutput
             }
         }
     }
-
 }

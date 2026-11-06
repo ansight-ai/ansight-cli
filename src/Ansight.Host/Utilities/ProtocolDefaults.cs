@@ -31,6 +31,7 @@ internal static class ProtocolDefaults
                 webSocketPath,
                 webSocketSessionPortRangeStart,
                 webSocketSessionPortRangeEnd);
+
             return new OverrideScope(previous);
         }
     }
@@ -61,6 +62,7 @@ internal static class ProtocolDefaults
             }
 
             disposed = true;
+
             lock (gate)
             {
                 overrideValues = previous;

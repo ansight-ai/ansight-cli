@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 /// <summary>Mandatory, coarse local engagement measurement shared by the CLI and player.</summary>
 public static class EngagementAnalytics
@@ -13,13 +13,17 @@ public static class EngagementAnalytics
     public static void RecordDailySignal(string dataDirectory, EventEnvelope envelope)
     {
         if (envelope.Level != EventLevel.Daily || envelope.EventName is not
-            ("cli_daily_active" or "cli_command_used_daily" or "local_web_daily_active")) return;
+                ("cli_daily_active" or "cli_command_used_daily" or "local_web_daily_active"))
+        {
+            return;
+        }
 
         try
         {
             var settings = new AnalyticsSettingsStore(dataDirectory);
             var directory = Path.Combine(settings.AnalyticsDirectoryPath, "engagement");
             Directory.CreateDirectory(directory);
+
             using var guard = new FileStream(Path.Combine(directory, "daily.lock"),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             var path = Path.Combine(directory, "daily-state.json");
@@ -27,12 +31,20 @@ public static class EngagementAnalytics
                 ? JsonSerializer.Deserialize<DailyState>(File.ReadAllText(path), jsonOptions) ?? new DailyState()
                 : new DailyState();
             var now = envelope.TimestampUtc.ToUniversalTime();
+
             if (state.LastSent.TryGetValue(envelope.EventName, out var previous)
                 && (envelope.EventName == "cli_command_used_daily"
                     ? now - previous < TimeSpan.FromHours(24)
-                    : now.Date == previous.Date)) return;
+                    : now.Date == previous.Date))
+            {
+                return;
+            }
 
-            if (!new EventOutbox(settings.AnalyticsDirectoryPath).TryStore(envelope)) return;
+            if (!new EventOutbox(settings.AnalyticsDirectoryPath).TryStore(envelope))
+            {
+                return;
+            }
+
             state.LastSent[envelope.EventName] = now;
             File.WriteAllText(path, JsonSerializer.Serialize(state, jsonOptions));
         }
@@ -49,6 +61,7 @@ public static class EngagementAnalytics
             var settings = new AnalyticsSettingsStore(dataDirectory);
             var directory = Path.Combine(settings.AnalyticsDirectoryPath, "engagement");
             Directory.CreateDirectory(directory);
+
             var hour = timestampUtc.ToUniversalTime().ToString("yyyyMMddHH", System.Globalization.CultureInfo.InvariantCulture);
             var path = Path.Combine(directory, hour + ".json");
             using var guard = new FileStream(Path.Combine(directory, hour + ".lock"),
@@ -56,9 +69,14 @@ public static class EngagementAnalytics
             var state = File.Exists(path)
                 ? JsonSerializer.Deserialize<HourlyState>(File.ReadAllText(path), jsonOptions) ?? new HourlyState()
                 : new HourlyState();
-            if (state.Emitted) return;
+
+            if (state.Emitted)
+            {
+                return;
+            }
 
             state.Actions = Math.Min(ActionsRequired, state.Actions + 1);
+
             if (state.Actions == ActionsRequired)
             {
                 var identity = AnalyticsIdentity.LoadOrCreate(settings.AnalyticsDirectoryPath);

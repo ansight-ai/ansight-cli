@@ -1,4 +1,4 @@
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 using System.Text.Json;
 using Ansight.Host.Tests.Unit.Runtime;
 
@@ -12,6 +12,7 @@ public sealed class HostLocalWebAnalyticsTests
         using var directory = new TemporaryDirectory();
         AnalyticsAccount.Update(directory.RootPath, Guid.NewGuid().ToString("D"));
         new AnalyticsSettingsStore(directory.RootPath).SetDetailedTrackingEnabled(true);
+
         var analytics = new LocalWebAnalytics(
             directory.RootPath,
             () => new DateTimeOffset(2026, 8, 21, 3, 0, 0, TimeSpan.Zero));
@@ -23,8 +24,10 @@ public sealed class HostLocalWebAnalyticsTests
             CancellationToken.None);
 
         Assert.Equal(2, ReadQueuedEvents(directory.RootPath).Length);
+
         var events = ReadQueuedEvents(directory.RootPath).Select(body => JsonNode.Parse(body)!.AsObject()).ToArray();
         Assert.Single(events, item => item["eventName"]!.GetValue<string>() == "local_web_daily_active");
+
         var detailed = Assert.Single(events, item => item["eventName"]!.GetValue<string>() == "local_web_session_viewed");
         Assert.True(detailed["properties"]!["is_live"]!.GetValue<bool>());
         Assert.Equal("explorer", detailed["properties"]!["mode"]!.GetValue<string>());
@@ -40,6 +43,7 @@ public sealed class HostLocalWebAnalyticsTests
         await File.WriteAllTextAsync(
             Path.Combine(analyticsDirectory, "settings.json"),
             """{"detailedTrackingEnabled":false}""");
+
         var analytics = new LocalWebAnalytics(
             directory.RootPath,
             () => new DateTimeOffset(2026, 8, 21, 3, 0, 0, TimeSpan.Zero));
@@ -66,6 +70,7 @@ public sealed class HostLocalWebAnalyticsTests
         using var directory = new TemporaryDirectory();
         AnalyticsAccount.Update(directory.RootPath, Guid.NewGuid().ToString("D"));
         new AnalyticsSettingsStore(directory.RootPath).SetDetailedTrackingEnabled(true);
+
         var analytics = new LocalWebAnalytics(directory.RootPath);
         await analytics.TrackAsync(new LocalWebAnalyticsRequest("panel_opened", Panel: panel), true, CancellationToken.None);
         Assert.Contains(panel, Assert.Single(ReadQueuedEvents(directory.RootPath)));

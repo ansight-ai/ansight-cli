@@ -12,10 +12,12 @@ internal sealed class RepositoryAutomationRunStore
     public RepositoryAutomationRunStore(string applicationDataPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationDataPath);
+
         var directoryPath = Path.Combine(applicationDataPath, "automation");
         PrivateStorageDirectory.Ensure(directoryPath);
         filePath = Path.Combine(directoryPath, "trigger-runs.jsonl");
         BoundedRunHistory.RestrictFile(filePath);
+
         if (File.Exists(filePath) && new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
         {
             Compact();
@@ -25,15 +27,19 @@ internal sealed class RepositoryAutomationRunStore
     public void Append(AutomationRunCompletedEvent completedEvent)
     {
         ArgumentNullException.ThrowIfNull(completedEvent);
+
         var line = SerializeBounded(completedEvent);
+
         if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
         {
             throw new IOException("Automation run history record exceeds the local size limit.");
         }
+
         lock (gate)
         {
             File.AppendAllText(filePath, line + Environment.NewLine);
             BoundedRunHistory.RestrictFile(filePath);
+
             if (new FileInfo(filePath).Length > BoundedRunHistory.MaximumFileBytes)
             {
                 Compact();
@@ -44,6 +50,7 @@ internal sealed class RepositoryAutomationRunStore
     public IReadOnlyList<AutomationRunCompletedEvent> GetRecent(string appId, int limit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         if (limit is < 1 or > 500)
         {
             throw new ArgumentOutOfRangeException(nameof(limit), limit, "Run trace limit must be between 1 and 500.");
@@ -72,6 +79,7 @@ internal sealed class RepositoryAutomationRunStore
     private string SerializeBounded(AutomationRunCompletedEvent completedEvent)
     {
         var output = completedEvent.Output;
+
         if (output is not null && JsonSerializer.SerializeToUtf8Bytes(output, json).Length > 32 * 1_024)
         {
             output = new System.Text.Json.Nodes.JsonObject { ["truncated"] = true };
@@ -79,6 +87,7 @@ internal sealed class RepositoryAutomationRunStore
 
         var matchedEvent = completedEvent.MatchedEvent;
         var payload = matchedEvent.Payload;
+
         if (JsonSerializer.SerializeToUtf8Bytes(payload, json).Length > 16 * 1_024)
         {
             matchedEvent = new AutomationEventEnvelope
@@ -102,6 +111,7 @@ internal sealed class RepositoryAutomationRunStore
             StandardError = BoundedRunHistory.LimitText(completedEvent.StandardError, 8 * 1_024)
         };
         var line = JsonSerializer.Serialize(bounded, json);
+
         if (System.Text.Encoding.UTF8.GetByteCount(line) > BoundedRunHistory.MaximumRecordBytes)
         {
             bounded = bounded with
@@ -133,6 +143,7 @@ internal sealed class RepositoryAutomationRunStore
         }
 
         var results = new List<AutomationRunCompletedEvent>();
+
         foreach (var line in File.ReadLines(filePath))
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -143,6 +154,7 @@ internal sealed class RepositoryAutomationRunStore
             try
             {
                 var item = JsonSerializer.Deserialize<AutomationRunCompletedEvent>(line, json);
+
                 if (item is not null)
                 {
                     results.Add(item);

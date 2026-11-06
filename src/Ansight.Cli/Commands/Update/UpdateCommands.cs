@@ -15,6 +15,7 @@ internal static class UpdateCommands
         var action = arguments.Positionals.Count == 1
             ? "apply"
             : arguments.Positionals[1].ToLowerInvariant();
+
         if (action is not ("apply" or "check"))
         {
             throw new CliUsageException(
@@ -24,12 +25,14 @@ internal static class UpdateCommands
         arguments.EnsurePositionalCount(
             action == "apply" && arguments.Positionals.Count == 1 ? 1 : 2,
             action == "check" ? "ansight update check" : "ansight update");
+
         var requestedVersion = arguments.GetOption("version");
         var requestedBuildNumber = ReadBuildNumber(arguments.GetOption("build-number"));
         var requestedChannel = arguments.GetOption("channel");
         output.WriteProgress(requestedVersion is null
             ? "[update] Checking for updates..."
             : "[update] Resolving the requested CLI build...");
+
         var installationState = CliInstallationReceiptStore.Load();
         using var httpClient = CreateHttpClient();
         var service = new CliUpdateService(
@@ -38,14 +41,16 @@ internal static class UpdateCommands
             installationState,
             CliRuntimeIdentifier.Current);
         var status = await service.CheckAsync(
-                requestedChannel,
-                requestedVersion,
-                requestedBuildNumber,
-                cancellationToken)
+            requestedChannel,
+            requestedVersion,
+            requestedBuildNumber,
+            cancellationToken)
             .ConfigureAwait(false);
+
         if (action == "check")
         {
             output.Write(status, () => RenderStatus(status));
+
             return CliExitCodes.Success;
         }
 
@@ -57,11 +62,12 @@ internal static class UpdateCommands
 
         var runner = new CliInstallerRunner(httpClient, installationState);
         var result = await runner.ApplyAsync(
-                status,
-                CreateProgress(output),
-                cancellationToken)
+            status,
+            CreateProgress(output),
+            cancellationToken)
             .ConfigureAwait(false);
         output.Write(result, () => result.Message);
+
         return CliExitCodes.Success;
     }
 
@@ -91,15 +97,16 @@ internal static class UpdateCommands
             var summary = string.IsNullOrWhiteSpace(status.Summary)
                 ? string.Empty
                 : $"{Environment.NewLine}{status.Summary}";
+
             return $"Ansight CLI {status.LatestVersion} ({status.LatestBuildNumber}) is available on the {status.Channel} channel."
-                   + $"{Environment.NewLine}Current: {status.CurrentVersion} ({status.CurrentBuildNumber})"
-                   + $"{Environment.NewLine}Run 'ansight update' to install it.{summary}";
+                + $"{Environment.NewLine}Current: {status.CurrentVersion} ({status.CurrentBuildNumber})"
+                + $"{Environment.NewLine}Run 'ansight update' to install it.{summary}";
         }
 
         if (status.IsVersionChange)
         {
             return $"Selected Ansight CLI build: {status.LatestVersion} ({status.LatestBuildNumber})."
-                   + $"{Environment.NewLine}Current: {status.CurrentVersion} ({status.CurrentBuildNumber})";
+                + $"{Environment.NewLine}Current: {status.CurrentVersion} ({status.CurrentBuildNumber})";
         }
 
         if (status.IsChannelChange)
@@ -118,10 +125,10 @@ internal static class UpdateCommands
         }
 
         if (!long.TryParse(
-                source,
-                System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var buildNumber)
+            source,
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var buildNumber)
             || buildNumber <= 0)
         {
             throw new CliUsageException("--build-number must be a positive integer.");

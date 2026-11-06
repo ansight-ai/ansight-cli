@@ -14,7 +14,7 @@ internal static class PairingQrPngWriter
 
         var fullOutputPath = Path.GetFullPath(outputPath);
         var parentDirectory = Path.GetDirectoryName(fullOutputPath)
-                              ?? throw new InvalidOperationException("The QR output path has no parent directory.");
+            ?? throw new InvalidOperationException("The QR output path has no parent directory.");
         Directory.CreateDirectory(parentDirectory);
 
         var pngBytes = EncodePng(payload);
@@ -42,11 +42,13 @@ internal static class PairingQrPngWriter
         using var qrData = generator.CreateQrCode(payload, ECCLevel.M);
         var imageSize = qrData.ModuleMatrix.Count * GraphicPixelsPerModule;
         using var surface = SKSurface.Create(new SKImageInfo(imageSize, imageSize))
-                            ?? throw new InvalidOperationException("Could not allocate the enrollment QR image.");
+            ?? throw new InvalidOperationException("Could not allocate the enrollment QR image.");
         surface.Canvas.Render(qrData, imageSize, imageSize);
+
         using var image = surface.Snapshot();
         using var imageData = image.Encode(SKEncodedImageFormat.Png, quality: 100)
-                              ?? throw new InvalidOperationException("Could not encode the enrollment QR image.");
+            ?? throw new InvalidOperationException("Could not encode the enrollment QR image.");
+
         return imageData.ToArray();
     }
 }

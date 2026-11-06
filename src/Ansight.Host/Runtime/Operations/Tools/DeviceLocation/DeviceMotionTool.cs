@@ -34,20 +34,28 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
         try
         {
             if (!TryResolveTarget(arguments, out var target, out var targetError))
+            {
                 return ToolError(targetError);
+            }
+
             if (target.DeviceIdentifier is null)
+            {
                 return ToolError("A live session or explicit virtual-device deviceId is required for motion simulation.");
+            }
 
             if (shake && !target.DeviceIdentifier.StartsWith("emulator-", StringComparison.Ordinal))
             {
                 if (arguments?["intensity"] is not null || arguments?["repetitions"] is not null
                     || arguments?["intervalMs"] is not null)
+                {
                     return ToolError("iOS Simulator shake is a fixed UIKit gesture; intensity, repetitions, and intervalMs apply only to Android Emulator.");
+                }
 
                 await deviceMotionRouter.ShakeIosSimulatorAsync(target.DeviceIdentifier,
-                        ToolExecutionCancellation.Current)
+                    ToolExecutionCancellation.Current)
                     .ConfigureAwait(false);
                 PublishMotionInjection(target, "shake", "core-simulator-darwin-notification", 0);
+
                 return RequestResult.ToolResult(new JsonObject
                 {
                     ["isSuccess"] = true,
@@ -70,6 +78,7 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
             await deviceMotionRouter.PlayAsync(target.DeviceIdentifier, samples, ToolExecutionCancellation.Current)
                 .ConfigureAwait(false);
             PublishMotionInjection(target, shake ? "shake" : "playAccelerometer", "adb-emulator-console", samples.Count);
+
             return RequestResult.ToolResult(new JsonObject
             {
                 ["isSuccess"] = true,
@@ -85,8 +94,8 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
             }, isError: false);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
-                                           or PlatformNotSupportedException or JsonException or IOException
-                                           or DllNotFoundException or MacSimulatorHidException)
+            or PlatformNotSupportedException or JsonException or IOException
+            or DllNotFoundException or MacSimulatorHidException)
         {
             return ToolError(exception.Message);
         }
@@ -94,7 +103,11 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
 
     private void PublishMotionInjection(DeviceHostTarget target, string operation, string backend, int sampleCount)
     {
-        if (target.SessionId is null) return;
+        if (target.SessionId is null)
+        {
+            return;
+        }
+
         HostSessionEvents.Publish(runtimeState, target.SessionId, "motion.injected." + operation, "Motion",
             JsonSerializer.Serialize(new
             {
@@ -109,6 +122,7 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
     private Dictionary<string, ToolSchema> BuildProperties()
     {
         var properties = BuildTargetProperties();
+
         if (shake)
         {
             properties["intensity"] = ToolSchema.Number("Peak X acceleration in m/s², 5–50. Default 20.");
@@ -129,6 +143,7 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
                 additionalProperties: false),
                 description: "1–100 samples, at most 10 seconds total.");
         }
+
         return properties;
     }
 
@@ -137,49 +152,73 @@ internal sealed class DeviceMotionTool : DeviceHostTargetOperation
         var intensity = arguments?["intensity"]?.Deserialize<double>() ?? 20d;
         var repetitions = arguments?["repetitions"]?.Deserialize<int>() ?? 3;
         var interval = arguments?["intervalMs"]?.Deserialize<int>() ?? 80;
+
         if (!double.IsFinite(intensity) || intensity is < 5 or > 50
             || repetitions is < 1 or > 8 || interval is < 40 or > 500)
+        {
             throw new ArgumentOutOfRangeException(nameof(arguments),
                 "Shake requires intensity 5–50 m/s², repetitions 1–8, and intervalMs 40–500.");
+        }
 
         var samples = new List<DeviceMotionSample>(repetitions * 2);
+
         for (var index = 0; index < repetitions; index++)
         {
             samples.Add(new DeviceMotionSample(new EmulatorAcceleration(intensity, 0, 0), interval));
             samples.Add(new DeviceMotionSample(new EmulatorAcceleration(-intensity, 0, 0), interval));
         }
+
         return samples;
     }
 
     private static IReadOnlyList<DeviceMotionSample> ReadSamples(JsonObject? arguments)
     {
         if (arguments?["samples"] is not JsonArray values || values.Count is < 1 or > 100)
+        {
             throw new ArgumentException("samples must contain 1–100 accelerometer samples.");
+        }
+
         var samples = new List<DeviceMotionSample>(values.Count);
+
         foreach (var value in values)
         {
             if (value is not JsonObject sample)
+            {
                 throw new ArgumentException("Each accelerometer sample must be an object.");
+            }
+
             var x = ReadAxis(sample, "x");
             var y = ReadAxis(sample, "y");
             var z = ReadAxis(sample, "z");
             var hold = sample["holdMs"]?.Deserialize<int>()
-                       ?? throw new ArgumentException("Each sample requires holdMs.");
+                ?? throw new ArgumentException("Each sample requires holdMs.");
+
             if (hold is < 10 or > 1000)
+            {
                 throw new ArgumentOutOfRangeException(nameof(arguments), "holdMs must be 10–1000.");
+            }
+
             samples.Add(new DeviceMotionSample(new EmulatorAcceleration(x, y, z), hold));
         }
+
         if (samples.Sum(static sample => sample.HoldMilliseconds) > 10_000)
+        {
             throw new ArgumentOutOfRangeException(nameof(arguments), "The sequence must last at most 10 seconds.");
+        }
+
         return samples;
     }
 
     private static double ReadAxis(JsonObject sample, string axis)
     {
         var value = sample[axis]?.Deserialize<double>()
-                    ?? throw new ArgumentException($"Each sample requires {axis}.");
+            ?? throw new ArgumentException($"Each sample requires {axis}.");
+
         if (!double.IsFinite(value) || value is < -100 or > 100)
+        {
             throw new ArgumentOutOfRangeException(axis, "Acceleration must be between -100 and 100 m/s².");
+        }
+
         return value;
     }
 }

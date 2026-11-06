@@ -13,20 +13,29 @@ public sealed partial class AppInteractionBackendTests
         var session = CreateModalTestSession();
         var tree = CreateModalNativeTree();
         tree["platform"] = platform;
+
         var header = new JsonObject
         {
-            ["id"] = "header", ["typeId"] = 1, ["role"] = "text", ["label"] = "Filters",
-            ["visible"] = true, ["enabled"] = true, ["supportedActions"] = new JsonArray("tap"),
-            ["bounds"] = new JsonArray(0, 490, 400, 50), ["z"] = headerZ
+            ["id"] = "header",
+            ["typeId"] = 1,
+            ["role"] = "text",
+            ["label"] = "Filters",
+            ["visible"] = true,
+            ["enabled"] = true,
+            ["supportedActions"] = new JsonArray("tap"),
+            ["bounds"] = new JsonArray(0, 490, 400, 50),
+            ["z"] = headerZ
         };
         var close = ModalNativeCopy("close", 500);
         close["automationId"] = "close";
         tree["root"]!["children"] = headerAfterButton
             ? new JsonArray(close, header) : new JsonArray(header, close);
+
         var bridge = new ModalSelectorBridge(session.SessionId, tree);
         var result = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(session,
             bridge, "ansight_tap_ui", null, default);
         Assert.True(bridge.IncludesComputedStyles);
+
         var capture = result.Capture!;
         var target = Assert.Single(LiveUiNodeQuery.Find(capture.Root,
             LiveUiSelector.Parse(new JsonObject { ["automationId"] = "close" }), capture.TypeRegistry));
@@ -43,19 +52,29 @@ public sealed partial class AppInteractionBackendTests
         var tree = CreateModalNativeTree();
         var behind = ModalNativeCopy("behind", 500);
         behind["z"] = 100;
+
         var targetNode = ModalNativeCopy("target", 500);
         targetNode["automationId"] = "target";
         tree["root"]!["children"] = new JsonArray(
             new JsonObject
             {
-                ["id"] = "background-branch", ["typeId"] = 1, ["visible"] = true, ["enabled"] = true,
-                ["bounds"] = new JsonArray(0, 0, 400, 800), ["children"] = new JsonArray(behind)
+                ["id"] = "background-branch",
+                ["typeId"] = 1,
+                ["visible"] = true,
+                ["enabled"] = true,
+                ["bounds"] = new JsonArray(0, 0, 400, 800),
+                ["children"] = new JsonArray(behind)
             },
             new JsonObject
             {
-                ["id"] = "foreground-branch", ["typeId"] = 1, ["visible"] = true, ["enabled"] = true,
-                ["bounds"] = new JsonArray(0, 0, 400, 800), ["children"] = new JsonArray(targetNode)
+                ["id"] = "foreground-branch",
+                ["typeId"] = 1,
+                ["visible"] = true,
+                ["enabled"] = true,
+                ["bounds"] = new JsonArray(0, 0, 400, 800),
+                ["children"] = new JsonArray(targetNode)
             });
+
         var result = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(session,
             new ModalSelectorBridge(session.SessionId, tree), "ansight_tap_ui", null, default);
         var capture = result.Capture!;
@@ -74,9 +93,11 @@ public sealed partial class AppInteractionBackendTests
         var tree = CreateModalNativeTree();
         var first = ModalNativeCopy("physical-button", 500);
         first["automationId"] = "target";
+
         var duplicate = first.DeepClone().AsObject();
         duplicate["id"] = sameRuntimeId ? "physical-button" : "another-button";
         tree["root"]!["children"] = new JsonArray(first, duplicate);
+
         var result = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(session,
             new ModalSelectorBridge(session.SessionId, tree), "ansight_tap_ui", null, default);
         var capture = result.Capture!;
@@ -99,16 +120,25 @@ public sealed partial class AppInteractionBackendTests
         tree["root"]!["children"] = new JsonArray(
             new JsonObject
             {
-                ["id"] = "about", ["typeId"] = 2, ["automationId"] = "map-about",
-                ["visible"] = true, ["enabled"] = true, ["role"] = "button",
+                ["id"] = "about",
+                ["typeId"] = 2,
+                ["automationId"] = "map-about",
+                ["visible"] = true,
+                ["enabled"] = true,
+                ["role"] = "button",
                 ["bounds"] = new JsonArray(340, 704, 44, 42)
             },
             new JsonObject
             {
-                ["id"] = "profile", ["typeId"] = 2, ["automationId"] = "profile-tab",
-                ["visible"] = true, ["enabled"] = true, ["role"] = "button",
+                ["id"] = "profile",
+                ["typeId"] = 2,
+                ["automationId"] = "profile-tab",
+                ["visible"] = true,
+                ["enabled"] = true,
+                ["role"] = "button",
                 ["bounds"] = new JsonArray(320, fullyCovered ? 700 : 721, 80, 100)
             });
+
         var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "map-about" });
         var result = await LiveUiTreeCapture.CaptureNativeVisualTreeAsync(session,
             new ModalSelectorBridge(session.SessionId, tree), "ansight_tap_ui", null, default);

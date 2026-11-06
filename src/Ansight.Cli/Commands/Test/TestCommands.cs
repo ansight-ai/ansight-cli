@@ -29,6 +29,7 @@ internal static class TestCommands
         }
 
         var subcommand = arguments.RequirePositional(1, "test subcommand").ToLowerInvariant();
+
         return subcommand switch
         {
             "list" => Task.FromResult(List(arguments, output, validate: false)),
@@ -60,6 +61,7 @@ internal static class TestCommands
             warnings,
             warnings.Count == 0);
         output.Write(result, () => RenderCatalog(result, validate));
+
         return validate && catalog.Warnings.Count > 0
             ? CliExitCodes.Failure
             : CliExitCodes.Success;
@@ -74,6 +76,7 @@ internal static class TestCommands
         var testId = arguments.RequirePositional(3, "test identifier");
         var video = RunVideoOptions.Resolve(arguments);
         var targets = WorkspaceTestTargetOptions.ResolveMany(arguments);
+
         if (targets.Count > 1)
         {
             if (arguments.HasFlag("session-id"))
@@ -153,6 +156,7 @@ internal static class TestCommands
             resultFilePath,
             arguments.HasFlag("audit"),
             testId));
+
         return exitCode;
     }
 
@@ -165,9 +169,11 @@ internal static class TestCommands
         var requestedTestIds = arguments.GetOptions("test");
         var catalog = WorkspaceTestCatalog.Load(workspacePath, cancellationToken);
         var configurationError = GetRunAllConfigurationError(catalog, requestedTestIds);
+
         if (configurationError is not null)
         {
             output.WriteError("configuration", configurationError, CliExitCodes.Configuration);
+
             if (!output.IsJson)
             {
                 output.WriteText("🔴");
@@ -177,6 +183,7 @@ internal static class TestCommands
         }
 
         var targets = WorkspaceTestTargetOptions.ResolveMany(arguments);
+
         return await RunBatchAsync(
             arguments,
             output,
@@ -257,6 +264,7 @@ internal static class TestCommands
             result);
         TestResultExporter.Save(resultFilePath, response, pruneGeneratedResults: arguments.GetOption("result-file") is null);
         output.Write(response, () => RenderBatch(result, resultFilePath, arguments.HasFlag("audit")));
+
         return exitCode;
     }
 
@@ -266,7 +274,9 @@ internal static class TestCommands
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(requestedTestIds);
+
         var enabledTests = catalog.Tests.Where(static test => test.Enabled).ToArray();
+
         if (enabledTests.Length == 0)
         {
             var warningDetails = catalog.Warnings.Count == 0
@@ -275,6 +285,7 @@ internal static class TestCommands
             var disabledDetails = catalog.Tests.Count == 0
                 ? string.Empty
                 : " All discovered tests are disabled.";
+
             return $"No runnable workspace tests were found beneath '{catalog.WorkspacePath}'.{disabledDetails}{warningDetails}";
         }
 
@@ -290,6 +301,7 @@ internal static class TestCommands
             .Where(id => !availableIds.Contains(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         if (missingIds.Length > 0)
         {
             return $"Workspace test(s) not found beneath '{catalog.WorkspacePath}': {string.Join(", ", missingIds)}.";
@@ -302,6 +314,7 @@ internal static class TestCommands
             .Where(id => !enabledIds.Contains(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
         return disabledIds.Length == 0
             ? null
             : $"Workspace test(s) are disabled: {string.Join(", ", disabledIds)}.";
@@ -309,17 +322,19 @@ internal static class TestCommands
 
     internal static string? ResolveTestSecret(string alias)
         => CliCommandContext.Current?.ResolveSecret(alias)
-           ?? CliCommandContext.ResolveScopedSecret(alias);
+            ?? CliCommandContext.ResolveScopedSecret(alias);
 
     internal static string? ResolveBatchRunId(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (!arguments.HasFlag("batch"))
         {
             return null;
         }
 
         var batchRunId = arguments.GetOption("batch")?.Trim();
+
         if (string.IsNullOrWhiteSpace(batchRunId))
         {
             throw new CliUsageException("--batch requires a run ID.");
@@ -339,6 +354,7 @@ internal static class TestCommands
     internal static int ResolveBatchExitCode(WorkspaceTestBatchResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
+
         if (result.WasCancelled)
         {
             return CliExitCodes.Cancelled;
@@ -377,12 +393,14 @@ internal static class TestCommands
             () => history.Batches.Count == 0 && history.Runs.Count == 0
                 ? "No test-run audits found."
                 : RenderHistory(history));
+
         return CliExitCodes.Success;
     }
 
     internal static async Task<int> InspectHistoryAsync(CliArguments arguments, CliOutput output)
     {
         arguments.EnsurePositionalCount(3, "ansight test inspect <run-id>");
+
         var runId = arguments.RequirePositional(2, "test or batch run identifier");
         var options = CliRuntime.ResolveOptions(arguments);
         await using var lease = await CliRuntimeLease.CreateAsync(
@@ -390,12 +408,14 @@ internal static class TestCommands
             start: false,
             CancellationToken.None).ConfigureAwait(false);
         var inspection = lease.Runtime.WorkspaceTests.History.Inspect(runId);
+
         if (inspection is null)
         {
             output.WriteError(
                 "test_run_not_found",
                 $"Test or batch run '{runId}' was not found in local history.",
                 CliExitCodes.Failure);
+
             return CliExitCodes.Failure;
         }
 
@@ -404,6 +424,7 @@ internal static class TestCommands
                 "ansight.workspace-test-history-inspection/v1",
                 inspection),
             () => RenderHistoryInspection(inspection));
+
         return CliExitCodes.Success;
     }
 
@@ -413,6 +434,7 @@ internal static class TestCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(4, "ansight test export <run-id> <output.zip>");
+
         var runId = arguments.RequirePositional(2, "test or batch run identifier");
         var outputPath = Path.GetFullPath(arguments.RequirePositional(3, "evaluation bundle output path"));
         var options = CliRuntime.ResolveOptions(arguments);
@@ -421,10 +443,10 @@ internal static class TestCommands
             start: false,
             cancellationToken).ConfigureAwait(false);
         var result = await lease.Runtime.WorkspaceTests.TraceExports.ExportAsync(
-                runId,
-                outputPath,
-                arguments.GetOption("app-id"),
-                cancellationToken)
+            runId,
+            outputPath,
+            arguments.GetOption("app-id"),
+            cancellationToken)
             .ConfigureAwait(false);
         output.Write(
             new TestHistoryExportOutput(
@@ -433,13 +455,15 @@ internal static class TestCommands
             () => result.IsSuccess
                 ? $"{result.Message} Bundle: {result.OutputPath}"
                 : result.Message);
+
         return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
     }
 
-internal static Task<int> RetryMeteringAsync(
+    internal static Task<int> RetryMeteringAsync(
         CliArguments arguments,
         CliOutput output,
         CancellationToken cancellationToken) => Ansight.Cli.Extensions.CliExtensionDispatch.Invoke<Task<int>>("CloudTestCommands.RetryMeteringAsync", [arguments, output, cancellationToken]);
+
     internal static string RenderHistory(WorkspaceTestHistoryResult history)
     {
         var lines = new List<string>
@@ -449,18 +473,20 @@ internal static Task<int> RetryMeteringAsync(
         };
         lines.AddRange(history.Batches.Select(entry =>
             $"BATCH\t{entry.Audit.BatchRunId}\t{entry.Audit.Status}\t{entry.Audit.StartedUtc:O}\t"
-            + $"{entry.Audit.PassedCount} passed/{entry.Audit.FailedCount} failed/{entry.Audit.SkippedCount} skipped\t"
-            + $"{entry.Audit.WorkspacePath}\t{entry.FilePath}"));
+                + $"{entry.Audit.PassedCount} passed/{entry.Audit.FailedCount} failed/{entry.Audit.SkippedCount} skipped\t"
+                + $"{entry.Audit.WorkspacePath}\t{entry.FilePath}"));
         lines.AddRange(history.Runs.Select(run =>
             $"RUN\t{run.RunId}\t{run.Status}\t{run.StartedUtc:O}\t"
-            + $"{run.TestId ?? "ad-hoc"}\t{run.AppId ?? "unknown"}\t{run.FilePath}"
-            + (string.IsNullOrWhiteSpace(run.BatchRunId) ? string.Empty : $"\tbatch={run.BatchRunId}")));
+                + $"{run.TestId ?? "ad-hoc"}\t{run.AppId ?? "unknown"}\t{run.FilePath}"
+                + (string.IsNullOrWhiteSpace(run.BatchRunId) ? string.Empty : $"\tbatch={run.BatchRunId}")));
+
         return string.Join(Environment.NewLine, lines);
     }
 
     internal static string RenderHistoryInspection(WorkspaceTestHistoryInspection inspection)
     {
         var lines = new List<string>();
+
         if (inspection.Batch is null
             && inspection.Runs.Count > 0
             && inspection.Runs.All(entry => string.Equals(
@@ -482,13 +508,13 @@ internal static Task<int> RetryMeteringAsync(
             lines.Add($"Started: {batch.StartedUtc:O}");
             lines.Add($"Completed: {batch.CompletedUtc:O}");
             lines.Add($"Results: {batch.PassedCount} passed · {batch.FailedCount} failed · "
-                      + $"{batch.SkippedCount} skipped · {batch.TotalTokens:N0} tokens");
+                + $"{batch.SkippedCount} skipped · {batch.TotalTokens:N0} tokens");
             lines.AddRange(batch.Tests.Select(test =>
                 $"TEST {test.Index}/{batch.Tests.Count}\t{test.Status.ToUpperInvariant()}\t"
-                + $"{test.TestId}"
-                + $"{RenderDeviceSuffix(test.Target?.DeviceIdentifier ?? test.RequestedDeviceIdentifier)}"
-                + $"\t{test.Message}"
-                + (string.IsNullOrWhiteSpace(test.AgentRunId) ? string.Empty : $"\trun={test.AgentRunId}")));
+                    + $"{test.TestId}"
+                    + $"{RenderDeviceSuffix(test.Target?.DeviceIdentifier ?? test.RequestedDeviceIdentifier)}"
+                    + $"\t{test.Message}"
+                    + (string.IsNullOrWhiteSpace(test.AgentRunId) ? string.Empty : $"\trun={test.AgentRunId}")));
             lines.Add($"Audit: {batchEntry.FilePath}");
         }
 
@@ -499,19 +525,21 @@ internal static Task<int> RetryMeteringAsync(
             lines.Add($"Test: {audit.WorkspaceTestId ?? "ad-hoc"} · App: {audit.AppId ?? "unknown"}");
             lines.Add($"Session: {audit.SessionId} · Reasoning: {audit.Reasoning ?? "not recorded"}");
             lines.Add($"Execution: {audit.ModelPassCount:N0} model passes · "
-                      + $"{audit.AnsightToolCallCount:N0} Ansight calls · {audit.DurationMilliseconds / 1000d:N1}s");
+                + $"{audit.AnsightToolCallCount:N0} Ansight calls · {audit.DurationMilliseconds / 1000d:N1}s");
             lines.Add($"Tokens: {audit.Tokens.TotalTokens:N0} total · {audit.Tokens.InputTokens:N0} input · "
-                      + $"{audit.Tokens.OutputTokens:N0} output");
+                + $"{audit.Tokens.OutputTokens:N0} output");
             lines.AddRange(audit.Instructions.Select(instruction =>
                 $"INSTRUCTION {instruction.Index}\t{instruction.Status.ToString().ToUpperInvariant()}\t{instruction.Summary}"));
             lines.AddRange(audit.ToolCalls.Select(call =>
                 $"TOOL {call.Sequence}\t{(call.IsError ? "FAILED" : "OK")}\t{call.ToolName}\t"
-                + $"{call.DurationMilliseconds:N0}ms\t{call.Message}"));
+                    + $"{call.DurationMilliseconds:N0}ms\t{call.Message}"));
+
             if (audit.TaskResult is { } task)
             {
                 lines.Add($"Task: {task.TaskId} ({task.Status})");
                 AppendTaskAssertions(lines, task);
             }
+
             lines.Add($"Audit: {entry.FilePath}");
         }
 
@@ -530,12 +558,13 @@ internal static Task<int> RetryMeteringAsync(
         };
         lines.AddRange(result.Tests.Select(test =>
             $"{test.TestId}\t{test.AppId}\t{test.Name}"
-            + (test.Enabled ? string.Empty : "\tdisabled")
-            + (string.IsNullOrWhiteSpace(test.TaskId) ? string.Empty : $"\ttask={test.TaskId}")
-            + (test.RequiredSecrets.Count == 0
-                ? string.Empty
-                : $"\tsecrets={string.Join(',', test.RequiredSecrets)}")));
+                + (test.Enabled ? string.Empty : "\tdisabled")
+                + (string.IsNullOrWhiteSpace(test.TaskId) ? string.Empty : $"\ttask={test.TaskId}")
+                + (test.RequiredSecrets.Count == 0
+                    ? string.Empty
+                    : $"\tsecrets={string.Join(',', test.RequiredSecrets)}")));
         lines.AddRange(result.Warnings.Select(warning => $"Warning: {warning}"));
+
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -557,13 +586,16 @@ internal static Task<int> RetryMeteringAsync(
             result.Message,
             $"Result: {resultFilePath}"
         };
+
         if (result.AgentResult is { } agentResult)
         {
             lines.Add($"Run: {agentResult.Audit.RunId}");
+
             if (!string.IsNullOrWhiteSpace(agentResult.Audit.BatchRunId))
             {
                 lines.Add($"Batch: {agentResult.Audit.BatchRunId}");
             }
+
             if (includeAudit)
             {
                 AppendAudit(lines, agentResult);
@@ -575,15 +607,26 @@ internal static Task<int> RetryMeteringAsync(
             lines.Add($"Run: {taskResult.RunId}");
             lines.Add($"Task: {taskResult.TaskId} ({taskResult.Status})");
             AppendTaskAssertions(lines, taskResult);
-            if (includeAudit) lines.Add($"Audit trace: {result.TaskAuditFilePath ?? "not persisted"}");
-            if (result.TaskAuditPersistenceError is { } error) lines.Add($"Audit persistence failed: {error}");
+
+            if (includeAudit)
+            {
+                lines.Add($"Audit trace: {result.TaskAuditFilePath ?? "not persisted"}");
+            }
+
+            if (result.TaskAuditPersistenceError is { } error)
+            {
+                lines.Add($"Audit persistence failed: {error}");
+            }
         }
 
         if (result.Video is { } video)
         {
             lines.Add($"Video: {video.Status} — {video.Message}");
+
             if (video.RecordingId is not null && video.Path is not null)
+            {
                 lines.Add($"Replay video: {video.RecordingId} ({video.ByteSize:N0} bytes)");
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(result.SessionId))
@@ -607,40 +650,46 @@ internal static Task<int> RetryMeteringAsync(
         var lines = new List<string>
         {
             $"Workspace tests complete: {result.PassedCount} passed, {result.FailedCount} failed, "
-            + $"{result.SkippedCount} skipped{(result.WasCancelled ? ", cancelled" : string.Empty)}.",
+                + $"{result.SkippedCount} skipped{(result.WasCancelled ? ", cancelled" : string.Empty)}.",
             $"Result: {resultFilePath}"
         };
+
         if (!string.IsNullOrWhiteSpace(result.BatchRunId))
         {
             lines.Add($"Batch: {result.BatchRunId}");
         }
+
         if (!string.IsNullOrWhiteSpace(result.HistoryFilePath))
         {
             lines.Add($"History audit: {result.HistoryFilePath}");
         }
+
         if (!string.IsNullOrWhiteSpace(result.HistoryPersistenceError))
         {
             lines.Add($"History persistence failed: {result.HistoryPersistenceError}");
         }
+
         if (result.Results.Count == 0)
         {
             lines.Add("FAILED: No workspace tests were executed.");
         }
+
         lines.AddRange(result.Results
             .Where(static testResult => !string.IsNullOrWhiteSpace(testResult.SessionId))
             .Select(static testResult =>
-                $"Session: {testResult.Test?.TestId ?? "unknown"} = {testResult.SessionId}"
-                + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
+                        $"Session: {testResult.Test?.TestId ?? "unknown"} = {testResult.SessionId}"
+                            + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
         lines.AddRange(result.Results
             .Where(static testResult => !testResult.IsSuccess && !testResult.IsSkipped)
             .Select(static testResult =>
                 $"FAILED: {testResult.Test?.TestId ?? "unknown"}: {testResult.Message}"
-                + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
+                    + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
         lines.AddRange(result.Results
             .Where(static testResult => testResult.IsSkipped)
             .Select(static testResult =>
                 $"SKIPPED: {testResult.Test?.TestId ?? "unknown"}: {testResult.Message}"
-                + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
+                    + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier)));
+
         if (includeAudit)
         {
             foreach (var taskResult in result.Results.Where(static candidate => candidate.TaskResult is not null))
@@ -650,10 +699,11 @@ internal static Task<int> RetryMeteringAsync(
                 AppendTaskAssertions(lines, taskResult.TaskResult);
                 lines.Add($"Audit trace: {taskResult.TaskAuditFilePath ?? "not persisted"}");
             }
+
             foreach (var testResult in result.Results.Where(static candidate => candidate.AgentResult is not null))
             {
                 lines.Add($"Execution audit: {testResult.Test?.TestId ?? "unknown"}"
-                          + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier));
+                    + RenderDeviceSuffix(testResult.Target?.DeviceIdentifier));
                 AppendAudit(lines, testResult.AgentResult!);
             }
         }
@@ -675,7 +725,9 @@ internal static Task<int> RetryMeteringAsync(
     private static void AppendTaskAssertions(List<string> lines, RepositoryTaskRunResult task)
     {
         foreach (var assertion in task.Assertions)
+        {
             lines.Add($"{(assertion.Passed ? "PASS" : "FAIL")}\t{assertion.AssertionId}\t{assertion.Message}");
+        }
     }
 
     internal static void AppendAudit(List<string> lines, SimulatorAgentRunResult agentResult)
@@ -686,12 +738,12 @@ internal static Task<int> RetryMeteringAsync(
             $"Reasoning: {audit.Reasoning ?? "not recorded"} ({audit.OpenAiTransport ?? "direct"}, {audit.OpenAiProtocol ?? "http"})");
         lines.Add(
             $"Tokens: {audit.Tokens.TotalTokens:N0} total; {audit.Tokens.InputTokens:N0} input; "
-            + $"{audit.Tokens.OutputTokens:N0} output; {audit.Tokens.CachedInputTokens:N0} cached; "
-            + $"{audit.Tokens.CacheWriteInputTokens:N0} cache-write; "
-            + $"{audit.Tokens.ReasoningOutputTokens:N0} reasoning");
+                + $"{audit.Tokens.OutputTokens:N0} output; {audit.Tokens.CachedInputTokens:N0} cached; "
+                + $"{audit.Tokens.CacheWriteInputTokens:N0} cache-write; "
+                + $"{audit.Tokens.ReasoningOutputTokens:N0} reasoning");
         lines.Add(
             $"Execution: {audit.ModelPassCount:N0} model passes; {audit.AnsightToolCallCount:N0} Ansight calls; "
-            + $"{audit.DurationMilliseconds / 1000d:N1}s");
+                + $"{audit.DurationMilliseconds / 1000d:N1}s");
         lines.Add(
             audit.OpenAiTransport == "hosted-proxy"
                 ? "Cost: attributed to this run in the organisation's provider-rate ledger; the CLI result records the exact token basis."
@@ -710,8 +762,15 @@ internal static Task<int> RetryMeteringAsync(
             return CliExitCodes.CapabilityUnavailable;
         }
 
-        if (result.WasCancelled) return CliExitCodes.Cancelled;
-        if (result.TaskResult is not null) return CliExitCodes.TestFailed;
+        if (result.WasCancelled)
+        {
+            return CliExitCodes.Cancelled;
+        }
+
+        if (result.TaskResult is not null)
+        {
+            return CliExitCodes.TestFailed;
+        }
 
         if (result.Test is null || result.MissingSecrets.Count > 0)
         {
@@ -748,10 +807,11 @@ internal static Task<int> RetryMeteringAsync(
     internal static bool ShouldWriteProgress(WorkspaceTestRunProgress progress, bool isVerbose)
     {
         ArgumentNullException.ThrowIfNull(progress);
+
         return isVerbose
-               || progress.AgentProgress?.Stage is not (
+            || progress.AgentProgress?.Stage is not (
                    SimulatorAgentProgressStage.Thinking
-                   or SimulatorAgentProgressStage.ModelCompleted);
+                       or SimulatorAgentProgressStage.ModelCompleted);
     }
 
     internal static string BuildHelp()
@@ -847,5 +907,4 @@ internal static Task<int> RetryMeteringAsync(
              ansight session list --connected   Reusable live session IDs
              ansight app list                    App IDs known to Ansight
            """;
-
 }

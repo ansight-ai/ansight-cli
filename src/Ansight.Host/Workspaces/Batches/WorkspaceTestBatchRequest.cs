@@ -20,13 +20,10 @@ public sealed record WorkspaceTestBatchRequest(
     public bool CaptureTrace { get; init; } = true;
 
     public TestVideoOptions? Video { get; init; }
-
     public SimulatorAgentOpenAiProtocol OpenAiProtocol { get; init; } = SimulatorAgentOpenAiProtocol.Http;
 
     public IReadOnlyList<WorkspaceTestTargetRequest>? Targets { get; init; }
-
     public bool Parallel { get; init; }
-
     [System.Text.Json.Serialization.JsonIgnore]
     public Func<string, string?>? SecretResolver { get; init; }
 }

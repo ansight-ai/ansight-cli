@@ -16,6 +16,6 @@ internal sealed record AppToolPermission(
 {
     public bool IsAllowedForAutomation =>
         IsExecutable
-        && (string.Equals(Policy, "read", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(Policy, "write", StringComparison.OrdinalIgnoreCase));
+            && (string.Equals(Policy, "read", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Policy, "write", StringComparison.OrdinalIgnoreCase));
 }

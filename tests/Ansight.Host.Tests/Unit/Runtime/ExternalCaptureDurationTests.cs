@@ -38,6 +38,7 @@ public sealed class ExternalCaptureDurationTests
             MetricChannels = [],
             Metrics = []
         });
+
         var reloaded = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         Assert.Equal(completedUtc, reloaded.GetSessionSummaries().Single().LastUpdatedUtc);
         Assert.True(reloaded.TryGetSessionSnapshot("legacy-external-capture-001", out var snapshot));
@@ -50,10 +51,15 @@ public sealed class ExternalCaptureDurationTests
         using var environment = new TestEnvironment();
         var state = new RuntimeState(new SessionCaptureStore(environment.ApplicationPaths));
         var id = state.CreateDeviceSession(new WorkspaceTestTarget("ios", "simulator-001", "Phone",
-            "test.duration", false, false, true) { DeviceKind = "simulator", ExecutionMode = "device" });
+            "test.duration", false, false, true)
+        {
+            DeviceKind = "simulator",
+            ExecutionMode = "device"
+        });
 
         state.EndDeviceSession(id);
         Assert.True(state.TryGetSessionSnapshot(id, out var completed));
+
         var endedUtc = completed!.LastUpdatedUtc;
         Assert.Equal(endedUtc, completed.CustomProperties!["captureEndedUtc"]!.GetValue<DateTimeOffset>());
 

@@ -8,6 +8,7 @@ public sealed class ApplicationPathsFactoryTests
         var root = Path.Combine(Path.GetTempPath(), $"ansight-path-tests-{Guid.NewGuid():N}");
         var dataPath = Path.Combine(root, "data");
         var appsPath = Path.Combine(dataPath, "apps");
+
         try
         {
             Directory.CreateDirectory(appsPath);
@@ -35,7 +36,10 @@ public sealed class ApplicationPathsFactoryTests
         }
         finally
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 
@@ -47,6 +51,7 @@ public sealed class ApplicationPathsFactoryTests
         var root = Path.Combine(Path.GetTempPath(), $"ansight-path-tests-{Guid.NewGuid():N}");
         var current = Path.Combine(root, "Ansight");
         var previous = Path.Combine(current, folderName);
+
         try
         {
             Directory.CreateDirectory(Path.Combine(previous, "data"));
@@ -59,7 +64,10 @@ public sealed class ApplicationPathsFactoryTests
         }
         finally
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 
@@ -69,6 +77,7 @@ public sealed class ApplicationPathsFactoryTests
         var root = Path.Combine(Path.GetTempPath(), $"ansight-path-tests-{Guid.NewGuid():N}");
         var current = Path.Combine(root, "Ansight");
         var previous = Path.Combine(current, "Cli", "data");
+
         try
         {
             Directory.CreateDirectory(previous);
@@ -82,7 +91,10 @@ public sealed class ApplicationPathsFactoryTests
         }
         finally
         {
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
         }
     }
 }

@@ -24,15 +24,21 @@ internal static class ReplayExtractionEvidence
             .Select(static group => group.ToArray())
             .ToArray();
         var selectedTimes = SampleEvenly(times, MaximumSelectorEvidenceTimes).ToArray();
-        if (selectedTimes.Length == 0) return [];
+
+        if (selectedTimes.Length == 0)
+        {
+            return [];
+        }
+
         return selectedTimes.SelectMany((nodes, index) => SampleEvenly(nodes,
             MaximumSelectorEvidenceNodes / selectedTimes.Length
-            + (index < MaximumSelectorEvidenceNodes % selectedTimes.Length ? 1 : 0))).ToArray();
+                + (index < MaximumSelectorEvidenceNodes % selectedTimes.Length ? 1 : 0))).ToArray();
     }
 
     private static IEnumerable<T> SampleEvenly<T>(IReadOnlyList<T> items, int maximumCount)
     {
         var count = Math.Min(items.Count, maximumCount);
+
         for (var index = 0; index < count; index++)
         {
             yield return items[count == 1 ? 0 : (int)Math.Round(index * (items.Count - 1d) / (count - 1))];
@@ -54,33 +60,44 @@ internal static class ReplayExtractionEvidence
         var recordings = snapshot.VideoRecordings
             .Where(video => video.StartedUtc <= endUtc && video.EndedUtc > startUtc)
             .OrderBy(video => video.StartedUtc).ToArray();
-        var keyTimes = new[] { startUtc, endUtc }
-            .Concat(Enumerable.Range(1, 2).Select(index => startUtc + (endUtc - startUtc) * (index / 3d)))
+        var keyTimes = new[] { startUtc, endUtc }.Concat(Enumerable.Range(1, 2).Select(index => startUtc + (endUtc - startUtc) * (index / 3d)))
             .Concat(sectionEnds.Where(time => time >= startUtc && time <= endUtc))
             .Distinct().Take(MaximumScreenshotCount).OrderBy(time => time);
         var selected = new HashSet<string>(StringComparer.Ordinal);
         var sampleTimes = new Dictionary<string, IReadOnlyList<long>>(StringComparer.Ordinal);
         var temporaryDirectory = Path.Combine(Path.GetTempPath(), "ansight-replay-evidence-" + Guid.NewGuid().ToString("N"));
         var appended = 0;
+
         try
         {
             foreach (var time in keyTimes)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 string path;
                 string description;
                 var recording = recordings.LastOrDefault(video => time >= video.StartedUtc && time < video.EndedUtc)
                     ?? recordings.LastOrDefault(video => time == endUtc && time == video.EndedUtc);
+
                 if (recording is not null)
                 {
                     var extractor = runtime.SessionVideoFrameExtractor
                         ?? throw new InvalidOperationException("This host cannot decode replay video for test extraction.");
                     var source = Path.Combine(SessionFileLocator.ResolveSessionDirectoryPath(runtime.ApplicationPaths, snapshot), recording.EntryPath);
+
                     if (!sampleTimes.TryGetValue(source, out var times))
+                    {
                         sampleTimes[source] = times = Ansight.Host.Sessions.Video.SessionVideoMp4TimingInspector.ReadPresentationTimesUs(source);
+                    }
+
                     var position = Math.Min((time - recording.StartedUtc).Ticks / 10, recording.DurationUs - 1);
                     var sample = times.LastOrDefault(value => value <= position);
-                    if (!selected.Add($"video:{recording.RecordingId}:{sample}")) continue;
+
+                    if (!selected.Add($"video:{recording.RecordingId}:{sample}"))
+                    {
+                        continue;
+                    }
+
                     Directory.CreateDirectory(temporaryDirectory);
                     path = Path.Combine(temporaryDirectory, $"frame-{appended}.jpg");
                     await extractor.ExtractAsync(source, TimeSpan.FromTicks(sample * 10), path, cancellationToken).ConfigureAwait(false);
@@ -89,24 +106,45 @@ internal static class ReplayExtractionEvidence
                 else
                 {
                     var frame = frames.MinBy(frame => Math.Abs((frame.CapturedAtUtc - time).TotalMilliseconds));
-                    if (frame is null || !selected.Add("screenshot:" + frame.FrameId)) continue;
+
+                    if (frame is null || !selected.Add("screenshot:" + frame.FrameId))
+                    {
+                        continue;
+                    }
+
                     path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, snapshot, frame);
                     description = $"Screenshot at {frame.CapturedAtUtc:O}";
-                    if (!File.Exists(path)) continue;
+
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
                 }
+
                 using var original = SKBitmap.Decode(path);
-                if (original is null) continue;
+
+                if (original is null)
+                {
+                    continue;
+                }
+
                 var width = Math.Min(original.Width, MaximumScreenshotWidth);
                 var height = Math.Max(1, (int)Math.Round(original.Height * width / (double)original.Width));
                 using var resized = width == original.Width ? original.Copy()
                     : original.Resize(new SKImageInfo(width, height), new SKSamplingOptions(SKFilterMode.Linear));
-                if (resized is null) continue;
+
+                if (resized is null)
+                {
+                    continue;
+                }
+
                 using var image = SKImage.FromBitmap(resized);
                 using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, ScreenshotJpegQuality);
                 content.Add(new JsonObject { ["type"] = "input_text", ["text"] = description + ":" });
                 content.Add(new JsonObject
                 {
-                    ["type"] = "input_image", ["image_url"] = "data:image/jpeg;base64," + Convert.ToBase64String(encoded.ToArray()),
+                    ["type"] = "input_image",
+                    ["image_url"] = "data:image/jpeg;base64," + Convert.ToBase64String(encoded.ToArray()),
                     ["detail"] = "auto"
                 });
                 appended++;
@@ -114,8 +152,12 @@ internal static class ReplayExtractionEvidence
         }
         finally
         {
-            if (Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, recursive: true);
+            if (Directory.Exists(temporaryDirectory))
+            {
+                Directory.Delete(temporaryDirectory, recursive: true);
+            }
         }
+
         return appended;
     }
 }

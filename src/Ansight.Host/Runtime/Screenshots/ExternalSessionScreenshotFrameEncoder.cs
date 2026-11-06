@@ -20,6 +20,7 @@ internal static class ExternalSessionScreenshotFrameEncoder
             : source.Resize(
                 new SKImageInfo(targetWidth, targetHeight),
                 new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+
         if (target is null)
         {
             throw new InvalidOperationException("The external screenshot could not be resized.");
@@ -27,6 +28,7 @@ internal static class ExternalSessionScreenshotFrameEncoder
 
         using var image = SKImage.FromBitmap(target);
         using var encoded = image.Encode(SKEncodedImageFormat.Webp, profile.Quality);
+
         return new EncodedExternalSessionScreenshot(
             "webp",
             target.Width,
@@ -35,10 +37,3 @@ internal static class ExternalSessionScreenshotFrameEncoder
             encoded.ToArray());
     }
 }
-
-internal sealed record EncodedExternalSessionScreenshot(
-    string Format,
-    int Width,
-    int Height,
-    int Quality,
-    byte[] Bytes);

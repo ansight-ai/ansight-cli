@@ -65,6 +65,7 @@ internal sealed class TagSessionTool : Operation
             tags,
             notes,
             name);
+
         if (!result.IsSuccess)
         {
             return Task.FromResult(ToolError(result.Message));

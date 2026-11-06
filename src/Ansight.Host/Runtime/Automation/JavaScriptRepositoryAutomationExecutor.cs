@@ -44,7 +44,9 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var startedAtUtc = DateTimeOffset.UtcNow;
+
         if (unavailableMessage is not null)
         {
             return new RepositoryAutomationExecutionResult(
@@ -62,24 +64,34 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         try
         {
             JsonObject? capabilities = null;
+
             if (hostTools is not null && request.Event.SessionId is { } sessionId)
             {
                 using var preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 preflight.CancelAfter(TimeSpan.FromSeconds(15));
+
                 using var scope = ToolExecutionCancellation.Push(preflight.Token);
                 var response = await hostTools("ansight_get_execution_capabilities",
                     new JsonObject { ["sessionId"] = sessionId }, request.Event.CorrelationId).ConfigureAwait(false);
                 capabilities = response.Payload?["structuredContent"]?.DeepClone() as JsonObject;
+
                 var missing = capabilities is null ? ExecutionCapabilities.Unavailable("session", null, "The event session is unavailable.")
                     : ExecutionCapabilities.Missing(capabilities, request.Trigger.Requires);
+
                 if (missing is not null)
+                {
                     return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, startedAtUtc,
                         DateTimeOffset.UtcNow, null, missing["message"]!.GetValue<string>(), missing, string.Empty);
+                }
             }
             else if (request.Trigger.Requires is { } requirements && (requirements.Capabilities.Count > 0 || requirements.AppTools.Count > 0))
+            {
                 return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, startedAtUtc, DateTimeOffset.UtcNow,
                     null, "The trigger host cannot resolve session capabilities.", null, string.Empty);
+            }
+
             process = Process.Start(CreateStartInfo(request));
+
             if (process is null)
             {
                 return Failure(startedAtUtc, "The Node.js runtime did not start.");
@@ -91,28 +103,33 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
                 CancellationToken.None);
 
             BoundedTextReadResult handshake;
+
             using (var moduleLoadTimeoutCts = new CancellationTokenSource(moduleLoadTimeout))
-            using (var moduleLoadCts = CancellationTokenSource.CreateLinkedTokenSource(
-                       cancellationToken,
-                       moduleLoadTimeoutCts.Token))
             {
-                try
+                using (var moduleLoadCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    moduleLoadTimeoutCts.Token))
                 {
-                    handshake = await ReadBoundedLineAsync(
-                        process.StandardOutput,
-                        MaximumHandshakeCharacters,
-                        moduleLoadCts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(process);
-                    await ObserveExitAsync(process).ConfigureAwait(false);
-                    var moduleLoadError = await standardErrorTask.ConfigureAwait(false);
-                    return ModuleLoadCancelled(
-                        startedAtUtc,
-                        TryGetExitCode(process),
-                        cancellationToken.IsCancellationRequested,
-                        moduleLoadError.Text);
+                    try
+                    {
+                        handshake = await ReadBoundedLineAsync(
+                            process.StandardOutput,
+                            MaximumHandshakeCharacters,
+                            moduleLoadCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        TryKill(process);
+                        await ObserveExitAsync(process).ConfigureAwait(false);
+
+                        var moduleLoadError = await standardErrorTask.ConfigureAwait(false);
+
+                        return ModuleLoadCancelled(
+                            startedAtUtc,
+                            TryGetExitCode(process),
+                            cancellationToken.IsCancellationRequested,
+                            moduleLoadError.Text);
+                    }
                 }
             }
 
@@ -122,7 +139,9 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             {
                 TryKill(process);
                 await ObserveExitAsync(process).ConfigureAwait(false);
+
                 var handshakeError = await standardErrorTask.ConfigureAwait(false);
+
                 return new RepositoryAutomationExecutionResult(
                     AutomationRunStatus.Failed,
                     startedAtUtc,
@@ -138,44 +157,51 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             var invocation = CreateInput(request);
             invocation["capabilities"] = capabilities?.DeepClone();
             invocation["run"]!["executionMode"] = capabilities?["executionMode"]?.DeepClone();
+
             var input = invocation.ToJsonString(JsonUtil.Compact);
             BoundedTextReadResult standardOutput;
 
             using (var functionTimeoutCts = new CancellationTokenSource(request.Trigger.Automation.FunctionTimeout))
-            using (var functionCts = CancellationTokenSource.CreateLinkedTokenSource(
-                       cancellationToken,
-                       functionTimeoutCts.Token))
             {
-                var standardOutputTask = ReadBoundedTextAsync(
-                    process.StandardOutput,
-                    MaximumStandardOutputCharacters,
-                    functionCts.Token);
-                try
+                using (var functionCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    functionTimeoutCts.Token))
                 {
-                    await process.StandardInput.WriteAsync(input.AsMemory(), functionCts.Token).ConfigureAwait(false);
-                    await process.StandardInput.FlushAsync(functionCts.Token).ConfigureAwait(false);
-                    process.StandardInput.Close();
-                    await process.WaitForExitAsync(functionCts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(process);
-                    await ObserveExitAsync(process).ConfigureAwait(false);
-                    var cancelledOutput = await standardOutputTask.ConfigureAwait(false);
-                    var cancelledError = await standardErrorTask.ConfigureAwait(false);
-                    return FunctionCancelled(
-                        request,
-                        startedAtUtc,
-                        TryGetExitCode(process),
-                        cancellationToken.IsCancellationRequested,
-                        cancelledOutput,
-                        cancelledError.Text);
-                }
+                    var standardOutputTask = ReadBoundedTextAsync(
+                        process.StandardOutput,
+                        MaximumStandardOutputCharacters,
+                        functionCts.Token);
 
-                standardOutput = await standardOutputTask.ConfigureAwait(false);
+                    try
+                    {
+                        await process.StandardInput.WriteAsync(input.AsMemory(), functionCts.Token).ConfigureAwait(false);
+                        await process.StandardInput.FlushAsync(functionCts.Token).ConfigureAwait(false);
+                        process.StandardInput.Close();
+                        await process.WaitForExitAsync(functionCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        TryKill(process);
+                        await ObserveExitAsync(process).ConfigureAwait(false);
+
+                        var cancelledOutput = await standardOutputTask.ConfigureAwait(false);
+                        var cancelledError = await standardErrorTask.ConfigureAwait(false);
+
+                        return FunctionCancelled(
+                            request,
+                            startedAtUtc,
+                            TryGetExitCode(process),
+                            cancellationToken.IsCancellationRequested,
+                            cancelledOutput,
+                            cancelledError.Text);
+                    }
+
+                    standardOutput = await standardOutputTask.ConfigureAwait(false);
+                }
             }
 
             var standardError = await standardErrorTask.ConfigureAwait(false);
+
             if (cancellationToken.IsCancellationRequested)
             {
                 return FunctionCancelled(
@@ -226,8 +252,10 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             }
 
             if (output["error"] is JsonObject capabilityError && capabilityError["code"]?.GetValue<string>() == ExecutionCapabilities.ErrorCode)
+            {
                 return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, startedAtUtc, DateTimeOffset.UtcNow,
                     process.ExitCode, capabilityError["message"]!.GetValue<string>(), capabilityError.DeepClone().AsObject(), standardError.Text);
+            }
 
             if (!output.TryGetPropertyValue("action", out var actionNode) || actionNode is null)
             {
@@ -252,7 +280,9 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             }
 
             if (action["type"]?.GetValue<string>() == "hostTool")
+            {
                 return await ExecuteHostActionAsync(request, action, startedAtUtc, cancellationToken).ConfigureAwait(false);
+            }
 
             if (!string.Equals(action["type"]?.GetValue<string>(), "appTool", StringComparison.Ordinal))
             {
@@ -265,6 +295,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             }
 
             var toolId = action["toolId"]?.GetValue<string>()?.Trim();
+
             if (string.IsNullOrWhiteSpace(toolId))
             {
                 return new RepositoryAutomationExecutionResult(
@@ -288,24 +319,29 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             }
 
             RepositoryAutomationExecutionResult appToolResult;
+
             using (var actionTimeoutCts = new CancellationTokenSource(request.Trigger.Automation.ActionTimeout))
-            using (var actionCts = CancellationTokenSource.CreateLinkedTokenSource(
-                       cancellationToken,
-                       actionTimeoutCts.Token))
             {
-                appToolResult = await appToolExecutor.ExecuteActionAsync(
-                    request,
-                    toolId,
-                    action["arguments"] as JsonObject,
-                    startedAtUtc,
-                    actionCts.Token,
-                    cancellationToken).ConfigureAwait(false);
+                using (var actionCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken,
+                    actionTimeoutCts.Token))
+                {
+                    appToolResult = await appToolExecutor.ExecuteActionAsync(
+                        request,
+                        toolId,
+                        action["arguments"] as JsonObject,
+                        startedAtUtc,
+                        actionCts.Token,
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
+
             var compositeOutput = new JsonObject
             {
                 ["action"] = action.DeepClone(),
                 ["result"] = appToolResult.Output?.DeepClone()
             };
+
             return appToolResult with
             {
                 ExitCode = process.ExitCode,
@@ -314,11 +350,12 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             };
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or IOException
-                                           or UnauthorizedAccessException
-                                           or System.ComponentModel.Win32Exception)
+            or IOException
+            or UnauthorizedAccessException
+            or System.ComponentModel.Win32Exception)
         {
             TryKill(process);
+
             return Failure(startedAtUtc, $"Repository automation could not execute: {exception.Message}");
         }
         finally
@@ -331,18 +368,34 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         RepositoryAutomationExecutionRequest request, JsonObject action, DateTimeOffset started, CancellationToken cancellationToken)
     {
         var name = action["toolName"]?.GetValue<string>();
+
         if (hostTools is null || request.Event.SessionId is not { } sessionId
             || name is not ("ansight_take_screenshot" or "ansight_capture_sandbox_file" or "ansight_create_annotation")
             || action["arguments"] is not (null or JsonObject))
+        {
             return new RepositoryAutomationExecutionResult(AutomationRunStatus.Rejected, started, DateTimeOffset.UtcNow,
                 null, "The trigger requested an unsupported host evidence action.", null, string.Empty);
+        }
+
         var arguments = action["arguments"]?.DeepClone() as JsonObject ?? new JsonObject();
-        foreach (var key in new[] { "sessionId", "appId", "deviceId", "bundleIdentifier" }) arguments.Remove(key);
+
+        foreach (var key in new[] { "sessionId", "appId", "deviceId", "bundleIdentifier" })
+        {
+            arguments.Remove(key);
+        }
+
         arguments["sessionId"] = sessionId;
-        if (name == "ansight_create_annotation") arguments["source"] = "trigger:" + request.Trigger.TriggerId;
+
+        if (name == "ansight_create_annotation")
+        {
+            arguments["source"] = "trigger:" + request.Trigger.TriggerId;
+        }
+
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(request.Trigger.Automation.ActionTimeout);
+
         using var scope = ToolExecutionCancellation.Push(deadline.Token);
+
         try
         {
             var response = await hostTools(name, arguments, request.Event.CorrelationId).WaitAsync(deadline.Token).ConfigureAwait(false);
@@ -350,6 +403,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             var failed = response.IsError || response.Payload?["isError"]?.GetValue<bool>() == true;
             var status = result?["code"]?.GetValue<string>() == ExecutionCapabilities.ErrorCode ? AutomationRunStatus.Rejected
                 : failed ? AutomationRunStatus.Failed : AutomationRunStatus.Succeeded;
+
             return new RepositoryAutomationExecutionResult(status, started, DateTimeOffset.UtcNow, null,
                 result?["message"]?.GetValue<string>() ?? (failed ? "Host evidence action failed." : "Host evidence captured."), result, string.Empty);
         }
@@ -363,7 +417,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
     private ProcessStartInfo CreateStartInfo(RepositoryAutomationExecutionRequest request)
     {
         var modulePath = request.Trigger.Automation.EntrypointPath
-                         ?? throw new InvalidOperationException("The TypeScript automation does not declare a module path.");
+            ?? throw new InvalidOperationException("The TypeScript automation does not declare a module path.");
         var startInfo = new ProcessStartInfo
         {
             FileName = executablePath,
@@ -374,6 +428,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
         if (string.Equals(Path.GetExtension(modulePath), ".ts", StringComparison.OrdinalIgnoreCase))
         {
             startInfo.ArgumentList.Add("--no-warnings");
@@ -388,10 +443,11 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
 
         var inheritedPath = Environment.GetEnvironmentVariable("PATH");
         var inheritedTemp = Environment.GetEnvironmentVariable("TMPDIR")
-                            ?? Environment.GetEnvironmentVariable("TEMP")
-                            ?? Path.GetTempPath();
+            ?? Environment.GetEnvironmentVariable("TEMP")
+            ?? Path.GetTempPath();
         var inheritedSystemRoot = Environment.GetEnvironmentVariable("SystemRoot");
         startInfo.Environment.Clear();
+
         if (!string.IsNullOrWhiteSpace(inheritedPath))
         {
             startInfo.Environment["PATH"] = inheritedPath;
@@ -402,6 +458,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         startInfo.Environment["TMP"] = inheritedTemp;
         startInfo.Environment["ANSIGHT_AUTOMATION"] = "1";
         startInfo.Environment["NO_COLOR"] = "1";
+
         if (!string.IsNullOrWhiteSpace(inheritedSystemRoot))
         {
             startInfo.Environment["SystemRoot"] = inheritedSystemRoot;
@@ -429,10 +486,10 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             ["event"] = JsonSerializer.SerializeToNode(request.Event, JsonUtil.Compact),
             ["appSuites"] = new JsonObject(
                 RepositoryJavaScriptApiMethods.StandardAppToolSuites.Select(suite =>
-                    new KeyValuePair<string, JsonNode?>(
-                        suite.Key,
-                        new JsonObject(suite.Value.Select(method =>
-                            new KeyValuePair<string, JsonNode?>(method.Key, JsonValue.Create(method.Value)))))))
+                        new KeyValuePair<string, JsonNode?>(
+                            suite.Key,
+                            new JsonObject(suite.Value.Select(method =>
+                                new KeyValuePair<string, JsonNode?>(method.Key, JsonValue.Create(method.Value)))))))
         };
     }
 
@@ -448,6 +505,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         var message = hostCancellationRequested
             ? "Repository automation execution was cancelled while loading its module."
             : $"Trigger module loading exceeded the host's {moduleLoadTimeout.TotalSeconds:0}-second limit.";
+
         return new RepositoryAutomationExecutionResult(
             status,
             startedAtUtc,
@@ -472,7 +530,8 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         var message = hostCancellationRequested
             ? "Repository automation execution was cancelled."
             : $"Trigger function exceeded its "
-              + $"{request.Trigger.Automation.FunctionTimeout.TotalMilliseconds:0}-millisecond execution bound.";
+                + $"{request.Trigger.Automation.FunctionTimeout.TotalMilliseconds:0}-millisecond execution bound.";
+
         return new RepositoryAutomationExecutionResult(
             status,
             startedAtUtc,
@@ -480,7 +539,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             exitCode,
             message,
             !standardOutput.ExceededLimit
-            && TryParseOutput(standardOutput.Text, out var parsedOutput)
+                && TryParseOutput(standardOutput.Text, out var parsedOutput)
                 ? parsedOutput
                 : null,
             standardError);
@@ -494,11 +553,13 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         var character = new char[1];
         var text = new StringBuilder(Math.Min(maximumCharacters, 128));
         var exceededLimit = false;
+
         while (true)
         {
             var charactersRead = await reader.ReadAsync(
                 character.AsMemory(),
                 cancellationToken).ConfigureAwait(false);
+
             if (charactersRead == 0 || character[0] == '\n')
             {
                 break;
@@ -525,6 +586,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
     private static bool TryParseOutput(string output, out JsonObject? parsed)
     {
         parsed = null;
+
         if (string.IsNullOrWhiteSpace(output))
         {
             return false;
@@ -533,6 +595,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         try
         {
             parsed = JsonNode.Parse(output) as JsonObject;
+
             return parsed is not null;
         }
         catch (JsonException)
@@ -580,6 +643,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
         while (true)
         {
             int charactersRead;
+
             try
             {
                 charactersRead = await reader.ReadAsync(
@@ -590,12 +654,14 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             {
                 break;
             }
+
             if (charactersRead == 0)
             {
                 break;
             }
 
             var remainingCapacity = maximumCharacters - text.Length;
+
             if (remainingCapacity > 0)
             {
                 text.Append(buffer, 0, Math.Min(charactersRead, remainingCapacity));
@@ -637,8 +703,8 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or System.ComponentModel.Win32Exception
-                                           or NotSupportedException)
+            or System.ComponentModel.Win32Exception
+            or NotSupportedException)
         {
         }
     }
@@ -650,7 +716,7 @@ internal sealed class JavaScriptRepositoryAutomationExecutor : IRepositoryAutoma
             await process.WaitForExitAsync().ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or System.ComponentModel.Win32Exception)
+            or System.ComponentModel.Win32Exception)
         {
         }
     }

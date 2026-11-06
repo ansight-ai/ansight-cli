@@ -3,7 +3,6 @@ namespace Ansight.RemoteSimulator.Core.Input;
 public interface ISimulatorInputSink : IAsyncDisposable
 {
     string BackendName { get; }
-
     string Status { get; }
 
     Task<InputDeliveryResult> SendAsync(RemotePointerEvent pointerEvent, CancellationToken cancellationToken = default);

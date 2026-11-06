@@ -14,6 +14,7 @@ internal static class LiveUiFuzzyStringMatcher
     {
         var normalizedActual = Normalize(actual, caseSensitive);
         var normalizedExpected = Normalize(expected, caseSensitive);
+
         if (normalizedActual.Length == 0 || normalizedExpected.Length == 0)
         {
             return LiveUiStringMatchResult.NoMatch;
@@ -27,6 +28,7 @@ internal static class LiveUiFuzzyStringMatcher
         if (normalizedActual.Contains(normalizedExpected, StringComparison.Ordinal))
         {
             var coverage = (double)normalizedExpected.Length / normalizedActual.Length;
+
             return new LiveUiStringMatchResult(
                 true,
                 Math.Round(0.96 + (0.04 * coverage), 3),
@@ -36,6 +38,7 @@ internal static class LiveUiFuzzyStringMatcher
         var bestMatch = EvaluateEditDistance(normalizedActual, normalizedExpected, "edit-distance");
         var expectedTokens = SplitTokens(normalizedExpected);
         var actualTokens = SplitTokens(normalizedActual);
+
         if (expectedTokens.Length == 1)
         {
             foreach (var actualToken in actualTokens)
@@ -65,10 +68,12 @@ internal static class LiveUiFuzzyStringMatcher
         var usedActualTokens = new bool[actualTokens.Count];
         var scoreTotal = 0d;
         var editDistanceTotal = 0;
+
         foreach (var expectedToken in expectedTokens)
         {
             var bestTokenIndex = -1;
             var bestTokenMatch = LiveUiStringMatchResult.NoMatch;
+
             for (var index = 0; index < actualTokens.Count; index++)
             {
                 if (usedActualTokens[index])
@@ -79,6 +84,7 @@ internal static class LiveUiFuzzyStringMatcher
                 var candidate = string.Equals(actualTokens[index], expectedToken, StringComparison.Ordinal)
                     ? new LiveUiStringMatchResult(true, 1, "token-exact")
                     : EvaluateEditDistance(actualTokens[index], expectedToken, "token-edit-distance");
+
                 if (candidate.IsMatch && candidate.Score > bestTokenMatch.Score)
                 {
                     bestTokenIndex = index;
@@ -98,7 +104,8 @@ internal static class LiveUiFuzzyStringMatcher
 
         var averageScore = scoreTotal / expectedTokens.Count;
         var coveragePenalty = 0.9
-                              + (0.1 * Math.Min(1, (double)expectedTokens.Count / actualTokens.Count));
+            + (0.1 * Math.Min(1, (double)expectedTokens.Count / actualTokens.Count));
+
         return new LiveUiStringMatchResult(
             true,
             Math.Round(averageScore * coveragePenalty, 3),
@@ -113,6 +120,7 @@ internal static class LiveUiFuzzyStringMatcher
         string reasonPrefix)
     {
         var comparisonLength = Math.Max(actual.Length, expected.Length);
+
         if (Math.Min(actual.Length, expected.Length) <= 3)
         {
             return LiveUiStringMatchResult.NoMatch;
@@ -124,6 +132,7 @@ internal static class LiveUiFuzzyStringMatcher
             <= 14 => 2,
             _ => Math.Max(3, (int)Math.Floor(comparisonLength * 0.15))
         };
+
         if (Math.Abs(actual.Length - expected.Length) > maximumDistance)
         {
             return LiveUiStringMatchResult.NoMatch;
@@ -131,6 +140,7 @@ internal static class LiveUiFuzzyStringMatcher
 
         var distance = CalculateDamerauLevenshteinDistance(actual, expected, maximumDistance);
         var similarity = 1d - ((double)distance / comparisonLength);
+
         return distance <= maximumDistance && similarity >= MinimumSimilarity
             ? new LiveUiStringMatchResult(
                 true,
@@ -147,10 +157,13 @@ internal static class LiveUiFuzzyStringMatcher
         var previousPreviousRow = new int[right.Length + 1];
         var previousRow = Enumerable.Range(0, right.Length + 1).ToArray();
         var currentRow = new int[right.Length + 1];
+
         for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
         {
             currentRow[0] = leftIndex;
+
             var rowMinimum = currentRow[0];
+
             for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
             {
                 var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
@@ -159,6 +172,7 @@ internal static class LiveUiFuzzyStringMatcher
                         previousRow[rightIndex] + 1,
                         currentRow[rightIndex - 1] + 1),
                     previousRow[rightIndex - 1] + substitutionCost);
+
                 if (leftIndex > 1
                     && rightIndex > 1
                     && left[leftIndex - 1] == right[rightIndex - 2]
@@ -191,6 +205,7 @@ internal static class LiveUiFuzzyStringMatcher
         var result = new StringBuilder(decomposed.Length);
         var pendingSeparator = false;
         var previousWasLowercase = false;
+
         foreach (var character in decomposed)
         {
             if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
@@ -206,6 +221,7 @@ internal static class LiveUiFuzzyStringMatcher
             }
 
             var beginsCamelCaseWord = previousWasLowercase && char.IsUpper(character);
+
             if ((pendingSeparator || beginsCamelCaseWord)
                 && result.Length > 0
                 && result[^1] != ' ')
@@ -232,17 +248,10 @@ internal static class LiveUiFuzzyStringMatcher
     private static int ReadTrailingInteger(string reason)
     {
         var separatorIndex = reason.LastIndexOf("-", StringComparison.Ordinal);
+
         return separatorIndex >= 0
-               && int.TryParse(reason[(separatorIndex + 1)..], out var value)
+            && int.TryParse(reason[(separatorIndex + 1)..], out var value)
             ? value
             : 0;
     }
-}
-
-internal sealed record LiveUiStringMatchResult(
-    bool IsMatch,
-    double Score,
-    string Reason)
-{
-    public static LiveUiStringMatchResult NoMatch { get; } = new(false, 0, "no-match");
 }

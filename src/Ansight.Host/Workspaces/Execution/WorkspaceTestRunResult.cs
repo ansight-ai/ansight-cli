@@ -10,15 +10,10 @@ public sealed record WorkspaceTestRunResult(
     WorkspaceTestTarget? Target = null)
 {
     public TestVideoResult? Video { get; init; }
-
     public Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult? TaskResult { get; init; }
-
     public SimulatorAgentRunAudit? TaskAudit { get; init; }
-
     public string? TaskAuditFilePath { get; init; }
-
     public string? TaskAuditPersistenceError { get; init; }
-
     [System.Text.Json.Serialization.JsonIgnore]
     public SimulatorAgentRunAudit? RunAudit => AgentResult?.Audit ?? TaskAudit;
 
@@ -26,7 +21,6 @@ public sealed record WorkspaceTestRunResult(
         || TaskResult?.Status == Ansight.Host.Runtime.Tasks.RepositoryTaskRunStatus.Cancelled;
 
     public string? AppiumSessionId { get; init; }
-
     public bool IsSkipped { get; init; }
 
     public static WorkspaceTestRunResult Failure(

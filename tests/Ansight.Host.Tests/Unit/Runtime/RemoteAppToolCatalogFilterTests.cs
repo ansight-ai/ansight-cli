@@ -168,6 +168,7 @@ public sealed class RemoteAppToolCatalogFilterTests
         Assert.Equal(2, tools.Count);
         Assert.Equal("redpoint.mapbox.query_surface_contents", tools[0]?["id"]?.GetValue<string>());
         Assert.Equal("redpoint.mapbox.list_surfaces", tools[1]?["id"]?.GetValue<string>());
+
         var prerequisiteToolIds = Assert.IsType<JsonArray>(tools[0]?["prerequisiteToolIds"]);
         Assert.Equal("redpoint.mapbox.list_surfaces", Assert.Single(prerequisiteToolIds)?.GetValue<string>());
         Assert.Equal(1, result["matchedToolCount"]?.GetValue<int>());

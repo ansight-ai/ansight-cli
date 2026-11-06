@@ -15,11 +15,11 @@ public sealed partial class AppExecutionServiceTests
             1, 1, 0)
         {
             TaskDiscovery = new SimulatorAgentRepositoryTaskDiscoveryTrace("query", "Open weather",
-            [
-                new("load-weather", 90.5, 0.8, ["preload-candidate"]),
+                [
+                    new("load-weather", 90.5, 0.8, ["preload-candidate"]),
                 new("open-guide", 70, 0.6, ["task-intent-mismatch"]),
                 new("delete-account", null, null, ["no-match"])
-            ])
+                ])
             {
                 AvailableTaskCount = 3,
                 AvailableTaskIds = ["load-weather", "open-guide", "delete-account"]
@@ -75,6 +75,7 @@ public sealed partial class AppExecutionServiceTests
         await File.WriteAllTextAsync(
             promptPath,
             "  Open settings.\nEnable reminders.\nVerify reminders are enabled.  ");
+
         var arguments = CliArguments.Parse(
             ["app", "execute", "session-1", "--prompt-file", promptPath]);
 
@@ -89,15 +90,15 @@ public sealed partial class AppExecutionServiceTests
     public async Task ReadPromptAsync_RejectsInlineAndFilePromptsTogether()
     {
         var arguments = CliArguments.Parse(
-        [
-            "app",
+            [
+                "app",
             "execute",
             "session-1",
             "--prompt",
             "Open settings.",
             "--prompt-file",
             "prompt.txt"
-        ]);
+            ]);
 
         var exception = await Assert.ThrowsAsync<CliUsageException>(() =>
             AppExecutionService.ReadPromptAsync(arguments, CancellationToken.None));
@@ -137,8 +138,8 @@ public sealed partial class AppExecutionServiceTests
     public void ResolveTarget_AcceptsADeviceAndInstalledApplicationIdentifier()
     {
         var arguments = CliArguments.Parse(
-        [
-            "app",
+            [
+                "app",
             "execute",
             "--device-id",
             "DEVICE-1",
@@ -146,7 +147,7 @@ public sealed partial class AppExecutionServiceTests
             "com.example.app",
             "--prompt",
             "Open settings"
-        ]);
+            ]);
 
         var target = AppExecutionService.ResolveTarget(arguments);
 
@@ -159,8 +160,8 @@ public sealed partial class AppExecutionServiceTests
     public void ResolveTargets_ExpandsRepeatedDeviceIdentifiers()
     {
         var arguments = CliArguments.Parse(
-        [
-            "app",
+            [
+                "app",
             "execute",
             "--device-id",
             "DEVICE-1",
@@ -172,7 +173,7 @@ public sealed partial class AppExecutionServiceTests
             "ios",
             "--prompt",
             "Open settings"
-        ]);
+            ]);
 
         var targets = AppExecutionService.ResolveTargets(arguments);
 
@@ -224,15 +225,15 @@ public sealed partial class AppExecutionServiceTests
     public void ResolveTarget_RejectsLaunchOptionsWithASession()
     {
         var arguments = CliArguments.Parse(
-        [
-            "app",
+            [
+                "app",
             "execute",
             "session-1",
             "--app",
             "/build/Example.app",
             "--prompt",
             "Open settings"
-        ]);
+            ]);
 
         var exception = Assert.Throws<CliUsageException>(() =>
             AppExecutionService.ResolveTarget(arguments));
@@ -257,6 +258,7 @@ public sealed partial class AppExecutionServiceTests
               </dict>
             </plist>
             """);
+
         var resolver = new AppExecutionArtifactIdentifierResolver();
 
         var result = await resolver.ResolveAsync(appPath, configuredAdbPath: null);
@@ -271,6 +273,7 @@ public sealed partial class AppExecutionServiceTests
         using var directory = TestDirectory.Create();
         var apkPath = Path.Combine(directory.Path, "Example.apk");
         await File.WriteAllBytesAsync(apkPath, []);
+
         var runner = new RecordingArtifactToolRunner(
             new AppExecutionArtifactToolResult(
                 0,
@@ -414,6 +417,7 @@ public sealed partial class AppExecutionServiceTests
             Instructions: [instruction],
             ModelPasses: [modelPass],
             ToolCalls: []);
+
         return new SimulatorAgentRunResult(
             audit.Status,
             audit.Message,
@@ -438,7 +442,6 @@ public sealed partial class AppExecutionServiceTests
         }
 
         public string? ExecutablePath { get; private set; }
-
         public IReadOnlyList<string> Arguments { get; private set; } = [];
 
         public Task<AppExecutionArtifactToolResult> RunAsync(
@@ -449,6 +452,7 @@ public sealed partial class AppExecutionServiceTests
             cancellationToken.ThrowIfCancellationRequested();
             ExecutablePath = executablePath;
             Arguments = arguments.ToArray();
+
             return Task.FromResult(result);
         }
     }
@@ -467,7 +471,6 @@ public sealed partial class AppExecutionServiceTests
         }
 
         public WorkspaceTestRunPreparationRequest? PreparationRequest { get; private set; }
-
         public WorkspaceTestRunMeterCompletion? Completion { get; private set; }
 
         public Task<WorkspaceTestRunPreparation> PrepareAsync(
@@ -476,6 +479,7 @@ public sealed partial class AppExecutionServiceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             PreparationRequest = request;
+
             return Task.FromResult(preparation);
         }
 
@@ -485,6 +489,7 @@ public sealed partial class AppExecutionServiceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             Completion = completion;
+
             return Task.FromResult(completionResult);
         }
     }

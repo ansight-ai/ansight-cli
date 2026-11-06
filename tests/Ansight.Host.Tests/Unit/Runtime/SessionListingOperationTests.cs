@@ -31,8 +31,10 @@ public sealed class SessionListingOperationTests
                     ["beta"] = true
                 }
             });
+
         var appToolBridge = new TestAppToolBridge();
         appToolBridge.Connect(sessionId);
+
         var catalog = CreateToolCatalog(runtimeState, environment, appToolBridge);
 
         var response = await catalog.HandleToolsCallAsync(
@@ -79,6 +81,7 @@ public sealed class SessionListingOperationTests
                     ["channel"] = "beta"
                 }
             }));
+
         var catalog = CreateToolCatalog(runtimeState, environment);
 
         var response = await catalog.HandleToolsCallAsync(
@@ -158,6 +161,7 @@ public sealed class SessionListingOperationTests
         var payload = GetStructuredContent(response);
         Assert.Equal(1, payload["matchedCount"]!.GetValue<int>());
         Assert.False(payload["isTruncated"]!.GetValue<bool>());
+
         var session = Assert.Single(payload["sessions"]!.AsArray());
         Assert.Equal("session-ios-tablet-sim-001", session!["sessionId"]!.GetValue<string>());
         Assert.Equal("tablet", session["deviceFormFactor"]!.GetValue<string>());
@@ -208,6 +212,7 @@ public sealed class SessionListingOperationTests
 
         var payload = GetStructuredContent(response);
         Assert.Equal(1, payload["matchedCount"]!.GetValue<int>());
+
         var session = Assert.Single(payload["sessions"]!.AsArray());
         Assert.Equal("session-older-with-telemetry-001", session!["sessionId"]!.GetValue<string>());
     }
@@ -269,6 +274,7 @@ public sealed class SessionListingOperationTests
         TestAppToolBridge? appToolBridge = null)
     {
         appToolBridge ??= new TestAppToolBridge();
+
         return new ToolCatalog(
             runtimeState,
             environment.ApplicationPaths,
@@ -301,6 +307,7 @@ public sealed class SessionListingOperationTests
         JsonObject? customProperties = null)
     {
         var createdUtc = lastUpdatedUtc.AddMinutes(-5);
+
         return new AppSessionSnapshot
         {
             SessionId = sessionId,
@@ -358,6 +365,7 @@ public sealed class SessionListingOperationTests
         Assert.False(response.IsError);
         Assert.NotNull(response.Payload);
         Assert.False(response.Payload!["isError"]!.GetValue<bool>());
+
         return Assert.IsType<JsonObject>(response.Payload["structuredContent"]);
     }
 
@@ -367,8 +375,12 @@ public sealed class SessionListingOperationTests
 
         public event EventHandler? ConnectionsChanged
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
 
         public IReadOnlyList<string> GetConnectedSessionIds()
@@ -405,7 +417,7 @@ public sealed class SessionListingOperationTests
     private sealed class EmptyPairingConfigService : IPairingConfigService
     {
         public PairingIssueResult Issue(string appName, string appId, PairingConfigDuration duration)
-            => throw new NotSupportedException();
+                => throw new NotSupportedException();
     }
 
     private sealed class EmptyPairingConfigCache : IPairingConfigCache
@@ -426,6 +438,5 @@ public sealed class SessionListingOperationTests
 
         public bool Remove(string configId)
             => false;
-
     }
 }

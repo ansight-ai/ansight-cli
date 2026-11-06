@@ -11,8 +11,9 @@ internal static class NavigationGuidance
             framework);
         var paradigms = AppGraphNavigationTechnologyCatalog.GetKinds(framework).Select(kind =>
             $"{kind.Kind} ({kind.Paradigm.Topology}): {kind.Paradigm.ChildInventory} "
-            + $"Selection: {kind.Paradigm.Selection} Return: {kind.Paradigm.ReturnBehavior} "
-            + $"Evidence: {kind.Paradigm.Evidence}");
+                + $"Selection: {kind.Paradigm.Selection} Return: {kind.Paradigm.ReturnBehavior} "
+                + $"Evidence: {kind.Paradigm.Evidence}");
+
         return guidance + "\nTechnology-specific navigation paradigms:\n" + string.Join("\n", paradigms);
     }
 }

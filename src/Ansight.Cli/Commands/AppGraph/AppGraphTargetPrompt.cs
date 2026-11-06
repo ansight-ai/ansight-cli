@@ -14,6 +14,7 @@ internal static class AppGraphTargetPrompt
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(output);
+
         if (!IsAppGraphExploration(arguments)
             || CliCommandHelp.IsRequested(arguments)
             || arguments.Positionals.Count > 3)
@@ -25,6 +26,7 @@ internal static class AppGraphTargetPrompt
             ? arguments.Positionals[2]
             : null;
         var optionAppId = arguments.GetOption("app-id");
+
         if (positionalAppId is not null && optionAppId is not null)
         {
             return arguments;
@@ -33,6 +35,7 @@ internal static class AppGraphTargetPrompt
         var configuredWorkspace = arguments.HasFlag("workspace")
             ? arguments.RequireOption("workspace")
             : Environment.CurrentDirectory;
+
         if (string.IsNullOrWhiteSpace(configuredWorkspace))
         {
             throw new CliUsageException("--workspace requires a non-empty folder path.");
@@ -42,17 +45,20 @@ internal static class AppGraphTargetPrompt
         IReadOnlyList<AppGraphWorkspaceApp> candidates = [];
         var appId = positionalAppId ?? optionAppId;
         string? appName = null;
+
         if (string.IsNullOrWhiteSpace(appId))
         {
             candidates = FindWorkspaceApps(
                 CliRuntime.ResolveOptions(arguments).DataDirectory,
                 workspacePath);
+
             if (candidates.Count == 1)
             {
                 appId = candidates[0].AppId;
                 appName = candidates[0].Name;
             }
         }
+
         if (appId is null
             && !arguments.IsJson
             && !arguments.IsSilent
@@ -78,11 +84,13 @@ internal static class AppGraphTargetPrompt
 
         var normalizedAppId = appId.Trim();
         var enrichedArguments = arguments;
+
         if (positionalAppId is null && optionAppId is null)
         {
             var values = arguments.OriginalArguments.ToList();
             values.Add("--app-id");
             values.Add(normalizedAppId);
+
             if (arguments.GetOption("workspace") is null)
             {
                 values.Add("--workspace");
@@ -103,11 +111,13 @@ internal static class AppGraphTargetPrompt
         }
 
         liveSessionProbe ??= ControlClient.TryHasConnectedAppSessionAsync;
+
         var hasLiveSession = await liveSessionProbe(
             enrichedArguments,
             normalizedAppId,
             enrichedArguments.GetOption("session-id"),
             cancellationToken).ConfigureAwait(false);
+
         if (hasLiveSession is not false
             || !PromptToLaunchApp(appName ?? normalizedAppId, normalizedAppId, output, standardInput))
         {
@@ -116,6 +126,7 @@ internal static class AppGraphTargetPrompt
 
         var launchArguments = enrichedArguments.OriginalArguments.ToList();
         launchArguments.Add("--launch");
+
         return CliArguments.Parse(launchArguments);
     }
 
@@ -124,11 +135,16 @@ internal static class AppGraphTargetPrompt
         string workspacePath)
     {
         var storePath = Path.Combine(dataDirectory, "data", "known-apps.json");
-        if (!File.Exists(storePath)) return [];
+
+        if (!File.Exists(storePath))
+        {
+            return [];
+        }
 
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(storePath));
+
             if (!document.RootElement.TryGetProperty("apps", out var apps)
                 || apps.ValueKind != JsonValueKind.Array)
             {
@@ -136,6 +152,7 @@ internal static class AppGraphTargetPrompt
             }
 
             var normalizedWorkspacePath = NormalizeDirectoryPath(workspacePath);
+
             return apps.EnumerateArray()
                 .Select(ReadWorkspaceApp)
                 .Where(static app => app is not null)
@@ -154,6 +171,7 @@ internal static class AppGraphTargetPrompt
     private static string? PromptForAppId(CliOutput output, TextReader standardInput)
     {
         output.WritePrompt("App ID to explore: ");
+
         return standardInput.ReadLine()?.Trim();
     }
 
@@ -163,13 +181,16 @@ internal static class AppGraphTargetPrompt
         TextReader standardInput)
     {
         output.WritePrompt("Select the workspace app to explore:" + Environment.NewLine);
+
         for (var index = 0; index < candidates.Count; index++)
         {
             output.WritePrompt($"  {index + 1}. {candidates[index].Name} ({candidates[index].AppId}){Environment.NewLine}");
         }
 
         output.WritePrompt($"Choice [1-{candidates.Count}]: ");
+
         var selection = standardInput.ReadLine()?.Trim();
+
         if (!int.TryParse(selection, out var selectedIndex)
             || selectedIndex < 1
             || selectedIndex > candidates.Count)
@@ -191,7 +212,9 @@ internal static class AppGraphTargetPrompt
             : $"'{appName}' ({appId})";
         output.WritePrompt(
             $"No live Ansight session is connected for {displayName}. Launch it now? [Y/n] ");
+
         var response = standardInput.ReadLine();
+
         if (response is null)
         {
             return false;
@@ -209,7 +232,12 @@ internal static class AppGraphTargetPrompt
     {
         var appId = ReadString(element, "appId");
         var codebasePath = ReadString(element, "codebasePath");
-        if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(codebasePath)) return null;
+
+        if (string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(codebasePath))
+        {
+            return null;
+        }
+
         return new AppGraphWorkspaceApp(
             appId.Trim(),
             ReadString(element, "name")?.Trim() is { Length: > 0 } name ? name : appId.Trim(),
@@ -218,17 +246,18 @@ internal static class AppGraphTargetPrompt
 
     private static string? ReadString(JsonElement element, string propertyName)
         => element.TryGetProperty(propertyName, out var value)
-           && value.ValueKind == JsonValueKind.String
+            && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 
     private static bool IsPathUnderOrEqual(string parentPath, string candidatePath)
     {
         var relative = Path.GetRelativePath(parentPath, candidatePath);
+
         return relative == "."
-               || (!relative.Equals("..", StringComparison.Ordinal)
-                   && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                   && !Path.IsPathFullyQualified(relative));
+            || (!relative.Equals("..", StringComparison.Ordinal)
+                && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !Path.IsPathFullyQualified(relative));
     }
 
     private static string NormalizeDirectoryPath(string path)
@@ -236,8 +265,6 @@ internal static class AppGraphTargetPrompt
 
     private static bool IsAppGraphExploration(CliArguments arguments)
         => arguments.Positionals.Count >= 2
-           && arguments.Positionals[0].ToLowerInvariant() is "app-graph" or "app-graphs"
-           && arguments.Positionals[1].Equals("explore", StringComparison.OrdinalIgnoreCase);
+            && arguments.Positionals[0].ToLowerInvariant() is "app-graph" or "app-graphs"
+            && arguments.Positionals[1].Equals("explore", StringComparison.OrdinalIgnoreCase);
 }
-
-internal sealed record AppGraphWorkspaceApp(string AppId, string Name, string CodebasePath);

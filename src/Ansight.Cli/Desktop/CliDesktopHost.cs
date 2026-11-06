@@ -11,7 +11,7 @@ namespace Ansight.Cli.Desktop;
 
 internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Process? process;
     private readonly TcpClient? connection;
     private readonly StreamReader actionReader;
@@ -36,6 +36,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
     private CliDesktopHost(TcpClient connection)
     {
         this.connection = connection;
+
         var stream = connection.GetStream();
         actionReader = new StreamReader(
             stream,
@@ -59,6 +60,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(writeProgress);
+
         if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsWindows())
         {
             return null;
@@ -74,16 +76,19 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         }
 
         var helperPath = ResolveWindowsHelperPath();
+
         if (helperPath is null)
         {
             writeProgress(
                 "Desktop integration warning: the native tray helper was not found; "
-                + "continuing without a tray icon or local notifications.");
+                    + "continuing without a tray icon or local notifications.");
+
             return null;
         }
 
         Process? process = null;
         CliDesktopHost? desktopHost = null;
+
         try
         {
             process = Process.Start(new ProcessStartInfo
@@ -96,6 +101,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
                 RedirectStandardError = true,
                 CreateNoWindow = true
             });
+
             if (process is null)
             {
                 return null;
@@ -109,13 +115,15 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
                     explorerUrl?.AbsoluteUri,
                     UpdateAvailable: updateAvailable),
                 cancellationToken).ConfigureAwait(false);
+
             return desktopHost;
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or IOException
-                                           or System.ComponentModel.Win32Exception)
+            or IOException
+            or System.ComponentModel.Win32Exception)
         {
             writeProgress($"Desktop integration warning: {exception.GetBaseException().Message}");
+
             if (desktopHost is not null)
             {
                 await desktopHost.DisposeAsync().ConfigureAwait(false);
@@ -136,21 +144,25 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var appPath = ResolveMacOSHelperAppPath();
+
         if (appPath is null)
         {
             writeProgress(
                 "Desktop integration warning: the native tray helper was not found; "
-                + "continuing without a tray icon or local notifications.");
+                    + "continuing without a tray icon or local notifications.");
+
             return null;
         }
 
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start(1);
+
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
         Process? launcher = null;
         TcpClient? connection = null;
+
         try
         {
             var startInfo = new ProcessStartInfo
@@ -171,6 +183,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             startInfo.ArgumentList.Add(token);
 
             launcher = Process.Start(startInfo);
+
             if (launcher is null)
             {
                 return null;
@@ -184,7 +197,8 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             var handshake = await ReadHandshakeAsync(
                 connection.GetStream(),
                 timeout.Token).ConfigureAwait(false);
-            var action = JsonSerializer.Deserialize<CliDesktopAction>(handshake, JsonOptions);
+            var action = JsonSerializer.Deserialize<CliDesktopAction>(handshake, jsonOptions);
+
             if (action is null
                 || !string.Equals(action.Schema, CliDesktopProtocol.ActionSchema, StringComparison.Ordinal)
                 || !string.Equals(action.Action, "ready", StringComparison.Ordinal)
@@ -192,6 +206,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             {
                 writeProgress("Desktop integration warning: the native tray helper returned an invalid handshake.");
                 connection.Dispose();
+
                 return null;
             }
 
@@ -204,6 +219,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
                     explorerUrl?.AbsoluteUri,
                     UpdateAvailable: updateAvailable),
                 cancellationToken).ConfigureAwait(false);
+
             return desktopHost;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -216,16 +232,18 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
                     ? "Desktop integration warning: the native tray helper did not connect in time."
                     : $"Desktop integration warning: {launcherError.Trim()}");
             connection?.Dispose();
+
             return null;
         }
         catch (Exception exception) when (exception is InvalidOperationException
-                                           or IOException
-                                           or JsonException
-                                           or System.ComponentModel.Win32Exception
-                                           or SocketException)
+            or IOException
+            or JsonException
+            or System.ComponentModel.Win32Exception
+            or SocketException)
         {
             writeProgress($"Desktop integration warning: {exception.GetBaseException().Message}");
             connection?.Dispose();
+
             return null;
         }
         finally
@@ -240,9 +258,11 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
     {
         var buffer = new byte[1];
         using var contents = new MemoryStream();
+
         while (contents.Length < 4096)
         {
             var bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+
             if (bytesRead == 0)
             {
                 throw new IOException("The native tray helper closed before completing its handshake.");
@@ -267,6 +287,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(notification);
+
         return SendCommandAsync(
             new CliDesktopCommand(
                 CliDesktopProtocol.CommandSchema,
@@ -289,6 +310,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(notificationIdentifier);
+
         return SendCommandAsync(
             new CliDesktopCommand(
                 CliDesktopProtocol.CommandSchema,
@@ -328,10 +350,11 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         await writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             await commandWriter.WriteLineAsync(
-                JsonSerializer.Serialize(command, JsonOptions).AsMemory(),
+                JsonSerializer.Serialize(command, jsonOptions).AsMemory(),
                 cancellationToken).ConfigureAwait(false);
             await commandWriter.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -348,9 +371,10 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             while (await actionReader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
             {
                 CliDesktopAction? action;
+
                 try
                 {
-                    action = JsonSerializer.Deserialize<CliDesktopAction>(line, JsonOptions);
+                    action = JsonSerializer.Deserialize<CliDesktopAction>(line, jsonOptions);
                 }
                 catch (JsonException)
                 {
@@ -393,9 +417,10 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             "update" => CliDesktopRequestedAction.Update,
             _ => default
         };
+
         return action is not null
-               && string.Equals(action.Schema, CliDesktopProtocol.ActionSchema, StringComparison.Ordinal)
-               && actionName is "stop" or "restart" or "update";
+            && string.Equals(action.Schema, CliDesktopProtocol.ActionSchema, StringComparison.Ordinal)
+            && actionName is "stop" or "restart" or "update";
     }
 
     private async Task ReadErrorsAsync(
@@ -428,10 +453,12 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
     private static string? ResolveMacOSHelperAppPath()
     {
         var configuredPath = Environment.GetEnvironmentVariable("ANSIGHT_DESKTOP_HELPER");
+
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             var fullConfiguredPath = Path.GetFullPath(
                 Environment.ExpandEnvironmentVariables(configuredPath.Trim()));
+
             if (Directory.Exists(fullConfiguredPath)
                 && string.Equals(Path.GetExtension(fullConfiguredPath), ".app", StringComparison.OrdinalIgnoreCase))
             {
@@ -441,6 +468,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             if (File.Exists(fullConfiguredPath))
             {
                 var directory = new DirectoryInfo(Path.GetDirectoryName(fullConfiguredPath)!);
+
                 while (directory is not null)
                 {
                     if (string.Equals(directory.Extension, ".app", StringComparison.OrdinalIgnoreCase))
@@ -461,20 +489,24 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             Path.Combine(baseDirectory, "Ansight Tray.app"),
             Path.Combine(baseDirectory, "ansight-tray.app")
         };
+
         return candidates.FirstOrDefault(Directory.Exists);
     }
 
     private static string? ResolveWindowsHelperPath()
     {
         var configuredPath = Environment.GetEnvironmentVariable("ANSIGHT_DESKTOP_HELPER");
+
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             var fullConfiguredPath = Path.GetFullPath(
                 Environment.ExpandEnvironmentVariables(configuredPath.Trim()));
+
             return File.Exists(fullConfiguredPath) ? fullConfiguredPath : null;
         }
 
         var path = Path.Combine(AppContext.BaseDirectory, "ansight-tray.exe");
+
         return File.Exists(path) ? path : null;
     }
 
@@ -486,9 +518,11 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         }
 
         disposed = true;
+
         try
         {
             await writeGate.WaitAsync().ConfigureAwait(false);
+
             try
             {
                 if (process is null || !process.HasExited)
@@ -496,7 +530,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
                     await commandWriter.WriteLineAsync(
                         JsonSerializer.Serialize(
                             new CliDesktopCommand(CliDesktopProtocol.CommandSchema, "shutdown"),
-                            JsonOptions)).ConfigureAwait(false);
+                            jsonOptions)).ConfigureAwait(false);
                     await commandWriter.FlushAsync().ConfigureAwait(false);
                 }
             }
@@ -508,6 +542,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             if (process is not null && !process.HasExited)
             {
                 var exitTask = process.WaitForExitAsync();
+
                 if (await Task.WhenAny(exitTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false) != exitTask)
                 {
                     process.Kill(entireProcessTree: true);
@@ -517,6 +552,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
             else if (process is null)
             {
                 var exitTask = actionReaderTask;
+
                 if (await Task.WhenAny(exitTask, Task.Delay(TimeSpan.FromSeconds(2))).ConfigureAwait(false) != exitTask)
                 {
                     connection?.Dispose();
@@ -529,6 +565,7 @@ internal sealed class CliDesktopHost : INotificationSink, IAsyncDisposable
         finally
         {
             shutdown.Cancel();
+
             try
             {
                 await Task.WhenAll(actionReaderTask, errorReaderTask).ConfigureAwait(false);

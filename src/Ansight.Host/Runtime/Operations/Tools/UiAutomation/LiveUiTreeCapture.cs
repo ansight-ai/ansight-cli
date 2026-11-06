@@ -35,19 +35,12 @@ internal sealed partial class LiveUiTreeCapture
     }
 
     public AppSessionSnapshot Session { get; }
-
     public string ToolId { get; }
-
     public JsonObject RawPayload { get; }
-
     public JsonObject Payload { get; }
-
     public JsonObject Root { get; }
-
     public VisualTreeTypeRegistry TypeRegistry { get; }
-
     public LiveUiBounds? Viewport { get; }
-
     public DateTimeOffset CapturedAtUtc { get; }
 
     public static Task<LiveUiCaptureResult> CaptureAsync(
@@ -89,6 +82,7 @@ internal sealed partial class LiveUiTreeCapture
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(selector);
+
         return CaptureAsync(
             session,
             appToolBridge,
@@ -110,6 +104,7 @@ internal sealed partial class LiveUiTreeCapture
         string? targetSource = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
+
         var result = await CaptureDeviceFirstAsync(
             session,
             appToolBridge,
@@ -120,6 +115,7 @@ internal sealed partial class LiveUiTreeCapture
             cancellationToken,
             allowCached,
             targetSource: targetSource).ConfigureAwait(false);
+
         return await ExpandNativeScrollTargetAsync(result, appToolBridge,
             operationName, correlationId, selector, cancellationToken).ConfigureAwait(false);
     }
@@ -152,6 +148,7 @@ internal sealed partial class LiveUiTreeCapture
             uiInputRouter,
             cancellationToken: cancellationToken,
             allowCached: allowCached).ConfigureAwait(false);
+
         if (deviceResult.IsSuccess)
         {
             return deviceResult;
@@ -163,6 +160,7 @@ internal sealed partial class LiveUiTreeCapture
             operationName,
             correlationId,
             cancellationToken).ConfigureAwait(false);
+
         return AddAttemptedToolIds(
             frameworkResult,
             [DeviceAccessibilityToolId, .. frameworkResult.AttemptedToolIds]);
@@ -178,15 +176,20 @@ internal sealed partial class LiveUiTreeCapture
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(uiInputRouter);
+
         var reportedIdentifier = DeviceLifecycleTool.ResolveNativeDeviceIdentifier(session);
         var deviceIdentifier = uiInputRouter.ResolveDeviceIdentifier(
             session.SessionId,
             reportedIdentifier);
+
         if (deviceIdentifier is null)
         {
             return LiveUiCaptureResult.Failure(
                 "The live session does not report device.nativeDeviceId, so device accessibility cannot be targeted.")
-                with { AttemptedToolIds = [DeviceAccessibilityToolId] };
+                        with
+            {
+                AttemptedToolIds = [DeviceAccessibilityToolId]
+            };
         }
 
         var result = await uiInputRouter.CaptureAccessibilityAsync(
@@ -198,10 +201,14 @@ internal sealed partial class LiveUiTreeCapture
                 Math.Clamp(maxDepth, 1, 64),
                 allowCached && session.CaptureSource != WorkspaceExecutionModes.Device),
             cancellationToken).ConfigureAwait(false);
+
         if (!result.IsSuccess || result.Payload is null)
         {
             return LiveUiCaptureResult.Failure(result.Message)
-                with { AttemptedToolIds = [DeviceAccessibilityToolId] };
+                        with
+            {
+                AttemptedToolIds = [DeviceAccessibilityToolId]
+            };
         }
 
         return CreateCapture(
@@ -234,12 +241,16 @@ internal sealed partial class LiveUiTreeCapture
         CancellationToken cancellationToken)
     {
         if (session.CaptureSource == WorkspaceExecutionModes.Device)
+        {
             return LiveUiCaptureResult.Failure("App visual trees require the Ansight SDK. Use device accessibility or screenshot text.");
+        }
+
         var requestContext = new AppToolBridgeRequestContext("host-ui", operationName, correlationId);
         var catalogResponse = await appToolBridge.QueryToolsAsync(
             session.SessionId,
             cancellationToken,
             requestContext);
+
         if (!catalogResponse.Success || catalogResponse.Envelope is null)
         {
             return LiveUiCaptureResult.Failure(catalogResponse.Message);
@@ -254,9 +265,10 @@ internal sealed partial class LiveUiTreeCapture
         var toolId = preferFrameworkTool
             ? GetLiveVisualTreeTool.ResolveToolId(arguments: null, catalogPayload)
             : RemoteAppToolIds.UiGetVisualTree;
+
         if (toolId is null
             || preferFrameworkTool
-               && string.Equals(toolId, RemoteAppToolIds.UiGetVisualTree, StringComparison.Ordinal)
+                && string.Equals(toolId, RemoteAppToolIds.UiGetVisualTree, StringComparison.Ordinal)
             || !RemoteAppToolCatalog.HasTool(catalogPayload, toolId))
         {
             return LiveUiCaptureResult.Failure(
@@ -286,35 +298,55 @@ internal sealed partial class LiveUiTreeCapture
         string? targetSource = null)
     {
         if (targetSource is not null && !IsTargetSource(targetSource))
+        {
             return LiveUiCaptureResult.Failure("Unknown targetSource. Rediscover and copy the complete target hint.");
+        }
+
         var deviceResult = await CaptureDeviceAccessibilityAsync(
             session,
             uiInputRouter,
             cancellationToken: cancellationToken,
             allowCached: allowCached).ConfigureAwait(false);
+
         if (session.CaptureSource == WorkspaceExecutionModes.Device)
+        {
             return targetSource is null or DeviceAccessibilityToolId ? deviceResult
                 : LiveUiCaptureResult.Failure("The target hint requires an SDK capture provider unavailable in device mode.");
-        if (targetSource == DeviceAccessibilityToolId) return deviceResult;
+        }
+
+        if (targetSource == DeviceAccessibilityToolId)
+        {
+            return deviceResult;
+        }
+
         if (targetSource is not null)
         {
             // Keep the existing modal arbitration: a provider hint must not target content
             // beneath an active system or app sheet.
             if (deviceResult.IsSuccess && HasModalDominance(deviceResult))
+            {
                 return await CaptureModalTargetAsync(deviceResult, session, appToolBridge,
                     operationName, correlationId, selector!, cancellationToken).ConfigureAwait(false);
+            }
+
             if (!deviceResult.IsSuccess)
+            {
                 return deviceResult;
+            }
+
             var targetedResult = await CaptureWithToolAsync(session, appToolBridge, targetSource,
                 new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
                 cancellationToken).ConfigureAwait(false);
+
             return ValidateForegroundTargets(deviceResult, targetedResult, selector);
         }
+
         if (deviceResult.IsSuccess
             && (selector is null || ContainsSelectorEvidence(deviceResult, selector)))
         {
             return deviceResult;
         }
+
         if (deviceResult.IsSuccess && HasModalDominance(deviceResult))
         {
             return await CaptureModalTargetAsync(
@@ -325,15 +357,19 @@ internal sealed partial class LiveUiTreeCapture
         var fallbackResult = preferredFallbackToolId is null ? null
             : await CaptureWithToolAsync(session, appToolBridge, preferredFallbackToolId,
                 new AppToolBridgeRequestContext("host-ui", operationName, correlationId), cancellationToken).ConfigureAwait(false);
+
         if (fallbackResult is null || !fallbackResult.IsSuccess
             || selector is not null && !ContainsSelectorEvidence(fallbackResult, selector))
+        {
             fallbackResult = await CaptureAsync(
-            session,
-            appToolBridge,
-            operationName,
-            correlationId,
-            selector,
-            cancellationToken).ConfigureAwait(false);
+                session,
+                appToolBridge,
+                operationName,
+                correlationId,
+                selector,
+                cancellationToken).ConfigureAwait(false);
+        }
+
         if (fallbackResult.IsSuccess)
         {
             return AddAttemptedToolIds(
@@ -345,8 +381,7 @@ internal sealed partial class LiveUiTreeCapture
             ? deviceResult with
             {
                 AttemptedToolIds = [DeviceAccessibilityToolId, .. fallbackResult.AttemptedToolIds]
-            }
-            : AddAttemptedToolIds(
+            } : AddAttemptedToolIds(
                 fallbackResult,
                 [DeviceAccessibilityToolId, .. fallbackResult.AttemptedToolIds]);
     }
@@ -367,12 +402,16 @@ internal sealed partial class LiveUiTreeCapture
         CancellationToken cancellationToken)
     {
         if (session.CaptureSource == WorkspaceExecutionModes.Device)
+        {
             return LiveUiCaptureResult.Failure("App visual trees require the Ansight SDK. Use device accessibility or screenshot text.");
+        }
+
         var requestContext = new AppToolBridgeRequestContext("host-ui", operationName, correlationId);
         var catalogResponse = await appToolBridge.QueryToolsAsync(
             session.SessionId,
             cancellationToken,
             requestContext);
+
         if (!catalogResponse.Success || catalogResponse.Envelope is null)
         {
             return LiveUiCaptureResult.Failure(catalogResponse.Message);
@@ -385,6 +424,7 @@ internal sealed partial class LiveUiTreeCapture
 
         var catalogPayload = catalogResponse.Envelope.Payload;
         var toolId = GetLiveVisualTreeTool.ResolveToolId(arguments: null, catalogPayload);
+
         if (toolId is null)
         {
             return LiveUiCaptureResult.Failure(
@@ -397,6 +437,7 @@ internal sealed partial class LiveUiTreeCapture
             toolId,
             requestContext,
             cancellationToken);
+
         if (!ShouldTryNativeFallback(preferredResult, toolId, catalogPayload, selector))
         {
             return preferredResult;
@@ -409,19 +450,29 @@ internal sealed partial class LiveUiTreeCapture
             requestContext,
             cancellationToken);
         var attemptedToolIds = new[] { toolId, RemoteAppToolIds.UiGetVisualTree };
+
         if (!nativeResult.IsSuccess)
         {
-            return preferredResult with { AttemptedToolIds = attemptedToolIds };
+            return preferredResult with
+            {
+                AttemptedToolIds = attemptedToolIds
+            };
         }
 
         if (!preferredResult.IsSuccess
             || preferredResult.Capture is { } preferredCapture && ContainsCycle(preferredCapture)
             || selector is not null && ContainsSelectorEvidence(nativeResult, selector))
         {
-            return nativeResult with { AttemptedToolIds = attemptedToolIds };
+            return nativeResult with
+            {
+                AttemptedToolIds = attemptedToolIds
+            };
         }
 
-        return preferredResult with { AttemptedToolIds = attemptedToolIds };
+        return preferredResult with
+        {
+            AttemptedToolIds = attemptedToolIds
+        };
     }
 
     private static async Task<LiveUiCaptureResult> CaptureWithToolAsync(
@@ -438,21 +489,20 @@ internal sealed partial class LiveUiTreeCapture
             ? new JsonObject
             {
                 ["root"] = MauiVisualTreeRootScope.Window
-            }
-            : toolId == RemoteAppToolIds.UiGetVisualTree
+            } : toolId == RemoteAppToolIds.UiGetVisualTree
                 ? new JsonObject
                 {
                     ["root"] = VisualTreeContract.WindowRootScope,
                     ["maxNodes"] = 2000,
                     ["maxDepth"] = 24,
                     ["includeComputedStyles"] = true
-                }
-                : null;
+                } : null;
+
         if (!GetLiveVisualTreeTool.TryBuildVisualTreeArguments(
-                visualTreeArguments,
-                toolId,
-                out var remoteArguments,
-                out var argumentError))
+            visualTreeArguments,
+            toolId,
+            out var remoteArguments,
+            out var argumentError))
         {
             return LiveUiCaptureResult.Failure(
                 argumentError ?? "Could not build visual-tree capture arguments.");
@@ -465,6 +515,7 @@ internal sealed partial class LiveUiTreeCapture
             after: null,
             cancellationToken,
             requestContext);
+
         if (!response.Success || response.Envelope is null)
         {
             return LiveUiCaptureResult.Failure(response.Message);
@@ -482,6 +533,7 @@ internal sealed partial class LiveUiTreeCapture
         }
 
         var payload = rawResult.DeepClone() as JsonObject ?? rawResult;
+
         return CreateCapture(session, toolId, payload);
     }
 
@@ -492,6 +544,7 @@ internal sealed partial class LiveUiTreeCapture
         string? failureContext = null)
     {
         var payload = VisualTreePresentationNormalizer.Create(rawPayload);
+
         if (!VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var typeRegistry, out var root)
             || typeRegistry is null
             || root is null)
@@ -508,9 +561,10 @@ internal sealed partial class LiveUiTreeCapture
             .Where(candidate => candidate.Width > 0 && candidate.Height > 0)
             .ToArray();
         var viewport = LiveUiNodeQuery.ReadCoordinateSpace(payload)
-                       ?? LiveUiNodeQuery.ReadBounds(root)
-                       ?? LiveUiBounds.Union(bounds);
+            ?? LiveUiNodeQuery.ReadBounds(root)
+            ?? LiveUiBounds.Union(bounds);
         var capturedAtUtc = ReadDateTimeOffset(payload, "capturedAtUtc") ?? DateTimeOffset.UtcNow;
+
         return LiveUiCaptureResult.Success(new LiveUiTreeCapture(
             session,
             toolId,
@@ -545,31 +599,32 @@ internal sealed partial class LiveUiTreeCapture
         }
 
         return !preferredResult.IsSuccess
-               || preferredResult.Capture is { } capture && ContainsCycle(capture)
-               || selector is not null && !ContainsMatch(preferredResult, selector);
+            || preferredResult.Capture is { } capture && ContainsCycle(capture)
+            || selector is not null && !ContainsMatch(preferredResult, selector);
     }
 
     private static bool ContainsMatch(LiveUiCaptureResult result, LiveUiSelector selector)
         => result.Capture is { } capture
-           && selector.IsAvailable(LiveUiNodeQuery.Find(
-               capture.Root,
-               selector,
-               capture.TypeRegistry).Count);
+            && selector.IsAvailable(LiveUiNodeQuery.Find(
+                capture.Root,
+                selector,
+                capture.TypeRegistry).Count);
 
     private static bool ContainsSelectorEvidence(
         LiveUiCaptureResult result,
         LiveUiSelector selector)
         => ContainsMatch(result, selector)
-           || selector.Visible == true && ContainsMatch(result, selector.WithoutVisibility());
+            || selector.Visible == true && ContainsMatch(result, selector.WithoutVisibility());
 
     private static bool HasModalDominance(LiveUiCaptureResult result)
         => result.Capture is { } capture
-           && LiveUiNodeQuery.Enumerate(capture.Root, capture.TypeRegistry)
-               .Any(IsModalSurfaceNode);
+            && LiveUiNodeQuery.Enumerate(capture.Root, capture.TypeRegistry)
+                .Any(IsModalSurfaceNode);
 
     private static bool IsModalSurfaceNode(LiveUiNodeMatch match)
     {
         var automationId = LiveUiNodeQuery.ReadAutomationId(match.Node);
+
         if (string.Equals(automationId, "PopoverDismissRegion", StringComparison.OrdinalIgnoreCase)
             || automationId?.EndsWith("-close-button", StringComparison.OrdinalIgnoreCase) == true)
         {
@@ -577,6 +632,7 @@ internal sealed partial class LiveUiTreeCapture
         }
 
         var role = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry);
+
         if (role is not null
             && (role.Equals("dialog", StringComparison.OrdinalIgnoreCase)
                 || role.Equals("alert", StringComparison.OrdinalIgnoreCase)))
@@ -585,6 +641,7 @@ internal sealed partial class LiveUiTreeCapture
         }
 
         var type = match.TypeRegistry.Resolve(match.Node);
+
         if (type is not null
             && (type.Contains("Dialog", StringComparison.OrdinalIgnoreCase)
                 || type.Contains("Alert", StringComparison.OrdinalIgnoreCase)
@@ -595,8 +652,9 @@ internal sealed partial class LiveUiTreeCapture
         }
 
         var text = LiveUiNodeQuery.ReadText(match.Node);
+
         return string.Equals(text, "Sheet Grabber", StringComparison.OrdinalIgnoreCase)
-               || text?.Contains("dismiss pop-up window", StringComparison.OrdinalIgnoreCase) == true;
+            || text?.Contains("dismiss pop-up window", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static bool ContainsCycle(LiveUiTreeCapture capture)
@@ -611,8 +669,8 @@ internal sealed partial class LiveUiTreeCapture
 
         return LiveUiNodeQuery.Enumerate(capture.Root, capture.TypeRegistry)
             .Any(match => match.Node["flags"] is JsonValue flagsValue
-                          && flagsValue.TryGetValue<int>(out var flags)
-                          && (flags & cycleFlag) == cycleFlag);
+                && flagsValue.TryGetValue<int>(out var flags)
+                && (flags & cycleFlag) == cycleFlag);
     }
 
     public string? ResolveNativeDeviceIdentifier()
@@ -621,6 +679,7 @@ internal sealed partial class LiveUiTreeCapture
     private static DateTimeOffset? ReadDateTimeOffset(JsonObject payload, string propertyName)
     {
         var text = LiveUiNodeQuery.ReadString(payload, propertyName);
+
         return DateTimeOffset.TryParse(text, out var value) ? value.ToUniversalTime() : null;
     }
 
@@ -631,22 +690,4 @@ internal sealed partial class LiveUiTreeCapture
 
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-}
-
-internal sealed record LiveUiCaptureResult(
-    bool IsSuccess,
-    LiveUiTreeCapture? Capture,
-    string Message)
-{
-    public IReadOnlyList<string> AttemptedToolIds { get; init; } = [];
-
-    public static LiveUiCaptureResult Success(LiveUiTreeCapture capture)
-        => new(true, capture, string.Empty)
-        {
-            AttemptedToolIds = [capture.ToolId]
-        };
-
-    public static LiveUiCaptureResult Failure(string message)
-        => new(false, null, message);
 }

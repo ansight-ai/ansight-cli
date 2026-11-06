@@ -11,6 +11,7 @@ internal static class SimulatorCrashReportParser
     public static bool TryParse(string filePath, out SimulatorCrashReport? report)
     {
         report = null;
+
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
             return false;
@@ -21,6 +22,7 @@ internal static class SimulatorCrashReportParser
             using var reader = new StreamReader(filePath);
             var headerJson = reader.ReadLine();
             var bodyJson = reader.ReadToEnd();
+
             if (string.IsNullOrWhiteSpace(headerJson) || string.IsNullOrWhiteSpace(bodyJson))
             {
                 return false;
@@ -30,6 +32,7 @@ internal static class SimulatorCrashReportParser
             using var bodyDocument = JsonDocument.Parse(bodyJson);
             var header = headerDocument.RootElement;
             var body = bodyDocument.RootElement;
+
             if (header.ValueKind != JsonValueKind.Object || body.ValueKind != JsonValueKind.Object)
             {
                 return false;
@@ -38,10 +41,11 @@ internal static class SimulatorCrashReportParser
             var processPath = ReadString(body, "procPath");
             var coalitionName = ReadString(body, "coalitionName");
             var hasFatalDiagnostic = TryGetObject(body, "exception").HasValue
-                                     || TryGetObject(body, "termination").HasValue;
+                || TryGetObject(body, "termination").HasValue;
             var isSimulator = ReadInt32(header, "is_simulated") == 1
-                              || ContainsCoreSimulatorDevicePath(processPath)
-                              || coalitionName?.StartsWith(CoreSimulatorCoalitionPrefix, StringComparison.Ordinal) == true;
+                || ContainsCoreSimulatorDevicePath(processPath)
+                || coalitionName?.StartsWith(CoreSimulatorCoalitionPrefix, StringComparison.Ordinal) == true;
+
             if (!isSimulator || !hasFatalDiagnostic)
             {
                 return false;
@@ -55,7 +59,7 @@ internal static class SimulatorCrashReportParser
             var processName = FirstNonEmpty(ReadString(body, "procName"), ReadString(header, "app_name"), ReadString(header, "name"));
             var processId = ReadInt32(body, "pid");
             var capturedAt = ParseDateTimeOffset(ReadString(body, "captureTime"))
-                             ?? ParseDateTimeOffset(ReadString(header, "timestamp"));
+                ?? ParseDateTimeOffset(ReadString(header, "timestamp"));
 
             if (string.IsNullOrWhiteSpace(bundleId)
                 || string.IsNullOrWhiteSpace(incidentId)
@@ -81,6 +85,7 @@ internal static class SimulatorCrashReportParser
                     bundleInfo.HasValue ? ReadString(bundleInfo.Value, "CFBundleVersion") : null,
                     ReadString(header, "build_version")),
                 ResolveSimulatorUdid(processPath, coalitionName));
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -116,7 +121,7 @@ internal static class SimulatorCrashReportParser
         }
 
         return value.ValueKind == JsonValueKind.String
-               && int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var textValue)
+            && int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var textValue)
             ? textValue
             : null;
     }
@@ -137,9 +142,10 @@ internal static class SimulatorCrashReportParser
         if (ContainsCoreSimulatorDevicePath(processPath))
         {
             var start = processPath!.IndexOf(CoreSimulatorDevicePathMarker, StringComparison.Ordinal)
-                        + CoreSimulatorDevicePathMarker.Length;
+                + CoreSimulatorDevicePathMarker.Length;
             var end = processPath.IndexOf('/', start);
             var candidate = end > start ? processPath[start..end] : processPath[start..];
+
             if (Guid.TryParse(candidate, out var udid))
             {
                 return udid.ToString("D").ToUpperInvariant();
@@ -149,6 +155,7 @@ internal static class SimulatorCrashReportParser
         if (coalitionName?.StartsWith(CoreSimulatorCoalitionPrefix, StringComparison.Ordinal) == true)
         {
             var candidate = coalitionName[CoreSimulatorCoalitionPrefix.Length..];
+
             if (Guid.TryParse(candidate, out var udid))
             {
                 return udid.ToString("D").ToUpperInvariant();

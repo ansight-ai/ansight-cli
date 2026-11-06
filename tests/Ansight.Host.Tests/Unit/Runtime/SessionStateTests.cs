@@ -29,6 +29,7 @@ public sealed class SessionStateTests
         var secondSource = CreateVisualTreeSnapshot("visual-tree-002", capturedAtUtc.AddSeconds(1), 2);
         state.VisualTreeSnapshots.Add(secondSource);
         state.MarkVisualTreesChanged();
+
         var appendedSnapshots = state.GetSnapshotVisualTrees();
 
         Assert.Same(firstSnapshot, appendedSnapshots[0]);
@@ -36,6 +37,7 @@ public sealed class SessionStateTests
 
         state.VisualTreeSnapshots[0] = CreateVisualTreeSnapshot("visual-tree-001", capturedAtUtc, 3);
         state.MarkVisualTreesChanged();
+
         var replacedSnapshots = state.GetSnapshotVisualTrees();
 
         Assert.NotSame(appendedSnapshots[0], replacedSnapshots[0]);

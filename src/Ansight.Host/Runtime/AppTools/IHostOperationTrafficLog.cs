@@ -5,9 +5,7 @@ namespace Ansight.Host.Runtime.AppTools;
 internal interface IHostOperationTrafficLog : IDisposable
 {
     bool IsCaptureEnabled { get; }
-
     string DirectoryPath { get; }
-
     string? CurrentFilePath { get; }
 
     void RecordToolBridgeRequest(

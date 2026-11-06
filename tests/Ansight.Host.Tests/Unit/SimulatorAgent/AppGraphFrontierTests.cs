@@ -8,6 +8,7 @@ public sealed class AppGraphFrontierTests
     public void UnattemptedCurrentAndUntouchedBranchesPrecedeRepeatedOrBlockedWork()
     {
         var now = DateTimeOffset.UtcNow;
+
         SimulatorAgentAppGraphLiveAction Action(string id, string destination, int attempts = 0,
             string tool = "ansight_tap_ui", string status = "queued", string navigationKind = "")
         {

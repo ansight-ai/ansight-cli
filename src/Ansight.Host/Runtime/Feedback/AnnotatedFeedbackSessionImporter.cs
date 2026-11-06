@@ -11,6 +11,7 @@ internal static class AnnotatedFeedbackSessionImporter
         ArgumentNullException.ThrowIfNull(completion);
 
         string? artifactDirectoryPath = null;
+
         try
         {
             await using var stream = new FileStream(
@@ -20,6 +21,7 @@ internal static class AnnotatedFeedbackSessionImporter
                 FileShare.Read,
                 64 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
+
             if (!AnnotatedFeedbackBundleReader.TryRead(stream, completion.BundlePath, out var content, out var error)
                 || content is null)
             {
@@ -33,6 +35,7 @@ internal static class AnnotatedFeedbackSessionImporter
 
             var importFailures = new List<string>();
             string? screenshotFrameId = null;
+
             if (content.Screenshot is not null)
             {
                 try
@@ -46,6 +49,7 @@ internal static class AnnotatedFeedbackSessionImporter
                         quality: 90,
                         content.Screenshot.Bytes, content.Screenshot.Geometry);
                     screenshotFrameId = screenshotFrame?.FrameId;
+
                     if (screenshotFrame is null)
                     {
                         importFailures.Add("Ansight could not persist the annotated feedback screenshot.");
@@ -60,9 +64,11 @@ internal static class AnnotatedFeedbackSessionImporter
             foreach (var visualTree in content.CreateVisualTreeSnapshots(screenshotFrameId))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 try
                 {
                     var result = runtimeState.AddSessionVisualTreeSnapshot(completion.SessionId, visualTree);
+
                     if (!result.IsSuccess)
                     {
                         importFailures.Add(result.Message);
@@ -75,6 +81,7 @@ internal static class AnnotatedFeedbackSessionImporter
             }
 
             var artifactSnapshot = content.CreateArtifactSnapshot();
+
             if (artifactSnapshot is not null)
             {
                 try
@@ -85,6 +92,7 @@ internal static class AnnotatedFeedbackSessionImporter
                         "annotated-feedback-artifacts",
                         Guid.NewGuid().ToString("N"));
                     Directory.CreateDirectory(artifactDirectoryPath);
+
                     foreach (var artifact in content.Artifacts.Where(artifact => artifact.Bytes is { Length: > 0 }))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -98,6 +106,7 @@ internal static class AnnotatedFeedbackSessionImporter
                         completion.SessionId,
                         artifactSnapshot,
                         artifactDirectoryPath);
+
                     if (!result.IsSuccess)
                     {
                         importFailures.Add(result.Message);
@@ -110,6 +119,7 @@ internal static class AnnotatedFeedbackSessionImporter
             }
 
             var annotation = content.CreateAnnotation(screenshotFrameId);
+
             if (importFailures.Count > 0)
             {
                 annotation = new SessionAnnotation

@@ -16,6 +16,7 @@ public sealed partial class SimulatorAgentAppGraphLiveRunStoreTests
     {
         var root = Path.Combine(Path.GetTempPath(), "ansight-graph-history-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+
         try
         {
             var paths = new DataToolApplicationPaths(root);
@@ -25,11 +26,16 @@ public sealed partial class SimulatorAgentAppGraphLiveRunStoreTests
             Assert.True(liveStore.ApplyReport("retained", CreateReport(
                 transitions: [CreateTransition("map-profile", "profile")],
                 actions: [CreateAction("open-profile", "map", "open-profile", "queued")]), 1).IsSuccess);
+
             var pending = liveStore.RecordDeliveredInput("retained", "map", "ansight_tap_ui",
                 new JsonObject { ["automationId"] = "open-profile" }, "input", "evidence", "Delivered.");
             Assert.NotNull(pending);
+
             var original = liveStore.Get("retained")!;
-            database.Save(original with { Status = storedStatus });
+            database.Save(original with
+            {
+                Status = storedStatus
+            });
 
             var restarted = new AppGraphLiveRunStore(new AppGraphExplorationDatabase(paths));
             var retained = Assert.Single(restarted.List("recording"));
@@ -44,6 +50,7 @@ public sealed partial class SimulatorAgentAppGraphLiveRunStoreTests
             Assert.Empty(restarted.List("another-recording"));
 
             liveStore.UpdateActivity("retained", "Still executing in this host.", 9, "ansight_find_ui");
+
             var active = Assert.Single(liveStore.List("recording"));
             Assert.Equal("running", active.Status);
             Assert.Equal(9, active.Turn);

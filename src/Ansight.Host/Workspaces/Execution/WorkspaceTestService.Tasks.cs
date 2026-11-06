@@ -15,6 +15,7 @@ public sealed partial class WorkspaceTestService
             var secrets = simulatorAgent.ResolveTestSecrets(test.AppId, test.RequiredSecrets, request.SecretResolver);
             using var trace = RepositoryTaskTraceScope.Begin(request.CaptureTrace);
             progress?.Report(new WorkspaceTestRunProgress("task.running", $"Running repository task '{test.TaskId}'."));
+
             var taskResult = await runtime.RunWorkspaceTestTaskAsync(
                 RepositoryTaskWorkspaceScope.Resolve(test.AppId, workspacePath), test.AppId,
                 session.SessionId, test.TaskId!, test.TaskInput, target?.DeviceIdentifier,
@@ -57,6 +58,7 @@ public sealed partial class WorkspaceTestService
             };
             var persistence = simulatorAgent.PersistRunAudit(audit);
             progress?.Report(new WorkspaceTestRunProgress("task.completed", taskResult.Message));
+
             return new WorkspaceTestRunResult(status == SimulatorAgentRunStatus.Succeeded,
                 taskResult.Message, test, session.SessionId, null, [], target)
             {
@@ -69,7 +71,7 @@ public sealed partial class WorkspaceTestService
             };
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException
-                                         or IOException or UnauthorizedAccessException)
+            or IOException or UnauthorizedAccessException)
         {
             return WorkspaceTestRunResult.Failure(exception.Message, test, session.SessionId, target: target);
         }

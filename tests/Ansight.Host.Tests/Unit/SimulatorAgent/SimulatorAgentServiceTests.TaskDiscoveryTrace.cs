@@ -16,7 +16,7 @@ public sealed partial class SimulatorAgentServiceTests
         };
         var gateway = new FakeToolGateway { RepositoryTaskDiscoveryTraces = [trace] };
         var client = new FakeOpenAiClient(
-        [
+            [
             CreateFunctionTurn("complete", "complete_instruction", new JsonObject
             {
                 ["outcome"] = "failed",
@@ -37,6 +37,7 @@ public sealed partial class SimulatorAgentServiceTests
             Assert.Equal(1, saved.InstructionIndex);
             Assert.Equal(trace.Query, saved.Query);
             Assert.Equal(trace.AvailableTaskIds, saved.AvailableTaskIds);
+
             var progress = Assert.Single(reported, item => item.Stage == SimulatorAgentProgressStage.TaskDiscovery);
             Assert.Equal(saved, progress.TaskDiscovery);
         }

@@ -36,12 +36,14 @@ internal static class LocalTypeScriptTaskCompiler
         ArgumentException.ThrowIfNullOrWhiteSpace(typeDefinitions);
 
         var compilerPath = ResolveCompilerPath();
+
         if (compilerPath is null)
         {
             return LocalTypeScriptTaskValidationResult.InfrastructureFailure(MissingCompilerMessage);
         }
 
         var runtimePath = ResolveJavaScriptRuntimePath(javaScriptExecutablePath);
+
         if (!OperatingSystem.IsWindows() && runtimePath is null)
         {
             return LocalTypeScriptTaskValidationResult.InfrastructureFailure(MissingRuntimeMessage);
@@ -60,6 +62,7 @@ internal static class LocalTypeScriptTaskCompiler
             Path.Combine(taskDirectory, "package.json"),
             "{\n  \"private\": true,\n  \"type\": \"module\"\n}\n",
             new UTF8Encoding(false));
+
         var configurationPath = Path.Combine(taskDirectory, "tsconfig.extraction.json");
         var configuration = $$"""
                               {
@@ -81,6 +84,7 @@ internal static class LocalTypeScriptTaskCompiler
             new UTF8Encoding(false));
 
         Process? process;
+
         try
         {
             process = Process.Start(CreateStartInfo(compilerPath, configurationPath, runtimePath));
@@ -90,15 +94,18 @@ internal static class LocalTypeScriptTaskCompiler
             return LocalTypeScriptTaskValidationResult.InfrastructureFailure(
                 $"The TypeScript compiler did not start: {exception.Message}");
         }
+
         if (process is null)
         {
             return LocalTypeScriptTaskValidationResult.InfrastructureFailure(
                 "The TypeScript compiler process did not start.");
         }
+
         using var runningProcess = process;
 
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
+
         if (!process.WaitForExit((int)compilationTimeout.TotalMilliseconds))
         {
             try
@@ -115,16 +122,17 @@ internal static class LocalTypeScriptTaskCompiler
         }
 
         Task.WaitAll(standardOutputTask, standardErrorTask);
+
         if (process.ExitCode == 0)
         {
             return LocalTypeScriptTaskValidationResult.Success;
         }
 
         var diagnostics = string.Join(
-                Environment.NewLine,
-                new[] { standardOutputTask.Result, standardErrorTask.Result }
-                    .Where(static value => !string.IsNullOrWhiteSpace(value)))
+            Environment.NewLine,
+            new[] { standardOutputTask.Result, standardErrorTask.Result }.Where(static value => !string.IsNullOrWhiteSpace(value)))
             .Trim();
+
         if (diagnostics.Length > MaximumDiagnosticCharacters)
         {
             diagnostics = diagnostics[..MaximumDiagnosticCharacters] + Environment.NewLine + "…";
@@ -147,7 +155,7 @@ internal static class LocalTypeScriptTaskCompiler
         }
 
         return !OperatingSystem.IsWindows()
-               && ResolveJavaScriptRuntimePath(javaScriptExecutablePath, inheritedPath) is null
+            && ResolveJavaScriptRuntimePath(javaScriptExecutablePath, inheritedPath) is null
             ? MissingRuntimeMessage
             : null;
     }
@@ -159,21 +167,24 @@ internal static class LocalTypeScriptTaskCompiler
         var requestedPath = string.IsNullOrWhiteSpace(configuredPath)
             ? Environment.GetEnvironmentVariable("ANSIGHT_TSC_PATH")
             : configuredPath;
+
         if (!string.IsNullOrWhiteSpace(requestedPath))
         {
             var normalizedPath = Path.GetFullPath(requestedPath.Trim());
+
             return File.Exists(normalizedPath) ? normalizedPath : null;
         }
 
         var executableNames = OperatingSystem.IsWindows()
-            ? new[] { "tsc.cmd", "tsc.exe", "tsc" }
-            : new[] { "tsc" };
+            ? new[] { "tsc.cmd", "tsc.exe", "tsc" } : new[] { "tsc" };
+
         foreach (var directory in (inheritedPath ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             foreach (var executableName in executableNames)
             {
                 var candidatePath = Path.Combine(directory, executableName);
+
                 if (File.Exists(candidatePath))
                 {
                     return Path.GetFullPath(candidatePath);
@@ -188,8 +199,8 @@ internal static class LocalTypeScriptTaskCompiler
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "npm",
                     "tsc.cmd")
-            }
-            : new[] { "/opt/homebrew/bin/tsc", "/usr/local/bin/tsc" };
+            } : new[] { "/opt/homebrew/bin/tsc", "/usr/local/bin/tsc" };
+
         foreach (var candidatePath in commonPaths)
         {
             if (File.Exists(candidatePath))
@@ -206,6 +217,7 @@ internal static class LocalTypeScriptTaskCompiler
         string? inheritedPath = null)
     {
         var resolution = JavaScriptRuntimeResolver.Resolve(configuredPath, inheritedPath);
+
         return resolution.IsAvailable ? resolution.ExecutablePath : null;
     }
 
@@ -215,6 +227,7 @@ internal static class LocalTypeScriptTaskCompiler
         string? javaScriptRuntimePath)
     {
         ProcessStartInfo startInfo;
+
         if (OperatingSystem.IsWindows()
             && string.Equals(Path.GetExtension(compilerPath), ".cmd", StringComparison.OrdinalIgnoreCase))
         {
@@ -247,6 +260,7 @@ internal static class LocalTypeScriptTaskCompiler
         startInfo.ArgumentList.Add("false");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(configurationPath);
+
         return startInfo;
     }
 }

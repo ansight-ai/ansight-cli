@@ -11,11 +11,9 @@ public sealed class LanguagePack
     public string Icon { get; set; } = "🇬🇧";
 
     public bool IsDefaultLanguagePack { get; set; }
-
     public bool IsPublic { get; set; } = true;
 
     public bool MachineTranslated { get; set; }
-
     public List<LanguageValue> Values { get; set; } = new();
 
     public IReadOnlyDictionary<string, LanguageValue> GetIndexedValues()

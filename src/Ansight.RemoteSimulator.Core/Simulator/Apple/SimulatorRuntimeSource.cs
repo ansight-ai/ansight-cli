@@ -16,6 +16,7 @@ public sealed class SimulatorRuntimeSource : IRefreshableRemoteRuntimeSource
         get
         {
             var snapshot = tracker.Current;
+
             return new RemoteRuntimeSnapshot(
                 snapshot.CapturedAtUtc,
                 snapshot.Devices
@@ -36,12 +37,14 @@ public sealed class SimulatorRuntimeSource : IRefreshableRemoteRuntimeSource
     public async Task<RemoteRuntimeSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
     {
         await tracker.RefreshIfStaleAsync(cancellationToken).ConfigureAwait(false);
+
         return Current;
     }
 
     public async Task<RemoteRuntimeSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
         await tracker.RefreshAsync(cancellationToken).ConfigureAwait(false);
+
         return Current;
     }
 }

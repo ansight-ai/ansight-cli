@@ -22,15 +22,22 @@ internal sealed record HostInputAction(
 
     internal static HostInputAction? Read(SessionApplicationEvent item)
     {
-        if (item.EventType != EventType) return null;
+        if (item.EventType != EventType)
+        {
+            return null;
+        }
+
         try
         {
             var action = JsonSerializer.Deserialize<HostInputAction>(item.Details ?? "", jsonOptions);
-            return action is { ActionId.Length: > 0, Kind: "tap" or "longPress" or "type" or "keyboard.press" or "keyboard.submit" }
-                   && action.CompletedAtUtc >= action.StartedAtUtc
-                   && action.Status is "succeeded" or "failed" or "interrupted"
+
+            return action is { ActionId.Length: > 0, Kind: "tap" or "longPress" or "type" or "keyboard.press" or "keyboard.submit" } && action.CompletedAtUtc >= action.StartedAtUtc
+                && action.Status is "succeeded" or "failed" or "interrupted"
                 ? action : null;
         }
-        catch (JsonException) { return null; }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

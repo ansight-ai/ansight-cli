@@ -14,9 +14,12 @@ internal static partial class LocalSessionSummaryRunner
     internal static AppSessionSnapshot SelectSection(AppSessionSnapshot snapshot, DateTimeOffset startUtc, DateTimeOffset endUtc)
     {
         if (startUtc == default || endUtc == default || endUtc <= startUtc)
+        {
             throw new ArgumentException("Choose a section with an end time after its start time.");
+        }
 
         bool InRange(DateTimeOffset timestamp) => timestamp >= startUtc && timestamp <= endUtc;
+
         var videos = snapshot.VideoRecordings.Where(video => video.StartedUtc < endUtc && video.EndedUtc > startUtc).ToArray();
         var logs = snapshot.Logs.Where(item => InRange(item.TimestampUtc)).ToArray();
         var images = snapshot.Images.Where(item => InRange(item.CapturedAtUtc)).ToArray();
@@ -28,11 +31,15 @@ internal static partial class LocalSessionSummaryRunner
         // An annotation spanning beyond this section may describe unrelated actions outside it.
         var annotations = snapshot.Annotations.Where(item => InRange(item.StartUtc)
             && InRange(item.EndUtc ?? item.StartUtc)).ToArray();
+
         if (logs.Length + images.Length + touches.Length + networkRequests.Length + visualTrees.Length
             + events.Length + metrics.Length + annotations.Length + videos.Length == 0)
+        {
             throw new ArgumentException("The selected section has no captured evidence to summarise.");
+        }
 
         var metricChannels = snapshot.MetricChannels.Where(channel => metrics.Any(item => item.ChannelId == channel.ChannelId)).ToArray();
+
         return new AppSessionSnapshot
         {
             SessionId = snapshot.SessionId,

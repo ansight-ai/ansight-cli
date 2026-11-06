@@ -1,16 +1,16 @@
-﻿using System;
+using System;
 namespace Ansight.Infrastructure.Logging;
 
-	public static class LogLevelMapper
-	{
-		public static LogLevel Map(string value, LogLevel fallbackValue = LogLevel.Information)
-		{
+public static class LogLevelMapper
+{
+    public static LogLevel Map(string value, LogLevel fallbackValue = LogLevel.Information)
+    {
         if (string.IsNullOrWhiteSpace(value))
         {
-				return fallbackValue;
+            return fallbackValue;
         }
 
-			switch (value.ToLowerInvariant())
+        switch (value.ToLowerInvariant())
         {
             case "v":
             case "verbose":
@@ -35,4 +35,4 @@ namespace Ansight.Infrastructure.Logging;
                 return fallbackValue;
         }
     }
-	}
+}

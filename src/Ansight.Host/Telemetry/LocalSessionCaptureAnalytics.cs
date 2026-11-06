@@ -46,13 +46,14 @@ public static class LocalSessionCaptureAnalytics
 
     public static bool ShouldReportActivation(string? previousStatus, AppSessionSnapshot snapshot)
         => ShouldReportRecordedCapture(previousStatus, snapshot)
-           && CreateCompletionProperties(snapshot)["hasEvidence"] is true;
+            && CreateCompletionProperties(snapshot)["hasEvidence"] is true;
 
     // A saved recording may end through a transport failure. Count the observed
     // live-to-historical transition, while excluding imports and connection attempts.
     public static bool ShouldReportRecordedCapture(string? previousStatus, AppSessionSnapshot snapshot)
     {
         var wasLiveSession = previousStatus is "Connected" or "WebSocket Open";
+
         if (!wasLiveSession || !snapshot.IsHistorical)
         {
             return false;
@@ -124,8 +125,9 @@ public static class LocalSessionCaptureAnalytics
         }
 
         var normalizedStatus = status.Trim();
+
         return string.Equals(normalizedStatus, "Connected", StringComparison.OrdinalIgnoreCase)
-               || normalizedStatus.Contains("open", StringComparison.OrdinalIgnoreCase);
+            || normalizedStatus.Contains("open", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsCaptureCompletionStatus(string? status)
@@ -136,7 +138,7 @@ public static class LocalSessionCaptureAnalytics
         }
 
         return status.Contains("complete", StringComparison.OrdinalIgnoreCase)
-               || status.Contains("closed", StringComparison.OrdinalIgnoreCase);
+            || status.Contains("closed", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ResolveCompletionOutcome(string? status)

@@ -17,7 +17,9 @@ internal sealed class DeviceSessionEvidence
 
     [ImportingConstructor]
     public DeviceSessionEvidence(IRuntimeState state, IUserPreferences preferences, INativeSessionLogCaptureManager nativeLogs)
-        : this(state, preferences, nativeLogs, new DeviceCommandRunner()) { }
+        : this(state, preferences, nativeLogs, new DeviceCommandRunner())
+    {
+    }
 
     internal DeviceSessionEvidence(IRuntimeState state, IUserPreferences preferences,
         INativeSessionLogCaptureManager nativeLogs, IDeviceCommandRunner commands)
@@ -32,7 +34,12 @@ internal sealed class DeviceSessionEvidence
         string? expectedProcessIdentity = null)
     {
         var capture = new Capture(new DevicePlatformProbe(target, commands, preferences.AdbPath), expectedProcessIdentity);
-        if (!captures.TryAdd(sessionId, capture)) throw new InvalidOperationException("Device evidence is already attached.");
+
+        if (!captures.TryAdd(sessionId, capture))
+        {
+            throw new InvalidOperationException("Device evidence is already attached.");
+        }
+
         await InitializeAndSampleAsync(sessionId, capture, cancellationToken).ConfigureAwait(false);
         capture.Work = RunAsync(sessionId, capture);
     }
@@ -48,43 +55,69 @@ internal sealed class DeviceSessionEvidence
                 await capture.Platform.InitializeAsync(cancellationToken).ConfigureAwait(false);
                 capture.Initialized = true;
                 UpdateProfile(sessionId, capture.Platform.Metadata, icon: capture.Platform.AppIcon);
+
                 foreach (var name in new[] { "files.read", "files.capture" })
+                {
                     SetCapability(sessionId, capture, name, capture.Platform.FileProvider is not null,
                         capture.Platform.FileProvider ?? "external-sandbox", capture.Platform.FileUnavailableReason);
+                }
+
                 SetCapability(sessionId, capture, "telemetry.fps", false,
                     capture.Platform.IsAndroid ? "adb-gfxinfo" : "instruments",
                     capture.Platform.IsAndroid ? "Waiting for renderer frame statistics."
                         : "The installed Instruments frame collector does not support this simulator platform.");
             }
+
             await SampleAsync(sessionId, capture, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             await ProcessUnavailableAsync(sessionId, capture, exception.Message).ConfigureAwait(false);
+
             if (!capture.Initialized)
+            {
                 foreach (var name in new[] { "files.read", "files.capture" })
+                {
                     SetCapability(sessionId, capture, name, false, "external-sandbox", exception.Message);
+                }
+            }
         }
     }
 
     private async Task ProcessUnavailableAsync(string sessionId, Capture capture, string reason)
     {
         if (capture.Previous is not null)
+        {
             await nativeLogs.StopAsync(sessionId, "The selected app process is unavailable.").ConfigureAwait(false);
+        }
+
         capture.Previous = null;
         capture.LastFrame = 0;
         SetCapability(sessionId, capture, "telemetry.process.cpu", false, capture.Platform.Provider, reason);
         SetCapability(sessionId, capture, "telemetry.process.memory", false, capture.Platform.Provider, reason);
+
         if (capture.Platform.IsAndroid)
+        {
             SetCapability(sessionId, capture, "telemetry.fps", false, "adb-gfxinfo", reason);
+        }
     }
 
     public async Task StopAsync(string sessionId)
     {
-        if (!captures.TryRemove(sessionId, out var capture)) return;
+        if (!captures.TryRemove(sessionId, out var capture))
+        {
+            return;
+        }
+
         await capture.Cancellation.CancelAsync().ConfigureAwait(false);
-        try { await capture.Work.ConfigureAwait(false); }
-        catch (OperationCanceledException) { }
+
+        try
+        {
+            await capture.Work.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
         finally
         {
             capture.Cancellation.Dispose();
@@ -97,17 +130,27 @@ internal sealed class DeviceSessionEvidence
     public DevicePlatformProbe RequireFiles(string sessionId)
     {
         if (!captures.TryGetValue(sessionId, out var capture))
+        {
             throw new InvalidOperationException("Live sandbox access requires an active device session.");
+        }
+
         return capture.Platform;
     }
 
     private async Task RunAsync(string sessionId, Capture capture)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
         while (await timer.WaitForNextTickAsync(capture.Cancellation.Token).ConfigureAwait(false))
         {
-            try { await InitializeAndSampleAsync(sessionId, capture, capture.Cancellation.Token).ConfigureAwait(false); }
-            catch (OperationCanceledException) when (capture.Cancellation.IsCancellationRequested) { break; }
+            try
+            {
+                await InitializeAndSampleAsync(sessionId, capture, capture.Cancellation.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (capture.Cancellation.IsCancellationRequested)
+            {
+                break;
+            }
         }
     }
 
@@ -116,38 +159,53 @@ internal sealed class DeviceSessionEvidence
         var sample = await capture.Platform.SampleAsync(cancellationToken).ConfigureAwait(false);
         var now = DateTimeOffset.UtcNow;
         var tick = Stopwatch.GetTimestamp();
+
         if (sample is null)
         {
             await ProcessUnavailableAsync(sessionId, capture,
                 "The app process is not running or cannot be identified uniquely.").ConfigureAwait(false);
+
             return;
         }
+
         if (capture.ExpectedProcessIdentity is { } expected && expected != sample.Identity)
         {
             await ProcessUnavailableAsync(sessionId, capture, "The watched process ended; waiting for a new recording.").ConfigureAwait(false);
+
             return;
         }
+
         var sameProcess = capture.Previous?.Identity == sample.Identity;
+
         if (!sameProcess)
         {
             capture.Segment++;
             capture.LastFrame = 0;
             UpdateProfile(sessionId, capture.Platform.Metadata, sample.ProcessId);
+
             if (state.TryGetSessionSnapshot(sessionId, out var profile))
+            {
                 await nativeLogs.AttachAsync(sessionId, profile!.DeviceProfile, profile.DeviceProfileJson).ConfigureAwait(false);
+            }
         }
+
         var elapsed = sameProcess ? Stopwatch.GetElapsedTime(capture.PreviousTick, tick).TotalSeconds : 0;
         var metrics = new List<SessionMetricSample>();
         Add("rss", "Process RSS", "memory", "bytes", sample.ResidentBytes);
         Add("physical-footprint", "Process physical footprint", "memory", "bytes", sample.FootprintBytes);
         Add("pss", "Process PSS", "memory", "bytes", sample.ProportionalBytes);
+
         // Integer millicores preserve sub-percent precision without changing the long-valued archive format.
         if (sameProcess && elapsed > 0 && sample.CpuNanoseconds is { } cpu && capture.Previous?.CpuNanoseconds is { } previousCpu && cpu >= previousCpu)
+        {
             Add("cpu-millicores", "Process CPU", "cpu", "millicores", (long)Math.Round((cpu - previousCpu) / (elapsed * 1_000_000)));
+        }
+
         SetCapability(sessionId, capture, "telemetry.process.cpu", sample.CpuNanoseconds is not null, capture.Platform.Provider,
             sample.CpuNanoseconds is null ? "Process CPU counters are not readable." : null);
         SetCapability(sessionId, capture, "telemetry.process.memory", sample.ResidentBytes is not null || sample.ProportionalBytes is not null,
             capture.Platform.Provider, sample.ResidentBytes is null && sample.ProportionalBytes is null ? "Process memory counters are not readable." : null);
+
         if (capture.Platform.IsAndroid)
         {
             try
@@ -164,18 +222,24 @@ internal sealed class DeviceSessionEvidence
                 SetCapability(sessionId, capture, "telemetry.fps", false, "adb-gfxinfo", exception.Message);
             }
         }
+
         state.AddSessionMetrics(sessionId, metrics, capture.Segment);
         capture.Previous = sample;
         capture.PreviousTick = tick;
 
         void Add(string kind, string name, string type, string unit, long? value, string? provider = null)
         {
-            if (value is null) return;
+            if (value is null)
+            {
+                return;
+            }
+
             if (!capture.Channels.TryGetValue(kind, out var channel))
             {
                 channel = HostSessionEvents.AllocateChannel(state, sessionId, name, type, unit, provider ?? capture.Platform.Provider, kind);
                 capture.Channels.Add(kind, channel);
             }
+
             metrics.Add(new SessionMetricSample { ChannelId = channel, Value = value.Value, CapturedAtUtc = now });
         }
     }
@@ -184,9 +248,19 @@ internal sealed class DeviceSessionEvidence
     {
         var value = new JsonObject { ["available"] = available, ["provider"] = provider, ["reason"] = reason };
         var serialized = value.ToJsonString();
-        if (capture.LastCapabilities.GetValueOrDefault(name) == serialized) return;
+
+        if (capture.LastCapabilities.GetValueOrDefault(name) == serialized)
+        {
+            return;
+        }
+
         capture.LastCapabilities[name] = serialized;
-        if (!state.TryGetSessionSnapshot(sessionId, out var session)) return;
+
+        if (!state.TryGetSessionSnapshot(sessionId, out var session))
+        {
+            return;
+        }
+
         var properties = session!.CustomProperties?.DeepClone().AsObject() ?? new JsonObject();
         var execution = properties["deviceExecution"] as JsonObject ?? new JsonObject();
         var capabilities = execution["capabilities"] as JsonObject ?? new JsonObject();
@@ -207,30 +281,65 @@ internal sealed class DeviceSessionEvidence
     private void UpdateProfile(string sessionId, JsonObject metadata, int? processId = null,
         Ansight.Pairing.Models.DeviceApplicationIconProfile? icon = null)
     {
-        if (!state.TryGetSessionSnapshot(sessionId, out var session) || session!.DeviceProfileJson is null) return;
+        if (!state.TryGetSessionSnapshot(sessionId, out var session) || session!.DeviceProfileJson is null)
+        {
+            return;
+        }
+
         var profile = JsonNode.Parse(session.DeviceProfileJson)!.AsObject();
         var app = profile["app"]!.AsObject();
-        if (processId.HasValue) app["processId"] = processId.Value;
-        if (icon is not null) app["icon"] = JsonSerializer.SerializeToNode(icon, JsonUtil.Compact);
-        if (metadata["appVersion"] is { } version) app["versionName"] = version.DeepClone();
-        if (metadata["buildNumber"] is { } build) app["buildNumber"] = build.DeepClone();
-        if (metadata["operatingSystemVersion"] is { } os) profile["device"]!["osVersion"] = os.DeepClone();
+
+        if (processId.HasValue)
+        {
+            app["processId"] = processId.Value;
+        }
+
+        if (icon is not null)
+        {
+            app["icon"] = JsonSerializer.SerializeToNode(icon, JsonUtil.Compact);
+        }
+
+        if (metadata["appVersion"] is { } version)
+        {
+            app["versionName"] = version.DeepClone();
+        }
+
+        if (metadata["buildNumber"] is { } build)
+        {
+            app["buildNumber"] = build.DeepClone();
+        }
+
+        if (metadata["operatingSystemVersion"] is { } os)
+        {
+            profile["device"]!["osVersion"] = os.DeepClone();
+        }
+
         var json = profile.ToJsonString();
         state.SetSessionDeviceProfile(sessionId, JsonSerializer.Deserialize<Ansight.Pairing.Models.DeviceAppProfile>(json, JsonUtil.Compact), json);
     }
 
-    private sealed class Capture(DevicePlatformProbe platform, string? expectedProcessIdentity)
+    private sealed class Capture
     {
-        public DevicePlatformProbe Platform { get; } = platform;
-        public string? ExpectedProcessIdentity { get; } = expectedProcessIdentity;
-        public CancellationTokenSource Cancellation { get; } = new();
-        public Task Work { get; set; } = Task.CompletedTask;
+        public Capture(DevicePlatformProbe platform, string? expectedProcessIdentity)
+        {
+            this.Platform = platform;
+            this.ExpectedProcessIdentity = expectedProcessIdentity;
+            this.Cancellation = new();
+            this.Work = Task.CompletedTask;
+            this.Channels = new(StringComparer.Ordinal);
+            this.LastCapabilities = new(StringComparer.Ordinal);
+        }
+
+        public DevicePlatformProbe Platform { get; }
+        public string? ExpectedProcessIdentity { get; }
+        public CancellationTokenSource Cancellation { get; }
+        public Task Work { get; set; }
         public bool Initialized { get; set; }
         public DeviceProcessSample? Previous { get; set; }
         public long PreviousTick { get; set; }
         public long LastFrame { get; set; }
         public int Segment { get; set; }
-        public Dictionary<string, byte> Channels { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, string> LastCapabilities { get; } = new(StringComparer.Ordinal);
+        public Dictionary<string, byte> Channels { get; }
+        public Dictionary<string, string> LastCapabilities { get; }
     }
 }

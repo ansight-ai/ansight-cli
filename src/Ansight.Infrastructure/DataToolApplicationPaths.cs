@@ -19,11 +19,9 @@ public class DataToolApplicationPaths : IApplicationPaths
     }
 
     public string BaseFolderPath { get; }
-
     public string ApplicationDataPath => Path.Combine(BaseFolderPath, "data");
 
     public string ApplicationLogsPath => Path.Combine(BaseFolderPath, "logs");
 
     public string ApplicationTempPath => Path.Combine(BaseFolderPath, "temp");
-
 }

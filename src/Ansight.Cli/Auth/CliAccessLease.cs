@@ -6,10 +6,10 @@ namespace Ansight.Cli.Auth;
 /// </summary>
 internal sealed class CliAccessLease : IAsyncDisposable
 {
-    internal static readonly TimeSpan MaximumValidity = TimeSpan.FromMinutes(5);
+    internal static readonly TimeSpan maximumValidity = TimeSpan.FromMinutes(5);
     // Leave 30 seconds for a slow verification before the five-minute hard deadline.
-    internal static readonly TimeSpan RecheckInterval = TimeSpan.FromMinutes(4.5);
-    internal static readonly TimeSpan LocalRecheckInterval = TimeSpan.FromSeconds(15);
+    internal static readonly TimeSpan recheckInterval = TimeSpan.FromMinutes(4.5);
+    internal static readonly TimeSpan localRecheckInterval = TimeSpan.FromSeconds(15);
     private readonly ICliAccessAuthorizer authorizer;
     private readonly TimeProvider timeProvider;
     private readonly CancellationTokenSource monitorShutdown;
@@ -63,40 +63,69 @@ internal sealed class CliAccessLease : IAsyncDisposable
         CancellationToken cancellationToken, TimeProvider? timeProvider = null)
     {
         timeProvider ??= TimeProvider.System;
+
         if (authorizer is CliLocalAccessAuthorizer)
+        {
             return CreateLocal(cancellationToken, timeProvider);
+        }
+
         var startedAt = timeProvider.GetTimestamp();
         var decision = await authorizer.CheckAsync(cancellationToken).ConfigureAwait(false);
         var validity = GetValidity(decision, timeProvider.GetElapsedTime(startedAt));
+
         if (validity <= TimeSpan.Zero)
+        {
             throw new CliAccessDeniedException(decision.IsAuthorized ? AccessDecision.ProductAccessRequired : decision);
+        }
+
         return new CliAccessLease(authorizer, decision, validity, cancellationToken, timeProvider);
     }
 
     private async Task MonitorAsync()
     {
         using var monitoring = CancellationTokenSource.CreateLinkedTokenSource(monitorShutdown.Token, accessDeadline.Token);
+
         try
         {
             while (true)
             {
-                await Task.Delay(RecheckInterval, timeProvider, monitoring.Token).ConfigureAwait(false);
+                await Task.Delay(recheckInterval, timeProvider, monitoring.Token).ConfigureAwait(false);
+
                 var startedAt = timeProvider.GetTimestamp();
                 var next = await authorizer.CheckAsync(monitoring.Token).ConfigureAwait(false);
+
                 // Never let switching accounts renew an operation started by another identity.
                 if (next.UserId != Decision.UserId && next.IsAuthorized)
+                {
                     next = AccessDecision.AuthenticationRequired;
+                }
+
                 var validity = GetValidity(next, timeProvider.GetElapsedTime(startedAt));
+
                 if (validity <= TimeSpan.Zero && next.IsAuthorized)
+                {
                     next = AccessDecision.ProductAccessRequired;
-                if (accessDeadline.IsCancellationRequested) return;
+                }
+
+                if (accessDeadline.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 Volatile.Write(ref decision, next);
+
                 if (validity <= TimeSpan.Zero)
                 {
                     await accessDeadline.CancelAsync().ConfigureAwait(false);
+
                     return;
                 }
-                if (accessDeadline.IsCancellationRequested) return;
+
+                if (accessDeadline.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 Volatile.Write(ref deadlineFailure, GetDeadlineFailure(next, validity));
                 accessDeadline.CancelAfter(validity);
             }
@@ -113,17 +142,29 @@ internal sealed class CliAccessLease : IAsyncDisposable
 
     private async Task MonitorLocalAsync()
     {
-        if (authorizer is not ICliLocalAccessProbe localProbe) return;
+        if (authorizer is not ICliLocalAccessProbe localProbe)
+        {
+            return;
+        }
+
         using var monitoring = CancellationTokenSource.CreateLinkedTokenSource(monitorShutdown.Token, accessDeadline.Token);
+
         try
         {
             while (true)
             {
-                await Task.Delay(LocalRecheckInterval, timeProvider, monitoring.Token).ConfigureAwait(false);
+                await Task.Delay(localRecheckInterval, timeProvider, monitoring.Token).ConfigureAwait(false);
+
                 var failure = await localProbe.CheckLocalAsync(Decision.UserId, monitoring.Token).ConfigureAwait(false);
-                if (failure is null) continue;
+
+                if (failure is null)
+                {
+                    continue;
+                }
+
                 Volatile.Write(ref decision, failure);
                 await accessDeadline.CancelAsync().ConfigureAwait(false);
+
                 return;
             }
         }
@@ -141,9 +182,13 @@ internal sealed class CliAccessLease : IAsyncDisposable
     {
         if (!decision.IsAuthorized || decision.EvaluatedAt is not { } evaluatedAt
             || decision.AuthorizedUntil is not { } authorizedUntil)
+        {
             return TimeSpan.Zero;
+        }
+
         var remaining = authorizedUntil - evaluatedAt - requestDuration;
-        return remaining < MaximumValidity ? remaining : MaximumValidity;
+
+        return remaining < maximumValidity ? remaining : maximumValidity;
     }
 
     public async ValueTask DisposeAsync()
@@ -157,12 +202,7 @@ internal sealed class CliAccessLease : IAsyncDisposable
     }
 
     private static AccessDecision GetDeadlineFailure(AccessDecision decision, TimeSpan validity)
-        => validity == MaximumValidity && decision.AuthorizedUntil - decision.EvaluatedAt > MaximumValidity
+        => validity == maximumValidity && decision.AuthorizedUntil - decision.EvaluatedAt > maximumValidity
             ? AccessDecision.Unavailable
             : AccessDecision.ProductAccessRequired;
-}
-
-internal sealed class CliAccessDeniedException(AccessDecision decision) : Exception(decision.Message)
-{
-    public AccessDecision Decision { get; } = decision;
 }

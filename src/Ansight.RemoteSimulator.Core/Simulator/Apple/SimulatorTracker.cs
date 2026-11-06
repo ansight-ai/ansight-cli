@@ -4,7 +4,7 @@ namespace Ansight.RemoteSimulator.Core.Simulator.Apple;
 
 public sealed class SimulatorTracker : IAsyncDisposable
 {
-    private static readonly TimeSpan DefaultRefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan defaultRefreshInterval = TimeSpan.FromSeconds(2);
     private readonly SimCtlClient client;
     private readonly TimeSpan refreshInterval;
     private readonly SemaphoreSlim refreshGate = new(1, 1);
@@ -13,7 +13,8 @@ public sealed class SimulatorTracker : IAsyncDisposable
     public SimulatorTracker(SimCtlClient client, TimeSpan? refreshInterval = null)
     {
         this.client = client ?? throw new ArgumentNullException(nameof(client));
-        this.refreshInterval = refreshInterval ?? DefaultRefreshInterval;
+        this.refreshInterval = refreshInterval ?? defaultRefreshInterval;
+
         if (this.refreshInterval < TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(refreshInterval));
@@ -38,6 +39,7 @@ public sealed class SimulatorTracker : IAsyncDisposable
     public async Task<SimulatorTrackerSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
         await refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             return await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
@@ -51,6 +53,7 @@ public sealed class SimulatorTracker : IAsyncDisposable
     public async Task<SimulatorTrackerSnapshot> RefreshIfStaleAsync(CancellationToken cancellationToken = default)
     {
         await refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             return Current.CapturedAtUtc != DateTimeOffset.MinValue
@@ -67,12 +70,14 @@ public sealed class SimulatorTracker : IAsyncDisposable
     public ValueTask DisposeAsync()
     {
         refreshGate.Dispose();
+
         return ValueTask.CompletedTask;
     }
 
     private async Task<SimulatorTrackerSnapshot> RefreshCoreAsync(CancellationToken cancellationToken)
     {
         SimulatorTrackerSnapshot next;
+
         try
         {
             var devices = await client.GetDevicesAsync(cancellationToken).ConfigureAwait(false);
@@ -93,6 +98,7 @@ public sealed class SimulatorTracker : IAsyncDisposable
 
         var previous = Current;
         Current = next;
+
         if (HasMeaningfulChange(previous, next))
         {
             SnapshotChanged?.Invoke(this, next);

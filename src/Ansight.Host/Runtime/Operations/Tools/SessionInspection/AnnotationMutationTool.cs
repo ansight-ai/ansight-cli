@@ -41,11 +41,14 @@ internal abstract class AnnotationMutationTool : Operation
         {
             return Task.FromResult(ToolError(error!));
         }
+
         if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var snapshot, out var resolutionError))
         {
             return Task.FromResult(ToolError(resolutionError));
         }
+
         var result = runtimeState.MutateSessionAnnotation(snapshot!.SessionId, mutation!);
+
         return Task.FromResult(result.IsSuccess
             ? RequestResult.ToolResult(result.Payload!, isError: false)
             : ToolError(result.Message));

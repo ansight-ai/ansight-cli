@@ -72,6 +72,7 @@ internal static class SessionListingFilters
         }
 
         var device = snapshot.DeviceProfile?.Device;
+
         if (!MatchesStringSet(device?.FormFactor, criteria.DeviceFormFactors)
             || !MatchesStringSet(device?.OsName, criteria.OsNames)
             || !MatchesStringSet(device?.OsVersion, criteria.OsVersions)
@@ -81,12 +82,14 @@ internal static class SessionListingFilters
         }
 
         var isVirtual = ResolveVirtualDeviceState(snapshot);
+
         if (criteria.IsVirtual.HasValue && isVirtual != criteria.IsVirtual.Value)
         {
             return false;
         }
 
         var isEmulator = device?.IsEmulator;
+
         if (criteria.IsEmulator.HasValue && isEmulator != criteria.IsEmulator.Value)
         {
             return false;
@@ -152,6 +155,7 @@ internal static class SessionListingFilters
         }
 
         var normalized = value.Trim();
+
         if (string.Equals(normalized, "sim", StringComparison.OrdinalIgnoreCase))
         {
             normalized = "simulator";
@@ -184,13 +188,13 @@ internal static class SessionListingFilters
     private static bool MatchesStringSet(string? value, HashSet<string> filters)
     {
         return filters.Count == 0
-               || (!string.IsNullOrWhiteSpace(value) && filters.Contains(value.Trim()));
+            || (!string.IsNullOrWhiteSpace(value) && filters.Contains(value.Trim()));
     }
 
     private static bool MatchesIntegerSet(int? value, HashSet<int> filters)
     {
         return filters.Count == 0
-               || (value.HasValue && filters.Contains(value.Value));
+            || (value.HasValue && filters.Contains(value.Value));
     }
 
     private static bool MatchesDeviceTypes(AppSessionSnapshot snapshot, HashSet<string> filters)
@@ -202,19 +206,21 @@ internal static class SessionListingFilters
 
         var isVirtual = ResolveVirtualDeviceState(snapshot);
         var isEmulator = snapshot.DeviceProfile?.Device?.IsEmulator;
+
         return filters.Any(filter => filter.ToLowerInvariant() switch
-        {
-            "physical" => isVirtual == false,
-            "virtual" => isVirtual == true,
-            "emulator" => isEmulator == true,
-            "simulator" => isEmulator == true,
-            _ => false
-        });
+{
+    "physical" => isVirtual == false,
+    "virtual" => isVirtual == true,
+    "emulator" => isEmulator == true,
+    "simulator" => isEmulator == true,
+    _ => false
+});
     }
 
     private static bool? ResolveVirtualDeviceState(AppSessionSnapshot snapshot)
     {
         var device = snapshot.DeviceProfile?.Device;
+
         return device?.IsVirtual ?? device?.IsEmulator;
     }
 }

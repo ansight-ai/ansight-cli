@@ -26,8 +26,8 @@ internal sealed record ExternalSessionScreenshotCapturePolicy(
 
     public static bool SupportsHostControl(JsonObject? profilePayload)
         => profilePayload?[ControlVersionPropertyName] is JsonValue controlVersionNode
-           && controlVersionNode.TryGetValue<int>(out var controlVersion)
-           && controlVersion >= ControlVersion;
+            && controlVersionNode.TryGetValue<int>(out var controlVersion)
+            && controlVersion >= ControlVersion;
 
     public JsonObject ToResponsePayload(bool periodicScreenshotsPaused = false)
         => new()

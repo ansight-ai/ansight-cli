@@ -26,6 +26,7 @@ internal sealed class DotNetTraceCaptureStore
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "derived"));
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "symbols"));
         PrivateStorageDirectory.Ensure(Path.Combine(capturePath, "diagnostics"));
+
         return capturePath;
     }
 
@@ -44,21 +45,24 @@ internal sealed class DotNetTraceCaptureStore
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+
         var capturePath = CreateCaptureDirectory(manifest.CaptureId);
         var manifestPath = Path.Combine(capturePath, ManifestFileName);
         var temporaryPath = manifestPath + ".tmp";
+
         await using (var stream = new FileStream(
-                         temporaryPath,
-                         FileMode.Create,
-                         FileAccess.Write,
-                         FileShare.None,
-                         16 * 1024,
-                         FileOptions.Asynchronous))
+            temporaryPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            16 * 1024,
+            FileOptions.Asynchronous))
         {
             await JsonSerializer.SerializeAsync(stream, manifest, jsonOptions, cancellationToken);
         }
 
         File.Move(temporaryPath, manifestPath, overwrite: true);
+
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(manifestPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -68,7 +72,9 @@ internal sealed class DotNetTraceCaptureStore
     public bool TryLoadManifest(string captureId, out DotNetTraceCaptureManifest? manifest)
     {
         manifest = null;
+
         string manifestPath;
+
         try
         {
             manifestPath = Path.Combine(GetCapturePath(captureId), ManifestFileName);
@@ -86,6 +92,7 @@ internal sealed class DotNetTraceCaptureStore
         try
         {
             manifest = DeserializeManifest(File.ReadAllText(manifestPath));
+
             return manifest is not null;
         }
         catch (JsonException)
@@ -97,11 +104,13 @@ internal sealed class DotNetTraceCaptureStore
     public IReadOnlyList<DotNetTraceCaptureManifest> ListManifests()
     {
         var manifests = new List<DotNetTraceCaptureManifest>();
+
         foreach (var manifestPath in Directory.EnumerateFiles(capturesPath, ManifestFileName, SearchOption.AllDirectories))
         {
             try
             {
                 var manifest = DeserializeManifest(File.ReadAllText(manifestPath));
+
                 if (manifest is not null)
                 {
                     manifests.Add(manifest);
@@ -129,6 +138,7 @@ internal sealed class DotNetTraceCaptureStore
         var capturePath = GetCapturePath(captureId);
         var normalizedCapturePath = Path.GetFullPath(capturePath) + Path.DirectorySeparatorChar;
         var normalizedFilePath = Path.GetFullPath(filePath);
+
         if (!normalizedFilePath.StartsWith(normalizedCapturePath, PathComparison))
         {
             throw new InvalidOperationException("Trace artifacts must be stored inside their capture directory.");
@@ -136,6 +146,7 @@ internal sealed class DotNetTraceCaptureStore
 
         await using var stream = File.OpenRead(normalizedFilePath);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
+
         return new DotNetTraceArtifact(
             kind,
             Path.GetRelativePath(capturePath, normalizedFilePath).Replace(Path.DirectorySeparatorChar, '/'),
@@ -149,8 +160,10 @@ internal sealed class DotNetTraceCaptureStore
         out string? filePath)
     {
         filePath = null;
+
         var artifact = manifest.Artifacts.FirstOrDefault(candidate =>
             string.Equals(candidate.Kind, kind, StringComparison.Ordinal));
+
         if (artifact is null)
         {
             return false;
@@ -159,6 +172,7 @@ internal sealed class DotNetTraceCaptureStore
         var capturePath = GetCapturePath(manifest.CaptureId);
         var candidatePath = Path.GetFullPath(Path.Combine(capturePath, artifact.RelativePath));
         var normalizedCapturePath = Path.GetFullPath(capturePath) + Path.DirectorySeparatorChar;
+
         if (!candidatePath.StartsWith(normalizedCapturePath, PathComparison)
             || !File.Exists(candidatePath))
         {
@@ -166,6 +180,7 @@ internal sealed class DotNetTraceCaptureStore
         }
 
         filePath = candidatePath;
+
         return true;
     }
 
@@ -185,6 +200,7 @@ internal sealed class DotNetTraceCaptureStore
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
+
         if (!TryReadString(root, "schema", out var schema)
             || !string.Equals(schema, "ansight.dotnet-trace-capture/v1", StringComparison.Ordinal)
             || !TryReadString(root, "captureId", out var captureId)
@@ -197,6 +213,7 @@ internal sealed class DotNetTraceCaptureStore
         var targetPath = ReadOptionalString(root, "targetPath");
         var applicationPath = targetPath ?? projectPath ?? string.Empty;
         var launchAdapter = ReadOptionalString(root, "launchAdapter");
+
         return new DotNetTraceCaptureManifest
         {
             Schema = schema,
@@ -257,12 +274,13 @@ internal sealed class DotNetTraceCaptureStore
     private static bool TryReadString(JsonElement root, string propertyName, out string value)
     {
         value = ReadOptionalString(root, propertyName) ?? string.Empty;
+
         return value.Length > 0;
     }
 
     private static string? ReadOptionalString(JsonElement root, string propertyName)
         => root.TryGetProperty(propertyName, out var element)
-           && element.ValueKind == JsonValueKind.String
+            && element.ValueKind == JsonValueKind.String
             ? element.GetString()
             : null;
 
@@ -277,8 +295,9 @@ internal sealed class DotNetTraceCaptureStore
         out DateTimeOffset value)
     {
         value = default;
+
         return root.TryGetProperty(propertyName, out var element)
-               && element.TryGetDateTimeOffset(out value);
+            && element.TryGetDateTimeOffset(out value);
     }
 
     private static DateTimeOffset? ReadOptionalDateTimeOffset(JsonElement root, string propertyName)

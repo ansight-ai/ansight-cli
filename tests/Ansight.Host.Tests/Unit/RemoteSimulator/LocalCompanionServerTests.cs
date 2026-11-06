@@ -19,10 +19,16 @@ public sealed class LocalCompanionServerTests
         await using var server = new LocalCompanionServer(new TestAuthorizer(), (request, cancellationToken) =>
         {
             Interlocked.Increment(ref calls);
-            return Task.FromResult(new LocalCompanionResponse(HttpStatusCode.OK, JsonSerializer.SerializeToElement(new { local = true })));
+
+            return Task.FromResult(new LocalCompanionResponse(HttpStatusCode.OK, JsonSerializer.SerializeToElement(new
+            {
+                local = true
+            })));
         });
         server.Start();
+
         using var client = CreateClient(server, server.CertificateSha256);
+
         if (token is not null)
         {
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -43,8 +49,12 @@ public sealed class LocalCompanionServerTests
         }
 
         await using var server = new LocalCompanionServer(new TestAuthorizer(), (_, _) =>
-            Task.FromResult(new LocalCompanionResponse(HttpStatusCode.OK, JsonSerializer.SerializeToElement(new { local = true }))));
+            Task.FromResult(new LocalCompanionResponse(HttpStatusCode.OK, JsonSerializer.SerializeToElement(new
+            {
+                local = true
+            }))));
         server.Start();
+
         using var client = CreateClient(server, server.CertificateSha256);
         client.BaseAddress = new Uri($"https://[::1]:{server.Port}");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "approved");
@@ -59,6 +69,7 @@ public sealed class LocalCompanionServerTests
     {
         await using var server = new LocalCompanionServer(new TestAuthorizer(), (_, _) => throw new InvalidOperationException("Must not dispatch"));
         server.Start();
+
         using var client = CreateClient(server, new string('0', 64));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "approved");
 
@@ -75,11 +86,18 @@ public sealed class LocalCompanionServerTests
             throw new InvalidOperationException("Must not dispatch");
         });
         server.Start();
+
         using var client = CreateClient(server, server.CertificateSha256);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "approved");
 
         using var query = await client.GetAsync("/api/state?token=secret");
-        using var oversized = await client.PostAsync("/api/command", new StringContent(new string('x', 65537)));
+        using var oversizedRequest = new HttpRequestMessage(HttpMethod.Post, "/api/command")
+        {
+            Content = new StringContent(new string('x', 65537))
+        };
+        oversizedRequest.Headers.ExpectContinue = true;
+
+        using var oversized = await client.SendAsync(oversizedRequest);
 
         Assert.Equal(HttpStatusCode.BadRequest, query.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, oversized.StatusCode);
@@ -93,6 +111,7 @@ public sealed class LocalCompanionServerTests
             ServerCertificateCustomValidationCallback = (_, certificate, _, _) => certificate is not null
                 && Convert.ToHexString(SHA256.HashData(certificate.RawData)).Equals(fingerprint, StringComparison.OrdinalIgnoreCase)
         };
+
         return new HttpClient(handler)
         {
             BaseAddress = new Uri($"https://127.0.0.1:{server.Port}"),

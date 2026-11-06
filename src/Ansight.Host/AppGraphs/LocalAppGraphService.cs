@@ -3,25 +3,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Ansight.Host.AppGraphs;
 
-public sealed record LocalAppGraphSyncLink(
-    Guid LocalGraphId,
-    Guid RemoteGraphId,
-    Guid RemoteTeamId,
-    Guid? LocalVersionId,
-    Guid? RemoteVersionId,
-    DateTimeOffset SyncedAtUtc);
-
-public sealed record LocalAppGraphImportRequest(
-    string AppId,
-    string AppName,
-    CloudAppGraphDetail Detail,
-    Guid RemoteTeamId);
-
-public sealed record LocalAppGraphIdentity(
-    Guid GraphId,
-    string AppId,
-    string AppName);
-
 public sealed partial class LocalAppGraphService
 {
     public static readonly Guid LocalTeamId = Guid.Parse("6c6f6361-6c2d-4d6f-9e64-650000000001");
@@ -45,7 +26,9 @@ public sealed partial class LocalAppGraphService
     public CloudRegisteredApp ResolveApp(string appId, string? appName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
+
         var normalizedAppId = appId.Trim();
+
         return new CloudRegisteredApp(
             CreateStableAppId(normalizedAppId),
             LocalTeamId,
@@ -61,6 +44,7 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = """
@@ -72,12 +56,15 @@ public sealed partial class LocalAppGraphService
                 ORDER BY updated_utc DESC;
                 """;
             command.Parameters.AddWithValue("$app_id", appId?.Trim() ?? string.Empty);
+
             var normalizedQuery = query?.Trim();
             var graphs = new List<CloudAppGraphSummary>();
             using var reader = command.ExecuteReader();
+
             while (reader.Read())
             {
                 var graph = ReadGraph(reader);
+
                 if (string.IsNullOrWhiteSpace(normalizedQuery)
                     || graph.Name.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)
                     || graph.Intent.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)
@@ -86,6 +73,7 @@ public sealed partial class LocalAppGraphService
                     graphs.Add(graph);
                 }
             }
+
             return CloudAppGraphQueryResult.Success(graphs);
         }
     }
@@ -100,15 +88,19 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             var graph = ReadGraph(connection, graphId);
+
             if (graph is null)
             {
                 return CloudAppGraphDetailResult.Failure($"Local App Graph '{graphId:D}' was not found.");
             }
+
             var versionId = publishedOnly
                 ? graph.PublishedVersionId
                 : graph.CurrentVersionId ?? graph.PublishedVersionId;
+
             if (!versionId.HasValue)
             {
                 return CloudAppGraphDetailResult.Failure(
@@ -116,12 +108,15 @@ public sealed partial class LocalAppGraphService
                         ? $"Local App Graph '{graph.Name}' does not have a published version."
                         : $"Local App Graph '{graph.Name}' does not have a version.");
             }
+
             var version = ReadVersion(connection, versionId.Value);
+
             if (version is null)
             {
                 return CloudAppGraphDetailResult.Failure(
                     $"Local App Graph version '{versionId.Value:D}' was not found.");
             }
+
             return CloudAppGraphDetailResult.Success(
                 new CloudAppGraphDetail(graph, version, ReadBindings(connection, version.Id)));
         }
@@ -130,7 +125,8 @@ public sealed partial class LocalAppGraphService
     public CloudAppGraphDetailResult Find(string appId, string graphName, bool publishedOnly = false)
     {
         var graph = List(appId, graphName).Graphs.FirstOrDefault(candidate =>
-            candidate.Name.Equals(graphName.Trim(), StringComparison.OrdinalIgnoreCase));
+                candidate.Name.Equals(graphName.Trim(), StringComparison.OrdinalIgnoreCase));
+
         return graph is null
             ? CloudAppGraphDetailResult.Failure(
                 $"Local App Graph '{graphName}' was not found for app '{appId}'.")
@@ -148,6 +144,7 @@ public sealed partial class LocalAppGraphService
         ArgumentException.ThrowIfNullOrWhiteSpace(appId);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(definition);
+
         if (!IsDefinitionValid(definition))
         {
             return CloudAppGraphCreateResult.Failure("A valid App Graph definition is required.");
@@ -156,14 +153,17 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var existing = FindGraphId(connection, transaction, appId, name);
+
             if (existing.HasValue)
             {
                 return CloudAppGraphCreateResult.Failure(
                     $"Local app '{appId}' already has an App Graph named '{name.Trim()}'.");
             }
+
             var graphId = Guid.NewGuid();
             var versionId = Guid.NewGuid();
             var now = DateTimeOffset.UtcNow;
@@ -186,7 +186,9 @@ public sealed partial class LocalAppGraphService
             InsertVersion(connection, transaction, versionId, graphId, 1, "draft", definition, "Created from local exploration.", now);
             ReplaceBindings(connection, transaction, versionId, evidence, bindings: null);
             transaction.Commit();
+
             var detailResult = Get(graphId);
+
             return detailResult.Detail is null
                 ? CloudAppGraphCreateResult.Failure(detailResult.Message)
                 : CloudAppGraphCreateResult.Success(
@@ -199,6 +201,7 @@ public sealed partial class LocalAppGraphService
         CloudAppGraphObservationCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (!IsDefinitionValid(request.CandidateDefinition))
         {
             return CloudAppGraphObservationOperationResult.Failure(
@@ -208,19 +211,23 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var graph = ReadGraph(connection, request.AppGraphId, transaction);
+
             if (graph is null)
             {
                 return CloudAppGraphObservationOperationResult.Failure(
                     $"Local App Graph '{request.AppGraphId:D}' was not found.");
             }
+
             var observationId = Guid.NewGuid();
             var versionId = Guid.NewGuid();
             var createsVersion = request.MergedIntoVersionId != graph.CurrentVersionId;
             var versionNumber = createsVersion ? graph.Version + 1 : graph.Version;
             var now = DateTimeOffset.UtcNow;
+
             using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
@@ -243,6 +250,7 @@ public sealed partial class LocalAppGraphService
                 command.Parameters.AddWithValue("$created_utc", now.ToString("O"));
                 command.ExecuteNonQuery();
             }
+
             if (createsVersion)
             {
                 InsertVersion(
@@ -257,6 +265,7 @@ public sealed partial class LocalAppGraphService
                     now);
                 ReplaceBindings(connection, transaction, versionId, request.Evidence, bindings: null);
             }
+
             using (var command = connection.CreateCommand())
             {
                 command.Transaction = transaction;
@@ -278,7 +287,9 @@ public sealed partial class LocalAppGraphService
                 command.Parameters.AddWithValue("$graph_id", graph.Id.ToString("D"));
                 command.ExecuteNonQuery();
             }
+
             transaction.Commit();
+
             return CloudAppGraphObservationOperationResult.Success(
                 observationId,
                 $"Saved local App Graph '{graph.Name}' as version {versionNumber}.");
@@ -288,9 +299,11 @@ public sealed partial class LocalAppGraphService
     public CloudAppGraphRunOperationResult CreateRun(CloudAppGraphRunCreateRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             var runId = Guid.NewGuid();
             using var command = connection.CreateCommand();
@@ -309,6 +322,7 @@ public sealed partial class LocalAppGraphService
             command.Parameters.AddWithValue("$session_id", request.TargetSessionId.Trim());
             command.Parameters.AddWithValue("$started_utc", DateTimeOffset.UtcNow.ToString("O"));
             command.ExecuteNonQuery();
+
             return CloudAppGraphRunOperationResult.Success(runId, "Local App Graph run started.");
         }
     }
@@ -316,9 +330,11 @@ public sealed partial class LocalAppGraphService
     public CloudAppGraphRunOperationResult WriteRunStep(CloudAppGraphRunStepWriteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = """
@@ -340,6 +356,7 @@ public sealed partial class LocalAppGraphService
             command.Parameters.AddWithValue("$started", request.StartedAt.ToString("O"));
             command.Parameters.AddWithValue("$completed", request.CompletedAt.ToString("O"));
             command.ExecuteNonQuery();
+
             return CloudAppGraphRunOperationResult.Success(request.RunId, $"Recorded local App Graph run step {request.StepIndex}.");
         }
     }
@@ -350,23 +367,29 @@ public sealed partial class LocalAppGraphService
         {
             return CloudAppGraphRunOperationResult.Failure("A run ID and terminal status are required.", runId);
         }
+
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             Guid graphId;
+
             using (var read = connection.CreateCommand())
             {
                 read.Transaction = transaction;
                 read.CommandText = "SELECT graph_id FROM local_app_graph_execution_runs WHERE id = $id;";
                 read.Parameters.AddWithValue("$id", runId.ToString("D"));
+
                 var value = read.ExecuteScalar() as string;
+
                 if (!Guid.TryParse(value, out graphId))
                 {
                     return CloudAppGraphRunOperationResult.Failure($"Local App Graph run '{runId:D}' was not found.", runId);
                 }
             }
+
             using (var update = connection.CreateCommand())
             {
                 update.Transaction = transaction;
@@ -381,6 +404,7 @@ public sealed partial class LocalAppGraphService
                 update.Parameters.AddWithValue("$id", runId.ToString("D"));
                 update.ExecuteNonQuery();
             }
+
             using (var updateGraph = connection.CreateCommand())
             {
                 updateGraph.Transaction = transaction;
@@ -393,7 +417,9 @@ public sealed partial class LocalAppGraphService
                 updateGraph.Parameters.AddWithValue("$id", graphId.ToString("D"));
                 updateGraph.ExecuteNonQuery();
             }
+
             transaction.Commit();
+
             return CloudAppGraphRunOperationResult.Success(runId, message ?? $"Local App Graph run {status}.");
         }
     }
@@ -401,9 +427,11 @@ public sealed partial class LocalAppGraphService
     public CloudAppGraphDetailResult Import(LocalAppGraphImportRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             var remote = request.Detail;
@@ -416,6 +444,7 @@ public sealed partial class LocalAppGraphService
             var existingLink = existing is null
                 ? null
                 : ReadSyncLink(connection, transaction, localGraphId);
+
             if (!linkedLocalId.HasValue
                 && existingLink is not null
                 && (existingLink.RemoteGraphId != remote.Graph.Id
@@ -423,8 +452,9 @@ public sealed partial class LocalAppGraphService
             {
                 return CloudAppGraphDetailResult.Failure(
                     $"Local App Graph '{remote.Graph.Name}' is already linked to hosted graph "
-                    + $"'{existingLink.RemoteGraphId:D}' in organisation '{existingLink.RemoteTeamId:D}'.");
+                        + $"'{existingLink.RemoteGraphId:D}' in organisation '{existingLink.RemoteTeamId:D}'.");
             }
+
             if (existing is not null && existingLink?.RemoteVersionId == remote.Version.Id)
             {
                 UpsertSyncLink(
@@ -437,11 +467,14 @@ public sealed partial class LocalAppGraphService
                     remote.Version.Id,
                     DateTimeOffset.UtcNow);
                 transaction.Commit();
+
                 return Get(localGraphId);
             }
+
             var versionNumber = existing is null ? 1 : existing.Version + 1;
             var localVersionId = Guid.NewGuid();
             var now = DateTimeOffset.UtcNow;
+
             if (existing is null)
             {
                 InsertGraph(
@@ -484,6 +517,7 @@ public sealed partial class LocalAppGraphService
                 update.Parameters.AddWithValue("$id", localGraphId.ToString("D"));
                 update.ExecuteNonQuery();
             }
+
             InsertVersion(
                 connection,
                 transaction,
@@ -505,6 +539,7 @@ public sealed partial class LocalAppGraphService
                 remote.Version.Id,
                 now);
             transaction.Commit();
+
             return Get(localGraphId);
         }
     }
@@ -514,6 +549,7 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = """
@@ -522,7 +558,9 @@ public sealed partial class LocalAppGraphService
                 FROM local_app_graph_sync_links WHERE local_graph_id = $id;
                 """;
             command.Parameters.AddWithValue("$id", localGraphId.ToString("D"));
+
             using var reader = command.ExecuteReader();
+
             return reader.Read() ? ReadSyncLink(reader) : null;
         }
     }
@@ -532,11 +570,14 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var command = connection.CreateCommand();
             command.CommandText = "SELECT app_id, app_name FROM local_app_graphs WHERE id = $id;";
             command.Parameters.AddWithValue("$id", localGraphId.ToString("D"));
+
             using var reader = command.ExecuteReader();
+
             return reader.Read()
                 ? new LocalAppGraphIdentity(localGraphId, reader.GetString(0), reader.GetString(1))
                 : null;
@@ -553,6 +594,7 @@ public sealed partial class LocalAppGraphService
         lock (databaseGate)
         {
             EnsureDatabase();
+
             using var connection = OpenConnection();
             using var transaction = connection.BeginTransaction();
             UpsertSyncLink(
@@ -572,6 +614,7 @@ public sealed partial class LocalAppGraphService
     {
         EnsureProviderInitialized();
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -702,8 +745,10 @@ public sealed partial class LocalAppGraphService
     {
         using var inspect = connection.CreateCommand();
         inspect.CommandText = "PRAGMA table_info(local_app_graph_observations);";
+
         using var reader = inspect.ExecuteReader();
         var hasColumn = false;
+
         while (reader.Read())
         {
             if (reader.GetString(1).Equals("source_kind", StringComparison.OrdinalIgnoreCase))
@@ -712,7 +757,9 @@ public sealed partial class LocalAppGraphService
                 break;
             }
         }
+
         reader.Close();
+
         if (hasColumn)
         {
             return;
@@ -727,8 +774,10 @@ public sealed partial class LocalAppGraphService
     {
         using var inspect = connection.CreateCommand();
         inspect.CommandText = "PRAGMA table_info(local_app_graph_sync_links);";
+
         using var reader = inspect.ExecuteReader();
         var hasColumn = false;
+
         while (reader.Read())
         {
             if (reader.GetString(1).Equals("local_version_id", StringComparison.OrdinalIgnoreCase))
@@ -737,7 +786,9 @@ public sealed partial class LocalAppGraphService
                 break;
             }
         }
+
         reader.Close();
+
         if (hasColumn)
         {
             return;
@@ -759,6 +810,7 @@ public sealed partial class LocalAppGraphService
         };
         var connection = new SqliteConnection(builder.ConnectionString);
         connection.Open();
+
         return connection;
     }
 
@@ -776,7 +828,9 @@ public sealed partial class LocalAppGraphService
             FROM local_app_graphs WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", graphId.ToString("D"));
+
         using var reader = command.ExecuteReader();
+
         return reader.Read() ? ReadGraph(reader) : null;
     }
 
@@ -805,8 +859,14 @@ public sealed partial class LocalAppGraphService
             FROM local_app_graph_versions WHERE id = $id;
             """;
         command.Parameters.AddWithValue("$id", versionId.ToString("D"));
+
         using var reader = command.ExecuteReader();
-        if (!reader.Read()) return null;
+
+        if (!reader.Read())
+        {
+            return null;
+        }
+
         return new CloudAppGraphVersion
         {
             Id = Guid.Parse(reader.GetString(0)),
@@ -831,8 +891,10 @@ public sealed partial class LocalAppGraphService
             ORDER BY edge_id, priority;
             """;
         command.Parameters.AddWithValue("$version_id", versionId.ToString("D"));
+
         var bindings = new List<CloudAppGraphBinding>();
         using var reader = command.ExecuteReader();
+
         while (reader.Read())
         {
             bindings.Add(new CloudAppGraphBinding
@@ -849,6 +911,7 @@ public sealed partial class LocalAppGraphService
                 Confidence = reader.GetDecimal(7)
             });
         }
+
         return bindings;
     }
 
@@ -932,16 +995,17 @@ public sealed partial class LocalAppGraphService
         IReadOnlyList<CloudAppGraphBinding>? bindings)
     {
         var sourceBindings = bindings?.Select(binding => new LocalBindingCandidate(
-                binding.Id,
-                binding.EdgeId,
-                binding.Priority,
-                binding.Mechanism,
-                binding.Configuration,
-                binding.Preconditions,
-                binding.Postconditions,
-                binding.Confidence))
+            binding.Id,
+            binding.EdgeId,
+            binding.Priority,
+            binding.Mechanism,
+            binding.Configuration,
+            binding.Preconditions,
+            binding.Postconditions,
+            binding.Confidence))
             .ToArray()
             ?? ReadBindingCandidates(evidence);
+
         foreach (var binding in sourceBindings)
         {
             using var command = connection.CreateCommand();
@@ -972,18 +1036,22 @@ public sealed partial class LocalAppGraphService
         {
             return [];
         }
+
         var result = new List<LocalBindingCandidate>();
         var priorities = new Dictionary<string, int>(StringComparer.Ordinal);
+
         foreach (var candidate in candidates.OfType<JsonObject>())
         {
             var edgeId = candidate["edgeId"]?.GetValue<string>()?.Trim();
             var mechanism = candidate["mechanism"]?.GetValue<string>()?.Trim();
+
             if (string.IsNullOrWhiteSpace(edgeId)
                 || string.IsNullOrWhiteSpace(mechanism)
                 || candidate["configuration"] is not JsonObject configuration)
             {
                 continue;
             }
+
             var priority = priorities.GetValueOrDefault(edgeId);
             priorities[edgeId] = priority + 1;
             result.Add(new LocalBindingCandidate(
@@ -996,6 +1064,7 @@ public sealed partial class LocalAppGraphService
                 ReadStringArray(candidate["postconditions"]),
                 candidate["confidence"]?.GetValue<decimal>() ?? 0.5m));
         }
+
         return result;
     }
 
@@ -1010,6 +1079,7 @@ public sealed partial class LocalAppGraphService
         command.CommandText = "SELECT id FROM local_app_graphs WHERE app_id = $app_id AND name = $name;";
         command.Parameters.AddWithValue("$app_id", appId.Trim());
         command.Parameters.AddWithValue("$name", graphName.Trim());
+
         return Guid.TryParse(command.ExecuteScalar() as string, out var id) ? id : null;
     }
 
@@ -1027,6 +1097,7 @@ public sealed partial class LocalAppGraphService
             """;
         command.Parameters.AddWithValue("$graph_id", remoteGraphId.ToString("D"));
         command.Parameters.AddWithValue("$team_id", remoteTeamId.ToString("D"));
+
         return Guid.TryParse(command.ExecuteScalar() as string, out var id) ? id : null;
     }
 
@@ -1084,18 +1155,21 @@ public sealed partial class LocalAppGraphService
             FROM local_app_graph_sync_links WHERE local_graph_id = $id;
             """;
         command.Parameters.AddWithValue("$id", localGraphId.ToString("D"));
+
         using var reader = command.ExecuteReader();
+
         return reader.Read() ? ReadSyncLink(reader) : null;
     }
 
     private static bool IsDefinitionValid(JsonObject definition)
         => definition["schema"]?.GetValue<string>() == "ansight.app-graph/v1"
-           && definition["nodes"] is JsonArray
-           && definition["edges"] is JsonArray;
+            && definition["nodes"] is JsonArray
+            && definition["edges"] is JsonArray;
 
     private static Guid CreateStableAppId(string appId)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(appId.Trim().ToLowerInvariant()));
+
         return new Guid(hash.AsSpan(0, 16));
     }
 
@@ -1114,7 +1188,11 @@ public sealed partial class LocalAppGraphService
     {
         lock (providerGate)
         {
-            if (providerInitialized) return;
+            if (providerInitialized)
+            {
+                return;
+            }
+
             try
             {
                 _ = SQLitePCL.raw.sqlite3_libversion();
@@ -1127,6 +1205,7 @@ public sealed partial class LocalAppGraphService
                 SQLitePCL.raw.SetProvider(provider);
                 SQLitePCL.raw.FreezeProvider();
             }
+
             providerInitialized = true;
         }
     }

@@ -12,6 +12,7 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var gateway = TaskBatchGateway();
         var taskIds = new[] { "reset-map-state", "focus-map-search-area", "validate-map-area-snapshot" };
+
         foreach (var taskId in taskIds)
         {
             var assertions = new[] { new RepositoryTaskAssertion(taskId, true, $"Verified {taskId}.", JsonValue.Create(true), JsonValue.Create(true)) };
@@ -25,9 +26,11 @@ public sealed partial class SimulatorAgentServiceTests
                 TaskSource = new RepositoryTaskSourceTrace(taskId, [])
             });
         }
+
         var client = new FakeOpenAiClient([TaskBatchTurn(), CompleteWebSocketTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var progress = new List<SimulatorAgentProgress>();
 
         var result = await service.RunAsync(TaskBatchRequest(), new SynchronousProgress<SimulatorAgentProgress>(progress.Add));
@@ -35,10 +38,16 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(2, client.Inputs.Count);
         Assert.Equal(taskIds, gateway.Calls.Select(call => call.Arguments["taskId"]!.GetValue<string>()));
-        Assert.All(gateway.Calls, call => { Assert.Equal("ansight_run_task", call.ToolName); Assert.Equal("session-123", call.SessionId); });
+        Assert.All(gateway.Calls, call =>
+        {
+            Assert.Equal("ansight_run_task", call.ToolName);
+            Assert.Equal("session-123", call.SessionId);
+        }
+);
         Assert.Equal(37.016575, gateway.Calls[0].Arguments["input"]!["latitude"]!.GetValue<double>());
         Assert.Equal("Point Perpendicular", gateway.Calls[1].Arguments["input"]!["searchArea"]!.GetValue<string>());
         Assert.Equal("Seaside", gateway.Calls[2].Arguments["input"]!["targetArea"]!.GetValue<string>());
+
         var steps = result.Audit.ToolCalls.Where(call => call.BatchCallId == "task-batch").ToArray();
         Assert.Equal(new int?[] { 1, 2, 3 }, steps.Select(call => call.BatchStepIndex));
         Assert.All(steps, call =>
@@ -50,9 +59,11 @@ public sealed partial class SimulatorAgentServiceTests
             Assert.NotNull(call.TaskSource);
             Assert.Contains("retained-only", call.Result.Content);
         });
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         Assert.Equal(TaskBatchReason, JsonNode.Parse(batch.Result.Content)!["reason"]!.GetValue<string>());
         Assert.Contains(progress, item => item.ToolName == AgentTaskBatch.ToolName && item.Message.Contains(TaskBatchReason));
+
         var output = Assert.Single(client.Inputs[1].OfType<JsonObject>(), item => item["type"]?.GetValue<string>() == "function_call_output");
         Assert.Equal("task-batch", output["call_id"]!.GetValue<string>());
         Assert.Contains(TaskBatchReason, output["output"]!.GetValue<string>());
@@ -67,11 +78,15 @@ public sealed partial class SimulatorAgentServiceTests
         var session = new FakeOpenAiSession([TaskBatchTurn(), CompleteWebSocketTurn()]);
         using var service = CreateToolLoadingService(session, gateway);
 
-        var result = await service.RunAsync(ToolLoadingRequest("Run reset-map-state, focus-map-search-area, then validate-map-area-snapshot.") with { CaptureTrace = true });
+        var result = await service.RunAsync(ToolLoadingRequest("Run reset-map-state, focus-map-search-area, then validate-map-area-snapshot.") with
+        {
+            CaptureTrace = true
+        });
 
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Contains(AgentTaskBatch.ToolName, ToolNames(session.Requests[0].Tools));
         Assert.Equal(3, gateway.Calls.Count);
+
         var output = Assert.Single(session.Requests[1].IncrementalInput!.OfType<JsonObject>(), item => item["type"]?.GetValue<string>() == "function_call_output");
         Assert.Equal("task-batch", output["call_id"]!.GetValue<string>());
         Assert.Contains("validate-map-area-snapshot", output["output"]!.GetValue<string>());
@@ -87,6 +102,7 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = TaskBatchGateway();
         gateway.Results.Enqueue(new ToolCallResult(false, "{\"status\":\"Passed\"}", "Reset passed."));
         gateway.Results.Enqueue(new ToolCallResult(true, new JsonObject { ["status"] = status }.ToJsonString(), $"Focus {status}."));
+
         var client = new FakeOpenAiClient([TaskBatchTurn(), CompleteWebSocketTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
@@ -94,8 +110,10 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(TaskBatchRequest());
 
         Assert.Equal(2, gateway.Calls.Count);
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         Assert.True(batch.IsError);
+
         var output = JsonNode.Parse(batch.Result.Content)!;
         Assert.False(output["completed"]!.GetValue<bool>());
         Assert.Equal(1, output["skippedStepCount"]!.GetValue<int>());
@@ -126,24 +144,59 @@ public sealed partial class SimulatorAgentServiceTests
         var arguments = turn.FunctionCalls[0].Arguments;
         var steps = arguments["steps"]!.AsArray();
         var last = steps[2]!.AsObject();
+
         switch (error)
         {
-            case "missing-reason": arguments.Remove("reason"); break;
-            case "blank-reason": arguments["reason"] = "  "; break;
-            case "long-reason": arguments["reason"] = new string('x', 1001); break;
-            case "empty": steps.Clear(); break;
-            case "too-many": while (steps.Count < 9) steps.Add(last.DeepClone()); break;
-            case "missing-id": last.Remove("taskId"); break;
-            case "bad-input": last["input"] = "invalid"; break;
-            case "ui-step": last["toolName"] = "ansight_tap_ui"; break;
-            case "nested-batch": last["toolName"] = AgentTaskBatch.ToolName; break;
-            case "completion": last["toolName"] = "complete_instruction"; break;
-            case "target-override": last["sessionId"] = "another-session"; break;
-            case "negative-cooldown": last["cooldownMs"] = -1; break;
-            case "long-cooldown": last["cooldownMs"] = 10001; break;
-            case "fractional-cooldown": last["cooldownMs"] = 1.5; break;
-            case "string-cooldown": last["cooldownMs"] = "100"; break;
+            case "missing-reason":
+                arguments.Remove("reason");
+                break;
+            case "blank-reason":
+                arguments["reason"] = "  ";
+                break;
+            case "long-reason":
+                arguments["reason"] = new string('x', 1001);
+                break;
+            case "empty":
+                steps.Clear();
+                break;
+            case "too-many":
+                while (steps.Count < 9)
+                {
+                    steps.Add(last.DeepClone());
+                }
+                break;
+            case "missing-id":
+                last.Remove("taskId");
+                break;
+            case "bad-input":
+                last["input"] = "invalid";
+                break;
+            case "ui-step":
+                last["toolName"] = "ansight_tap_ui";
+                break;
+            case "nested-batch":
+                last["toolName"] = AgentTaskBatch.ToolName;
+                break;
+            case "completion":
+                last["toolName"] = "complete_instruction";
+                break;
+            case "target-override":
+                last["sessionId"] = "another-session";
+                break;
+            case "negative-cooldown":
+                last["cooldownMs"] = -1;
+                break;
+            case "long-cooldown":
+                last["cooldownMs"] = 10001;
+                break;
+            case "fractional-cooldown":
+                last["cooldownMs"] = 1.5;
+                break;
+            case "string-cooldown":
+                last["cooldownMs"] = "100";
+                break;
         }
+
         var gateway = TaskBatchGateway();
         var client = new FakeOpenAiClient([turn, CompleteWebSocketTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
@@ -165,17 +218,26 @@ public sealed partial class SimulatorAgentServiceTests
         var client = new FakeOpenAiClient([TaskBatchTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var progress = new SynchronousProgress<SimulatorAgentProgress>(item =>
         {
-            if (cancel && item.Stage == SimulatorAgentProgressStage.ToolCompleted && item.ToolName == "ansight_run_task") cancellation.Cancel();
+            if (cancel && item.Stage == SimulatorAgentProgressStage.ToolCompleted && item.ToolName == "ansight_run_task")
+            {
+                cancellation.Cancel();
+            }
         });
 
-        var result = await service.RunAsync(TaskBatchRequest() with { MaximumToolCalls = cancel ? 10 : 1 }, progress, cancellation.Token);
+        var result = await service.RunAsync(TaskBatchRequest() with
+        {
+            MaximumToolCalls = cancel ? 10 : 1
+        }, progress, cancellation.Token);
 
         Assert.Equal(cancel ? SimulatorAgentRunStatus.Cancelled : SimulatorAgentRunStatus.Failed, result.Status);
         Assert.Single(gateway.Calls);
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         Assert.True(batch.IsError);
+
         var output = JsonNode.Parse(batch.Result.Content)!;
         Assert.Equal(1, output["executedStepCount"]!.GetValue<int>());
         Assert.Equal(2, output["skippedStepCount"]!.GetValue<int>());
@@ -188,6 +250,7 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = TaskBatchGateway();
         gateway.Results.Enqueue(new ToolCallResult(true, "{}", "Reset failed."));
         gateway.Results.Enqueue(new ToolCallResult(true, "{}", "Reset failed."));
+
         var batch = TaskBatchTurn();
         var arguments = batch.FunctionCalls[0].Arguments["steps"]![0]!.DeepClone().AsObject();
         var client = new FakeOpenAiClient([
@@ -201,6 +264,7 @@ public sealed partial class SimulatorAgentServiceTests
         var result = await service.RunAsync(TaskBatchRequest());
 
         Assert.Equal(2, gateway.Calls.Count);
+
         var blocked = Assert.Single(result.Audit.ToolCalls, call => call.BatchStepIndex == 1);
         Assert.True(blocked.IsError);
         Assert.Contains("circuitBreaker", blocked.Result.Content);
@@ -235,10 +299,12 @@ public sealed partial class SimulatorAgentServiceTests
         turn.FunctionCalls[0].Arguments["steps"]![0]!["cooldownMs"] = 50;
         // A final task's requested cooldown must not delay completion.
         turn.FunctionCalls[0].Arguments["steps"]![2]!["cooldownMs"] = 10000;
+
         var gateway = TaskBatchGateway();
         var client = new FakeOpenAiClient([turn, CompleteWebSocketTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var progress = new List<SimulatorAgentProgress>();
 
         var result = await service.RunAsync(TaskBatchRequest(), new SynchronousProgress<SimulatorAgentProgress>(progress.Add));
@@ -246,8 +312,10 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Succeeded, result.Status);
         Assert.Equal(3, gateway.Calls.Count);
         Assert.All(gateway.Calls, call => Assert.False(call.Arguments.ContainsKey("cooldownMs")));
+
         var waiting = Assert.Single(progress, item => item.Message.StartsWith("Task batch cooldown:"));
         Assert.Equal(AgentTaskBatch.ToolName, waiting.ToolName);
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         var output = JsonNode.Parse(batch.Result.Content)!;
         var cooldown = output["steps"]![0]!["cooldown"]!;
@@ -265,13 +333,18 @@ public sealed partial class SimulatorAgentServiceTests
         using var cancellation = new CancellationTokenSource();
         var turn = TaskBatchTurn();
         turn.FunctionCalls[0].Arguments["steps"]![0]!["cooldownMs"] = 10000;
+
         var gateway = TaskBatchGateway();
         var client = new FakeOpenAiClient([turn]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var progress = new SynchronousProgress<SimulatorAgentProgress>(item =>
         {
-            if (item.Message.StartsWith("Task batch cooldown:")) cancellation.CancelAfter(20);
+            if (item.Message.StartsWith("Task batch cooldown:"))
+            {
+                cancellation.CancelAfter(20);
+            }
         });
 
         var result = await service.RunAsync(TaskBatchRequest(), progress, cancellation.Token);
@@ -279,6 +352,7 @@ public sealed partial class SimulatorAgentServiceTests
         Assert.Equal(SimulatorAgentRunStatus.Cancelled, result.Status);
         Assert.Single(gateway.Calls);
         Assert.Single(result.Audit.ToolCalls, call => call.BatchCallId == "task-batch");
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         var output = JsonNode.Parse(batch.Result.Content)!;
         Assert.Equal(2, output["skippedStepCount"]!.GetValue<int>());
@@ -293,18 +367,29 @@ public sealed partial class SimulatorAgentServiceTests
     {
         var turn = TaskBatchTurn();
         turn.FunctionCalls[0].Arguments["steps"]![0]!["cooldownMs"] = 10000;
+
         var gateway = TaskBatchGateway();
-        if (failed) gateway.Results.Enqueue(new ToolCallResult(true, "{}", "Reset failed."));
+
+        if (failed)
+        {
+            gateway.Results.Enqueue(new ToolCallResult(true, "{}", "Reset failed."));
+        }
+
         var client = new FakeOpenAiClient([turn, CompleteWebSocketTurn()]);
         using var service = new SimulatorAgentService(new InMemoryEncryptedStorage(), client, gateway);
         service.SetDefaultModelAccessTokenForTesting("sk-local-test");
+
         var progress = new List<SimulatorAgentProgress>();
 
-        var result = await service.RunAsync(TaskBatchRequest() with { MaximumToolCalls = failed ? 10 : 1 },
+        var result = await service.RunAsync(TaskBatchRequest() with
+        {
+            MaximumToolCalls = failed ? 10 : 1
+        },
             new SynchronousProgress<SimulatorAgentProgress>(progress.Add));
 
         Assert.Single(gateway.Calls);
         Assert.DoesNotContain(progress, item => item.Message.StartsWith("Task batch cooldown:"));
+
         var batch = Assert.Single(result.Audit.ToolCalls, call => call.ToolName == AgentTaskBatch.ToolName);
         var output = JsonNode.Parse(batch.Result.Content)!;
         Assert.Equal(2, output["skippedStepCount"]!.GetValue<int>());
@@ -316,16 +401,20 @@ public sealed partial class SimulatorAgentServiceTests
         var gateway = new FakeToolGateway
         {
             RepositoryTaskShortcuts = [
-                CreateRepositoryTaskShortcut("ansight_task_reset", "reset-map-state", "Reset map"),
+                    CreateRepositoryTaskShortcut("ansight_task_reset", "reset-map-state", "Reset map"),
                 CreateRepositoryTaskShortcut("ansight_task_focus", "focus-map-search-area", "Focus area"),
                 CreateRepositoryTaskShortcut("ansight_task_validate", "validate-map-area-snapshot", "Validate areas")]
         };
         AddToolLoadingDefinitions(gateway);
+
         return gateway;
     }
 
     private static SimulatorAgentRunRequest TaskBatchRequest()
-        => new("session-123", ["Run reset-map-state, focus-map-search-area, then validate-map-area-snapshot."]) { CaptureTrace = true };
+        => new("session-123", ["Run reset-map-state, focus-map-search-area, then validate-map-area-snapshot."])
+        {
+            CaptureTrace = true
+        };
 
     private static OpenAiTurn TaskBatchTurn()
         => CreateFunctionTurn("task-batch", AgentTaskBatch.ToolName, new JsonObject

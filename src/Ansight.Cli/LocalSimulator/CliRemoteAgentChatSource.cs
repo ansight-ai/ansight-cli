@@ -20,6 +20,7 @@ internal sealed class CliRemoteAgentChatSource : IRemoteAgentChatSource
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(new RemoteAgentChatListResult(false, SubmissionUnavailable, []));
     }
 
@@ -28,6 +29,7 @@ internal sealed class CliRemoteAgentChatSource : IRemoteAgentChatSource
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(new RemoteAnnotationBatchSubmissionResult(false, SubmissionUnavailable, "unavailable"));
     }
 
@@ -36,6 +38,7 @@ internal sealed class CliRemoteAgentChatSource : IRemoteAgentChatSource
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         var tasks = runtime.Sessions.GetSummaries()
             .Where(session => string.IsNullOrWhiteSpace(request.SessionId)
                 || string.Equals(session.SessionId, request.SessionId.Trim(), StringComparison.Ordinal))
@@ -48,6 +51,7 @@ internal sealed class CliRemoteAgentChatSource : IRemoteAgentChatSource
                 link.ProviderTurnId, link.ProviderTaskTitle, link.WorkingDirectory, link.SubmittedPrompt,
                 link.Status, link.StatusMessage, link.CreatedAtUtc, link.UpdatedAtUtc))
             .ToArray();
+
         return Task.FromResult(new RemoteAgentTaskListResult(true, "Linked Ansight task history loaded.", tasks));
     }
 }

@@ -22,6 +22,7 @@ internal static class SessionInspectionToolSchemas
         var queryDescription = includeRequiredQuery
             ? "Required case-insensitive keyword or phrase to match against log message, tag, source, or event id."
             : "Optional case-insensitive keyword or phrase to match against message, tag, source, or event id.";
+
         return new Dictionary<string, ToolSchema>
         {
             ["query"] = ToolSchema.String(queryDescription, nullable: !includeRequiredQuery),
@@ -173,6 +174,7 @@ internal static class SessionInspectionToolSchemas
             },
             required: ["x", "y", "width", "height"],
             additionalProperties: false);
+
         return ToolSchema.Object(
             properties: new Dictionary<string, ToolSchema>
             {

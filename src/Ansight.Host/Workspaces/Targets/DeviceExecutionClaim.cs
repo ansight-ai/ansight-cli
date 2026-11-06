@@ -17,13 +17,22 @@ internal sealed class DeviceExecutionClaim : IDisposable
     {
         // Android inventory reports both an AVD name and a serial as it boots.
         var key = $"{device.Platform}:{(device.Platform == DevicePlatforms.Android ? device.Name : device.Identifier)}";
-        if (!claimedDevices.TryAdd(key, 0)) return null;
+
+        if (!claimedDevices.TryAdd(key, 0))
+        {
+            return null;
+        }
+
         return new DeviceExecutionClaim(key);
     }
 
     public void Dispose()
     {
         var released = Interlocked.Exchange(ref key, null);
-        if (released is not null) claimedDevices.TryRemove(released, out _);
+
+        if (released is not null)
+        {
+            claimedDevices.TryRemove(released, out _);
+        }
     }
 }

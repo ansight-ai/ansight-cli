@@ -2,13 +2,19 @@ using System.Diagnostics;
 
 namespace Ansight.Host.Workspaces.Execution;
 
-internal sealed class WorkspaceLaunchTiming(IProgress<WorkspaceTestRunProgress>? progress) : IProgress<WorkspaceTestRunProgress>
+internal sealed class WorkspaceLaunchTiming : IProgress<WorkspaceTestRunProgress>
 {
+    private readonly IProgress<WorkspaceTestRunProgress>? progress;
     private readonly List<SimulatorAgentStartupStep> steps = [];
     private readonly Stopwatch timer = new();
     private string? stage;
     private DateTimeOffset startedUtc;
     private bool completed;
+
+    public WorkspaceLaunchTiming(IProgress<WorkspaceTestRunProgress>? progress)
+    {
+        this.progress = progress;
+    }
 
     public void Report(WorkspaceTestRunProgress value)
     {
@@ -36,6 +42,7 @@ internal sealed class WorkspaceLaunchTiming(IProgress<WorkspaceTestRunProgress>?
                     "session.wait" => "Wait for app to connect to Ansight",
                     _ => null
                 };
+
                 if (name is not null)
                 {
                     FinishStage();
@@ -45,6 +52,7 @@ internal sealed class WorkspaceLaunchTiming(IProgress<WorkspaceTestRunProgress>?
                 }
             }
         }
+
         progress?.Report(value);
     }
 
@@ -52,12 +60,17 @@ internal sealed class WorkspaceLaunchTiming(IProgress<WorkspaceTestRunProgress>?
     {
         FinishStage(status);
         completed = true;
+
         return steps.ToArray();
     }
 
     private void FinishStage(string status = "succeeded")
     {
-        if (stage is null) return;
+        if (stage is null)
+        {
+            return;
+        }
+
         steps.Add(new(stage, startedUtc, timer.ElapsedMilliseconds, status));
         stage = null;
         timer.Reset();

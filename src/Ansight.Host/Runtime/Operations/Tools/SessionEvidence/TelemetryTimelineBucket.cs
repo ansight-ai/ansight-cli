@@ -14,16 +14,14 @@ internal sealed class TelemetryTimelineBucket
     }
 
     public int Index { get; }
-
     public DateTimeOffset StartUtc { get; }
-
     public DateTimeOffset EndUtc { get; }
-
     public int SampleCount { get; private set; }
 
     public void Add(SessionMetricSample sample)
     {
         SampleCount++;
+
         if (!statsByChannelId.TryGetValue(sample.ChannelId, out var stats))
         {
             stats = new TelemetryTimelineChannelStats(sample.ChannelId);

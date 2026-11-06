@@ -9,7 +9,11 @@ public sealed partial class RepositoryTaskTests
     [Fact]
     public void PermissionsTypeScriptContractAcceptsNativeApisAndRejectsOverrides()
     {
-        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null) return;
+        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null)
+        {
+            return;
+        }
+
         using var repository = CreateRepository("export const placeholder = true;");
         var path = Path.Combine(repository.RootPath, "permissions.ts");
         File.WriteAllText(path, """
@@ -94,9 +98,11 @@ public sealed partial class RepositoryTaskTests
             """;
         using var repository = CreateRepository(module);
         File.WriteAllText(Path.Combine(repository.RootPath, "ansight", "tasks", "ansight-task.js"), RepositoryModuleContractArtifacts.GetTaskRuntimeModule());
+
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         Assert.Empty(task.DeclaredHostTools);
         Assert.Empty(LocalTaskExtractionCoordinator.ValidateTaskApiSurface(module));
+
         var calls = new List<string>();
         var permissions = new List<string>();
         var executor = new JavaScriptRepositoryTaskExecutor("node", (name, arguments, _) =>
@@ -106,6 +112,7 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("enforced-session", arguments["sessionId"]!.GetValue<string>());
             Assert.Null(arguments["deviceId"]);
             Assert.Null(arguments["bundleIdentifier"]);
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["status"] = "granted" }, isError: false));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
         var result = await executor.ExecuteAsync(new RepositoryTaskExecutionRequest("run", task, "enforced-session", new JsonObject(), "permissions"), default);
@@ -126,20 +133,32 @@ public sealed partial class RepositoryTaskTests
             ["ios"] = "IosPermissionNames",
             ["android"] = "AndroidPermissionNames"
         };
+
         foreach (var entry in catalogInterfaces)
         {
             var declaration = Regex.Match(contract, $@"export interface {entry.Value} \{{(?<body>[\s\S]*?)\}}");
             Assert.True(declaration.Success);
+
             var catalog = new JsonObject();
+
             foreach (Match member in Regex.Matches(declaration.Groups["body"].Value, """readonly (?<name>\w+): "(?<value>[^"]+)";"""))
+            {
                 catalog[member.Groups["name"].Value] = member.Groups["value"].Value;
+            }
+
             Assert.NotEmpty(catalog);
             expected[entry.Key] = catalog;
+
             var named = new JsonObject();
+
             foreach (var member in catalog)
+            {
                 named[char.ToUpperInvariant(member.Key[0]) + member.Key[1..]] = member.Value!.DeepClone();
+            }
+
             expectedNamed[entry.Key] = named;
         }
+
         var module = $$"""
             import { Permission, IosPermission, AndroidPermission } from "../ansight-task.js";
             export const task = {
@@ -171,8 +190,10 @@ public sealed partial class RepositoryTaskTests
             """;
         using var repository = CreateRepository(module);
         File.WriteAllText(Path.Combine(repository.RootPath, "ansight", "tasks", "ansight-task.js"), RepositoryModuleContractArtifacts.GetTaskRuntimeModule());
+
         var task = Assert.Single(LoadRepository(repository.RootPath).Tasks);
         Assert.Empty(LocalTaskExtractionCoordinator.ValidateTaskApiSurface(module));
+
         var executor = new JavaScriptRepositoryTaskExecutor("node", (_, _, _) =>
             throw new InvalidOperationException("Reading permission constants must not call a host tool."),
             hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
@@ -184,15 +205,18 @@ public sealed partial class RepositoryTaskTests
     public void EveryPermissionConstantDocumentsAvailabilityMappingsAndPlatformLinks()
     {
         var contract = RepositoryModuleContractArtifacts.GetTaskTypeDefinitions();
+
         foreach (var declarationName in new[] { "interface AppPermissionNames", "interface IosPermissionNames", "interface AndroidPermissionNames", "const Permission:", "const IosPermission:", "const AndroidPermission:" })
         {
             var declaration = Regex.Match(contract, $@"export {Regex.Escape(declarationName)} \{{(?<body>[\s\S]*?)\}}");
             Assert.True(declaration.Success, declarationName);
+
             var body = declaration.Groups["body"].Value;
             var memberCount = Regex.Matches(body, @"readonly \w+:").Count;
             var documentedMembers = Regex.Matches(body, @"/\*\*(?<docs>[\s\S]*?)\*/\s*readonly \w+:");
             Assert.True(memberCount > 0, declarationName);
             Assert.Equal(memberCount, documentedMembers.Count);
+
             foreach (Match member in documentedMembers)
             {
                 var docs = member.Groups["docs"].Value;
@@ -204,5 +228,4 @@ public sealed partial class RepositoryTaskTests
             }
         }
     }
-
 }

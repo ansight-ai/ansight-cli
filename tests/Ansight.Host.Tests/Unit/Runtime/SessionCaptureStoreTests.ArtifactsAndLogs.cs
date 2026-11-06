@@ -33,6 +33,7 @@ public sealed partial class SessionCaptureStoreTests
 
         Assert.NotNull(firstFrame);
         Assert.Null(secondFrame);
+
         var firstImagePath = SessionImageArtifactPath.ResolveCapturedImagePath(
             sessionCapturesRootPath,
             "com.example.testapp",
@@ -100,6 +101,7 @@ public sealed partial class SessionCaptureStoreTests
 
         Assert.True(loadedSuccessfully);
         Assert.NotNull(loadedSnapshot);
+
         var loadedFrame = Assert.Single(loadedSnapshot!.Images);
         Assert.Equal(persistedFrame.FrameId, loadedFrame.FrameId);
     }
@@ -129,8 +131,7 @@ public sealed partial class SessionCaptureStoreTests
                     ChannelId = 1,
                     Name = "Native heap",
                     ColorHex = "#007AFF"
-                }
-            ],
+                }            ],
             Metrics =
             [
                 new SessionMetricSample
@@ -144,8 +145,7 @@ public sealed partial class SessionCaptureStoreTests
                     ChannelId = 1,
                     Value = 124,
                     CapturedAtUtc = createdUtc.AddSeconds(2)
-                }
-            ]
+                }            ]
         };
 
         store.Save(snapshot);

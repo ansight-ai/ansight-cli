@@ -36,6 +36,7 @@ public sealed partial class WorkspaceTestBatchRunner
                     analytics.RecordUsage("batch_test", outcome: "succeeded", count: result.PassedCount);
                     analytics.RecordUsage("batch_test", outcome: "failed", count: result.FailedCount);
                     analytics.RecordUsage("batch_test", outcome: "skipped", count: result.SkippedCount);
+
                     return result.WasCancelled ? "cancelled" : result.FailedCount > 0 ? "failed" : "succeeded";
                 });
 
@@ -45,16 +46,15 @@ public sealed partial class WorkspaceTestBatchRunner
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var catalog = WorkspaceTestCatalog.Load(request.WorkspacePath, cancellationToken);
-        var requestedIds = request.TestIds is { Count: > 0 }
-            ? request.TestIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
+        var requestedIds = request.TestIds is { Count: > 0 } ? request.TestIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
             : null;
         var tests = catalog.Tests
             .Where(static test => test.Enabled)
             .Where(test => requestedIds is null || requestedIds.Contains(test.TestId))
             .ToArray();
-        IReadOnlyList<WorkspaceTestTargetRequest?> batchTargets = request.Targets is { Count: > 0 }
-            ? request.Targets.Cast<WorkspaceTestTargetRequest?>().ToArray()
+        IReadOnlyList<WorkspaceTestTargetRequest?> batchTargets = request.Targets is { Count: > 0 } ? request.Targets.Cast<WorkspaceTestTargetRequest?>().ToArray()
             : [request.Target];
         var totalRunCount = request.Parallel
             ? tests.Length
@@ -80,7 +80,7 @@ public sealed partial class WorkspaceTestBatchRunner
             WorkspaceTestHistoryStatuses.Running,
             request.Parallel
                 ? $"Running {tests.Length:N0} workspace test(s) in parallel across "
-                  + $"{batchTargets.Count:N0} target(s)."
+                    + $"{batchTargets.Count:N0} target(s)."
                 : $"Running {tests.Length:N0} workspace test(s) across {batchTargets.Count:N0} target(s).",
             request.Parallel
                 ? tests.Select((test, testIndex) => WorkspaceTestBatchItemAudit.Pending(
@@ -101,6 +101,7 @@ public sealed partial class WorkspaceTestBatchRunner
         var resolvedTargets = batchTargets.ToArray();
         var auditGate = new object();
         var wasCancelled = false;
+
         try
         {
             if (request.Parallel)
@@ -124,6 +125,7 @@ public sealed partial class WorkspaceTestBatchRunner
             };
             batchAudit = CompleteBatchAudit(batchAudit, result, DateTimeOffset.UtcNow);
             historySave = batchAuditStore.Save(batchAudit);
+
             return result with
             {
                 HistoryFilePath = historySave.FilePath,
@@ -165,10 +167,11 @@ public sealed partial class WorkspaceTestBatchRunner
                     tests.Length,
                     test.TestId,
                     $"Starting workspace test {testIndex + 1} of {tests.Length}: {test.Name} on "
-                    + $"{batchTargets.Count:N0} target(s).")
+                        + $"{batchTargets.Count:N0} target(s).")
                 {
                     TargetCount = batchTargets.Count
                 });
+
                 var startBarrier = batchTargets.Count > 1
                     ? new WorkspaceTestRunStartBarrier(batchTargets.Count)
                     : null;
@@ -182,6 +185,7 @@ public sealed partial class WorkspaceTestBatchRunner
                 var testResults = await Task.WhenAll(targetRuns).ConfigureAwait(false);
                 results.AddRange(testResults);
                 wasCancelled |= testResults.Any(static result => result.WasCancelled);
+
                 for (var targetIndex = 0; targetIndex < testResults.Length; targetIndex++)
                 {
                     var testResult = testResults[targetIndex];
@@ -197,8 +201,14 @@ public sealed partial class WorkspaceTestBatchRunner
                             testResult,
                             requestedTarget));
                 }
+
                 historySave = batchAuditStore.Save(batchAudit);
-                if (wasCancelled) break;
+
+                if (wasCancelled)
+                {
+                    break;
+                }
+
                 if (testResults.Any(static result => !result.IsSuccess && !result.IsSkipped)
                     && !request.ContinueAfterTestFailure)
                 {
@@ -210,6 +220,7 @@ public sealed partial class WorkspaceTestBatchRunner
         async Task RunTestsInParallelAsync()
         {
             var workerCount = Math.Min(tests.Length, batchTargets.Count);
+
             if (workerCount == 0)
             {
                 return;
@@ -231,6 +242,7 @@ public sealed partial class WorkspaceTestBatchRunner
             async Task RunWorkerAsync(int workerIndex)
             {
                 var isFirstTest = true;
+
                 while (TryClaimTest(out var testIndex))
                 {
                     var test = tests[testIndex];
@@ -240,16 +252,18 @@ public sealed partial class WorkspaceTestBatchRunner
                         tests.Length,
                         test.TestId,
                         $"Starting workspace test {testIndex + 1} of {tests.Length}: {test.Name} on "
-                        + $"target {workerIndex + 1} of {workerCount}.")
+                            + $"target {workerIndex + 1} of {workerCount}.")
                     {
                         TargetIndex = workerIndex + 1,
                         TargetCount = workerCount,
                         DeviceIdentifier = requestedTarget?.DeviceIdentifier
                     });
+
                     var startParticipant = isFirstTest
                         ? startBarrier?.CreateParticipant()
                         : null;
                     isFirstTest = false;
+
                     var testResult = await RunTargetAsync(
                         test,
                         testIndex,
@@ -258,10 +272,16 @@ public sealed partial class WorkspaceTestBatchRunner
                         workerCount,
                         startParticipant).ConfigureAwait(false);
                     testResults[testIndex] = testResult;
+
                     if (testResult.WasCancelled)
                     {
-                        lock (scheduleGate) { wasCancelled = true; stopScheduling = true; }
+                        lock (scheduleGate)
+                        {
+                            wasCancelled = true;
+                            stopScheduling = true;
+                        }
                     }
+
                     resolvedTargets[workerIndex] = WorkspaceTestService.PinBatchTarget(
                         requestedTarget,
                         testResult.Target);
@@ -301,17 +321,20 @@ public sealed partial class WorkspaceTestBatchRunner
                     {
                         wasCancelled = true;
                         testIndex = -1;
+
                         return false;
                     }
 
                     if (stopScheduling || nextTestIndex >= tests.Length)
                     {
                         testIndex = -1;
+
                         return false;
                     }
 
                     testIndex = nextTestIndex;
                     nextTestIndex++;
+
                     return true;
                 }
             }
@@ -340,6 +363,7 @@ public sealed partial class WorkspaceTestBatchRunner
                         TargetCount = targetCount,
                         DeviceIdentifier = target?.DeviceIdentifier
                     }));
+
             try
             {
                 return await runTest(
@@ -378,23 +402,24 @@ public sealed partial class WorkspaceTestBatchRunner
         }
     }
 
-}
-
-public sealed partial class WorkspaceTestBatchRunner
-{
     private static WorkspaceTestBatchRunAudit ReplaceBatchItem(
         WorkspaceTestBatchRunAudit audit,
         WorkspaceTestBatchItemAudit item)
     {
         var tests = audit.Tests.ToArray();
         var itemIndex = item.Index - 1;
+
         if (itemIndex < 0 || itemIndex >= tests.Length)
         {
             throw new ArgumentOutOfRangeException(nameof(item), "Batch item index is outside the test collection.");
         }
 
         tests[itemIndex] = item;
-        return audit with { Tests = tests };
+
+        return audit with
+        {
+            Tests = tests
+        };
     }
 
     private static WorkspaceTestBatchRunAudit CompleteBatchAudit(
@@ -410,8 +435,9 @@ public sealed partial class WorkspaceTestBatchRunner
                     ? WorkspaceTestHistoryStatuses.Skipped
                     : WorkspaceTestHistoryStatuses.Succeeded;
         var message = $"Workspace tests complete: {result.PassedCount:N0} passed, "
-                      + $"{result.FailedCount:N0} failed, {result.SkippedCount:N0} skipped"
-                      + (result.WasCancelled ? ", cancelled." : ".");
+            + $"{result.FailedCount:N0} failed, {result.SkippedCount:N0} skipped"
+            + (result.WasCancelled ? ", cancelled." : ".");
+
         return audit with
         {
             CompletedUtc = completedUtc,
@@ -441,12 +467,10 @@ public sealed partial class WorkspaceTestBatchRunner
         IReadOnlyList<WorkspaceTestBatchItemAudit> tests,
         string message)
         => tests.Select(test => test.Status == WorkspaceTestHistoryStatuses.Pending
-                ? test with
-                {
-                    Status = WorkspaceTestHistoryStatuses.Skipped,
-                    Message = message
-                }
-                : test)
+            ? test with
+            {
+                Status = WorkspaceTestHistoryStatuses.Skipped,
+                Message = message
+            } : test)
             .ToArray();
-
 }

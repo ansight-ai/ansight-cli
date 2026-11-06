@@ -14,6 +14,7 @@ public sealed class DotNetTraceCaptureStoreTests
         var capturePath = store.CreateCaptureDirectory(captureId);
         var tracePath = Path.Combine(capturePath, "raw", "runtime.nettrace");
         await File.WriteAllBytesAsync(tracePath, [1, 2, 3, 4]);
+
         var artifact = await store.DescribeArtifactAsync(
             captureId,
             DotNetProfilingEngine.NetTraceArtifactKind,

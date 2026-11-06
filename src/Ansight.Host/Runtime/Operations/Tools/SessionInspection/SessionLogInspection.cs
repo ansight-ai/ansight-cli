@@ -62,6 +62,7 @@ internal static class SessionLogInspection
         JsonObject? arguments)
     {
         var query = NormalizeOptionalString(arguments?["query"]?.GetValue<string>());
+
         if (query is null)
         {
             return ToolError("query is required.");
@@ -95,10 +96,13 @@ internal static class SessionLogInspection
 
         var searchedSessionCount = 0;
         var matchedLogs = new List<SessionLogSearchMatch>();
+
         foreach (var resolvedSnapshot in sessionResolver.LoadResolvedSnapshots(candidateSessions))
         {
             searchedSessionCount++;
+
             var platformKey = SessionPlatformFilters.ResolveSessionPlatformKey(resolvedSnapshot);
+
             if (platformFilters.Count > 0 && !platformFilters.Contains(platformKey))
             {
                 continue;
@@ -106,6 +110,7 @@ internal static class SessionLogInspection
 
             var osName = SessionPlatformFilters.ResolveSessionOperatingSystem(resolvedSnapshot);
             var isLive = liveSessionIds.Contains(resolvedSnapshot.SessionId);
+
             foreach (var log in resolvedSnapshot.Logs)
             {
                 if (!PayloadJson.MatchesTimestamp(log.TimestampUtc, startUtc, endUtc)
@@ -163,9 +168,9 @@ internal static class SessionLogInspection
     public static bool MatchesLogQuery(LogEntry log, string query)
     {
         return log.Message.Contains(query, StringComparison.OrdinalIgnoreCase)
-               || (!string.IsNullOrWhiteSpace(log.Tag) && log.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
-               || (!string.IsNullOrWhiteSpace(log.Source) && log.Source.Contains(query, StringComparison.OrdinalIgnoreCase))
-               || (!string.IsNullOrWhiteSpace(log.EventId) && log.EventId.Contains(query, StringComparison.OrdinalIgnoreCase));
+            || (!string.IsNullOrWhiteSpace(log.Tag) && log.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(log.Source) && log.Source.Contains(query, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(log.EventId) && log.EventId.Contains(query, StringComparison.OrdinalIgnoreCase));
     }
 
     private static JsonObject BuildLogPayload(LogEntry log)

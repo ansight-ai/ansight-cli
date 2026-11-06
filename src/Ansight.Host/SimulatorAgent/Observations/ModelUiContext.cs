@@ -22,12 +22,14 @@ internal sealed class ModelUiContext
         var result = observation.DeepClone().AsObject();
         UiNodeProjection.CompactBoundsInPlace(result);
         Compact(result);
+
         return result;
     }
 
     public bool TryResolveSelectors(JsonNode arguments, out string? error)
     {
         error = null;
+
         if (arguments is JsonObject value)
         {
             if (ReadString(value["nodeId"]) is { } nodeId && IsAlias(nodeId))
@@ -35,22 +37,32 @@ internal sealed class ModelUiContext
                 if (!idsByAlias.TryGetValue(nodeId, out var runtimeId))
                 {
                     error = $"Node ID '{nodeId}' is unknown or expired. Use a fresh observation or an exact automation ID.";
+
                     return false;
                 }
+
                 value["nodeId"] = runtimeId;
             }
+
             foreach (var child in value.Select(entry => entry.Value).OfType<JsonNode>())
             {
-                if (!TryResolveSelectors(child, out error)) return false;
+                if (!TryResolveSelectors(child, out error))
+                {
+                    return false;
+                }
             }
         }
         else if (arguments is JsonArray array)
         {
             foreach (var child in array.OfType<JsonNode>())
             {
-                if (!TryResolveSelectors(child, out error)) return false;
+                if (!TryResolveSelectors(child, out error))
+                {
+                    return false;
+                }
             }
         }
+
         return true;
     }
 
@@ -58,10 +70,18 @@ internal sealed class ModelUiContext
     {
         if (node is JsonArray array)
         {
-            foreach (var child in array.OfType<JsonNode>()) Compact(child);
+            foreach (var child in array.OfType<JsonNode>())
+            {
+                Compact(child);
+            }
+
             return;
         }
-        if (node is not JsonObject value) return;
+
+        if (node is not JsonObject value)
+        {
+            return;
+        }
 
         foreach (var entry in value.ToArray())
         {
@@ -74,6 +94,7 @@ internal sealed class ModelUiContext
                     aliasesById[id] = alias;
                     idsByAlias[alias] = id;
                 }
+
                 value[entry.Key] = alias;
             }
             else if (entry.Value is { } child)

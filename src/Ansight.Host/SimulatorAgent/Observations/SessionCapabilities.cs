@@ -8,7 +8,6 @@ internal sealed record SessionCapabilities(
     IReadOnlyList<string> NavigationFrameworks)
 {
     public bool IsDeviceOnly { get; init; }
-
     public IReadOnlyList<string> GuidanceFrameworks
     {
         get
@@ -19,6 +18,7 @@ internal sealed record SessionCapabilities(
             }
 
             var frameworks = new SortedSet<string>(StringComparer.Ordinal);
+
             foreach (var framework in NavigationFrameworks)
             {
                 if (NavigationControllerCatalog.ResolveFramework(framework) is { } controller)
@@ -47,7 +47,6 @@ internal sealed record SessionCapabilities(
             return frameworks.ToArray();
         }
     }
-
     private static readonly IReadOnlyList<string> supportedVisualTreeToolIds =
     [
         VisualTreeContract.MauiToolId,
@@ -78,14 +77,16 @@ internal sealed record SessionCapabilities(
         // MAUI custom sheets can live outside its logical page tree. Start with the
         // published native hierarchy so those windows and their controls are included.
         var preferredToolId = VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
-                              && VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal)
+            && VisualTreeToolIds.Contains(VisualTreeContract.NativeToolId, StringComparer.Ordinal)
             ? VisualTreeContract.NativeToolId
             : VisualTreeToolIds.FirstOrDefault();
+
         // With no published provider, retain the normal device-accessibility fallback.
         if (preferredToolId is { } toolId)
         {
             arguments["toolId"] = toolId;
         }
+
         return arguments;
     }
 
@@ -125,22 +126,26 @@ internal sealed record SessionCapabilities(
         get
         {
             var technologies = new List<string>();
+
             if (VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
                 || NavigationFrameworks.Contains("maui", StringComparer.Ordinal))
             {
                 technologies.Add(".NET MAUI");
             }
+
             if (VisualTreeToolIds.Contains(VisualTreeContract.ReactShadowToolId, StringComparer.Ordinal)
                 || VisualTreeToolIds.Contains(VisualTreeContract.ReactComponentToolId, StringComparer.Ordinal)
                 || NavigationFrameworks.Contains("react-native", StringComparer.Ordinal))
             {
                 technologies.Add("React Native");
             }
+
             if (VisualTreeToolIds.Contains(VisualTreeContract.FlutterToolId, StringComparer.Ordinal)
                 || NavigationFrameworks.Contains("flutter", StringComparer.Ordinal))
             {
                 technologies.Add("Flutter");
             }
+
             if (VisualTreeToolIds.Contains(VisualTreeContract.DomToolId, StringComparer.Ordinal))
             {
                 technologies.Add("DOM");
@@ -149,12 +154,12 @@ internal sealed record SessionCapabilities(
             return technologies;
         }
     }
-
     public string ProfileDescription
     {
         get
         {
             var technologies = TechnologyDisplayNames;
+
             return technologies.Count == 0
                 ? PlatformDisplayName
                 : $"{PlatformDisplayName} with {string.Join(" and ", technologies)}";
@@ -164,6 +169,7 @@ internal sealed record SessionCapabilities(
     private static HashSet<string> ReadPublishedExecutableToolIds(JsonObject? catalog)
     {
         var results = new HashSet<string>(StringComparer.Ordinal);
+
         if (catalog?["tools"] is not JsonArray tools)
         {
             return results;
@@ -173,8 +179,9 @@ internal sealed record SessionCapabilities(
         {
             var toolId = ReadString(tool, "id") ?? ReadString(tool, "name");
             var executable = tool["executable"] is not JsonValue executableValue
-                             || !executableValue.TryGetValue<bool>(out var parsedExecutable)
-                             || parsedExecutable;
+                || !executableValue.TryGetValue<bool>(out var parsedExecutable)
+                || parsedExecutable;
+
             if (toolId is not null
                 && executable
                 && tool["denial"] is null)
@@ -212,6 +219,7 @@ internal sealed record SessionCapabilities(
     {
         var claimedToolIds = new HashSet<string>(StringComparer.Ordinal);
         var frameworks = new List<string>();
+
         foreach (var controller in NavigationControllerCatalog.All)
         {
             if (!IsFrameworkCompatibleWithPlatform(controller.Framework, runtimePlatform))
@@ -221,7 +229,8 @@ internal sealed record SessionCapabilities(
 
             var toolId = controller.NavigationToolIds.FirstOrDefault(candidate =>
                 publishedToolIds.Contains(candidate)
-                && !claimedToolIds.Contains(candidate));
+                    && !claimedToolIds.Contains(candidate));
+
             if (toolId is null)
             {
                 continue;
@@ -236,8 +245,8 @@ internal sealed record SessionCapabilities(
 
     private static string? ReadString(JsonObject value, string propertyName)
         => value[propertyName] is JsonValue jsonValue
-           && jsonValue.TryGetValue<string>(out var text)
-           && !string.IsNullOrWhiteSpace(text)
+            && jsonValue.TryGetValue<string>(out var text)
+            && !string.IsNullOrWhiteSpace(text)
             ? text.Trim()
             : null;
 }

@@ -11,6 +11,7 @@ internal static class ToolResultSummary
         if (payload["message"] is JsonValue messageValue)
         {
             var message = messageValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(message))
             {
                 summaryParts.Add(message.Trim());
@@ -20,6 +21,7 @@ internal static class ToolResultSummary
         if (payload["toolId"] is JsonValue toolIdValue)
         {
             var toolId = toolIdValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(toolId))
             {
                 summaryParts.Add($"toolId={toolId.Trim()}");
@@ -29,6 +31,7 @@ internal static class ToolResultSummary
         if (payload["configId"] is JsonValue configIdValue)
         {
             var configId = configIdValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(configId))
             {
                 summaryParts.Add($"configId={configId.Trim()}");
@@ -38,6 +41,7 @@ internal static class ToolResultSummary
         if (payload["sessionId"] is JsonValue sessionIdValue)
         {
             var sessionId = sessionIdValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(sessionId))
             {
                 summaryParts.Add($"sessionId={sessionId.Trim()}");
@@ -47,6 +51,7 @@ internal static class ToolResultSummary
         if (payload["appId"] is JsonValue appIdValue)
         {
             var appId = appIdValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(appId))
             {
                 summaryParts.Add($"appId={appId.Trim()}");
@@ -56,6 +61,7 @@ internal static class ToolResultSummary
         if (payload["responseType"] is JsonValue responseTypeValue)
         {
             var responseType = responseTypeValue.GetValue<string>();
+
             if (!string.IsNullOrWhiteSpace(responseType))
             {
                 summaryParts.Add($"responseType={responseType.Trim()}");
@@ -123,6 +129,7 @@ internal static class ToolResultSummary
         }
 
         var prefix = isError ? "Tool call failed" : "Tool call succeeded";
+
         return $"{prefix}. {string.Join(" | ", summaryParts.Where(part => !string.IsNullOrWhiteSpace(part)))}";
     }
 

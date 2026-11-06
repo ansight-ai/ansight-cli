@@ -35,6 +35,7 @@ internal sealed partial class WebSocketSessionManager
                 "Session ID is required.",
                 requestContext,
                 durationMs: 0);
+
             return AppToolBridgeResponse.FromFailure("Session ID is required.");
         }
 
@@ -50,6 +51,7 @@ internal sealed partial class WebSocketSessionManager
                 message,
                 requestContext,
                 durationMs: 0);
+
             return AppToolBridgeResponse.FromFailure(message);
         }
 
@@ -57,6 +59,7 @@ internal sealed partial class WebSocketSessionManager
         string? authorizationError;
         bool isAuthorized;
         var requiresCatalogQuery = false;
+
         if (string.Equals(envelope.Type, ToolProtocolMessageTypes.QueryType, StringComparison.Ordinal))
         {
             isAuthorized = connection.CanQueryTools(out authorizationError);
@@ -81,6 +84,7 @@ internal sealed partial class WebSocketSessionManager
             isAuthorized = false;
             authorizationError = "Tool ID is required.";
         }
+
         if (!isAuthorized)
         {
             var message = authorizationError ?? "The authenticated client grant denied this tool operation.";
@@ -91,10 +95,12 @@ internal sealed partial class WebSocketSessionManager
                 message,
                 requestContext,
                 durationMs: 0);
+
             return AppToolBridgeResponse.FromFailure(message, requiresCatalogQuery);
         }
 
         LogToolBridgeRequest(normalizedSessionId, envelope, serializedRequest, requestContext);
+
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         ToolProtocolEnvelope? receivedResponse = null;
 
@@ -103,6 +109,7 @@ internal sealed partial class WebSocketSessionManager
             var responseReceipt = await connection.SendRequestAsync(envelope, cancellationToken).ConfigureAwait(false);
             var response = responseReceipt.Envelope;
             receivedResponse = response;
+
             var appResponseDurationMs = stopwatch.ElapsedMilliseconds;
             var binaryTransferMetrics = await AwaitBinaryToolArtifactTransferIfNeededAsync(normalizedSessionId, response, cancellationToken).ConfigureAwait(false);
             CaptureDiagnosticAppToolResult(normalizedSessionId, toolId, response);
@@ -118,6 +125,7 @@ internal sealed partial class WebSocketSessionManager
                 responseReceipt,
                 binaryTransferMetrics,
                 requestContext);
+
             return AppToolBridgeResponse.FromSuccess(
                 $"Received {response.Type} from app session '{normalizedSessionId}'.",
                 response,
@@ -127,18 +135,21 @@ internal sealed partial class WebSocketSessionManager
         {
             stopwatch.Stop();
             LogToolBridgeFailure(normalizedSessionId, envelope, serializedRequest, ex.Message, requestContext, stopwatch.ElapsedMilliseconds);
+
             return AppToolBridgeResponse.FromFailure(ex.Message);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             stopwatch.Stop();
             LogToolBridgeFailure(normalizedSessionId, envelope, serializedRequest, "The tool request was cancelled.", requestContext, stopwatch.ElapsedMilliseconds);
+
             return AppToolBridgeResponse.FromFailure("The tool request was cancelled.");
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
             LogToolBridgeFailure(normalizedSessionId, envelope, serializedRequest, ex.Message, requestContext, stopwatch.ElapsedMilliseconds);
+
             return AppToolBridgeResponse.FromFailure($"Failed to proxy tool request to app session '{normalizedSessionId}': {ex.Message}");
         }
         finally
@@ -157,6 +168,7 @@ internal sealed partial class WebSocketSessionManager
         ToolProtocolEnvelope response)
     {
         AppToolDiagnosticArtifactCaptureResult capture;
+
         try
         {
             capture = AppToolDiagnosticArtifactCapture.CaptureIfSupported(
@@ -168,6 +180,7 @@ internal sealed partial class WebSocketSessionManager
         catch (Exception exception)
         {
             log.Info($"app_tool_diagnostic_artifact_failed sessionId={sessionId} toolId={toolId} message={FormatLogValue(exception.Message)}");
+
             return;
         }
 
@@ -179,6 +192,7 @@ internal sealed partial class WebSocketSessionManager
         if (capture.IsCaptured)
         {
             log.Info($"app_tool_diagnostic_artifact_saved sessionId={sessionId} toolId={toolId} snapshotId={capture.SnapshotId}");
+
             return;
         }
 
@@ -194,6 +208,7 @@ internal sealed partial class WebSocketSessionManager
         CancellationToken cancellationToken)
     {
         var registrations = binaryToolArtifactTransfers.TryGetCompletions(sessionId, response);
+
         if (registrations.Count == 0)
         {
             return null;
@@ -202,6 +217,7 @@ internal sealed partial class WebSocketSessionManager
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var totalSizeBytes = 0L;
         string? lastSnapshotId = null;
+
         try
         {
             foreach (var registration in registrations)
@@ -211,10 +227,12 @@ internal sealed partial class WebSocketSessionManager
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     timeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
                     await registration.Completion.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+
                     var sizeBytes = File.Exists(registration.ArtifactPath)
                         ? new FileInfo(registration.ArtifactPath).Length
                         : 0;
                     totalSizeBytes += sizeBytes;
+
                     if (registration.CaptureSessionArtifactSnapshot)
                     {
                         lastSnapshotId = CaptureCompletedBinaryToolArtifact(sessionId, registration, sizeBytes);
@@ -235,9 +253,12 @@ internal sealed partial class WebSocketSessionManager
             {
                 binaryToolArtifactTransfers.FailTransfer(sessionId, registration.TransferId, exception);
             }
+
             throw;
         }
+
         stopwatch.Stop();
+
         return new BinaryToolArtifactTransferMetrics(
             string.Join(",", registrations.Select(static registration => registration.TransferId)),
             stopwatch.ElapsedMilliseconds,
@@ -253,6 +274,7 @@ internal sealed partial class WebSocketSessionManager
         if (!File.Exists(registration.ArtifactPath))
         {
             log.Info($"session_artifact_capture_skipped sessionId={sessionId} transferId={registration.TransferId} reason=missing_payload path={registration.ArtifactPath}");
+
             return null;
         }
 
@@ -308,18 +330,22 @@ internal sealed partial class WebSocketSessionManager
             };
 
             var result = runtimeState.AddSessionArtifactSnapshot(sessionId, snapshot, sourceDirectoryPath);
+
             if (!result.IsSuccess)
             {
                 log.Info($"session_artifact_capture_failed sessionId={sessionId} transferId={registration.TransferId} snapshotId={snapshotId} message={FormatLogValue(result.Message)}");
+
                 return null;
             }
 
             log.Info($"session_artifact_capture_saved sessionId={sessionId} transferId={registration.TransferId} snapshotId={snapshotId} providerId={registration.ProviderId ?? string.Empty} artifactId={registration.ArtifactId ?? string.Empty} byteCount={sizeBytes}");
+
             return snapshotId;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             log.Info($"session_artifact_capture_failed sessionId={sessionId} transferId={registration.TransferId} snapshotId={snapshotId} message={FormatLogValue(ex.Message)}");
+
             return null;
         }
         finally
@@ -336,12 +362,14 @@ internal sealed partial class WebSocketSessionManager
             $"{registration.TransferId}.bin");
         var invalidCharacters = Path.GetInvalidFileNameChars();
         var builder = new StringBuilder(fileName.Length);
+
         foreach (var character in fileName)
         {
             builder.Append(invalidCharacters.Contains(character) ? '_' : character);
         }
 
         var sanitized = builder.ToString().Trim();
+
         return string.IsNullOrWhiteSpace(sanitized)
             ? $"{registration.TransferId}.bin"
             : sanitized;
@@ -350,6 +378,7 @@ internal sealed partial class WebSocketSessionManager
     private static string BuildArtifactSnapshotDirectoryName(DateTimeOffset capturedAtUtc, string snapshotId)
     {
         var timestamp = capturedAtUtc.ToUniversalTime().ToString("yyyy-MM-dd'T'HH-mm-ss.fffffff'Z'", CultureInfo.InvariantCulture);
+
         return $"{timestamp}-{snapshotId}";
     }
 
@@ -545,6 +574,7 @@ internal sealed partial class WebSocketSessionManager
     private string ResolveSessionStatus(string sessionId, string fallbackStatus)
     {
         var sessionContext = ResolveSessionContext(sessionId);
+
         return string.IsNullOrWhiteSpace(sessionContext.Status)
             ? fallbackStatus
             : sessionContext.Status;
@@ -553,6 +583,7 @@ internal sealed partial class WebSocketSessionManager
     private bool TryHandleToolBridgeResponse(string sessionId, string payload)
     {
         ToolProtocolEnvelope? envelope;
+
         try
         {
             envelope = JsonSerializer.Deserialize<ToolProtocolEnvelope>(payload, JsonUtil.Compact);
@@ -575,9 +606,11 @@ internal sealed partial class WebSocketSessionManager
 
         var encodedOriginalByteCount = ReadInteger(envelope.Payload?["originalByteCount"]);
         var encodedCompressedByteCount = ReadInteger(envelope.Payload?["compressedByteCount"]);
+
         if (!ToolProtocolPayloadEncoding.TryDecode(envelope.Payload, out var decodedPayload, out var decodeError))
         {
             LogUnmatchedToolBridgeResponse(sessionId, envelope, payload, decodeError);
+
             return true;
         }
 
@@ -600,6 +633,7 @@ internal sealed partial class WebSocketSessionManager
         if (connection is null)
         {
             LogUnmatchedToolBridgeResponse(sessionId, envelope, payload, "session_bridge_closed");
+
             return true;
         }
 
@@ -607,17 +641,18 @@ internal sealed partial class WebSocketSessionManager
         _ = binaryToolArtifactTransfers.TryRegisterAll(sessionId, sessionContext.AppId, envelope);
 
         if (connection.TryCompleteResponse(
-                envelope,
-                GetPayloadCharacterCount(payload),
-                GetPayloadByteCount(payload),
-                encodedOriginalByteCount,
-                encodedCompressedByteCount))
+            envelope,
+            GetPayloadCharacterCount(payload),
+            GetPayloadByteCount(payload),
+            encodedOriginalByteCount,
+            encodedCompressedByteCount))
         {
             return true;
         }
 
         binaryToolArtifactTransfers.CancelResponse(sessionId, envelope, "The tool response no longer has a waiting request.");
         LogUnmatchedToolBridgeResponse(sessionId, envelope, payload, "unmatched_reply_to");
+
         return true;
     }
 
@@ -628,6 +663,7 @@ internal sealed partial class WebSocketSessionManager
         AppToolBridgeRequestContext? requestContext)
     {
         var sessionContext = ResolveSessionContext(sessionId);
+
         if (IsHostOperationLogCaptureEnabled)
         {
             log.Info($"tool_bridge_request_sent source={requestContext?.Source ?? "unknown"} operation={requestContext?.Operation} correlationId={requestContext?.CorrelationId} sessionId={sessionId} appId={sessionContext.AppId} clientName={sessionContext.ClientName} requestId={envelope.Id} requestType={envelope.Type} capability={envelope.Capability} toolId={TryReadToolId(envelope)} requestBodyChars={GetPayloadCharacterCount(requestBody)}");
@@ -663,7 +699,8 @@ internal sealed partial class WebSocketSessionManager
         var encodedSavedByteCount = Math.Max(
             0,
             (responseReceipt.EncodedOriginalByteCount ?? 0)
-            - (responseReceipt.EncodedCompressedByteCount ?? 0));
+                - (responseReceipt.EncodedCompressedByteCount ?? 0));
+
         if (IsHostOperationLogCaptureEnabled)
         {
             log.Info($"tool_bridge_response_received source={requestContext?.Source ?? "unknown"} operation={requestContext?.Operation} correlationId={requestContext?.CorrelationId} sessionId={sessionId} appId={sessionContext.AppId} clientName={sessionContext.ClientName} requestId={requestEnvelope.Id} replyTo={responseEnvelope.ReplyTo} requestType={requestEnvelope.Type} responseType={responseEnvelope.Type} toolId={TryReadToolId(requestEnvelope)} isSuccess={isSuccess} durationMs={durationMs} requestBodyChars={requestBodyChars} responseBodyChars={responseBodyChars}");
@@ -694,6 +731,7 @@ internal sealed partial class WebSocketSessionManager
         var sessionContext = ResolveSessionContext(sessionId);
         var requestBodyChars = GetPayloadCharacterCount(requestBody);
         var requestBodyBytes = GetPayloadByteCount(requestBody);
+
         if (IsHostOperationLogCaptureEnabled)
         {
             log.Info($"tool_bridge_request_failed source={requestContext?.Source ?? "unknown"} operation={requestContext?.Operation} correlationId={requestContext?.CorrelationId} sessionId={sessionId} appId={sessionContext.AppId} clientName={sessionContext.ClientName} requestId={envelope.Id} requestType={envelope.Type} toolId={TryReadToolId(envelope)} durationMs={durationMs} message={message} requestBodyChars={requestBodyChars}");
@@ -719,6 +757,7 @@ internal sealed partial class WebSocketSessionManager
         string reason)
     {
         var sessionContext = ResolveSessionContext(sessionId);
+
         if (IsHostOperationLogCaptureEnabled)
         {
             log.Info($"tool_bridge_response_unmatched sessionId={sessionId} appId={sessionContext.AppId} clientName={sessionContext.ClientName} replyTo={envelope.ReplyTo} responseType={envelope.Type} toolId={TryReadToolId(envelope)} reason={reason} responseBodyChars={GetPayloadCharacterCount(responseBody)}");
@@ -781,29 +820,34 @@ internal sealed partial class WebSocketSessionManager
         out bool requiresCatalogQuery)
     {
         requiresCatalogQuery = false;
+
         if (envelope.Payload is not JsonObject payload
             || payload["calls"] is not JsonArray calls
             || calls.Count is < 1 or > 32)
         {
             error = "A tool batch must contain between 1 and 32 calls.";
+
             return false;
         }
 
         foreach (var call in calls.OfType<JsonObject>())
         {
             var batchToolId = call["toolId"]?.GetValue<string>();
+
             if (string.IsNullOrWhiteSpace(batchToolId))
             {
                 error = "Every batched call requires a tool ID.";
+
                 return false;
             }
 
             if (!connection.CanCallTool(
-                    batchToolId,
-                    out error,
-                    out var callRequiresCatalogQuery))
+                batchToolId,
+                out error,
+                out var callRequiresCatalogQuery))
             {
                 requiresCatalogQuery = callRequiresCatalogQuery;
+
                 return false;
             }
         }
@@ -811,18 +855,20 @@ internal sealed partial class WebSocketSessionManager
         if (calls.OfType<JsonObject>().Count() != calls.Count)
         {
             error = "Every batched call must be a JSON object.";
+
             return false;
         }
 
         error = null;
+
         return true;
     }
 
     private static long? TryReadToolResultInt64(ToolProtocolEnvelope envelope, string propertyName)
     {
         if (envelope.Payload is not JsonObject payloadObject ||
-            payloadObject["result"] is not JsonObject resultObject ||
-            resultObject[propertyName] is not JsonValue value)
+                payloadObject["result"] is not JsonObject resultObject ||
+                resultObject[propertyName] is not JsonValue value)
         {
             return null;
         }
@@ -851,6 +897,7 @@ internal sealed partial class WebSocketSessionManager
     {
         var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         var completedTask = await Task.WhenAny(startedTask, timeoutTask);
+
         if (completedTask != startedTask)
         {
             throw new TimeoutException("Timed out waiting for WebSocket session startup.");

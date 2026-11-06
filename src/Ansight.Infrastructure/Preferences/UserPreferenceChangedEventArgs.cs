@@ -10,8 +10,6 @@ public sealed class UserPreferenceChangedEventArgs : EventArgs
     }
 
     public string Key { get; }
-
     public object? PreviousValue { get; }
-
     public object? CurrentValue { get; }
 }

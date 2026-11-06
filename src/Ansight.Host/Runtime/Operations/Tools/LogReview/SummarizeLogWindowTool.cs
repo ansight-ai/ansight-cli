@@ -30,6 +30,7 @@ internal sealed class SummarizeLogWindowTool : Operation
     {
         var properties = SessionInspectionToolSchemas.LogReviewFilterProperties(includeRequiredQuery: false);
         properties["topCount"] = ToolSchema.Integer(topCountDescription, nullable: true);
+
         return properties;
     }
 }

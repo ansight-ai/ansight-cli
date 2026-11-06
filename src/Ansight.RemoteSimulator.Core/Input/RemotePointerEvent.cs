@@ -27,6 +27,7 @@ public sealed record RemotePointerEvent(
         }
 
         var normalizedPhase = Phase.Trim().ToLowerInvariant();
+
         if (normalizedPhase is not ("down" or "move" or "up" or "cancel" or "scroll"))
         {
             throw new ArgumentException("Pointer phase must be down, move, up, cancel, or scroll.", nameof(Phase));
@@ -43,6 +44,7 @@ public sealed record RemotePointerEvent(
         var normalizedMouseButton = string.IsNullOrWhiteSpace(MouseButton)
             ? (normalizedPhase is "down" or "up" or "cancel" ? "left" : "none")
             : MouseButton.Trim().ToLowerInvariant();
+
         if (normalizedMouseButton is not ("none" or "left" or "right" or "middle"))
         {
             throw new ArgumentException("Mouse button must be none, left, right, or middle.", nameof(MouseButton));

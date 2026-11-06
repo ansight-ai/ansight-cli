@@ -11,6 +11,7 @@ public sealed class NativeProfileCaptureAdapterTests
         using var environment = new TestEnvironment();
         var capturePath = Path.Combine(environment.RootPath, "process-sample-capture");
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
+
         var runner = new SampleProcessRunner();
         var adapter = new ProcessSampleCaptureAdapter(runner, "/fake/sample");
 
@@ -20,13 +21,16 @@ public sealed class NativeProfileCaptureAdapterTests
                 1234,
                 TimeSpan.FromSeconds(3),
                 1,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None);
 
         var request = Assert.Single(runner.Requests);
         Assert.Equal("/fake/sample", request.FileName);
         Assert.Equal(["1234", "3", "1", "-file", Path.Combine(capturePath, "raw", "sample.txt")], request.Arguments);
         Assert.Equal(TimeSpan.FromSeconds(18), request.Timeout);
+
         var artifact = Assert.Single(result.Artifacts);
         Assert.Equal(ProcessSampleCaptureAdapter.ArtifactKind, artifact.Kind);
         Assert.True(artifact.Authoritative);
@@ -40,6 +44,7 @@ public sealed class NativeProfileCaptureAdapterTests
         var capturePath = Path.Combine(environment.RootPath, "instruments-capture");
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
+
         var runner = new InstrumentsProcessRunner();
         var adapter = new InstrumentsProfileCaptureAdapter(runner);
 
@@ -54,14 +59,16 @@ public sealed class NativeProfileCaptureAdapterTests
                 NativeProfilePresets.Cpu,
                 TimeSpan.FromSeconds(5),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None);
 
         Assert.Equal(2, result.Artifacts.Count);
         Assert.Contains(result.Artifacts, artifact => artifact.Kind
-                                                     == InstrumentsProfileCaptureAdapter.TraceArtifactKind
-                                                     && artifact.IsDirectory
-                                                     && artifact.Authoritative);
+            == InstrumentsProfileCaptureAdapter.TraceArtifactKind
+            && artifact.IsDirectory
+            && artifact.Authoritative);
         Assert.Equal(2, runner.Requests.Count);
         Assert.Equal("/Applications/Xcode.app/usr/bin/xctrace", runner.Requests[0].FileName);
         Assert.Equal("record", runner.Requests[0].Arguments[0]);
@@ -81,6 +88,7 @@ public sealed class NativeProfileCaptureAdapterTests
         var capturePath = Path.Combine(environment.RootPath, $"instruments-{preset}-capture");
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
+
         var runner = new InstrumentsProcessRunner();
         var adapter = new InstrumentsProfileCaptureAdapter(runner);
 
@@ -95,7 +103,9 @@ public sealed class NativeProfileCaptureAdapterTests
                 preset,
                 TimeSpan.FromSeconds(5),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None);
 
         Assert.Contains(template, runner.Requests[0].Arguments);
@@ -108,6 +118,7 @@ public sealed class NativeProfileCaptureAdapterTests
         var capturePath = Path.Combine(environment.RootPath, "timed-out-instruments-capture");
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
+
         var adapter = new InstrumentsProfileCaptureAdapter(new TimedOutProcessRunner());
 
         var exception = await Assert.ThrowsAsync<TimeoutException>(() => adapter.CaptureAsync(
@@ -121,7 +132,9 @@ public sealed class NativeProfileCaptureAdapterTests
                 NativeProfilePresets.Launch,
                 TimeSpan.FromSeconds(1),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None));
 
         Assert.Contains("timed out", exception.Message, StringComparison.OrdinalIgnoreCase);
@@ -135,6 +148,7 @@ public sealed class NativeProfileCaptureAdapterTests
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
         Directory.CreateDirectory(Path.Combine(capturePath, "diagnostics"));
+
         var runner = new PerfettoProcessRunner();
         var launcher = new RecordingAndroidProfileLauncher(
             () => runner.Requests.Any(request => request.Arguments.Contains("perfetto")));
@@ -151,19 +165,23 @@ public sealed class NativeProfileCaptureAdapterTests
                 NativeProfilePresets.Launch,
                 TimeSpan.FromSeconds(2),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None);
 
         Assert.True(launcher.WasLaunched);
         Assert.True(launcher.PerfettoHadStartedAtLaunch);
         Assert.Equal("emulator-5554", launcher.DeviceId);
         Assert.Contains(result.Artifacts, artifact => artifact.Kind
-                                                     == PerfettoProfileCaptureAdapter.TraceArtifactKind
-                                                     && artifact.Authoritative);
+            == PerfettoProfileCaptureAdapter.TraceArtifactKind
+            && artifact.Authoritative);
+
         var config = await File.ReadAllTextAsync(
             Path.Combine(capturePath, "diagnostics", "perfetto-config.pbtxt"));
         Assert.Contains("com.example.app", config, StringComparison.Ordinal);
         Assert.Contains("sched/sched_switch", config, StringComparison.Ordinal);
+
         var perfettoRequest = Assert.Single(
             runner.Requests,
             request => request.Arguments.Contains("perfetto"));
@@ -188,6 +206,7 @@ public sealed class NativeProfileCaptureAdapterTests
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
         Directory.CreateDirectory(Path.Combine(capturePath, "diagnostics"));
+
         var runner = new PerfettoProcessRunner();
         var launcher = new RecordingAndroidProfileLauncher(
             () => runner.Requests.Any(request => request.Arguments.Contains("perfetto")));
@@ -204,7 +223,9 @@ public sealed class NativeProfileCaptureAdapterTests
                 preset,
                 TimeSpan.FromSeconds(2),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None);
 
         var config = await File.ReadAllTextAsync(
@@ -213,6 +234,7 @@ public sealed class NativeProfileCaptureAdapterTests
         Assert.Contains(configMarker, config, StringComparison.Ordinal);
         Assert.Equal(!launchBeforeCapture, launcher.PerfettoHadStartedAtLaunch);
         Assert.Contains(result.Artifacts, artifact => artifact.Authoritative);
+
         if (preset is NativeProfilePresets.NativeHeap or NativeProfilePresets.ManagedHeap)
         {
             Assert.Contains(result.Warnings, warning => warning.Contains(
@@ -234,6 +256,7 @@ public sealed class NativeProfileCaptureAdapterTests
         Directory.CreateDirectory(Path.Combine(capturePath, "raw"));
         Directory.CreateDirectory(Path.Combine(capturePath, "derived"));
         Directory.CreateDirectory(Path.Combine(capturePath, "diagnostics"));
+
         var adapter = new PerfettoProfileCaptureAdapter(
             new PerfettoProcessRunner(apiLevel),
             new RecordingAndroidProfileLauncher(),
@@ -250,7 +273,9 @@ public sealed class NativeProfileCaptureAdapterTests
                 preset,
                 TimeSpan.FromSeconds(2),
                 null!,
-                _ => { }),
+                _ =>
+                {
+                }),
             CancellationToken.None));
 
         Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
@@ -266,6 +291,7 @@ public sealed class NativeProfileCaptureAdapterTests
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
+
             if (request.Arguments.Contains("record"))
             {
                 var outputPath = ReadOption(request.Arguments, "--output");
@@ -295,6 +321,7 @@ public sealed class NativeProfileCaptureAdapterTests
                 ReadOption(request.Arguments, "-file"),
                 "Call graph:\n    1 Thread_1\n",
                 cancellationToken);
+
             return new NativeProfilingProcessResult(0, string.Empty, string.Empty, false);
         }
     }
@@ -305,7 +332,7 @@ public sealed class NativeProfileCaptureAdapterTests
             NativeProfilingProcessRequest request,
             Action<string>? outputReceived,
             CancellationToken cancellationToken)
-            => Task.FromResult(new NativeProfilingProcessResult(-1, string.Empty, string.Empty, true));
+                => Task.FromResult(new NativeProfilingProcessResult(-1, string.Empty, string.Empty, true));
     }
 
     private sealed class PerfettoProcessRunner : INativeProfilingProcessRunner
@@ -325,6 +352,7 @@ public sealed class NativeProfileCaptureAdapterTests
             CancellationToken cancellationToken)
         {
             Requests.Add(request);
+
             if (request.Arguments.SequenceEqual(["version"]))
             {
                 return new NativeProfilingProcessResult(0, "Android Debug Bridge 1.0.41", string.Empty, false);
@@ -359,9 +387,7 @@ public sealed class NativeProfileCaptureAdapterTests
         }
 
         public bool WasLaunched { get; private set; }
-
         public string? DeviceId { get; private set; }
-
         public bool? PerfettoHadStartedAtLaunch { get; private set; }
 
         public Task LaunchAsync(
@@ -373,6 +399,7 @@ public sealed class NativeProfileCaptureAdapterTests
             WasLaunched = true;
             DeviceId = deviceId;
             PerfettoHadStartedAtLaunch = hasPerfettoStarted?.Invoke();
+
             return Task.CompletedTask;
         }
     }
@@ -381,6 +408,7 @@ public sealed class NativeProfileCaptureAdapterTests
     {
         var index = arguments.ToList().IndexOf(option);
         Assert.InRange(index, 0, arguments.Count - 2);
+
         return arguments[index + 1];
     }
 }

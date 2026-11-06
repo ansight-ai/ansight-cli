@@ -58,6 +58,7 @@ public sealed class HostNotificationCoordinatorTests
         using var runtime = environment.CreateRuntime();
         var store = new Ansight.Host.Explorer.GettingStartedStore(environment.ApplicationPaths.ApplicationDataPath);
         store.Update(state => state with { Opened = true, Skipped = true });
+
         var sink = new RecordingNotificationSink();
         using var coordinator = new NotificationCoordinator(runtime, sink);
 
@@ -77,6 +78,7 @@ public sealed class HostNotificationCoordinatorTests
             "com.example.weather",
             "Weather"));
         Assert.True(registration.IsSuccess);
+
         var sink = new RecordingNotificationSink();
         using var coordinator = new NotificationCoordinator(runtime, sink);
         var pairingEvent = new RuntimePairingEvent(
@@ -186,6 +188,7 @@ public sealed class HostNotificationCoordinatorTests
             "com.alphaoutdoors.redpoint",
             "Redpoint"));
         Assert.True(registration.IsSuccess);
+
         var sink = new RecordingNotificationSink();
         using var coordinator = new NotificationCoordinator(runtime, sink);
         var trendsEvent = new RuntimeTrendsEvent(
@@ -224,8 +227,7 @@ public sealed class HostNotificationCoordinatorTests
                 StartedUtc = DateTimeOffset.UtcNow.AddSeconds(-10),
                 CompletedUtc = DateTimeOffset.UtcNow,
                 Success = true
-            }
-        ]);
+            }        ]);
 
         coordinator.HandleSessionUpdated(snapshot);
         coordinator.HandleSessionUpdated(snapshot);
@@ -251,8 +253,7 @@ public sealed class HostNotificationCoordinatorTests
                 AgentId = "Codex",
                 StartedUtc = DateTimeOffset.UtcNow,
                 Success = false
-            }
-        ]);
+            }        ]);
 
         coordinator.HandleSessionUpdated(snapshot);
 
@@ -307,15 +308,15 @@ public sealed class HostNotificationCoordinatorTests
         var notification = Assert.Single(sink.Notifications);
         Assert.Equal(NotificationCoordinator.CompanionAccessReminderIdentifier, notification.Identifier);
         Assert.Equal("Companion access is still enabled", notification.Title);
-        Assert.Equal(NotificationCoordinator.CompanionAccessReminderInterval, notification.Schedule!.Delay);
-        Assert.Equal(NotificationCoordinator.CompanionAccessReminderInterval, notification.Schedule.RepeatInterval);
+        Assert.Equal(NotificationCoordinator.companionAccessReminderInterval, notification.Schedule!.Delay);
+        Assert.Equal(NotificationCoordinator.companionAccessReminderInterval, notification.Schedule.RepeatInterval);
         Assert.True(notification.Schedule.PreserveExisting);
         Assert.Equal(
             NotificationCoordinator.DeferCompanionAccessReminderActionIdentifier,
             notification.Action!.Identifier);
         Assert.Equal("Remind me in 2 weeks", notification.Action.Title);
         Assert.Equal(
-            NotificationCoordinator.CompanionAccessReminderInterval,
+            NotificationCoordinator.companionAccessReminderInterval,
             notification.Action.DeferralInterval);
 
         coordinator.HandleCompanionAccessStatusChanged(alwaysStatus with
@@ -380,6 +381,7 @@ public sealed class HostNotificationCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             Notifications.Add(notification);
+
             return Task.CompletedTask;
         }
 
@@ -388,6 +390,7 @@ public sealed class HostNotificationCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             RemovedNotificationIdentifiers.Add(notificationIdentifier);
+
             return Task.CompletedTask;
         }
     }

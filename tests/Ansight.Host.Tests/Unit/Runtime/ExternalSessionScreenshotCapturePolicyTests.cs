@@ -11,6 +11,7 @@ public sealed class ExternalSessionScreenshotCapturePolicyTests
         var request = new ExternalSessionScreenshotCaptureRequest(1024, 1_000);
         Assert.Equal(1_000, ExternalSessionScreenshotCaptureProfile.Standard(request).Interval.TotalMilliseconds);
         Assert.Equal(400, ExternalSessionScreenshotCaptureProfile.TestRun(request).Interval.TotalMilliseconds);
+
         var policy = ExternalSessionScreenshotCapturePolicy.Host("appium-xcuitest", request.MaxWidth,
             request.IntervalMilliseconds).ToResponsePayload();
         Assert.Equal(1_000, policy["sessionJpegCapture"]!["intervalMilliseconds"]!.GetValue<int>());
@@ -124,6 +125,7 @@ public sealed class ExternalSessionScreenshotCapturePolicyTests
     {
         using var source = new SKBitmap(120, 240);
         source.Erase(SKColors.CornflowerBlue);
+
         using var image = SKImage.FromBitmap(source);
         using var png = image.Encode(SKEncodedImageFormat.Png, 100);
         var profile = ExternalSessionScreenshotCaptureProfile.Standard(
@@ -137,6 +139,7 @@ public sealed class ExternalSessionScreenshotCapturePolicyTests
         Assert.Equal(80, encoded.Quality);
         Assert.Equal("RIFF", Encoding.ASCII.GetString(encoded.Bytes, 0, 4));
         Assert.Equal("WEBP", Encoding.ASCII.GetString(encoded.Bytes, 8, 4));
+
         using var decoded = SKBitmap.Decode(encoded.Bytes);
         Assert.NotNull(decoded);
         Assert.Equal(encoded.Width, decoded.Width);

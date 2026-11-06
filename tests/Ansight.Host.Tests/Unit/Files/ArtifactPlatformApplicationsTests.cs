@@ -13,6 +13,7 @@ public sealed class ArtifactPlatformApplicationsTests
         }
 
         var directory = CreateArtifactDirectory();
+
         try
         {
             var applications = await ArtifactPlatformApplications.ListAsync(Path.Combine(directory, "artifact é.json"), CancellationToken.None);
@@ -42,6 +43,7 @@ public sealed class ArtifactPlatformApplicationsTests
         }
 
         var directory = CreateArtifactDirectory();
+
         try
         {
             await Assert.ThrowsAsync<InvalidDataException>(() => ArtifactPlatformApplications.OpenAsync(
@@ -78,6 +80,7 @@ public sealed class ArtifactPlatformApplicationsTests
         var directory = Path.Combine(Path.GetTempPath(), "ansight-artifact-viewers-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "artifact é.json"), "{}");
+
         return directory;
     }
 }

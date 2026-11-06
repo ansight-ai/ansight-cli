@@ -32,6 +32,7 @@ internal sealed class LocalTaskSelectorEvidenceIndex
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(blocks);
+
         var ocrNodes = blocks
             .Where(static block => !string.IsNullOrWhiteSpace(block.Text))
             .Select(block => new LocalTaskSelectorEvidenceNode(
@@ -46,6 +47,7 @@ internal sealed class LocalTaskSelectorEvidenceIndex
                 frame.CapturedAtUtc,
                 VisualTreeKind: "screenshot",
                 Source: "ocr"));
+
         return new LocalTaskSelectorEvidenceIndex(
             TreeCount,
             ScreenshotFrameCount,
@@ -59,11 +61,11 @@ internal sealed class LocalTaskSelectorEvidenceIndex
     public bool ContainsIdentity(LocalTaskSelectorEvidenceNode candidate)
         => Nodes.Any(node =>
             (!string.IsNullOrWhiteSpace(candidate.AutomationId)
-             && string.Equals(node.AutomationId, candidate.AutomationId, StringComparison.OrdinalIgnoreCase))
-            || (!string.IsNullOrWhiteSpace(candidate.NodeId)
-                && string.Equals(node.NodeId, candidate.NodeId, StringComparison.OrdinalIgnoreCase))
-            || (candidate.TextValues.Count > 0
-                && candidate.TextValues.Overlaps(node.TextValues)
-                && string.Equals(node.Role, candidate.Role, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(node.Type, candidate.Type, StringComparison.OrdinalIgnoreCase)));
+                && string.Equals(node.AutomationId, candidate.AutomationId, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(candidate.NodeId)
+                    && string.Equals(node.NodeId, candidate.NodeId, StringComparison.OrdinalIgnoreCase))
+                || (candidate.TextValues.Count > 0
+                    && candidate.TextValues.Overlaps(node.TextValues)
+                    && string.Equals(node.Role, candidate.Role, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(node.Type, candidate.Type, StringComparison.OrdinalIgnoreCase)));
 }

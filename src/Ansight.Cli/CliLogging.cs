@@ -15,12 +15,13 @@ internal static class CliLogging
             ? TryCreateHostLoggerFactory(arguments, verbose, silent)
             : CreateConsoleLoggerFactory(verbose, silent);
         Ansight.Infrastructure.Logging.Logger.Instance.Factory = factory;
+
         if (factory is IApplicationLoggerFactory)
         {
             var identity = CliReleaseIdentity.Current;
             Ansight.Infrastructure.Logging.Logger.Create().Info(
                 $"host_process_starting version={identity.Version} buildNumber={identity.BuildNumber} "
-                + $"commitSha={identity.CommitSha} executable={Environment.ProcessPath ?? "unavailable"}");
+                    + $"commitSha={identity.CommitSha} executable={Environment.ProcessPath ?? "unavailable"}");
         }
 
         return factory;
@@ -28,7 +29,7 @@ internal static class CliLogging
 
     internal static string? CurrentLogFilePath
         => Ansight.Infrastructure.Logging.Logger.Instance.Factory is IApplicationLoggerFactory factory
-           && !string.IsNullOrWhiteSpace(factory.LogFilePath)
+            && !string.IsNullOrWhiteSpace(factory.LogFilePath)
             ? factory.LogFilePath
             : null;
 
@@ -40,15 +41,16 @@ internal static class CliLogging
         try
         {
             var dataDirectory = CliRuntime.ResolveDataDirectory(arguments.GetOption("data-dir"));
+
             return new CliHostLoggerFactory(
                 Path.Combine(dataDirectory, LoggingConstants.LogsFolderName),
                 verbose,
                 silent);
         }
         catch (Exception exception) when (exception is ArgumentException
-                                           or IOException
-                                           or InvalidOperationException
-                                           or UnauthorizedAccessException)
+            or IOException
+            or InvalidOperationException
+            or UnauthorizedAccessException)
         {
             return CreateConsoleLoggerFactory(verbose, silent);
         }

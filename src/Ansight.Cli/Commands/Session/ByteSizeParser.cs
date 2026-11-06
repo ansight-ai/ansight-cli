@@ -4,7 +4,7 @@ namespace Ansight.Cli.Commands.Session;
 
 internal static class ByteSizeParser
 {
-    private static readonly IReadOnlyDictionary<string, decimal> Multipliers =
+    private static readonly IReadOnlyDictionary<string, decimal> multipliers =
         new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
         {
             [""] = 1m,
@@ -23,26 +23,29 @@ internal static class ByteSizeParser
     {
         var normalized = source.Trim().Replace(" ", string.Empty, StringComparison.Ordinal);
         var unitStart = 0;
+
         while (unitStart < normalized.Length
-               && (char.IsDigit(normalized[unitStart]) || normalized[unitStart] is '.' or ','))
+            && (char.IsDigit(normalized[unitStart]) || normalized[unitStart] is '.' or ','))
         {
             unitStart++;
         }
 
         var numericSource = normalized[..unitStart];
         var unit = normalized[unitStart..];
+
         if (!decimal.TryParse(
-                numericSource,
-                NumberStyles.AllowDecimalPoint,
-                CultureInfo.InvariantCulture,
-                out var numericValue)
+            numericSource,
+            NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture,
+            out var numericValue)
             || numericValue < 0
-            || !Multipliers.TryGetValue(unit, out var multiplier))
+            || !multipliers.TryGetValue(unit, out var multiplier))
         {
             throw InvalidValue(optionName, minimum, maximum);
         }
 
         var byteValue = decimal.Ceiling(numericValue * multiplier);
+
         if (byteValue < minimum || byteValue > maximum || byteValue > long.MaxValue)
         {
             throw InvalidValue(optionName, minimum, maximum);
@@ -55,12 +58,13 @@ internal static class ByteSizeParser
     {
         return new CliUsageException(
             $"--{optionName} must be a byte size between {Format(minimum)} and {Format(maximum)} "
-            + "using B, KB, KiB, MB, MiB, GB, GiB, TB, or TiB.");
+                + "using B, KB, KiB, MB, MiB, GB, GiB, TB, or TiB.");
     }
 
     private static string Format(long bytes)
     {
         const decimal gibibyte = 1024m * 1024m * 1024m;
+
         return $"{bytes / gibibyte:0.##} GiB";
     }
 }

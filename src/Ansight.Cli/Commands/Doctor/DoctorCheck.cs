@@ -11,7 +11,6 @@ internal sealed record DoctorCheck(
     string? Path)
 {
     public DependencyVersionAdvice? VersionAdvice { get; init; }
-
     public string Justification => DoctorCheckGuidance.GetJustification(Name);
 
     public string InstallInstructions => Status == "not-applicable"

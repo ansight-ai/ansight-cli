@@ -2,7 +2,7 @@ namespace Ansight.Infrastructure.Logging;
 
 internal static class LogRetentionPolicy
 {
-    private static readonly string[] DefaultSearchPatterns =
+    private static readonly string[] defaultSearchPatterns =
     [
         "*.log",
         "*.jsonl"
@@ -14,7 +14,7 @@ internal static class LogRetentionPolicy
             logsFolderPath,
             LoggingConstants.RetainedLogsMaximumTime,
             DateTimeOffset.UtcNow,
-            DefaultSearchPatterns);
+            defaultSearchPatterns);
     }
 
     internal static int DeleteExpiredFiles(
@@ -32,6 +32,7 @@ internal static class LogRetentionPolicy
 
         var cutoffUtc = nowUtc.ToUniversalTime().Subtract(retention).UtcDateTime;
         var deletedCount = 0;
+
         foreach (var filePath in EnumerateCandidateFiles(logsFolderPath, searchPatterns))
         {
             if (!TryGetLastWriteTimeUtc(filePath, out var lastWriteTimeUtc)
@@ -51,10 +52,10 @@ internal static class LogRetentionPolicy
         string logsFolderPath,
         IReadOnlyList<string>? searchPatterns)
     {
-        var resolvedSearchPatterns = searchPatterns is { Count: > 0 }
-            ? searchPatterns
-            : DefaultSearchPatterns;
+        var resolvedSearchPatterns = searchPatterns is { Count: > 0 } ? searchPatterns
+            : defaultSearchPatterns;
         var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var searchPattern in resolvedSearchPatterns)
         {
             if (string.IsNullOrWhiteSpace(searchPattern))
@@ -63,6 +64,7 @@ internal static class LogRetentionPolicy
             }
 
             IEnumerable<string> matches;
+
             try
             {
                 matches = Directory.EnumerateFiles(
@@ -90,11 +92,13 @@ internal static class LogRetentionPolicy
         try
         {
             lastWriteTimeUtc = File.GetLastWriteTimeUtc(filePath);
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             lastWriteTimeUtc = default;
+
             return false;
         }
     }
@@ -104,6 +108,7 @@ internal static class LogRetentionPolicy
         try
         {
             File.Delete(filePath);
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

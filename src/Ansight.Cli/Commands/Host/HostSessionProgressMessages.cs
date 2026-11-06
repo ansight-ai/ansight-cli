@@ -19,6 +19,7 @@ internal static class HostSessionProgressMessages
     public static string BuildPairingRejected(RuntimePairingEvent runtimeEvent)
     {
         var reason = runtimeEvent.ReasonMessage ?? runtimeEvent.ReasonCode ?? "Unknown reason.";
+
         return $"[pairing] Rejected '{runtimeEvent.ClientName}' for '{runtimeEvent.AppId}': {reason}";
     }
 
@@ -30,7 +31,8 @@ internal static class HostSessionProgressMessages
         var detail = string.IsNullOrWhiteSpace(runtimeEvent.Message)
             ? runtimeEvent.Status
             : runtimeEvent.Message;
+
         return $"[capture] Session '{runtimeEvent.SessionId}' stopped: {detail}"
-               + Environment.NewLine + $"[replay] ansight session serve '{runtimeEvent.SessionId}' --open";
+            + Environment.NewLine + $"[replay] ansight session serve '{runtimeEvent.SessionId}' --open";
     }
 }

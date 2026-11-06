@@ -7,7 +7,9 @@ internal static class WorkspaceTestTargetOptions
     public static WorkspaceTestTargetRequest? Resolve(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         var targets = ResolveMany(arguments);
+
         if (targets.Count > 1)
         {
             throw new CliUsageException(
@@ -20,10 +22,15 @@ internal static class WorkspaceTestTargetOptions
     public static IReadOnlyList<WorkspaceTestTargetRequest> ResolveMany(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         var headless = arguments.HasFlag("headless");
         var executionMode = ResolveExecutionMode(arguments);
+
         if (executionMode == WorkspaceExecutionModes.Device && arguments.HasFlag("app-graph"))
+        {
             throw new CliUsageException("App Graph execution requires SDK mode in v1.");
+        }
+
         var applicationPath = ResolveApplicationPath(arguments);
         var platform = arguments.HasFlag("platform")
             ? arguments.RequireOption("platform")
@@ -32,6 +39,7 @@ internal static class WorkspaceTestTargetOptions
         var deviceKind = arguments.HasFlag("device-kind")
             ? arguments.RequireOption("device-kind")
             : null;
+
         if (applicationPath is null
             && platform is null
             && deviceIdentifiers.Count == 0
@@ -49,14 +57,27 @@ internal static class WorkspaceTestTargetOptions
                 deviceIdentifier,
                 applicationPath,
                 deviceKind,
-                headless) { ExecutionMode = executionMode }).ToArray();
+                headless)
+            {
+                ExecutionMode = executionMode
+            }).ToArray();
     }
 
     internal static string ResolveExecutionMode(CliArguments arguments)
     {
-        if (!arguments.HasFlag("execution-mode")) return WorkspaceExecutionModes.Sdk;
-        try { return WorkspaceExecutionModes.Normalize(arguments.RequireOption("execution-mode")); }
-        catch (ArgumentException exception) { throw new CliUsageException(exception.Message); }
+        if (!arguments.HasFlag("execution-mode"))
+        {
+            return WorkspaceExecutionModes.Sdk;
+        }
+
+        try
+        {
+            return WorkspaceExecutionModes.Normalize(arguments.RequireOption("execution-mode"));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new CliUsageException(exception.Message);
+        }
     }
 
     private static IReadOnlyList<string> ResolveDeviceIdentifiers(CliArguments arguments)
@@ -64,6 +85,7 @@ internal static class WorkspaceTestTargetOptions
         var values = new List<string>();
         AddOptionValues(arguments, "device-id", values);
         AddOptionValues(arguments, "device", values);
+
         return values
             .Select(static value => value.Trim())
             .Where(static value => value.Length > 0)
@@ -77,7 +99,9 @@ internal static class WorkspaceTestTargetOptions
         AddOptionValue(arguments, "app", values);
         AddOptionValue(arguments, "ipa", values);
         AddOptionValue(arguments, "application-path", values);
+
         var distinctValues = values.Distinct(StringComparer.Ordinal).ToArray();
+
         if (distinctValues.Length > 1)
         {
             throw new CliUsageException(

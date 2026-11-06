@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 
@@ -9,11 +9,8 @@ public class ApplicationLoggerFactory : IApplicationLoggerFactory
     private readonly string applicationLogsPath;
     private string logFilePath = string.Empty;
     protected LogFileWriter? LogFileWriter { get; private set; }
-
     protected int ProcessId { get; }
-
     protected ApplicationLoggerFilter LogFilter { get; }
-
     public string LogFilePath => logFilePath;
 
 
@@ -23,7 +20,10 @@ public class ApplicationLoggerFactory : IApplicationLoggerFactory
 
     public ApplicationLoggerFactory(string applicationLogsPath, bool writeToFile = false)
     {
-        if (string.IsNullOrWhiteSpace(applicationLogsPath)) throw new ArgumentException("Value cannot be null or whitespace.", nameof(applicationLogsPath));
+        if (string.IsNullOrWhiteSpace(applicationLogsPath))
+        {
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(applicationLogsPath));
+        }
 
         this.applicationLogsPath = applicationLogsPath;
 
@@ -33,6 +33,7 @@ public class ApplicationLoggerFactory : IApplicationLoggerFactory
         LogFilter = new ApplicationLoggerFilter();
 
         var logsFolderPath = applicationLogsPath;
+
         if (!Directory.Exists(logsFolderPath))
         {
             Directory.CreateDirectory(logsFolderPath);
@@ -43,6 +44,7 @@ public class ApplicationLoggerFactory : IApplicationLoggerFactory
         if (writeToFile)
         {
             var resolvedLogFilePath = CreateLogFilePath(logsFolderPath);
+
             if (string.IsNullOrWhiteSpace(resolvedLogFilePath))
             {
                 resolvedLogFilePath = Path.Combine(
@@ -78,6 +80,7 @@ public class ApplicationLoggerFactory : IApplicationLoggerFactory
     {
         var logFileId = DateTime.UtcNow.ToString(LoggingConstants.FileNameDateFormat);
         var logFileName = logFileId + LoggingConstants.LogFileExtension;
+
         return Path.Combine(logsFolderPath, logFileName);
     }
 }

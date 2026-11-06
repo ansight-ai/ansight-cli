@@ -28,6 +28,7 @@ internal sealed class SessionConnectionRegistry
         lock (gate)
         {
             connectionsBySessionId.TryGetValue(sessionId, out var connection);
+
             return connection;
         }
     }
@@ -38,6 +39,7 @@ internal sealed class SessionConnectionRegistry
         {
             connectionsBySessionId.TryGetValue(sessionId, out var existing);
             connectionsBySessionId[sessionId] = connection;
+
             return ReferenceEquals(existing, connection) ? null : existing;
         }
     }
@@ -53,6 +55,7 @@ internal sealed class SessionConnectionRegistry
             }
 
             connectionsBySessionId.Remove(sessionId);
+
             return true;
         }
     }

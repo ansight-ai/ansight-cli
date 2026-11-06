@@ -15,6 +15,7 @@ public sealed class AnnotationMutationTests
 
         var result = Assert.Single(results, result => result.IsSuccess);
         Assert.Equal("review", result.Payload?["annotationId"]?.GetValue<string>());
+
         var annotation = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal(initial.LastUpdatedUtc, annotation.StartUtc);
         Assert.Equal("ansight-operation", annotation.Source);
@@ -26,6 +27,7 @@ public sealed class AnnotationMutationTests
     {
         using var context = new AnnotationMutationTestContext();
         Assert.True(context.Mutate(SessionAnnotationMutationKind.Create, """{"annotationId":"review","label":"Original","notes":"Before","status":"needs review"}""").IsSuccess);
+
         var label = ReadMutation(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","label":"Updated"}""");
         var notes = ReadMutation(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","notes":"After"}""");
 
@@ -34,6 +36,7 @@ public sealed class AnnotationMutationTests
             Task.Run(() => context.State.MutateSessionAnnotation(context.SessionId, notes)));
 
         Assert.All(results, result => Assert.True(result.IsSuccess, result.Message));
+
         var annotation = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal("Updated", annotation.Label);
         Assert.Equal("After", annotation.Notes);
@@ -66,13 +69,14 @@ public sealed class AnnotationMutationTests
                 Kind = SessionAnnotationGeometryKind.Arrow,
                 X = 0.1,
                 Y = 0.2,
-                Points = [new SessionAnnotationGeometryPoint { X = 0.1, Y = 0.2 }, new SessionAnnotationGeometryPoint { X = 0.8, Y = 0.7 }]
+                Points = [new SessionAnnotationGeometryPoint {X = 0.1, Y = 0.2 }, new SessionAnnotationGeometryPoint {X = 0.8, Y = 0.7 }]
             }],
             Target = new SessionAnnotationTarget { TargetId = "legacy-node", VisualTreeSnapshotId = "legacy-tree" }
         }).IsSuccess);
 
         var updated = context.Mutate(SessionAnnotationMutationKind.Patch, """{"annotationId":"review","expectedSource":"sdk","label":"After","startUtc":"2026-09-08T02:00:02Z"}""");
         Assert.True(updated.IsSuccess, updated.Message);
+
         var saved = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal("After", saved.Label);
         Assert.Equal("sdk", saved.Source);
@@ -136,6 +140,7 @@ public sealed class AnnotationMutationTests
 
         Assert.False(patched.IsSuccess);
         Assert.False(removed.IsSuccess);
+
         var unchanged = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal("Before", unchanged.Label);
         Assert.Equal("task:checkout", unchanged.Source);
@@ -148,6 +153,7 @@ public sealed class AnnotationMutationTests
         var capturedAt = DateTimeOffset.Parse("2026-09-08T03:00:00Z");
         var frame = await context.AddFrameAsync(capturedAt);
         context.AddTree("tree", "pay");
+
         var input = new JsonObject
         {
             ["label"] = " Checkout ",
@@ -164,13 +170,16 @@ public sealed class AnnotationMutationTests
                 })
         };
         Assert.True(AnnotationMutationArgumentReader.TryRead(input, SessionAnnotationMutationKind.Create, out var mutation, out var error), error);
+
         var result = context.State.MutateSessionAnnotation(context.SessionId, mutation!);
 
         Assert.True(result.IsSuccess, result.Message);
+
         var saved = Assert.Single(context.Snapshot.Annotations);
         Assert.Equal("Checkout", saved.Label);
         Assert.Null(saved.EndUtc);
         Assert.All(saved.Geometry, geometry => Assert.Equal(capturedAt, geometry.CapturedAtUtc));
+
         var path = Assert.Single(saved.Geometry, geometry => geometry.Kind == SessionAnnotationGeometryKind.FreeDraw);
         Assert.Equal(0.2, path.X);
         Assert.Equal(0.6, path.Width!.Value, 12);
@@ -223,6 +232,7 @@ public sealed class AnnotationMutationTests
         Assert.Empty(context.Snapshot.Annotations);
 
         Assert.True(context.Mutate(SessionAnnotationMutationKind.Create, """{"annotationId":"review","label":"Before"}""").IsSuccess);
+
         var patchInput = new JsonObject { ["annotationId"] = "review", ["notes"] = oversized };
         Assert.True(AnnotationMutationArgumentReader.TryRead(patchInput, SessionAnnotationMutationKind.Patch, out var patch, out _));
         Assert.False(context.State.MutateSessionAnnotation(context.SessionId, patch!).IsSuccess);
@@ -274,6 +284,7 @@ public sealed class AnnotationMutationTests
     internal static SessionAnnotationMutation ReadMutation(SessionAnnotationMutationKind kind, string json)
     {
         Assert.True(AnnotationMutationArgumentReader.TryRead(JsonNode.Parse(json)!.AsObject(), kind, out var mutation, out var error), error);
+
         return mutation!;
     }
 }

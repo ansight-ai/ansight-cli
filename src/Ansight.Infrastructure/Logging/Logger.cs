@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 namespace Ansight.Infrastructure.Logging;
 
@@ -31,7 +31,7 @@ public sealed class Logger
     /// <summary>
     /// Creates a new <see cref="ILogger"/>, capturing the name of the file where is was created as the logger context.
     /// </summary>
-    public static ILogger Create([CallerFilePath]string tag = "", bool removeFileExtension = true)
+    public static ILogger Create([CallerFilePath] string tag = "", bool removeFileExtension = true)
     {
         if (tag is null)
         {

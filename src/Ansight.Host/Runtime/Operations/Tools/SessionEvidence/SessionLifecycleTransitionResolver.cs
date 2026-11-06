@@ -2,10 +2,6 @@ using AppLifecycleState = global::Ansight.AppLifecycleState;
 
 namespace Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 
-internal readonly record struct ResolvedSessionLifecycleTransition(
-    DateTimeOffset TimestampUtc,
-    AppLifecycleState State);
-
 internal static class SessionLifecycleTransitionResolver
 {
     public static IReadOnlyList<ResolvedSessionLifecycleTransition> Build(AppSessionSnapshot snapshot)
@@ -48,6 +44,7 @@ internal static class SessionLifecycleTransitionResolver
         IEnumerable<ResolvedSessionLifecycleTransition> transitions)
     {
         var result = new List<ResolvedSessionLifecycleTransition>();
+
         foreach (var transition in transitions.OrderBy(static item => item.TimestampUtc))
         {
             if (result.Count > 0 && result[^1].State == transition.State)
@@ -67,6 +64,7 @@ internal static class SessionLifecycleTransitionResolver
             || value?.Contains("App moved to foreground", StringComparison.OrdinalIgnoreCase) == true)
         {
             state = AppLifecycleState.Foreground;
+
             return true;
         }
 
@@ -74,10 +72,12 @@ internal static class SessionLifecycleTransitionResolver
             || value?.Contains("App moved to background", StringComparison.OrdinalIgnoreCase) == true)
         {
             state = AppLifecycleState.Background;
+
             return true;
         }
 
         state = AppLifecycleState.Unknown;
+
         return false;
     }
 }

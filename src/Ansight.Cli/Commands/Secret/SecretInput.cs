@@ -13,9 +13,11 @@ internal static class SecretInput
         }
 
         var environmentVariable = arguments.GetOption("from-env");
+
         if (!string.IsNullOrWhiteSpace(environmentVariable))
         {
             var value = Environment.GetEnvironmentVariable(environmentVariable);
+
             if (string.IsNullOrEmpty(value))
             {
                 throw new CliUsageException(
@@ -29,6 +31,7 @@ internal static class SecretInput
         {
             var value = await Console.In.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
             value = value.TrimEnd('\r', '\n');
+
             if (value.Length == 0)
             {
                 throw new CliUsageException("No secret value was supplied on stdin.");
@@ -44,11 +47,15 @@ internal static class SecretInput
         }
 
         Console.Error.Write(prompt);
+
         var characters = new List<char>();
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var key = Console.ReadKey(intercept: true);
+
             if (key.Key == ConsoleKey.Enter)
             {
                 Console.Error.WriteLine();

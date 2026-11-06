@@ -48,8 +48,10 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var normalized = pointerEvent.NormalizeAndValidate();
         var device = ResolveReadyDevice(normalized.DeviceUdid);
+
         if (device is null)
         {
             return Failure("The Android emulator display size is unavailable.");
@@ -76,6 +78,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         var key = new AndroidPointerKey(normalized.DeviceUdid, normalized.PointerId);
+
         switch (normalized.Phase)
         {
             case "down":
@@ -112,7 +115,6 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
 
                     completedGesture = gesture.Update(normalized);
                 }
-
                 return await DeliverGestureAsync(device, completedGesture, cancellationToken).ConfigureAwait(false);
             default:
                 return Failure("The Android pointer phase is unsupported.");
@@ -124,6 +126,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var normalized = buttonEvent.NormalizeAndValidate();
         var keyCode = normalized.Button switch
         {
@@ -134,6 +137,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
             "volume-down" => "KEYCODE_VOLUME_DOWN",
             _ => throw new ArgumentOutOfRangeException(nameof(buttonEvent), normalized.Button, "Unsupported Android button."),
         };
+
         return RunInputAsync(
             normalized.DeviceUdid,
             ["keyevent", keyCode],
@@ -146,7 +150,9 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var normalized = keyEvent.NormalizeAndValidate();
+
         if (HidKeyMapper.IsModifier(normalized.UsageCode))
         {
             lock (stateGate)
@@ -164,6 +170,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
                 else
                 {
                     modifierSet.Remove(normalized.UsageCode);
+
                     if (modifierSet.Count == 0)
                     {
                         pressedModifiers.Remove(normalized.DeviceUdid);
@@ -180,6 +187,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         var keyCode = HidKeyMapper.Map(normalized.UsageCode);
+
         if (keyCode is null)
         {
             return Task.FromResult(Failure(
@@ -187,6 +195,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         string[] modifiers;
+
         lock (stateGate)
         {
             modifiers = pressedModifiers.TryGetValue(normalized.DeviceUdid, out var activeModifiers)
@@ -212,17 +221,19 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+
         var normalized = textEvent.NormalizeAndValidate();
+
         foreach (var operation in TextInputEncoder.Encode(normalized.Text))
         {
             var arguments = operation.Kind == TextInputOperationKind.Text
-                ? new[] { "text", operation.Value }
-                : new[] { "keyevent", operation.Value };
+                ? new[] { "text", operation.Value } : new[] { "keyevent", operation.Value };
             var result = await RunTextInputAsync(
                 normalized.DeviceUdid,
                 arguments,
                 "ADB text input delivered.",
                 cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 return result;
@@ -239,18 +250,21 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken)
     {
         await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var command = "input "
-                          + string.Join(' ', inputArguments.Select(QuoteShellArgument))
-                          + "\n";
+                + string.Join(' ', inputArguments.Select(QuoteShellArgument))
+                + "\n";
             var result = await client.RunWithStandardInputAsync(
                 ["-s", deviceSerial, "shell", "-T"],
                 command,
                 cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 var detail = FirstNonEmpty(result.StandardError, result.StandardOutput);
+
                 return Failure(string.IsNullOrWhiteSpace(detail)
                     ? $"ADB input failed with exit code {result.ExitCode}."
                     : $"ADB input failed: {detail}");
@@ -279,12 +293,15 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         disposed = true;
+
         lock (stateGate)
         {
             gestures.Clear();
             pressedModifiers.Clear();
         }
+
         sendGate.Dispose();
+
         return ValueTask.CompletedTask;
     }
 
@@ -299,7 +316,8 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         var endY = ToDisplayCoordinate(gesture.EndY, device.DisplayHeight.Value);
         var distance = Math.Sqrt(
             Math.Pow(gesture.EndX - gesture.StartX, 2)
-            + Math.Pow(gesture.EndY - gesture.StartY, 2));
+                + Math.Pow(gesture.EndY - gesture.StartY, 2));
+
         if (distance <= TapDistanceThreshold)
         {
             return await RunInputAsync(
@@ -310,6 +328,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         var duration = Math.Clamp(gesture.EndTimestampMilliseconds - gesture.StartTimestampMilliseconds, 1, 60_000);
+
         return await RunInputAsync(
             device.Identifier,
             [
@@ -340,6 +359,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
                 0,
                 pressure),
         };
+
         if (pointerEvent.SecondaryContact is not null)
         {
             touches.Add(new AndroidEmulatorTouch(
@@ -350,12 +370,14 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         }
 
         await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             await controller!.SendTouchAsync(
                 device.Identifier,
                 touches,
                 cancellationToken).ConfigureAwait(false);
+
             return Success(pointerEvent.SecondaryContact is null
                 ? "Android Emulator live touch input delivered."
                 : "Android Emulator live multi-touch input delivered.");
@@ -373,14 +395,18 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         CancellationToken cancellationToken)
     {
         await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             var arguments = new List<string> { "-s", deviceSerial, "shell", "input" };
             arguments.AddRange(inputArguments);
+
             var result = await client.RunAsync(arguments, cancellationToken).ConfigureAwait(false);
+
             if (!result.IsSuccess)
             {
                 var detail = FirstNonEmpty(result.StandardError, result.StandardOutput);
+
                 return Failure(string.IsNullOrWhiteSpace(detail)
                     ? $"ADB input failed with exit code {result.ExitCode}."
                     : $"ADB input failed: {detail}");
@@ -401,26 +427,29 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
     private RemoteRuntimeDevice? ResolveReadyDevice(string deviceSerial)
     {
         var device = deviceResolver(deviceSerial);
-        return device is { IsBooted: true, DisplayWidth: > 0, DisplayHeight: > 0 }
-            ? device
+
+        return device is { IsBooted: true, DisplayWidth: > 0, DisplayHeight: > 0 } ? device
             : null;
     }
 
     private InputDeliveryResult Success(string message)
     {
         SetStatus(message);
+
         return InputDeliveryResult.Success(BackendName, message);
     }
 
     private InputDeliveryResult Failure(string message)
     {
         SetStatus(message);
+
         return InputDeliveryResult.Failure(BackendName, message);
     }
 
     private InputDeliveryResult FailureLocked(string message)
     {
         status = message;
+
         return InputDeliveryResult.Failure(BackendName, message);
     }
 
@@ -437,7 +466,7 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value))?.Trim()
-           ?? string.Empty;
+            ?? string.Empty;
 
     private readonly record struct AndroidPointerKey(string DeviceSerial, long PointerId);
 
@@ -450,13 +479,13 @@ public sealed class AndroidEmulatorInputSink : ISimulatorInputSink
         long EndTimestampMilliseconds)
     {
         public static AndroidPointerGesture Start(RemotePointerEvent pointerEvent)
-            => new(
-                pointerEvent.NormalizedX,
-                pointerEvent.NormalizedY,
-                pointerEvent.NormalizedX,
-                pointerEvent.NormalizedY,
-                pointerEvent.TimestampMilliseconds,
-                pointerEvent.TimestampMilliseconds);
+                => new(
+                    pointerEvent.NormalizedX,
+                    pointerEvent.NormalizedY,
+                    pointerEvent.NormalizedX,
+                    pointerEvent.NormalizedY,
+                    pointerEvent.TimestampMilliseconds,
+                    pointerEvent.TimestampMilliseconds);
 
         public AndroidPointerGesture Update(RemotePointerEvent pointerEvent)
             => this with

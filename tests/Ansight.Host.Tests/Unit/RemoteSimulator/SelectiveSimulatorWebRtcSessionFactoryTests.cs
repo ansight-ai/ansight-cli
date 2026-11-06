@@ -62,7 +62,6 @@ public sealed class SelectiveSimulatorWebRtcSessionFactoryTests
     private sealed class StubWebRtcSessionFactory : ISimulatorWebRtcSessionFactory
     {
         public string? LastCreatedDeviceIdentifier { get; private set; }
-
         public string BackendName => "stub";
 
         public string Status => "ready";
@@ -72,6 +71,7 @@ public sealed class SelectiveSimulatorWebRtcSessionFactoryTests
         public ISimulatorWebRtcSession Create(string deviceUdid, int framesPerSecond)
         {
             LastCreatedDeviceIdentifier = deviceUdid;
+
             return new StubWebRtcSession(deviceUdid);
         }
     }
@@ -85,10 +85,13 @@ public sealed class SelectiveSimulatorWebRtcSessionFactoryTests
 
         public event EventHandler<WebRtcInputMessageEventArgs>? InputReceived
         {
-            add { }
-            remove { }
+            add
+            {
+            }
+            remove
+            {
+            }
         }
-
         public string DeviceUdid { get; }
 
         public Task<WebRtcSessionDescription> CreateAnswerAsync(

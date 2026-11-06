@@ -3,9 +3,18 @@ using Ansight.Host.Explorer.TaskExtraction;
 
 namespace Ansight.Cli.Commands.App.Learning;
 
-internal sealed class AppLearnAuthor(RuntimeCoordinator runtime, CliOutput output) : IAppLearnAuthor, IDisposable
+internal sealed class AppLearnAuthor : IAppLearnAuthor, IDisposable
 {
-    private readonly TaskDraftAuthor author = new(runtime);
+    private readonly RuntimeCoordinator runtime;
+    private readonly CliOutput output;
+    private readonly TaskDraftAuthor author;
+
+    public AppLearnAuthor(RuntimeCoordinator runtime, CliOutput output)
+    {
+        this.runtime = runtime;
+        this.output = output;
+        author = new TaskDraftAuthor(runtime);
+    }
 
     public async Task<LocalTaskExtractionSnapshot> AuthorAsync(LocalTaskExtractionStartRequest request, CancellationToken cancellationToken,
         Action<LocalTaskExtractionSnapshot> checkpoint)
@@ -13,16 +22,36 @@ internal sealed class AppLearnAuthor(RuntimeCoordinator runtime, CliOutput outpu
         var snapshot = await author.AuthorAsync(request,
             new CliProgress<string>(message => output.WriteProgress($"[learn.author] {message}")), cancellationToken, checkpoint)
             .ConfigureAwait(false);
-        if (snapshot.Status != "ready" || snapshot.Draft is null) return snapshot;
+
+        if (snapshot.Status != "ready" || snapshot.Draft is null)
+        {
+            return snapshot;
+        }
+
         var catalog = runtime.InspectRepositoryTasks(snapshot.AppId, snapshot.Draft.DraftRootPath);
         var task = catalog.Tasks.Count == 1 ? catalog.Tasks[0] : null;
-        if (catalog.Warnings.Count > 0 || task is null || !task.Enabled || string.IsNullOrWhiteSpace(task.StartingState)
-            || string.IsNullOrWhiteSpace(task.SuccessState) || task.InputSchema["required"] is System.Text.Json.Nodes.JsonArray { Count: > 0 })
+        var requiresReview = catalog.Warnings.Count > 0
+            || task is null
+            || !task.Enabled
+            || string.IsNullOrWhiteSpace(task.StartingState)
+            || string.IsNullOrWhiteSpace(task.SuccessState)
+            || task.InputSchema["required"] is System.Text.Json.Nodes.JsonArray { Count: > 0 };
+
+        if (requiresReview)
         {
             const string message = "Learned tasks must be enabled, declare starting/success states, and require no runtime inputs.";
-            return snapshot with { Status = "needsReview", Message = message,
-                Draft = snapshot.Draft with { ValidationWarnings = [.. snapshot.Draft.ValidationWarnings, message] } };
+
+            return snapshot with
+            {
+                Status = "needsReview",
+                Message = message,
+                Draft = snapshot.Draft with
+                {
+                    ValidationWarnings = [.. snapshot.Draft.ValidationWarnings, message]
+                }
+            };
         }
+
         return snapshot;
     }
 

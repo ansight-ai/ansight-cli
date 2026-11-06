@@ -32,6 +32,7 @@ public sealed class RemoteControlServerRecordingTests
         var annotations = new FakeAnnotationFrameSource();
         await using var server = CreateServer(null, factory, annotationSource: annotations);
         await server.StartAsync();
+
         using var client = new HttpClient();
         var offerBody = JsonSerializer.Serialize(new
         {
@@ -55,9 +56,11 @@ public sealed class RemoteControlServerRecordingTests
             frameId = "frame-1",
             batchId
         }));
+
         using var response = JsonDocument.Parse(await session.WaitForMessageAsync());
 
         Assert.Equal((int)expectedStatus, response.RootElement.GetProperty("statusCode").GetInt32());
+
         if (expectedStatus == HttpStatusCode.OK)
         {
             Assert.Equal("device-1", annotations.RequestedDevice);
@@ -140,6 +143,7 @@ public sealed class RemoteControlServerRecordingTests
             evidence);
         await using var server = CreateServer(recordingSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         var summaries = await client.GetFromJsonAsync<RemoteRecordingSummary[]>(
@@ -174,6 +178,7 @@ public sealed class RemoteControlServerRecordingTests
     {
         await using var server = CreateServer(recordingSource: null);
         await server.StartAsync();
+
         using var client = new HttpClient();
 
         using var response = await client.GetAsync(Endpoint(server, "/api/recordings"));
@@ -191,6 +196,7 @@ public sealed class RemoteControlServerRecordingTests
         var webRtcSessionFactory = new FakeWebRtcSessionFactory();
         await using var server = CreateServer(CreateMinimalRecordingSource(), webRtcSessionFactory);
         await server.StartAsync();
+
         using var client = new HttpClient();
         var grantedScopes = grantRecordingRead ? new[] { "view", "recordings.read" } : ["view"];
 
@@ -209,6 +215,7 @@ public sealed class RemoteControlServerRecordingTests
         Assert.True(
             offerResponse.IsSuccessStatusCode,
             await offerResponse.Content.ReadAsStringAsync());
+
         var offerAnswer = await offerResponse.Content.ReadFromJsonAsync<JsonElement>();
         var answerScopes = offerAnswer.GetProperty("grantedScopes")
             .EnumerateArray()
@@ -219,6 +226,7 @@ public sealed class RemoteControlServerRecordingTests
         session.Receive("""
             {"kind":"recording_request","requestId":"request-1","operation":"list"}
             """);
+
         var responseMessage = await session.WaitForMessageAsync();
         using var responseDocument = JsonDocument.Parse(responseMessage);
 
@@ -236,6 +244,7 @@ public sealed class RemoteControlServerRecordingTests
             webRtcSessionFactory,
             inputSink);
         await server.StartAsync();
+
         using var client = new HttpClient();
         var offerBody = JsonSerializer.Serialize(
             new
@@ -257,6 +266,7 @@ public sealed class RemoteControlServerRecordingTests
         session.Receive("""
             {"udid":"device-1","phase":"down","x":0.25,"y":0.75,"pointerId":1,"timestamp":123,"mouseButton":"right"}
             """);
+
         var pointerEvent = await inputSink.WaitForPointerAsync();
 
         Assert.Equal("down", pointerEvent.Phase);
@@ -279,6 +289,7 @@ public sealed class RemoteControlServerRecordingTests
             webRtcSessionFactory,
             appInspectionSource: inspectionSource);
         await server.StartAsync();
+
         using var client = new HttpClient();
         var grantedScopes = grantInspectionRead ? new[] { "view", "inspect.read" } : ["view"];
         var offerBody = JsonSerializer.Serialize(
@@ -305,17 +316,20 @@ public sealed class RemoteControlServerRecordingTests
               "arguments":{"path":"logs"}
             }
             """);
+
         var responseMessage = await session.WaitForMessageAsync();
         using var responseDocument = JsonDocument.Parse(responseMessage);
 
         Assert.Equal("inspection_response", responseDocument.RootElement.GetProperty("kind").GetString());
         Assert.Equal((int)expectedStatusCode, responseDocument.RootElement.GetProperty("statusCode").GetInt32());
+
         if (grantInspectionRead)
         {
             var invocation = await inspectionSource.WaitForInvocationAsync();
             Assert.Equal("device-1", invocation.DeviceUdid);
             Assert.Equal("app-session-1", invocation.Request.SessionId);
             Assert.Equal("files.list", invocation.Request.Operation);
+
             var content = Convert.FromBase64String(responseDocument.RootElement.GetProperty("data").GetString()!);
             Assert.Equal("{\"ok\":true}", Encoding.UTF8.GetString(content));
         }
@@ -353,6 +367,7 @@ public sealed class RemoteControlServerRecordingTests
             1_000,
             1,
             false);
+
         return new FakeRemoteRecordingSource(
             summary,
             new RemoteRecordingFrameSummary("frame-1", capturedAt, 100, 200, "image/png", 1),
@@ -371,6 +386,7 @@ public sealed class RemoteControlServerRecordingTests
     private static string Endpoint(RemoteControlServer server, string path, string? query = null)
     {
         var separator = string.IsNullOrWhiteSpace(query) ? string.Empty : $"&{query}";
+
         return $"http://127.0.0.1:{server.Port}{path}?token={SessionToken}{separator}";
     }
 
@@ -383,9 +399,11 @@ public sealed class RemoteControlServerRecordingTests
             CancellationToken cancellationToken = default)
         {
             RequestedDevice = deviceIdentifier;
+
             var matchesBatch = batchId == "batch-1"
                 && sessionId == "live-session"
                 && frameId == "frame-1";
+
             return Task.FromResult<RemoteRecordingFrame?>(matchesBatch
                 ? new RemoteRecordingFrame("image/png", [1, 2, 3])
                 : null);
@@ -459,7 +477,7 @@ public sealed class RemoteControlServerRecordingTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<RemoteRecordingFrame?>(
                 string.Equals(recordingId, summary.Id, StringComparison.Ordinal)
-                && string.Equals(frameId, frameSummary.Id, StringComparison.Ordinal)
+                    && string.Equals(frameId, frameSummary.Id, StringComparison.Ordinal)
                     ? frame
                     : null);
 
@@ -495,6 +513,7 @@ public sealed class RemoteControlServerRecordingTests
             CancellationToken cancellationToken = default)
         {
             invocationReceived.TrySetResult(new Invocation(deviceUdid, request));
+
             return Task.FromResult(RemoteAppInspectionResult.Json(Encoding.UTF8.GetBytes("{\"ok\":true}")));
         }
 
@@ -518,6 +537,7 @@ public sealed class RemoteControlServerRecordingTests
         {
             var session = new FakeWebRtcSession(deviceUdid);
             LastSession = session;
+
             return session;
         }
     }
@@ -544,6 +564,7 @@ public sealed class RemoteControlServerRecordingTests
         public bool TrySendMessage(string message)
         {
             messageSent.TrySetResult(message);
+
             return true;
         }
 

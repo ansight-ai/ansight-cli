@@ -21,6 +21,7 @@ internal static class ControlClient
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
+
         try
         {
             return await TryRunCoreAsync(arguments, output, timeout.Token, null, hostCommand: true).ConfigureAwait(false);
@@ -52,13 +53,16 @@ internal static class ControlClient
 
         var options = CliRuntime.ResolveOptions(arguments);
         var metadata = CliRuntime.ReadMetadata(options.DataDirectory);
+
         if (metadata is null || !CliRuntime.IsHostProcessRunning(metadata))
         {
             return null;
         }
 
         if (hostCommand && !metadata.SupportsLifecycleControl)
+        {
             throw new CliHostUnavailableException("The running host predates graceful lifecycle control. Close it from its foreground console or tray, then start it with the updated CLI.");
+        }
 
         if (string.IsNullOrWhiteSpace(metadata.ControlPipeName))
         {
@@ -68,11 +72,13 @@ internal static class ControlClient
 
         var forwardedArguments = CreateForwardedArguments(arguments, Environment.CurrentDirectory);
         var isAccountUpload = !hostCommand
-                              && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments)
-                              && CliCommandAccessPolicy.Classify(arguments, CliCommandAccessPolicy.HasRunnerCredentials) == CliAccessClass.Cloud;
+            && CliCommandAccessPolicy.UsesResidentHostCloudUpload(arguments)
+            && CliCommandAccessPolicy.Classify(arguments, CliCommandAccessPolicy.HasRunnerCredentials) == CliAccessClass.Cloud;
+
         if (isAccountUpload)
         {
             callerUserId = CliAccessContext.Current?.Lease.Decision.UserId;
+
             if (string.IsNullOrWhiteSpace(callerUserId))
             {
                 return AccessDecision.AuthenticationRequired.WriteFailure(output);
@@ -90,18 +96,25 @@ internal static class ControlClient
             CliCommandContext.ResolveScopedSecret,
             cancellationToken);
         Ansight.Host.Workspaces.Execution.RunnerAiCredentials? runnerAiCredentials = null;
+
         if (CliCommandAccessPolicy.UsesRequestScopedRunnerCredentials(arguments) && CliCommandAccessPolicy.HasRunnerCredentials)
         {
             var scopedCredentials = Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current;
             var key = scopedCredentials?.ApiKey ?? Environment.GetEnvironmentVariable("ANSIGHT_RUNNER_API_KEY");
-            if (string.IsNullOrWhiteSpace(key)) key = Environment.GetEnvironmentVariable("ANSIGHT_API_KEY");
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                key = Environment.GetEnvironmentVariable("ANSIGHT_API_KEY");
+            }
+
             runnerAiCredentials = new(key!.Trim(), arguments.GetOption("team-id")
                 ?? scopedCredentials?.TeamId ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
         }
+
         var request = new ControlRequest(
             isAccountUpload ? ControlProtocol.AccountUploadRequestSchema
                 : runnerAiCredentials is not null ? ControlProtocol.RunnerAiRequestSchema
-                : callerUserId is null ? ControlProtocol.RequestSchema : ControlProtocol.HostLeaseRequestSchema,
+                    : callerUserId is null ? ControlProtocol.RequestSchema : ControlProtocol.HostLeaseRequestSchema,
             forwardedArguments,
             secretValue,
             StreamOutput: true,
@@ -119,6 +132,7 @@ internal static class ControlClient
             PipeOptions.Asynchronous);
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(3));
+
         try
         {
             await pipe.ConnectAsync(connectTimeout.Token).ConfigureAwait(false);
@@ -149,31 +163,38 @@ internal static class ControlClient
             JsonSerializer.Serialize(request, jsonOptions).AsMemory(),
             cancellationToken).ConfigureAwait(false);
         await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+
         var response = await ReadCommandResponseAsync(arguments, reader, writer, output, cancellationToken)
             .ConfigureAwait(false);
+
         if (response is null)
         {
             throw new CliHostUnavailableException(
                 "The resident host disconnected before returning the command result. The operation may have run partially; inspect the latest trace before retrying.");
         }
+
         var rejectedLegacyLease = !isAccountUpload
-                                  && runnerAiCredentials is null
-                                  && callerUserId is not null
-                                  && string.Equals(response.Schema, ControlProtocol.ResponseSchema, StringComparison.Ordinal);
+            && runnerAiCredentials is null
+            && callerUserId is not null
+            && string.Equals(response.Schema, ControlProtocol.ResponseSchema, StringComparison.Ordinal);
+
         if (rejectedLegacyLease)
         {
             // An older host rejected v2 before executing anything. Use the normal access path.
             return null;
         }
+
         var expectedSchema = isAccountUpload ? ControlProtocol.AccountUploadResponseSchema
             : runnerAiCredentials is not null ? ControlProtocol.RunnerAiResponseSchema
-            : callerUserId is null ? ControlProtocol.ResponseSchema : ControlProtocol.HostLeaseResponseSchema;
+                : callerUserId is null ? ControlProtocol.ResponseSchema : ControlProtocol.HostLeaseResponseSchema;
+
         if (!string.Equals(response.Schema, expectedSchema, StringComparison.Ordinal))
         {
             throw new CliHostUnavailableException("The resident host returned an incompatible CLI control response. Restart it once with this CLI version to enable authenticated uploads and runner requests.");
         }
 
         output.WriteRaw(response.StandardOutput, response.StandardError);
+
         return response.ExitCode;
     }
 
@@ -185,8 +206,9 @@ internal static class ControlClient
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedTarget);
+
         var probeArguments = CliArguments.Parse(
-        [
+            [
             "session",
             "list",
             "--connected",
@@ -198,6 +220,7 @@ internal static class ControlClient
         using var standardError = new StringWriter();
         var output = new CliOutput(true, standardOutput, standardError);
         int? exitCode;
+
         try
         {
             exitCode = await TryRunAsync(probeArguments, output, cancellationToken)
@@ -212,6 +235,7 @@ internal static class ControlClient
         {
             return false;
         }
+
         if (exitCode != CliExitCodes.Success)
         {
             return null;
@@ -222,6 +246,7 @@ internal static class ControlClient
             var result = JsonSerializer.Deserialize<SessionListOutput>(
                 standardOutput.ToString(),
                 jsonOptions);
+
             if (result is null)
             {
                 return null;
@@ -231,9 +256,10 @@ internal static class ControlClient
             var normalizedSessionId = string.IsNullOrWhiteSpace(requestedSessionId)
                 ? null
                 : requestedSessionId.Trim();
+
             return result.Sessions.Any(session => normalizedSessionId is null
                 ? session.AppId.Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase)
-                  || session.SessionId.Equals(normalizedTarget, StringComparison.Ordinal)
+                    || session.SessionId.Equals(normalizedTarget, StringComparison.Ordinal)
                 : session.SessionId.Equals(normalizedSessionId, StringComparison.Ordinal));
         }
         catch (JsonException)
@@ -267,10 +293,13 @@ internal static class ControlClient
         using var registration = cancellationToken.Register(
             static state => ((TaskCompletionSource)state!).TrySetResult(), cancelRequested);
         var cancellationSent = false;
+
         try
         {
             if (await Task.WhenAny(responseTask, cancelRequested.Task).ConfigureAwait(false) == responseTask)
+            {
                 return await responseTask.ConfigureAwait(false);
+            }
 
             // Keep the response read alive while the host stops the provider and persists
             // its final evidence. Closing this pipe would cancel without acknowledging cleanup.
@@ -280,6 +309,7 @@ internal static class ControlClient
                 JsonSerializer.Serialize(new ControlCancel(ControlProtocol.CancelSchema), jsonOptions).AsMemory(),
                 responseCancellation.Token).ConfigureAwait(false);
             await writer.FlushAsync(responseCancellation.Token).ConfigureAwait(false);
+
             return await responseTask.ConfigureAwait(false)
                 ?? throw new CliHostUnavailableException(
                     "The host disconnected before confirming operation cancellation cleanup. The operation may have partially completed; do not retry automatically.");
@@ -311,9 +341,11 @@ internal static class ControlClient
     {
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(output);
+
         while (true)
         {
             var responseLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+
             if (responseLine is null)
             {
                 return null;
@@ -323,6 +355,7 @@ internal static class ControlClient
             var schema = document.RootElement.TryGetProperty("schema", out var schemaElement)
                 ? schemaElement.GetString()
                 : null;
+
             if (schema is ControlProtocol.ResponseSchema or ControlProtocol.HostLeaseResponseSchema
                 or ControlProtocol.RunnerAiResponseSchema or ControlProtocol.AccountUploadResponseSchema)
             {
@@ -336,8 +369,9 @@ internal static class ControlClient
             }
 
             var streamedOutput = JsonSerializer.Deserialize<ControlOutput>(responseLine, jsonOptions)
-                                 ?? throw new CliHostUnavailableException(
-                                     "The resident host returned invalid streamed CLI output.");
+                ?? throw new CliHostUnavailableException(
+                    "The resident host returned invalid streamed CLI output.");
+
             switch (streamedOutput.Stream)
             {
                 case ControlOutputStreams.StandardOutput:
@@ -359,20 +393,26 @@ internal static class ControlClient
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+
         var forwardedArguments = arguments.OriginalArguments.ToArray();
+
         if (arguments.Positionals.Count >= 2
             && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
             && arguments.Positionals[1].Equals("export", StringComparison.OrdinalIgnoreCase))
         {
             var exportWorkingDirectory = Path.GetFullPath(workingDirectory);
+
             if (arguments.Positionals.Count >= 3)
             {
                 var sourceIndex = arguments.GetOriginalArgumentIndexForPositional(2);
                 forwardedArguments[sourceIndex] = ResolvePath(forwardedArguments[sourceIndex], exportWorkingDirectory);
             }
+
             ResolvePathOptions(forwardedArguments, exportWorkingDirectory);
+
             return forwardedArguments;
         }
+
         if (arguments.Positionals.Count >= 3
             && arguments.Positionals[0].ToLowerInvariant() is "workspace" or "workspaces"
             && arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize")
@@ -383,10 +423,12 @@ internal static class ControlClient
                 forwardedArguments[workspacePathArgumentIndex],
                 workspaceWorkingDirectory);
             ResolvePathOptions(forwardedArguments, workspaceWorkingDirectory);
+
             return forwardedArguments;
         }
 
         var fullWorkingDirectory = Path.GetFullPath(workingDirectory);
+
         if (arguments.Positionals.Count >= 3
             && arguments.Positionals[0].Equals("replay", StringComparison.OrdinalIgnoreCase)
             && arguments.Positionals[1].ToLowerInvariant() is "sentry" or "posthog" or "post-hog")
@@ -394,6 +436,7 @@ internal static class ControlClient
             var sourceArgumentIndex = arguments.GetOriginalArgumentIndexForPositional(2);
             var source = forwardedArguments[sourceArgumentIndex];
             var candidatePath = Path.GetFullPath(source, fullWorkingDirectory);
+
             if (File.Exists(candidatePath)
                 || Path.IsPathFullyQualified(source)
                 || Path.GetExtension(source).ToLowerInvariant() is ".json" or ".jsonl" or ".ndjson")
@@ -440,8 +483,8 @@ internal static class ControlClient
             fullWorkingDirectory,
             resolveAppOption: arguments.Positionals[0].ToLowerInvariant() is not ("ui" or "keyboard"),
             resolvePolicyOption: arguments.Positionals.Count >= 2
-                                 && arguments.Positionals[0].ToLowerInvariant() is ("session" or "sessions")
-                                 && arguments.Positionals[1].ToLowerInvariant() is ("share" or "share-batch"));
+                && arguments.Positionals[0].ToLowerInvariant() is ("session" or "sessions")
+                && arguments.Positionals[1].ToLowerInvariant() is ("share" or "share-batch"));
 
         if (arguments.Positionals.Count >= 4
             && arguments.Positionals[0].ToLowerInvariant() is "test" or "tests"
@@ -451,6 +494,7 @@ internal static class ControlClient
             forwardedArguments[outputArgumentIndex] = ResolvePath(
                 forwardedArguments[outputArgumentIndex],
                 fullWorkingDirectory);
+
             return forwardedArguments;
         }
 
@@ -466,6 +510,7 @@ internal static class ControlClient
             forwardedArguments[workspaceArgumentIndex],
             fullWorkingDirectory);
         ResolvePathOptions(forwardedArguments, fullWorkingDirectory);
+
         return forwardedArguments;
     }
 
@@ -478,6 +523,7 @@ internal static class ControlClient
         AddOption("secret-key-file", options.SecureStorageKeyFilePath);
         AddOption("team-id", Ansight.Host.Workspaces.Execution.RunnerAiCredentialContext.Current?.TeamId
             ?? Environment.GetEnvironmentVariable("ANSIGHT_TEAM_ID"));
+
         if (parsed.Positionals[0].Equals("cloud", StringComparison.OrdinalIgnoreCase))
         {
             AddOption("app-id", Environment.GetEnvironmentVariable("ANSIGHT_APP_ID"));
@@ -508,6 +554,7 @@ internal static class ControlClient
         for (var index = 0; index < arguments.Length; index++)
         {
             var argument = arguments[index];
+
             if (!argument.StartsWith("--", StringComparison.Ordinal))
             {
                 continue;
@@ -516,6 +563,7 @@ internal static class ControlClient
             var separatorIndex = argument.IndexOf('=', StringComparison.Ordinal);
             var optionName = (separatorIndex >= 0 ? argument[2..separatorIndex] : argument[2..])
                 .Trim();
+
             if (!resolveAppOption
                 && optionName.Equals("app", StringComparison.OrdinalIgnoreCase))
             {
@@ -530,9 +578,9 @@ internal static class ControlClient
 
             if (optionName.ToLowerInvariant() is not (
                     "app" or "ipa" or "application-path" or "result-file" or "data-dir"
-                    or "secret-store-file" or "secret-key-file"
-                    or "workspace" or "repository" or "output" or "file" or "instructions-file"
-                    or "prompt-file" or "sanitizer" or "policy" or "input-file"))
+                        or "secret-store-file" or "secret-key-file"
+                        or "workspace" or "repository" or "output" or "file" or "instructions-file"
+                        or "prompt-file" or "sanitizer" or "policy" or "input-file"))
             {
                 continue;
             }
@@ -540,6 +588,7 @@ internal static class ControlClient
             if (separatorIndex >= 0)
             {
                 var value = argument[(separatorIndex + 1)..];
+
                 if (!string.IsNullOrWhiteSpace(value))
                 {
                     arguments[index] = argument[..(separatorIndex + 1)] + ResolvePath(value, workingDirectory);
@@ -563,15 +612,23 @@ internal static class ControlClient
     internal static bool ShouldForward(CliArguments arguments)
     {
         // This command owns a duplex connection rather than a one-command forward.
-        if (AppInteractionCommand.IsMatch(arguments)) return false;
+        if (AppInteractionCommand.IsMatch(arguments))
+        {
+            return false;
+        }
+
         if (arguments.Positionals.Count == 0)
         {
             return false;
         }
 
         var command = arguments.Positionals[0].ToLowerInvariant();
+
         if (command == "input" && Ansight.Cli.Commands.Device.DeviceInputCommands.IsTextInput(arguments))
+        {
             return Ansight.Cli.Input.TextInputValue.Parse(arguments).SecretAlias is not null;
+        }
+
         if (command is "serve"
             or "ui"
             or "keyboard"
@@ -595,35 +652,39 @@ internal static class ControlClient
         if (command == "account")
         {
             return arguments.Positionals.Count > 1
-                   && arguments.Positionals[1].ToLowerInvariant() is "grant" or "grants";
+                && arguments.Positionals[1].ToLowerInvariant() is "grant" or "grants";
         }
 
         if (command is "device" or "devices")
         {
-            if (arguments.Positionals.Count >= 2 && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase)) return true;
+            if (arguments.Positionals.Count >= 2 && arguments.Positionals[1].Equals("network", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             return arguments.Positionals.Count >= 3
-                   && arguments.Positionals[1].Equals("location", StringComparison.OrdinalIgnoreCase)
-                   && arguments.Positionals[2].ToLowerInvariant() is "play" or "replay" or "status" or "stop";
+                && arguments.Positionals[1].Equals("location", StringComparison.OrdinalIgnoreCase)
+                && arguments.Positionals[2].ToLowerInvariant() is "play" or "replay" or "status" or "stop";
         }
 
         if (command is "workspace" or "workspaces")
         {
             return arguments.Positionals.Count > 1
-                   && (arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize"
-                       || arguments.Positionals[1].Equals("export", StringComparison.OrdinalIgnoreCase)
-                       && arguments.HasFlag("app-id"));
+                && (arguments.Positionals[1].ToLowerInvariant() is "init" or "initialize"
+                    || arguments.Positionals[1].Equals("export", StringComparison.OrdinalIgnoreCase)
+                        && arguments.HasFlag("app-id"));
         }
 
         if (command == "trends")
         {
             return arguments.Positionals.Count > 1
-                   && arguments.Positionals[1].ToLowerInvariant() is "history" or "rebuild";
+                && arguments.Positionals[1].ToLowerInvariant() is "history" or "rebuild";
         }
 
         return command is "test" or "tests"
-               && arguments.Positionals.Count > 1
-               && arguments.Positionals[1].ToLowerInvariant() is "run" or "run-inline" or "run-all"
-                   or "history" or "inspect" or "export";
+            && arguments.Positionals.Count > 1
+            && arguments.Positionals[1].ToLowerInvariant() is "run" or "run-inline" or "run-all"
+                or "history" or "inspect" or "export";
     }
 
     internal static IReadOnlyDictionary<string, string> CollectForwardedSecretValues(
@@ -633,16 +694,20 @@ internal static class ControlClient
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentNullException.ThrowIfNull(environmentVariableResolver);
+
         var aliases = ResolveForwardedSecretAliases(arguments, cancellationToken);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var alias in aliases)
         {
             var value = environmentVariableResolver(alias);
+
             if (!string.IsNullOrEmpty(value))
             {
                 values[alias] = value;
             }
         }
+
         return values;
     }
 
@@ -657,12 +722,15 @@ internal static class ControlClient
 
         var command = arguments.Positionals[0].ToLowerInvariant();
         var subcommand = arguments.Positionals[1].ToLowerInvariant();
+
         if ((command == "ui" && subcommand == "type")
             || (command == "input" && subcommand is "text" or "type"))
         {
             var alias = Ansight.Cli.Input.TextInputValue.Parse(arguments).SecretAlias;
+
             return alias is null ? [] : [alias];
         }
+
         if ((command is "test" or "tests" && subcommand == "run-inline")
             || (command == "app" && subcommand == "execute")
             || ((command is "task" or "tasks") && subcommand == "run"))
@@ -681,12 +749,14 @@ internal static class ControlClient
 
         var catalog = WorkspaceTestCatalog.Load(arguments.Positionals[2], cancellationToken);
         IEnumerable<WorkspaceTestDefinition> tests = catalog.Tests;
+
         if (subcommand == "run")
         {
             if (arguments.Positionals.Count < 4)
             {
                 return [];
             }
+
             var testId = arguments.Positionals[3];
             tests = tests.Where(test => string.Equals(
                 test.TestId,
@@ -696,6 +766,7 @@ internal static class ControlClient
         else
         {
             var requestedTestIds = arguments.GetOptions("test");
+
             if (requestedTestIds.Count > 0)
             {
                 var requestedIds = requestedTestIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -720,6 +791,7 @@ internal static class ControlClient
             arguments.EnsurePositionalCount(
                 4,
                 "ansight secret set <app-id> <alias> [--stdin|--from-env <NAME>]");
+
             return ReadSecretAsync(arguments, "Secret value: ", cancellationToken);
         }
 
@@ -729,11 +801,12 @@ internal static class ControlClient
             && !File.Exists(arguments.Positionals[2]))
         {
             var tokenEnvironmentVariable = arguments.GetOption("token-env")
-                                           ?? (arguments.Positionals[1].Equals(
-                                                   "sentry",
-                                                   StringComparison.OrdinalIgnoreCase)
-                                               ? "SENTRY_AUTH_TOKEN"
-                                               : "POSTHOG_PERSONAL_API_KEY");
+                ?? (arguments.Positionals[1].Equals(
+                    "sentry",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "SENTRY_AUTH_TOKEN"
+                    : "POSTHOG_PERSONAL_API_KEY");
+
             return Task.FromResult(Environment.GetEnvironmentVariable(tokenEnvironmentVariable));
         }
 

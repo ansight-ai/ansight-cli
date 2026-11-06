@@ -37,6 +37,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         }
 
         await StopAsync(sessionId, "Native log target changed.").ConfigureAwait(false);
+
         if (!userPreferences.CaptureNativeSessionLogs)
         {
             return;
@@ -44,6 +45,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
 
         var cancellation = new CancellationTokenSource();
         var handle = new NativeCaptureHandle(cancellation);
+
         lock (captureGate)
         {
             capturesBySessionId[sessionId] = handle;
@@ -55,6 +57,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
     public async Task StopAsync(string sessionId, string reason)
     {
         NativeCaptureHandle? handle;
+
         lock (captureGate)
         {
             if (!capturesBySessionId.Remove(sessionId, out handle))
@@ -64,6 +67,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         }
 
         handle.Cancellation.Cancel();
+
         try
         {
             await handle.Task.ConfigureAwait(false);
@@ -80,8 +84,8 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         if (runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot) && snapshot is not null)
         {
             foreach (var stream in snapshot.LogStreams.Where(stream =>
-                         stream.Status == SessionLogStreamStatuses.Active
-                         && IsNativeStream(stream.StreamId)))
+                                 stream.Status == SessionLogStreamStatuses.Active
+                                     && IsNativeStream(stream.StreamId)))
             {
                 runtimeState.SetSessionLogStreamStatus(
                     sessionId,
@@ -100,6 +104,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         CancellationToken cancellationToken)
     {
         var osName = profile.Device?.OsName?.Trim().ToLowerInvariant() ?? string.Empty;
+
         try
         {
             if (string.Equals(osName, "android", StringComparison.Ordinal))
@@ -153,16 +158,20 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
                 "Android Logcat",
                 packageIdentifier,
                 reportedProcessId));
+
         if (string.IsNullOrWhiteSpace(packageIdentifier))
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AndroidLogcat, "The session profile did not include an Android package identifier.");
+
             return;
         }
 
         var tool = AdbToolLocator.Resolve(userPreferences.AdbPath);
+
         if (!tool.IsFound)
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AndroidLogcat, tool.Message);
+
             return;
         }
 
@@ -170,19 +179,24 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         var target = await client.ResolveSessionTargetAsync(
             ResolveNativeDeviceId(profileJson), packageIdentifier, reportedProcessId, cancellationToken)
             .ConfigureAwait(false);
+
         if (target.Device is null)
         {
             runtimeState.EnsureSessionLogStream(sessionId, new SessionLogStream
             {
-                StreamId = SessionLogStreamIds.AndroidLogcat, Kind = SessionLogStreamKinds.AndroidLogcat,
-                DisplayName = "Android Logcat", Status = SessionLogStreamStatuses.Unavailable,
+                StreamId = SessionLogStreamIds.AndroidLogcat,
+                Kind = SessionLogStreamKinds.AndroidLogcat,
+                DisplayName = "Android Logcat",
+                Status = SessionLogStreamStatuses.Unavailable,
                 StatusMessage = target.Message,
                 Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["bindingCode"] = target.Code, ["recovery"] = target.Recovery ?? string.Empty,
+                    ["bindingCode"] = target.Code,
+                    ["recovery"] = target.Recovery ?? string.Empty,
                     ["candidates"] = string.Join(", ", target.CandidateDeviceIds)
                 }
             });
+
             return;
         }
 
@@ -217,11 +231,13 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
             entryChannel.Reader,
             cancellationToken);
         var captures = new Dictionary<int, AndroidProcessCapture>();
+
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 IReadOnlyList<int> processIds;
+
                 try
                 {
                     processIds = await client.GetProcessIdsAsync(
@@ -237,9 +253,9 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
                 }
 
                 foreach (var stoppedProcessId in captures
-                             .Where(pair => !processIds.Contains(pair.Key) || pair.Value.PumpTask.IsCompleted)
-                             .Select(pair => pair.Key)
-                             .ToArray())
+                    .Where(pair => !processIds.Contains(pair.Key) || pair.Value.PumpTask.IsCompleted)
+                    .Select(pair => pair.Key)
+                    .ToArray())
                 {
                     await captures[stoppedProcessId].DisposeAsync().ConfigureAwait(false);
                     captures.Remove(stoppedProcessId);
@@ -286,22 +302,27 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
                 "Apple Unified Log",
                 profile.App?.AppId,
                 processId));
+
         if (profile.Device?.IsVirtual != true && profile.Device?.IsEmulator != true)
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AppleUnifiedLog, "SimCtl log capture is only available for simulator sessions.");
+
             return;
         }
 
         if (!processId.HasValue || processId.Value <= 0)
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AppleUnifiedLog, "The session profile did not include an application process ID.");
+
             return;
         }
 
         var tool = await SimCtlToolLocator.ResolveAsync(userPreferences.XcodePath, cancellationToken).ConfigureAwait(false);
+
         if (!tool.IsFound)
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AppleUnifiedLog, tool.Message);
+
             return;
         }
 
@@ -310,6 +331,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
             .Where(device => device.IsBooted)
             .ToArray();
         SimCtlDevice? target = null;
+
         if (!string.IsNullOrWhiteSpace(nativeDeviceId))
         {
             target = bootedDevices.FirstOrDefault(device => string.Equals(device.Udid, nativeDeviceId, StringComparison.OrdinalIgnoreCase));
@@ -317,6 +339,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         else
         {
             var matches = new List<SimCtlDevice>();
+
             foreach (var device in bootedDevices)
             {
                 if (await client.ProcessExistsAsync(device.Udid, processId.Value, cancellationToken).ConfigureAwait(false))
@@ -332,6 +355,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
             else if (matches.Count > 1)
             {
                 MarkUnavailable(sessionId, SessionLogStreamIds.AppleUnifiedLog, "More than one simulator matched the session process.");
+
                 return;
             }
         }
@@ -340,6 +364,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
             || !await client.ProcessExistsAsync(target.Udid, processId.Value, cancellationToken).ConfigureAwait(false))
         {
             MarkUnavailable(sessionId, SessionLogStreamIds.AppleUnifiedLog, "No booted simulator matched the session device and process.");
+
             return;
         }
 
@@ -376,6 +401,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
             SessionLogStreamIds.AppleUnifiedLog,
             entryChannel.Reader,
             cancellationToken);
+
         try
         {
             await foreach (var entry in stream.ReadEntriesAsync(cancellationToken).ConfigureAwait(false))
@@ -401,6 +427,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         {
             using var document = JsonDocument.Parse(profileJson);
             var root = document.RootElement;
+
             if (root.TryGetProperty("device", out var device)
                 && device.ValueKind == JsonValueKind.Object)
             {
@@ -425,14 +452,17 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         using var timer = new PeriodicTimer(batchWindow);
         var entriesAvailableTask = reader.WaitToReadAsync(cancellationToken).AsTask();
         var timerTask = timer.WaitForNextTickAsync(cancellationToken).AsTask();
+
         while (true)
         {
             var completedTask = await Task.WhenAny(entriesAvailableTask, timerTask).ConfigureAwait(false);
+
             if (completedTask == entriesAvailableTask)
             {
                 if (!await entriesAvailableTask.ConfigureAwait(false))
                 {
                     FlushBatch();
+
                     return;
                 }
 
@@ -454,6 +484,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
                 if (!await timerTask.ConfigureAwait(false))
                 {
                     FlushBatch();
+
                     return;
                 }
 
@@ -539,6 +570,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         AddHashValue(ref hash, entry.ThreadId);
         AddHashValue(ref hash, entry.Tag);
         AddHashValue(ref hash, entry.Message);
+
         return $"native:adb:{hash:x16}";
     }
 
@@ -583,6 +615,7 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
         int? processId)
     {
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
+
         if (!string.IsNullOrWhiteSpace(appIdentifier))
         {
             metadata["appIdentifier"] = appIdentifier.Trim();
@@ -616,16 +649,17 @@ internal sealed class NativeSessionLogCaptureManager : INativeSessionLogCaptureM
 
     private static bool IsNativeStream(string streamId)
         => string.Equals(streamId, SessionLogStreamIds.AndroidLogcat, StringComparison.Ordinal)
-           || string.Equals(streamId, SessionLogStreamIds.AppleUnifiedLog, StringComparison.Ordinal);
+            || string.Equals(streamId, SessionLogStreamIds.AppleUnifiedLog, StringComparison.Ordinal);
 
     private void MarkActiveNativeStreamCompleted(string sessionId, string osName, string message)
     {
         var streamId = string.Equals(osName, "android", StringComparison.Ordinal)
             ? SessionLogStreamIds.AndroidLogcat
             : SessionLogStreamIds.AppleUnifiedLog;
+
         if (!runtimeState.TryGetSessionSnapshot(sessionId, out var snapshot)
             || snapshot?.LogStreams.FirstOrDefault(stream => string.Equals(stream.StreamId, streamId, StringComparison.Ordinal))?.Status
-            != SessionLogStreamStatuses.Active)
+                != SessionLogStreamStatuses.Active)
         {
             return;
         }

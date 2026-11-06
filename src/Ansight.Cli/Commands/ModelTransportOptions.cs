@@ -5,6 +5,7 @@ internal static class ModelTransportOptions
     public static void Validate(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (arguments.HasFlag("openai-transport"))
         {
             throw new CliUsageException(
@@ -17,6 +18,7 @@ internal static class ModelTransportOptions
     public static SimulatorAgentOpenAiProtocol ResolveModelTransport(CliArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
+
         if (!arguments.HasFlag("model-transport"))
         {
             return SimulatorAgentOpenAiProtocol.Auto;

@@ -11,18 +11,21 @@ internal static class WorkspaceCommands
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (CliCommandHelp.IsRequested(arguments))
         {
             return CliCommandHelp.Write(output, BuildHelp());
         }
 
         var action = arguments.RequirePositional(1, "workspace action").ToLowerInvariant();
+
         if (action == "list")
         {
             return await ListAsync(arguments, output, cancellationToken).ConfigureAwait(false);
         }
 
         var service = new WorkspaceAuthoringService();
+
         try
         {
             if (action is "export" or "import")
@@ -51,6 +54,7 @@ internal static class WorkspaceCommands
                     action,
                     result),
                 () => Render(result));
+
             return result.IsSuccess ? CliExitCodes.Success : CliExitCodes.Failure;
         }
         catch (ArgumentException exception)
@@ -65,6 +69,7 @@ internal static class WorkspaceCommands
         CancellationToken cancellationToken)
     {
         arguments.EnsurePositionalCount(2, "ansight workspace list");
+
         var options = CliRuntime.ResolveOptions(arguments);
         await using var lease = await CliRuntimeLease.CreateAsync(
             options,
@@ -87,6 +92,7 @@ internal static class WorkspaceCommands
                     Environment.NewLine,
                     workspaces.Select(workspace =>
                         $"{workspace.AppId}\t{workspace.AppName}\t{workspace.CodebasePath}")));
+
         return CliExitCodes.Success;
     }
 
@@ -99,7 +105,9 @@ internal static class WorkspaceCommands
         arguments.EnsurePositionalCount(
             3,
             "ansight workspace init <workspace-path> [--app-id <id>] [--name <name>] [--no-register] [--force]");
+
         var appId = arguments.GetOption("app-id");
+
         if (arguments.HasFlag("no-register") && appId is not null)
         {
             throw new CliUsageException("Use either --app-id or --no-register, not both.");
@@ -109,9 +117,11 @@ internal static class WorkspaceCommands
             arguments.RequirePositional(2, "workspace path"),
             HasOverwriteFlag(arguments)));
         AppOperationResult? appRegistration = null;
+
         if (result.IsSuccess && !string.IsNullOrWhiteSpace(appId))
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             var options = CliRuntime.ResolveOptions(arguments);
             await using var lease = await CliRuntimeLease.CreateAsync(
                 options,
@@ -134,6 +144,7 @@ internal static class WorkspaceCommands
                 appRegistration,
                 registrationNextStep),
             () => Render(result, appRegistration, registrationNextStep));
+
         return result.IsSuccess && appRegistration?.IsSuccess is not false
             ? CliExitCodes.Success
             : CliExitCodes.Failure;
@@ -147,6 +158,7 @@ internal static class WorkspaceCommands
         arguments.EnsurePositionalCount(
             5,
             "ansight workspace add <task|test|trigger|sanitizer> <workspace-path> <id> [options]");
+
         return kind switch
         {
             "task" or "tasks" => AddTask(service, arguments),
@@ -210,6 +222,7 @@ internal static class WorkspaceCommands
         string? registrationNextStep = null)
     {
         var lines = new List<string> { result.Message };
+
         if (!string.IsNullOrWhiteSpace(result.DefinitionPath))
         {
             lines.Add($"Definition: {result.DefinitionPath}");
@@ -233,6 +246,7 @@ internal static class WorkspaceCommands
         if (appRegistration is not null)
         {
             lines.Add(appRegistration.Message);
+
             if (appRegistration.IsSuccess)
             {
                 lines.Add("Automatic session analysis is enabled for this app.");

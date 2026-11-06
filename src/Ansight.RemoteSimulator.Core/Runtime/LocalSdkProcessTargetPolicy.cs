@@ -13,13 +13,13 @@ internal static class LocalSdkProcessTargetPolicy
         string? remoteAddress,
         int processIdentifier)
         => IsMacProcessPlatform(platform, isVirtual)
-           && IsLocalAddress(remoteAddress)
-           && IsProcessRunning(processIdentifier);
+            && IsLocalAddress(remoteAddress)
+            && IsProcessRunning(processIdentifier);
 
     private static bool IsMacProcessPlatform(string? platform, bool? isVirtual)
         => string.Equals(platform, "macos", StringComparison.OrdinalIgnoreCase)
-           || (string.Equals(platform, "ios", StringComparison.OrdinalIgnoreCase)
-               && isVirtual == false);
+            || (string.Equals(platform, "ios", StringComparison.OrdinalIgnoreCase)
+                && isVirtual == false);
 
     public static bool IsProcessRunning(int processIdentifier)
     {
@@ -31,6 +31,7 @@ internal static class LocalSdkProcessTargetPolicy
         try
         {
             using var process = Process.GetProcessById(processIdentifier);
+
             return !process.HasExited;
         }
         catch (ArgumentException)
@@ -53,6 +54,7 @@ internal static class LocalSdkProcessTargetPolicy
         {
             return false;
         }
+
         if (IPAddress.IsLoopback(address))
         {
             return true;
@@ -73,6 +75,6 @@ internal static class LocalSdkProcessTargetPolicy
 
     private static bool AddressesEqual(IPAddress left, IPAddress right)
         => left.Equals(right)
-           || (left.AddressFamily != right.AddressFamily
-               && left.MapToIPv6().Equals(right.MapToIPv6()));
+            || (left.AddressFamily != right.AddressFamily
+                && left.MapToIPv6().Equals(right.MapToIPv6()));
 }

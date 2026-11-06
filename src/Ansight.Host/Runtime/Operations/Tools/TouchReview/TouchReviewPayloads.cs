@@ -35,6 +35,7 @@ internal static class TouchReviewPayloads
     public static JsonObject BuildTouchPayload(SessionTouchInputRecord touch, int? touchIndex = null, bool isTarget = false)
     {
         var point = TouchReviewGeometry.ResolveTouchPoint(touch);
+
         return new JsonObject
         {
             ["id"] = touch.Id,

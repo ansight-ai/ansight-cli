@@ -14,7 +14,7 @@ public sealed class SessionCacheCommandsTests
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
 
         var result = await RunAsync(
-        [
+            [
             "session",
             "cache",
             "status",
@@ -28,6 +28,7 @@ public sealed class SessionCacheCommandsTests
         ]);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         var payload = JsonNode.Parse(result.StandardOutput)!.AsObject();
         Assert.Equal("ansight.session-cache/v1", payload["schemaVersion"]!.GetValue<string>());
         Assert.Equal("status", payload["operation"]!.GetValue<string>());
@@ -46,7 +47,7 @@ public sealed class SessionCacheCommandsTests
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
 
         var result = await RunAsync(
-        [
+            [
             "session",
             "cache",
             "prune",
@@ -72,7 +73,7 @@ public sealed class SessionCacheCommandsTests
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
 
         var result = await RunAsync(
-        [
+            [
             "session",
             "cache",
             "compact",
@@ -86,6 +87,7 @@ public sealed class SessionCacheCommandsTests
         ]);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         var payload = JsonNode.Parse(result.StandardOutput)!.AsObject();
         Assert.Equal(
             "ansight.session-cache-compaction/v1",
@@ -105,7 +107,7 @@ public sealed class SessionCacheCommandsTests
         FileEncryptionKeyProvider.CreateKeyFile(keyPath);
 
         var result = await RunAsync(
-        [
+            [
             "session",
             "cache",
             "compact",
@@ -121,6 +123,7 @@ public sealed class SessionCacheCommandsTests
         ]);
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
+
         var payload = JsonNode.Parse(result.StandardOutput)!.AsObject();
         Assert.Equal(14, payload["compactionAgeDays"]!.GetValue<int>());
         Assert.Equal(string.Empty, result.StandardError);
@@ -137,6 +140,7 @@ public sealed class SessionCacheCommandsTests
             CancellationToken.None,
             accessAuthorizer: TestAccessAuthorizer.Allow,
             allowResidentHostForwarding: false);
+
         return new CommandResult(
             exitCode,
             standardOutput.ToString(),

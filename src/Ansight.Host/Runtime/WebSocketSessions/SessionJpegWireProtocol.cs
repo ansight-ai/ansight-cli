@@ -25,6 +25,7 @@ internal static class SessionJpegWireProtocol
         bytes = ReadOnlyMemory<byte>.Empty;
 
         var span = payload.Span;
+
         if (span.Length < HeaderSize
             || span[0] != (byte)'A'
             || span[1] != (byte)'S'
@@ -40,7 +41,9 @@ internal static class SessionJpegWireProtocol
         capturedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(BinaryPrimitives.ReadInt64LittleEndian(span[8..16]));
         width = BinaryPrimitives.ReadInt32LittleEndian(span[16..20]);
         height = BinaryPrimitives.ReadInt32LittleEndian(span[20..24]);
+
         var byteCount = BinaryPrimitives.ReadInt32LittleEndian(span[24..28]);
+
         if (byteCount < 0 || span.Length != HeaderSize + byteCount)
         {
             return false;
@@ -48,6 +51,7 @@ internal static class SessionJpegWireProtocol
 
         bytes = payload[HeaderSize..];
         format = "jpeg";
+
         return true;
     }
 }

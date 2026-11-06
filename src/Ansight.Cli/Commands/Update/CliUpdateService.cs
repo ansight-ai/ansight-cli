@@ -4,7 +4,7 @@ namespace Ansight.Cli.Commands.Update;
 
 internal sealed class CliUpdateService
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
@@ -43,6 +43,7 @@ internal sealed class CliUpdateService
         long latestBuildNumber;
         string? summary;
         DateTimeOffset? publishedAtUtc;
+
         if (requestedVersion is not null && requestedBuildNumber is not null)
         {
             latestVersion = requestedVersion.Trim();
@@ -55,15 +56,17 @@ internal sealed class CliUpdateService
             using var response = await httpClient.GetAsync(channel.ReleaseUrl, cancellationToken)
                 .ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
+
             await using var content = await response.Content.ReadAsStreamAsync(cancellationToken)
                 .ConfigureAwait(false);
             var release = await JsonSerializer.DeserializeAsync<CliReleaseFeed>(
-                              content,
-                              JsonOptions,
-                              cancellationToken)
-                          .ConfigureAwait(false)
-                          ?? throw new InvalidOperationException(
-                              $"The {channel.Name} release feed is empty.");
+                content,
+                jsonOptions,
+                cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    $"The {channel.Name} release feed is empty.");
+
             if (!string.IsNullOrWhiteSpace(release.Channel)
                 && !string.Equals(release.Channel, channel.Name, StringComparison.OrdinalIgnoreCase))
             {
@@ -91,6 +94,7 @@ internal sealed class CliUpdateService
         }
 
         ValidateTarget(latestVersion, latestBuildNumber);
+
         var comparison = CompareBuilds(
             identity.Version,
             identity.BuildNumber,
@@ -98,10 +102,10 @@ internal sealed class CliUpdateService
             latestBuildNumber);
         var installedChannel = installationState.Receipt?.Channel;
         var isChannelChange = !string.IsNullOrWhiteSpace(requestedChannel)
-                              && !string.Equals(
-                                  installedChannel,
-                                  channel.Name,
-                                  StringComparison.OrdinalIgnoreCase);
+            && !string.Equals(
+                installedChannel,
+                channel.Name,
+                StringComparison.OrdinalIgnoreCase);
         var archiveName = $"ansight-cli-{rid}-{latestVersion}-{latestBuildNumber}.tar.gz";
         var archiveUrl = $"{channel.DownloadBaseUrl.TrimEnd('/')}/{rid}/{latestVersion}/{latestBuildNumber}/{archiveName}";
 
@@ -133,10 +137,12 @@ internal sealed class CliUpdateService
             || !CliReleaseVersion.TryParse(rightVersion, out var right))
         {
             var fallback = string.Compare(leftVersion, rightVersion, StringComparison.OrdinalIgnoreCase);
+
             return fallback != 0 ? fallback : leftBuildNumber.CompareTo(rightBuildNumber);
         }
 
         var versionComparison = left!.CompareTo(right);
+
         return versionComparison != 0
             ? versionComparison
             : leftBuildNumber.CompareTo(rightBuildNumber);

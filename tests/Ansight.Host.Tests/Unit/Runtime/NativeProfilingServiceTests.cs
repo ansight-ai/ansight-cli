@@ -30,8 +30,8 @@ public sealed class NativeProfilingServiceTests
         Assert.Contains(
             snapshot.Manifest.Artifacts,
             artifact => artifact.Kind == ProcessSampleCaptureAdapter.ArtifactKind
-                        && artifact.Authoritative
-                        && artifact.Length > 0);
+                && artifact.Authoritative
+                && artifact.Length > 0);
         Assert.Equal("/fake/sample", snapshot.Manifest.CaptureToolPath);
     }
 
@@ -79,8 +79,8 @@ public sealed class NativeProfilingServiceTests
         Assert.Contains(
             snapshot.Manifest.Artifacts,
             artifact => artifact.Kind == CompletingAdapter.ArtifactKind
-                        && artifact.Authoritative
-                        && artifact.Length == 4);
+                && artifact.Authoritative
+                && artifact.Length == 4);
         Assert.Equal(["install", "terminate"], devices.Operations);
         Assert.Equal(applicationPath, devices.InstalledApplicationPath);
         Assert.Equal("com.example.app", devices.TerminatedApplicationIdentifier);
@@ -104,20 +104,26 @@ public sealed class NativeProfilingServiceTests
         {
             Devices = devices.Inventory.Devices.Select(device => device with { IsBooted = isBooted }).ToArray()
         };
+
         using var service = new NativeProfilingEngine(
             environment.ApplicationPaths,
             deviceService: devices,
             adapters: [new CompletingAdapter()]);
 
         string captureId;
+
         using (DeviceLaunchContext.Push(commandHeadless))
         {
-            captureId = await service.StartCaptureAsync(CreateRequest(applicationPath) with { Headless = headless });
+            captureId = await service.StartCaptureAsync(CreateRequest(applicationPath) with
+            {
+                Headless = headless
+            });
         }
 
         var snapshot = await WaitForTerminalCaptureAsync(service, captureId);
 
         Assert.Equal(NativeProfileCaptureState.Completed, snapshot.State);
+
         if (isBooted)
         {
             Assert.Empty(devices.StartedDeviceIdentifiers);
@@ -186,6 +192,7 @@ public sealed class NativeProfilingServiceTests
     {
         var applicationPath = Path.Combine(environment.RootPath, "TestApp.apk");
         File.WriteAllBytes(applicationPath, [1, 2, 3]);
+
         return applicationPath;
     }
 
@@ -194,9 +201,11 @@ public sealed class NativeProfilingServiceTests
         string captureId)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
         while (true)
         {
             timeout.Token.ThrowIfCancellationRequested();
+
             if (service.TryGetCapture(captureId, out var snapshot)
                 && snapshot is not null
                 && snapshot.IsTerminal)
@@ -214,9 +223,11 @@ public sealed class NativeProfilingServiceTests
         NativeProfileCaptureState expectedState)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
         while (true)
         {
             timeout.Token.ThrowIfCancellationRequested();
+
             if (service.TryGetCapture(captureId, out var snapshot)
                 && snapshot?.State == expectedState)
             {
@@ -254,6 +265,7 @@ public sealed class NativeProfilingServiceTests
         {
             var artifactPath = Path.Combine(context.CapturePath, "raw", "capture.perfetto-trace");
             await File.WriteAllBytesAsync(artifactPath, [1, 2, 3, 4], cancellationToken);
+
             return new NativeProfileAdapterCaptureResult(
                 [
                     new NativeProfileProducedArtifact(
@@ -314,6 +326,7 @@ public sealed class NativeProfilingServiceTests
         {
             var artifactPath = Path.Combine(context.CapturePath, "raw", "sample.txt");
             await File.WriteAllTextAsync(artifactPath, "Call graph:\n", cancellationToken);
+
             return new NativeProfileAdapterCaptureResult(
                 [
                     new NativeProfileProducedArtifact(

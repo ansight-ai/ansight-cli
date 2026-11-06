@@ -17,6 +17,7 @@ internal static class CliInstallationReceiptStore
     public static CliInstallationState Load()
     {
         var receiptPath = ResolveReceiptPath();
+
         if (!File.Exists(receiptPath))
         {
             return new CliInstallationState(null, receiptPath);
@@ -27,6 +28,7 @@ internal static class CliInstallationReceiptStore
             var receipt = JsonSerializer.Deserialize<CliInstallationReceipt>(
                 File.ReadAllText(receiptPath),
                 jsonOptions);
+
             return receipt is null
                 ? new CliInstallationState(null, receiptPath)
                 : new CliInstallationState(receipt, receiptPath);
@@ -40,9 +42,11 @@ internal static class CliInstallationReceiptStore
     public static void Save(string receiptPath, CliInstallationReceipt receipt)
     {
         var directory = Path.GetDirectoryName(receiptPath)
-                        ?? throw new InvalidOperationException("The CLI installation receipt path has no directory.");
+            ?? throw new InvalidOperationException("The CLI installation receipt path has no directory.");
         Directory.CreateDirectory(directory);
+
         var pendingPath = $"{receiptPath}.new-{Environment.ProcessId}";
+
         try
         {
             File.WriteAllText(
@@ -62,16 +66,19 @@ internal static class CliInstallationReceiptStore
     private static string ResolveReceiptPath()
     {
         var explicitPath = Environment.GetEnvironmentVariable("ANSIGHT_INSTALL_RECEIPT");
+
         if (!string.IsNullOrWhiteSpace(explicitPath))
         {
             return Path.GetFullPath(explicitPath.Trim());
         }
 
         var executablePath = Environment.ProcessPath;
+
         if (!string.IsNullOrWhiteSpace(executablePath))
         {
             var executableDirectory = Directory.GetParent(executablePath);
             var versionsDirectory = executableDirectory?.Parent;
+
             if (versionsDirectory is not null
                 && string.Equals(versionsDirectory.Name, "versions", StringComparison.OrdinalIgnoreCase)
                 && versionsDirectory.Parent is not null)
@@ -79,6 +86,7 @@ internal static class CliInstallationReceiptStore
                 var installerReceiptPath = Path.Combine(
                     versionsDirectory.Parent.FullName,
                     ReceiptFileName);
+
                 if (File.Exists(installerReceiptPath))
                 {
                     return installerReceiptPath;
@@ -97,6 +105,7 @@ internal static class CliInstallationReceiptStore
                 "share",
                 "ansight",
                 "cli");
+
         return Path.Combine(defaultRoot, ReceiptFileName);
     }
 }

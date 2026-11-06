@@ -23,6 +23,7 @@ internal sealed class KnownAppStore : IKnownAppStore
         lock (gate)
         {
             ReloadDocument();
+
             return document.Apps
                 .Select(Clone)
                 .OrderBy(app => app.Name, StringComparer.OrdinalIgnoreCase)
@@ -36,21 +37,26 @@ internal sealed class KnownAppStore : IKnownAppStore
         if (string.IsNullOrWhiteSpace(appId))
         {
             app = null;
+
             return false;
         }
 
         lock (gate)
         {
             ReloadDocument();
+
             var existing = document.Apps.FirstOrDefault(item =>
                 string.Equals(item.AppId, appId.Trim(), StringComparison.Ordinal));
+
             if (existing is null)
             {
                 app = null;
+
                 return false;
             }
 
             app = Clone(existing);
+
             return true;
         }
     }
@@ -64,12 +70,15 @@ internal sealed class KnownAppStore : IKnownAppStore
         lock (gate)
         {
             ReloadDocument();
+
             var index = document.Apps.FindIndex(item =>
                 string.Equals(item.AppId, sanitized.AppId, StringComparison.Ordinal));
+
             if (index >= 0)
             {
                 var existing = document.Apps[index];
                 sanitized.FirstSeenUtc = existing.FirstSeenUtc;
+
                 if (string.IsNullOrWhiteSpace(sanitized.SourceKind))
                 {
                     sanitized.SourceKind = existing.SourceKind;
@@ -101,8 +110,10 @@ internal sealed class KnownAppStore : IKnownAppStore
         lock (gate)
         {
             ReloadDocument();
+
             var removed = document.Apps.RemoveAll(item =>
                 string.Equals(item.AppId, appId.Trim(), StringComparison.Ordinal));
+
             if (removed == 0)
             {
                 return false;
@@ -112,6 +123,7 @@ internal sealed class KnownAppStore : IKnownAppStore
         }
 
         NotifyChanged();
+
         return true;
     }
 
@@ -143,8 +155,10 @@ internal sealed class KnownAppStore : IKnownAppStore
         lock (gate)
         {
             ReloadDocument();
+
             var existing = document.Apps.FirstOrDefault(item =>
                 string.Equals(item.AppId, normalizedAppId, StringComparison.Ordinal));
+
             if (existing is null)
             {
                 document.Apps.Add(new KnownAppDefinition
@@ -168,6 +182,7 @@ internal sealed class KnownAppStore : IKnownAppStore
             else
             {
                 var changed = false;
+
                 if (!string.Equals(existing.Name, normalizedName, StringComparison.Ordinal)
                     && (string.IsNullOrWhiteSpace(existing.Name)
                         || string.Equals(existing.Name, existing.AppId, StringComparison.Ordinal)))
@@ -237,6 +252,7 @@ internal sealed class KnownAppStore : IKnownAppStore
     private void Persist()
     {
         var directory = Path.GetDirectoryName(storePath);
+
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -259,6 +275,7 @@ internal sealed class KnownAppStore : IKnownAppStore
         {
             var json = File.ReadAllText(storePath);
             var document = JsonSerializer.Deserialize<KnownAppDocument>(json, JsonUtil.Compact);
+
             return document ?? new KnownAppDocument();
         }
         catch

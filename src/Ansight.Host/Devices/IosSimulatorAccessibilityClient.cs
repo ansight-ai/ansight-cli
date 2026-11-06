@@ -6,7 +6,7 @@ namespace Ansight.Host.Devices;
 
 internal sealed class IosSimulatorAccessibilityClient
 {
-    private static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan captureTimeout = TimeSpan.FromSeconds(10);
     private readonly string? executablePath;
 
     public IosSimulatorAccessibilityClient(string? configuredExecutablePath)
@@ -25,6 +25,7 @@ internal sealed class IosSimulatorAccessibilityClient
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceIdentifier);
+
         if (executablePath is null)
         {
             throw new InvalidOperationException(AvailabilityMessage);
@@ -43,16 +44,19 @@ internal sealed class IosSimulatorAccessibilityClient
         startInfo.ArgumentList.Add(deviceIdentifier.Trim());
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(CaptureTimeout);
+        timeout.CancelAfter(captureTimeout);
+
         try
         {
             using var process = Process.Start(startInfo)
-                                ?? throw new InvalidOperationException("Could not start AXe.");
+                ?? throw new InvalidOperationException("Could not start AXe.");
             var standardOutputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var standardErrorTask = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+
             var standardOutput = await standardOutputTask.ConfigureAwait(false);
             var standardError = (await standardErrorTask.ConfigureAwait(false)).Trim();
+
             if (process.ExitCode != 0)
             {
                 throw new InvalidOperationException(
@@ -64,7 +68,7 @@ internal sealed class IosSimulatorAccessibilityClient
             try
             {
                 return JsonNode.Parse(standardOutput)
-                       ?? throw new InvalidDataException("AXe describe-ui returned an empty JSON document.");
+                    ?? throw new InvalidDataException("AXe describe-ui returned an empty JSON document.");
             }
             catch (JsonException exception)
             {
@@ -76,7 +80,7 @@ internal sealed class IosSimulatorAccessibilityClient
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TimeoutException(
-                $"AXe describe-ui exceeded the {CaptureTimeout.TotalSeconds:0}-second capture limit.");
+                $"AXe describe-ui exceeded the {captureTimeout.TotalSeconds:0}-second capture limit.");
         }
     }
 
@@ -85,16 +89,19 @@ internal sealed class IosSimulatorAccessibilityClient
         var configured = string.IsNullOrWhiteSpace(configuredExecutablePath)
             ? Environment.GetEnvironmentVariable("ANSIGHT_AXE_PATH")
             : configuredExecutablePath;
+
         if (!string.IsNullOrWhiteSpace(configured))
         {
             var absolutePath = Path.GetFullPath(configured.Trim());
+
             return File.Exists(absolutePath) ? absolutePath : null;
         }
 
         foreach (var directoryPath in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-                     .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var candidate = Path.Combine(directoryPath, "axe");
+
             if (File.Exists(candidate))
             {
                 return Path.GetFullPath(candidate);
@@ -102,10 +109,10 @@ internal sealed class IosSimulatorAccessibilityClient
         }
 
         foreach (var candidate in new[]
-                 {
-                     "/opt/homebrew/bin/axe",
-                     "/usr/local/bin/axe"
-                 })
+        {
+            "/opt/homebrew/bin/axe",
+            "/usr/local/bin/axe"
+        })
         {
             if (File.Exists(candidate))
             {

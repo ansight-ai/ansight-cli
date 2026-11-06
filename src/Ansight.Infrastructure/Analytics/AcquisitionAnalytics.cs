@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Ansight.Analytics;
+namespace Ansight.Infrastructure.Analytics;
 
 /// <summary>Consent-aware acquisition events. Never accepts URLs, credentials or free-form error text.</summary>
 public static class AcquisitionAnalytics
@@ -18,20 +18,35 @@ public static class AcquisitionAnalytics
         try
         {
             var settings = new AnalyticsSettingsStore(dataDirectory);
-            if (!settings.IsDetailedTrackingActive) return null;
+
+            if (!settings.IsDetailedTrackingActive)
+            {
+                return null;
+            }
+
             var path = Path.Combine(settings.AnalyticsDirectoryPath, "acquisition-id");
+
             if (File.Exists(path) && Guid.TryParseExact(File.ReadAllText(path), "D", out var saved))
+            {
                 return saved.ToString("D");
+            }
+
             var candidate = Environment.GetEnvironmentVariable("ANSIGHT_ACQUISITION_ID");
+
             if (Guid.TryParseExact(candidate, "D", out var supplied))
             {
                 Directory.CreateDirectory(settings.AnalyticsDirectoryPath);
                 File.WriteAllText(path, supplied.ToString("D"));
+
                 return supplied.ToString("D");
             }
+
             return null;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     public static void Track(string dataDirectory, string eventName, string? attemptId = null,
@@ -40,16 +55,30 @@ public static class AcquisitionAnalytics
         try
         {
             var settings = new AnalyticsSettingsStore(dataDirectory);
-            if (!settings.IsDetailedTrackingActive) return;
+
+            if (!settings.IsDetailedTrackingActive)
+            {
+                return;
+            }
+
             if (eventName is not ("cli_install_attributed" or "cli_update_attributed" or "cli_auth_started"
-                or "cli_auth_completed" or "cli_auth_failed" or "cli_first_app_connected" or "cli_first_session_captured")) return;
+                or "cli_auth_completed" or "cli_auth_failed" or "cli_first_app_connected" or "cli_first_session_captured"))
+            {
+                return;
+            }
+
             var identity = AnalyticsIdentity.LoadOrCreate(settings.AnalyticsDirectoryPath);
             var insertId = once
                 ? CreateOnceInsertId(identity, eventName)
                 : Guid.NewGuid().ToString("N");
             // A durable marker also prevents re-emitting milestones after the outbox is acknowledged.
             var marker = Path.Combine(settings.AnalyticsDirectoryPath, insertId + ".milestone");
-            if (once && File.Exists(marker)) return;
+
+            if (once && File.Exists(marker))
+            {
+                return;
+            }
+
             var properties = new Dictionary<string, object?>
             {
                 ["installation_id"] = identity,
@@ -58,9 +87,19 @@ public static class AcquisitionAnalytics
                 ["is_ci"] = new[] { "CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID" }.Any(key => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key))),
                 ["surface"] = "cli",
             };
-            if (Guid.TryParse(Environment.GetEnvironmentVariable("ANSIGHT_INSTALL_ATTEMPT_ID"), out var installerAttempt)) properties["installer_attempt_id"] = installerAttempt.ToString("D");
-            if (Guid.TryParse(attemptId, out var attempt)) properties["auth_attempt_id"] = attempt.ToString("D");
+
+            if (Guid.TryParse(Environment.GetEnvironmentVariable("ANSIGHT_INSTALL_ATTEMPT_ID"), out var installerAttempt))
+            {
+                properties["installer_attempt_id"] = installerAttempt.ToString("D");
+            }
+
+            if (Guid.TryParse(attemptId, out var attempt))
+            {
+                properties["auth_attempt_id"] = attempt.ToString("D");
+            }
+
             Guid? account = null;
+
             if (Guid.TryParse(accountId, out var parsedAccount))
             {
                 account = parsedAccount;
@@ -71,17 +110,31 @@ public static class AcquisitionAnalytics
                 account = currentAccount;
                 properties["account_id"] = currentAccount.ToString("D");
             }
-            if (outcome is "succeeded" or "failed" or "cancelled") properties["outcome"] = outcome;
+
+            if (outcome is "succeeded" or "failed" or "cancelled")
+            {
+                properties["outcome"] = outcome;
+            }
+
             var outbox = new EventOutbox(settings.AnalyticsDirectoryPath);
+
             if (eventName == "cli_auth_completed" && account is not null)
             {
                 QueueAccountIdentity(outbox, identity, account.Value, "cli");
             }
+
             var stored = outbox.TryStore(new EventEnvelope(
                 insertId, eventName, identity, EventLevel.Detailed, properties, DateTimeOffset.UtcNow));
-            if (once && stored) File.WriteAllText(marker, "1");
+
+            if (once && stored)
+            {
+                File.WriteAllText(marker, "1");
+            }
         }
-        catch { /* Measurement must never affect authentication or capture. */ }
+        catch
+        {
+            /* Measurement must never affect authentication or capture. */
+        }
     }
 
     public static void IdentifyAccount(string dataDirectory, string? accountId, string surface = "cli")
@@ -93,11 +146,14 @@ public static class AcquisitionAnalytics
             {
                 return;
             }
+
             var settings = new AnalyticsSettingsStore(dataDirectory);
+
             if (!settings.IsDetailedTrackingActive)
             {
                 return;
             }
+
             var identity = AnalyticsIdentity.LoadOrCreate(settings.AnalyticsDirectoryPath);
             QueueAccountIdentity(new EventOutbox(settings.AnalyticsDirectoryPath), identity, account, surface);
         }
@@ -122,6 +178,7 @@ public static class AcquisitionAnalytics
         var accountIdentity = $"account-{accountId:D}";
         var insertId = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
             $"account-link:2:{installationIdentity}:{accountIdentity}"))).ToLowerInvariant();
+
         return new EventEnvelope(
             insertId,
             "cli_account_linked",

@@ -1,4 +1,4 @@
-using Ansight.Analytics;
+using Ansight.Infrastructure.Analytics;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -30,13 +30,18 @@ internal sealed class LocalWebAnalytics
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         var kind = request.Kind?.Trim().ToLowerInvariant();
+
         if (kind == "engagement_action")
         {
             EngagementAnalytics.RecordAction(analytics.DataDirectoryPath, utcNow());
+
             return Task.CompletedTask;
         }
+
         var isDaily = kind == "daily_active";
+
         if (!isDaily && !settings.IsDetailedTrackingActive)
         {
             return Task.CompletedTask;
@@ -47,9 +52,13 @@ internal sealed class LocalWebAnalytics
             // Explicit allowlist; do not expose arbitrary host metric names to the browser.
             if (request.Feature is "logs" or "network" or "visual_tree" or "artifacts" or "files" or "playback"
                 or "annotations" or "active_minute")
+            {
                 analytics.RecordUsage(request.Feature, "local_web");
+            }
+
             return Task.CompletedTask;
         }
+
         var now = utcNow().ToUniversalTime();
         var eventName = kind switch
         {
@@ -64,7 +73,12 @@ internal sealed class LocalWebAnalytics
             ["surface"] = "local_web",
             ["tracking_level"] = isDaily ? "daily" : "detailed"
         };
-        if (!isDaily) properties["mode"] = isExplorer ? "explorer" : "session";
+
+        if (!isDaily)
+        {
+            properties["mode"] = isExplorer ? "explorer" : "session";
+        }
+
         if (kind == "session_viewed")
         {
             properties["is_live"] = request.IsLive == true;
@@ -76,13 +90,18 @@ internal sealed class LocalWebAnalytics
             properties["panel"] = panel;
             analytics.RecordUsage(panel switch
             {
-                "apps" => "app", "devices" => "device", "device_location" => "location",
-                "test_execution" => "test", _ => panel
+                "apps" => "app",
+                "devices" => "device",
+                "device_location" => "location",
+                "test_execution" => "test",
+                _ => panel
             }, "local_web");
         }
 
         if (!isDaily)
+        {
             properties["account_id"] = AnalyticsAccount.Read(analytics.DataDirectoryPath);
+        }
 
         try
         {
@@ -92,8 +111,15 @@ internal sealed class LocalWebAnalytics
                 : Guid.NewGuid().ToString("N");
             var envelope = new EventEnvelope(insertId, eventName, distinctId,
                 isDaily ? EventLevel.Daily : EventLevel.Detailed, properties, now);
-            if (isDaily) EngagementAnalytics.RecordDailySignal(analytics.DataDirectoryPath, envelope);
-            else outbox.TryStore(envelope);
+
+            if (isDaily)
+            {
+                EngagementAnalytics.RecordDailySignal(analytics.DataDirectoryPath, envelope);
+            }
+            else
+            {
+                outbox.TryStore(envelope);
+            }
         }
         catch
         {
@@ -109,15 +135,22 @@ internal sealed class LocalWebAnalytics
             "apps" => "apps",
             "device_location" => "device_location",
             "trends" => "trends",
-            "about" => "about", "account" => "account", "app_graph" => "app_graph",
-            "devices" => "devices", "health" => "health", "session_admin" => "session_admin",
-            "settings" => "settings", "test_execution" => "test_execution", "test_history" => "test_history",
+            "about" => "about",
+            "account" => "account",
+            "app_graph" => "app_graph",
+            "devices" => "devices",
+            "health" => "health",
+            "session_admin" => "session_admin",
+            "settings" => "settings",
+            "test_execution" => "test_execution",
+            "test_history" => "test_history",
             _ => throw new InvalidDataException("Unknown local analytics panel.")
         };
 
     private static string Hash(string value)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+
         return Convert.ToHexString(bytes[..16]).ToLowerInvariant();
     }
 }

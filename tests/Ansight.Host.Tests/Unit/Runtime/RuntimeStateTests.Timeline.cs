@@ -12,7 +12,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var frames = new[]
         {
             CreateImageFrame("frame-005", At(5)),
@@ -60,8 +62,7 @@ public sealed partial class RuntimeStateTests
                         StartedUtc = At(30),
                         CompletedUtc = At(35),
                         Success = true
-                    }
-                ],
+                    }                ],
                 Annotations =
                 [
                     new SessionAnnotation
@@ -82,8 +83,7 @@ public sealed partial class RuntimeStateTests
                         StartUtc = At(25),
                         EndUtc = At(30),
                         Label = "Outside annotation"
-                    }
-                ],
+                    }                ],
                 Logs =
                 [
                     CreateLog(At(5), "evt-005"),
@@ -113,6 +113,7 @@ public sealed partial class RuntimeStateTests
 
         Assert.True(importResult.IsSuccess);
         Assert.NotNull(importResult.ImportedSession);
+
         var importedSession = importResult.ImportedSession!;
         var capturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(environment.ApplicationPaths);
         var sessionDirectoryPath = SessionImageArtifactPath.ResolveSessionDirectoryPath(
@@ -177,8 +178,8 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(importedSession.SessionId, out var persistedSnapshot)
-                  && persistedSnapshot?.CreatedUtc == At(10)
-                  && persistedSnapshot.LastUpdatedUtc == At(20),
+                && persistedSnapshot?.CreatedUtc == At(10)
+                && persistedSnapshot.LastUpdatedUtc == At(20),
             because: "Trimmed capture bounds should be persisted.");
         Assert.True(captureStore.TryLoad(importedSession.SessionId, out var persisted));
         Assert.NotNull(persisted);
@@ -200,7 +201,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         SessionNetworkRequest Request(string id, int startSeconds, int endSeconds)
             => CreateNetworkRequest(id, At(startSeconds), At(endSeconds));
 
@@ -227,6 +230,7 @@ public sealed partial class RuntimeStateTests
             Metrics = []
         }, new Dictionary<string, byte[]>());
         Assert.True(imported.IsSuccess);
+
         var sessionId = imported.ImportedSession!.SessionId;
 
         var result = runtimeState.TrimSessionTimeline(sessionId, At(10), At(20), SessionTimelineTrimMode.KeepSelectionOnly);
@@ -263,7 +267,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         SessionNetworkRequest Request(string id, int startSeconds, int endSeconds)
             => CreateNetworkRequest(id, At(startSeconds), At(endSeconds));
 
@@ -290,6 +296,7 @@ public sealed partial class RuntimeStateTests
             Metrics = []
         }, new Dictionary<string, byte[]>());
         Assert.True(imported.IsSuccess);
+
         var sessionId = imported.ImportedSession!.SessionId;
 
         var result = runtimeState.TrimSessionTimeline(sessionId, At(10), At(20), SessionTimelineTrimMode.CutSelection);
@@ -334,7 +341,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var frames = new[]
         {
             CreateImageFrame("frame-005", At(5)),
@@ -374,8 +383,7 @@ public sealed partial class RuntimeStateTests
                         StartedUtc = At(30),
                         CompletedUtc = At(35),
                         Success = true
-                    }
-                ],
+                    }                ],
                 Annotations =
                 [
                     new SessionAnnotation
@@ -389,8 +397,7 @@ public sealed partial class RuntimeStateTests
                             CreateAnnotationGeometry("geometry-015", "frame-015", At(15)),
                             CreateAnnotationGeometry("geometry-025", "frame-025", At(25))
                         ]
-                    }
-                ],
+                    }                ],
                 Logs =
                 [
                     CreateLog(At(5), "evt-005"),
@@ -419,6 +426,7 @@ public sealed partial class RuntimeStateTests
             });
 
         Assert.True(importResult.IsSuccess);
+
         var sourceSession = importResult.ImportedSession!;
 
         var result = runtimeState.ExtractSessionTimelineRange(
@@ -429,6 +437,7 @@ public sealed partial class RuntimeStateTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.ExtractedSession);
+
         var extracted = result.ExtractedSession!;
         Assert.NotEqual(sourceSession.SessionId, extracted.SessionId);
         Assert.Equal("Checkout issue slice", extracted.Name);
@@ -490,6 +499,7 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
 
         var importResult = runtimeState.ImportSessionSnapshot(
@@ -512,8 +522,7 @@ public sealed partial class RuntimeStateTests
                         StartUtc = At(10),
                         EndUtc = At(20),
                         Label = "Checkout failure"
-                    }
-                ],
+                    }                ],
                 Logs =
                 [
                     CreateLog(At(5), "evt-005"),
@@ -531,12 +540,14 @@ public sealed partial class RuntimeStateTests
             new Dictionary<string, byte[]>());
 
         Assert.True(importResult.IsSuccess);
+
         var sourceSession = importResult.ImportedSession!;
 
         var result = runtimeState.ExtractSessionAnnotationBounds(sourceSession.SessionId, "annotation-bounds");
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.ExtractedSession);
+
         var extracted = result.ExtractedSession!;
         Assert.Equal(At(10), extracted.CreatedUtc);
         Assert.Equal(At(20), extracted.LastUpdatedUtc);
@@ -552,6 +563,7 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
 
         var importResult = runtimeState.ImportSessionSnapshot(
@@ -609,9 +621,9 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(importResult.ImportedSession.SessionId, out var persistedSnapshot)
-                  && persistedSnapshot?.CreatedUtc == At(10)
-                  && persistedSnapshot.LastUpdatedUtc == At(20)
-                  && persistedSnapshot.IsPinned,
+                && persistedSnapshot?.CreatedUtc == At(10)
+                && persistedSnapshot.LastUpdatedUtc == At(20)
+                && persistedSnapshot.IsPinned,
             because: "Metadata persistence must not rewrite capture bounds.");
     }
 
@@ -622,7 +634,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var sessionId = runtimeState.CreateSession("app-1", "Client", IPAddress.Loopback, null, null);
         runtimeState.UpdateSessionMetricChannels(sessionId, [CreateMetricChannel()]);
         runtimeState.AddSessionMetrics(
@@ -664,7 +678,9 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
+
         var frames = new[]
         {
             CreateImageFrame("frame-005", At(5)),
@@ -701,8 +717,7 @@ public sealed partial class RuntimeStateTests
                         {
                             ["type"] = "root"
                         }
-                    }
-                ],
+                    }                ],
                 ArtifactSnapshots =
                 [
                     CreateArtifactSnapshot("artifact-015", At(15)),
@@ -733,8 +748,7 @@ public sealed partial class RuntimeStateTests
                         [
                             CreateAnnotationGeometry("geometry-025", "frame-025", At(25))
                         ]
-                    }
-                ],
+                    }                ],
                 Logs =
                 [
                     CreateLog(At(5), "evt-005"),
@@ -764,6 +778,7 @@ public sealed partial class RuntimeStateTests
 
         Assert.True(importResult.IsSuccess);
         Assert.NotNull(importResult.ImportedSession);
+
         var importedSession = importResult.ImportedSession!;
         var capturesRootPath = SessionImageArtifactPath.ResolveSessionCapturesRootPath(environment.ApplicationPaths);
         var sessionDirectoryPath = SessionImageArtifactPath.ResolveSessionDirectoryPath(
@@ -822,7 +837,7 @@ public sealed partial class RuntimeStateTests
 
         await TestSupport.TestWait.UntilAsync(
             () => captureStore.TryLoad(importedSession.SessionId, out var persistedSnapshot)
-                  && persistedSnapshot?.LastUpdatedUtc == At(20),
+                && persistedSnapshot?.LastUpdatedUtc == At(20),
             because: "Compacted capture bounds should be persisted.");
         Assert.True(captureStore.TryLoad(importedSession.SessionId, out var persisted));
         Assert.NotNull(persisted);
@@ -842,6 +857,7 @@ public sealed partial class RuntimeStateTests
         var captureStore = new SessionCaptureStore(environment.ApplicationPaths);
         var runtimeState = new RuntimeState(captureStore);
         var startedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:00Z");
+
         DateTimeOffset At(int seconds) => startedAtUtc.AddSeconds(seconds);
 
         var importResult = runtimeState.ImportSessionSnapshot(
@@ -923,8 +939,7 @@ public sealed partial class RuntimeStateTests
                     {
                         Source = "Client",
                         EventId = "evt-imported"
-                    }
-                ],
+                    }                ],
                 MetricChannels =
                 [
                     new SessionMetricChannel
@@ -932,8 +947,7 @@ public sealed partial class RuntimeStateTests
                         ChannelId = 1,
                         Name = "FPS",
                         ColorHex = "#00FF00"
-                    }
-                ],
+                    }                ],
                 Metrics =
                 [
                     new SessionMetricSample
@@ -942,8 +956,7 @@ public sealed partial class RuntimeStateTests
                         Value = 55,
                         CapturedAtUtc = DateTimeOffset.Parse("2026-04-01T05:00:20Z"),
                         SegmentId = 4
-                    }
-                ]
+                    }                ]
             },
             new Dictionary<string, byte[]>
             {

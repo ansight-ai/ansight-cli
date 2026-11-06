@@ -7,7 +7,7 @@ public static class AppGraphExplorationSummaryValidator
 {
     public const string ExplorationSchema = "ansight.app-graph-exploration/v1";
 
-    private static readonly HashSet<string> SupportedNavigationHostKinds = new(
+    private static readonly HashSet<string> supportedNavigationHostKinds = new(
         ["flyout", "drawer", "bottom_tabs", "top_tabs", "navigation_rail", "shell", "other"],
         StringComparer.Ordinal);
 
@@ -21,61 +21,77 @@ public static class AppGraphExplorationSummaryValidator
         if (!string.Equals(ReadString(root, "schema"), ExplorationSchema, StringComparison.Ordinal))
         {
             error = $"The exploration summary must use schema '{ExplorationSchema}'.";
+
             return false;
         }
 
         if (root["destinations"] is not JsonArray destinations || destinations.Count == 0)
         {
             error = "The exploration did not return any observed destinations.";
+
             return false;
         }
+
         if (root["transitions"] is not JsonArray transitions)
         {
             error = "The exploration summary must include a transitions array.";
+
             return false;
         }
 
         var destinationsById = new Dictionary<string, DestinationContract>(StringComparer.Ordinal);
+
         for (var index = 0; index < destinations.Count; index++)
         {
             if (destinations[index] is not JsonObject destination)
             {
                 error = $"Exploration destination {index + 1} is not an object.";
+
                 return false;
             }
 
             var id = ReadString(destination, "id");
             var name = ReadString(destination, "name");
             var purpose = ReadString(destination, "purpose");
+
             if (string.IsNullOrWhiteSpace(id)
                 || string.IsNullOrWhiteSpace(name)
                 || string.IsNullOrWhiteSpace(purpose))
             {
                 error = $"Exploration destination {index + 1} requires id, name, and purpose.";
+
                 return false;
             }
+
             if (destinationsById.ContainsKey(id))
             {
                 error = $"Exploration destination id '{id}' is duplicated.";
+
                 return false;
             }
 
             var kind = ReadString(destination, "kind")?.Trim().ToLowerInvariant();
+
             if (kind is not ("screen" or "dialog" or "state"))
             {
                 error = $"Exploration destination '{id}' must use kind screen, dialog, or state.";
+
                 return false;
             }
 
             var parentScreen = ReadString(destination, "parentScreen");
+
             if (kind == "state" && string.IsNullOrWhiteSpace(parentScreen))
             {
                 error = $"Named state '{id}' requires its containing screen in parentScreen.";
+
                 return false;
             }
+
             if (kind == "dialog" && !string.IsNullOrWhiteSpace(parentScreen))
             {
                 error = $"Dialog destination '{id}' cannot belong to a navigation host or containing screen.";
+
                 return false;
             }
 
@@ -83,11 +99,12 @@ public static class AppGraphExplorationSummaryValidator
         }
 
         var navigationHostChildren = new HashSet<string>(StringComparer.Ordinal);
+
         if (!TryValidateNavigationHosts(
-                root["navigationHosts"] as JsonArray ?? [],
-                destinationsById,
-                navigationHostChildren,
-                out error))
+            root["navigationHosts"] as JsonArray ?? [],
+            destinationsById,
+            navigationHostChildren,
+            out error))
         {
             return false;
         }
@@ -99,22 +116,25 @@ public static class AppGraphExplorationSummaryValidator
                 && !navigationHostChildren.Contains(destinationId))
             {
                 error = $"Screen destination '{destinationId}' may only use parentScreen when it is declared as a child of that navigation host.";
+
                 return false;
             }
         }
 
         if (!TryValidateTabGroups(
-                root["tabGroups"] as JsonArray ?? [],
-                destinationsById,
-                out error))
+            root["tabGroups"] as JsonArray ?? [],
+            destinationsById,
+            out error))
         {
             return false;
         }
 
         var containmentErrors = AppGraphContainment.FindErrors(AppGraphContainmentReader.ReadRelations(root));
+
         if (containmentErrors.Count > 0)
         {
             error = string.Join(" ", containmentErrors);
+
             return false;
         }
 
@@ -123,6 +143,7 @@ public static class AppGraphExplorationSummaryValidator
             if (transitions[index] is not JsonObject transition)
             {
                 error = $"Exploration transition {index + 1} is not an object.";
+
                 return false;
             }
 
@@ -132,29 +153,37 @@ public static class AppGraphExplorationSummaryValidator
             var action = transition["action"] as JsonObject;
             var automationId = action is null ? null : ReadString(action, "automationId");
             var semanticMeaning = action is null ? null : ReadString(action, "semanticMeaning");
+
             if (string.IsNullOrWhiteSpace(id)
                 || string.IsNullOrWhiteSpace(from)
                 || string.IsNullOrWhiteSpace(to)
                 || string.IsNullOrWhiteSpace(semanticMeaning))
             {
                 error = $"Exploration transition {index + 1} requires id, from, to, and semantic action values.";
+
                 return false;
             }
+
             if (string.IsNullOrWhiteSpace(automationId)
                 && !(action?["hasStableAutomationId"] is JsonValue stable && stable.TryGetValue<bool>(out var isStable)
-                     && !isStable && AppGraphActionIdentity.HasObservedSelector(action["selector"] as JsonObject)))
+                    && !isStable && AppGraphActionIdentity.HasObservedSelector(action["selector"] as JsonObject)))
             {
                 error = $"Exploration transition '{id}' requires the interacted element's automation ID, or hasStableAutomationId=false with an observed selector.";
+
                 return false;
             }
+
             if (!destinationsById.ContainsKey(from))
             {
                 error = $"Exploration transition '{id}' references unknown source destination '{from}'.";
+
                 return false;
             }
+
             if (!destinationsById.ContainsKey(to))
             {
                 error = $"Exploration transition '{id}' references unknown resulting destination '{to}'.";
+
                 return false;
             }
 
@@ -166,15 +195,18 @@ public static class AppGraphExplorationSummaryValidator
                 var isValidReturnContext = context is JsonObject contextObject
                     && ReadString(contextObject, "returnDestinationId") == to
                     && navigationKind is "back" or "pop" or "dismiss";
+
                 if (!isValidReturnContext)
                 {
                     error = $"Exploration transition '{id}' requires return-navigation context matching its destination.";
+
                     return false;
                 }
             }
         }
 
         error = string.Empty;
+
         return true;
     }
 
@@ -189,6 +221,7 @@ public static class AppGraphExplorationSummaryValidator
             if (value is not JsonObject host)
             {
                 error = "Every navigation host must be an object.";
+
                 return false;
             }
 
@@ -200,26 +233,31 @@ public static class AppGraphExplorationSummaryValidator
             var childDestinationIds = ReadStringArray(host, "childDestinationIds");
             var hasIncompleteHost = string.IsNullOrWhiteSpace(id)
                 || kind is null
-                || !SupportedNavigationHostKinds.Contains(kind)
+                || !supportedNavigationHostKinds.Contains(kind)
                 || string.IsNullOrWhiteSpace(name)
                 || string.IsNullOrWhiteSpace(destinationId)
                 || string.IsNullOrWhiteSpace(activeChildDestinationId)
                 || childDestinationIds.Count == 0;
+
             if (hasIncompleteHost)
             {
                 error = "Every navigation host requires id, supported kind, name, destinationId, activeChildDestinationId, and at least one observed direct child.";
+
                 return false;
             }
+
             if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
-                    host["technology"] as JsonObject,
-                    AppGraphNavigationTechnologyCatalog.NavigationHostScope,
-                    out var technology,
-                    out var normalizedRole,
-                    out error))
+                host["technology"] as JsonObject,
+                AppGraphNavigationTechnologyCatalog.NavigationHostScope,
+                out var technology,
+                out var normalizedRole,
+                out error))
             {
                 error = $"Navigation host '{id}': {error}";
+
                 return false;
             }
+
             if (!string.Equals(kind, normalizedRole, StringComparison.Ordinal)
                 || !string.Equals(
                     ReadString(host, "framework")?.Trim(),
@@ -227,20 +265,26 @@ public static class AppGraphExplorationSummaryValidator
                     StringComparison.OrdinalIgnoreCase))
             {
                 error = $"Navigation host '{id}' compatibility kind/framework must match its technology descriptor.";
+
                 return false;
             }
+
             if (!destinationsById.ContainsKey(destinationId))
             {
                 error = $"Navigation host '{id}' references unknown host destination '{destinationId}'.";
+
                 return false;
             }
+
             if (!childDestinationIds.Contains(activeChildDestinationId, StringComparer.Ordinal))
             {
                 error = $"Navigation host '{id}' does not include active child '{activeChildDestinationId}'.";
+
                 return false;
             }
+
             if (!AppGraphNavigationTechnologyCatalog.TryValidateChildOrder(
-                    technology, childDestinationIds, activeChildDestinationId, out error))
+                technology, childDestinationIds, activeChildDestinationId, out error))
             {
                 return false;
             }
@@ -250,13 +294,16 @@ public static class AppGraphExplorationSummaryValidator
                 if (!destinationsById.ContainsKey(childDestinationId))
                 {
                     error = $"Navigation host '{id}' references unknown child destination '{childDestinationId}'.";
+
                     return false;
                 }
+
                 navigationHostChildren.Add(childDestinationId);
             }
         }
 
         error = string.Empty;
+
         return true;
     }
 
@@ -270,6 +317,7 @@ public static class AppGraphExplorationSummaryValidator
             if (value is not JsonObject tabGroup)
             {
                 error = "Every tab group must be an object.";
+
                 return false;
             }
 
@@ -281,29 +329,37 @@ public static class AppGraphExplorationSummaryValidator
                 || string.IsNullOrWhiteSpace(parentDestinationId)
                 || string.IsNullOrWhiteSpace(selectedDestinationId)
                 || tabDestinationIds.Count == 0;
+
             if (hasIncompleteTabGroup)
             {
                 error = "Every tab group requires id, parentDestinationId, selectedDestinationId, and at least one observed tabDestinationId.";
+
                 return false;
             }
+
             if (!AppGraphNavigationTechnologyCatalog.TryReadAndValidate(
-                    tabGroup["technology"] as JsonObject,
-                    AppGraphNavigationTechnologyCatalog.TabGroupScope,
-                    out _,
-                    out _,
-                    out error))
+                tabGroup["technology"] as JsonObject,
+                AppGraphNavigationTechnologyCatalog.TabGroupScope,
+                out _,
+                out _,
+                out error))
             {
                 error = $"Tab group '{id}': {error}";
+
                 return false;
             }
+
             if (!destinationsById.ContainsKey(parentDestinationId))
             {
                 error = $"Tab group '{id}' references unknown parent destination '{parentDestinationId}'.";
+
                 return false;
             }
+
             if (!tabDestinationIds.Contains(selectedDestinationId, StringComparer.Ordinal))
             {
                 error = $"Tab group '{id}' does not include selected tab '{selectedDestinationId}'.";
+
                 return false;
             }
 
@@ -312,47 +368,58 @@ public static class AppGraphExplorationSummaryValidator
                 if (!destinationsById.TryGetValue(tabDestinationId, out var destination))
                 {
                     error = $"Tab group '{id}' references unknown tab destination '{tabDestinationId}'.";
+
                     return false;
                 }
+
                 if (destination.Kind != "state")
                 {
                     error = $"Internal tab destination '{tabDestinationId}' must use kind state.";
+
                     return false;
                 }
             }
         }
 
         error = string.Empty;
+
         return true;
     }
 
     private static bool TryParseObject(string? value, out JsonObject result, out string error)
     {
         result = new JsonObject();
+
         var source = value?.Trim() ?? string.Empty;
         var firstBrace = source.IndexOf('{');
         var lastBrace = source.LastIndexOf('}');
+
         if (firstBrace < 0 || lastBrace <= firstBrace)
         {
             error = "The exploration agent did not return a JSON object in its completion summary.";
+
             return false;
         }
 
         try
         {
             result = JsonNode.Parse(source[firstBrace..(lastBrace + 1)]) as JsonObject ?? new JsonObject();
+
             if (result.Count > 0)
             {
                 error = string.Empty;
+
                 return true;
             }
 
             error = "The exploration agent did not return a JSON object in its completion summary.";
+
             return false;
         }
         catch (JsonException exception)
         {
             error = $"The exploration completion summary is not valid JSON: {exception.Message}";
+
             return false;
         }
     }

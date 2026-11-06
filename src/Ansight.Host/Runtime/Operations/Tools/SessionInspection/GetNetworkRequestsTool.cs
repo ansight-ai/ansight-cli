@@ -21,6 +21,7 @@ internal sealed class GetNetworkRequestsTool : Operation
         {
             var limit = NetworkInspectionArguments.ReadLimit(arguments, "limit", 200, 1000);
             var cursor = NetworkInspectionArguments.ReadString(arguments, "cursor");
+
             if (!sessionResolver.TryResolveSession(arguments, requireLiveSession: false, out var session, out var error))
             {
                 return Task.FromResult(ToolError(error));
@@ -30,6 +31,7 @@ internal sealed class GetNetworkRequestsTool : Operation
             var snapshot = cursor is null
                 ? snapshotStore.Create(session!, NetworkInspectionFilters.Read(arguments))
                 : snapshotStore.Resolve(cursor, session!.SessionId, out offset);
+
             if (cursor is not null)
             {
                 snapshot.Filters.ValidateContinuation(arguments);
@@ -49,9 +51,11 @@ internal sealed class GetNetworkRequestsTool : Operation
                 ["nextCursor"] = null
             };
             var serializedCharacters = payload.ToJsonString().Length + 1024;
+
             while (offset + requests.Count < snapshot.Summaries.Count && requests.Count < limit)
             {
                 var summary = snapshot.Summaries[offset + requests.Count];
+
                 if (summary.Length + 1 > NetworkInspectionPayload.MaximumSerializedCharacters - serializedCharacters)
                 {
                     if (requests.Count == 0)
@@ -71,6 +75,7 @@ internal sealed class GetNetworkRequestsTool : Operation
             payload["isTruncated"] = hasMore;
             payload["hasMore"] = hasMore;
             payload["nextCursor"] = hasMore ? NetworkRequestSnapshotStore.Cursor(snapshot, offset + requests.Count) : null;
+
             if (cursor is null && hasMore)
             {
                 snapshotStore.Retain(snapshot);

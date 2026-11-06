@@ -11,6 +11,7 @@ internal sealed class ToolCatalog
     private readonly OperationRegistry tools;
     private readonly OperationServices services;
     private Ansight.Infrastructure.Extensions.OptionalExtensions? extensions;
+
     internal void ConfigureExtensions(Ansight.Infrastructure.Extensions.OptionalExtensions extensions) => this.extensions = extensions;
 
     public ToolCatalog(
@@ -76,17 +77,25 @@ internal sealed class ToolCatalog
         OperationExecutionContext? context = null)
     {
         var toolName = parameters?["name"]?.GetValue<string>();
+
         if (string.IsNullOrWhiteSpace(toolName))
         {
             return Task.FromResult(RequestResult.Error(-32602, "tools/call requires a non-empty tool name."));
         }
 
         var arguments = parameters?["arguments"] as JsonObject;
+
         if (services.SessionResolver.TryResolveLiveSession(arguments, out var session, out _)
             && ExecutionCapabilities.RejectTool(services.RuntimeState, services.AppToolBridge, session!, toolName) is { } rejection)
+        {
             return Task.FromResult(rejection);
+        }
+
         if (extensions?.HasOperation(toolName) == true)
+        {
             return extensions.GetService<IOperationExtension>().ExecuteAsync(services, toolName, arguments, correlationId, context);
+        }
+
         return tools.TryGet(toolName, out var tool)
             ? tool!.ExecuteAsync(arguments, correlationId, context)
             : Task.FromResult(RequestResult.Error(-32602, $"Unknown tool '{toolName}'."));
@@ -98,7 +107,15 @@ internal sealed class ToolCatalog
     private JsonArray BuildDefinitions()
     {
         var definitions = tools.BuildDefinitions();
-        if (extensions is not null) foreach (var definition in extensions.ReadOperationDefinitions()) definitions.Add(definition?.DeepClone());
+
+        if (extensions is not null)
+        {
+            foreach (var definition in extensions.ReadOperationDefinitions())
+            {
+                definitions.Add(definition?.DeepClone());
+            }
+        }
+
         return definitions;
     }
 

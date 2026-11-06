@@ -161,8 +161,8 @@ internal static class SessionTimelineBuilder
         }
 
         foreach (var actionGroup in snapshot.VisualTreeSnapshots
-                     .Where(visualTree => !string.IsNullOrWhiteSpace(visualTree.ActionId))
-                     .GroupBy(visualTree => visualTree.ActionId!, StringComparer.Ordinal))
+            .Where(visualTree => !string.IsNullOrWhiteSpace(visualTree.ActionId))
+            .GroupBy(visualTree => visualTree.ActionId!, StringComparer.Ordinal))
         {
             var orderedEvidence = actionGroup
                 .OrderBy(visualTree => visualTree.CapturedAtUtc)
@@ -198,6 +198,7 @@ internal static class SessionTimelineBuilder
         }
 
         var channelMap = snapshot.MetricChannels.ToDictionary(channel => channel.ChannelId);
+
         foreach (var metric in snapshot.Metrics)
         {
             AddEvent(
@@ -241,6 +242,7 @@ internal static class SessionTimelineBuilder
         DateTimeOffset? endUtc)
     {
         var normalizedTimestampUtc = timestampUtc.ToUniversalTime();
+
         if (!PayloadJson.MatchesTimestamp(normalizedTimestampUtc, startUtc, endUtc))
         {
             return;

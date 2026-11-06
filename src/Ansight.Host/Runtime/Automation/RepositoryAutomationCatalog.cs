@@ -32,6 +32,7 @@ internal sealed class RepositoryAutomationCatalog
     public IReadOnlyList<RepositoryAutomationTriggerDefinition> FindMatches(AutomationEventEnvelope envelope)
     {
         var key = new RepositoryAutomationTriggerIndexKey(envelope.Kind, envelope.AppId);
+
         if (!triggersByIndexKey.TryGetValue(key, out var candidates))
         {
             return Array.Empty<RepositoryAutomationTriggerDefinition>();

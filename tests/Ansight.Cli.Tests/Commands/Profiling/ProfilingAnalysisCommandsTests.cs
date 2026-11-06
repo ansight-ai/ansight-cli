@@ -9,7 +9,7 @@ public sealed class ProfilingAnalysisCommandsTests
     public void CreateRequest_MapsSelectionAndCpuLimit()
     {
         var arguments = CliArguments.Parse([
-            "profile",
+                "profile",
             "dotnet",
             "cpu",
             "capture-001",
@@ -23,7 +23,7 @@ public sealed class ProfilingAnalysisCommandsTests
             "7",
             "--limit",
             "25"
-        ]);
+            ]);
 
         var request = ProfilingAnalysisCommands.CreateRequest("cpu", arguments, out var resultLimit);
 
@@ -40,7 +40,7 @@ public sealed class ProfilingAnalysisCommandsTests
     public void CreateRequest_RejectsReversedSelection()
     {
         var arguments = CliArguments.Parse([
-            "profile",
+                "profile",
             "dotnet",
             "overview",
             "capture-001",
@@ -48,7 +48,7 @@ public sealed class ProfilingAnalysisCommandsTests
             "20",
             "--end-ms",
             "10"
-        ]);
+            ]);
 
         var exception = Assert.Throws<CliUsageException>(() =>
             ProfilingAnalysisCommands.CreateRequest("overview", arguments, out _));
@@ -118,6 +118,7 @@ public sealed class ProfilingAnalysisCommandsTests
             new Dictionary<string, int> { ["Microsoft-Windows-DotNETRuntime"] = 1_000 },
             new Dictionary<string, int> { ["Method/JittingStarted"] = 1 },
             ["Example warning."]);
+
         return new DotNetTraceAnalysisResult(
             "capture-001",
             "dotnet-traceevent-v2",

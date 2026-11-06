@@ -8,8 +8,12 @@ public sealed class WorkspaceLaunchTimingTests
     public void CapturesPerformedLaunchStagesAndStopsBeforeExecution()
     {
         var timing = new WorkspaceLaunchTiming(null);
+
         foreach (var stage in new[] { "target.resolve", "device.start", "app.check-install", "app.reuse", "app.stop", "app.launch", "app.launched", "session.wait", "session.selected", "app.stop" })
+        {
             timing.Report(new WorkspaceTestRunProgress(stage, "Progress"));
+        }
+
         var steps = timing.Complete();
         Assert.Equal(7, steps.Count);
         Assert.DoesNotContain(steps, step => step.Name == "Install application");

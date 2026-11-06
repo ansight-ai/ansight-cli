@@ -3,67 +3,46 @@ namespace Ansight.Host.Runtime.Configuration;
 public sealed class RuntimeOptions
 {
     public string? ExtensionsDirectory { get; init; }
-
     /// <summary>Optional embedding application's permission lifetime for background feature work.</summary>
     public CancellationToken FeatureLifetime { get; init; }
-
     public ISessionVideoEncoder? SessionVideoEncoder { get; init; }
     public ISessionVideoTranscoder? SessionVideoTranscoder { get; init; }
     public ISessionVideoFrameExtractor? SessionVideoFrameExtractor { get; init; }
-
     public string HostIdentityStorageKey { get; init; } = "host-identity";
 
     public string? HostIdentityName { get; init; }
-
     public string? BaseFolderPath { get; init; }
-
     public string? SecureStorageFilePath { get; init; }
-
     public string? SecureStorageKeyFilePath { get; init; }
-
     public string? AdbPath { get; init; }
-
     public string? XcodePath { get; init; }
-
     /// <summary>
     /// Optional AXe executable used when the resident CoreSimulator accessibility bridge is unavailable.
     /// Defaults to <c>ANSIGHT_AXE_PATH</c>, then searches <c>PATH</c> and common Homebrew locations.
     /// </summary>
     public string? IosSimulatorAxePath { get; init; }
-
     /// <summary>
     /// Optional direct WebDriverAgent server used as an iOS accessibility fallback without Appium.
     /// Defaults to <c>ANSIGHT_WDA_SERVER_URL</c>. When unset, Ansight does not probe port 8100.
     /// </summary>
     public string? IosWebDriverAgentServerUrl { get; init; }
-
     /// <summary>
     /// Appium server used for physical iOS input through the XCUITest driver.
     /// Defaults to <c>ANSIGHT_APPIUM_SERVER_URL</c> or <c>http://127.0.0.1:4723/</c>.
     /// </summary>
     public string? IosPhysicalDeviceAppiumServerUrl { get; init; }
-
     public string? IosPhysicalDeviceXcodeTeamId { get; init; }
-
     public string? IosPhysicalDeviceXcodeSigningIdentity { get; init; }
-
     public string? IosPhysicalDeviceWebDriverAgentBundleIdentifier { get; init; }
-
     public string? IosPhysicalDeviceXcodeConfigurationFilePath { get; init; }
-
     public int? DiscoveryPort { get; init; }
-
     public int? WebSocketPort { get; init; }
-
     public int? WebSocketSessionPortRangeStart { get; init; }
-
     public int? WebSocketSessionPortRangeEnd { get; init; }
-
     /// <summary>
     /// Enables repository-owned automations for apps registered with a trusted repository path.
     /// </summary>
     public bool EnableRepositoryAutomations { get; init; }
-
     /// <summary>
     /// Repository roots containing visible <c>ansight/triggers</c> modules for embedded hosts.
     /// </summary>

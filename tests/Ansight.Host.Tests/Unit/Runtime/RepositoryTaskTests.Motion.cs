@@ -8,7 +8,11 @@ public sealed partial class RepositoryTaskTests
     [Fact]
     public void Motion_TypeScriptContractExposesShakeAndTimedSamples()
     {
-        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null) return;
+        if (LocalTypeScriptTaskCompiler.ResolveCompilerPath() is null)
+        {
+            return;
+        }
+
         using var repository = CreateRepository("export const placeholder = true;");
         var path = Path.Combine(repository.RootPath, "motion.ts");
         File.WriteAllText(path, """
@@ -58,6 +62,7 @@ public sealed partial class RepositoryTaskTests
             Assert.Equal("motion-session", arguments["sessionId"]!.GetValue<string>());
             Assert.Null(arguments["deviceId"]);
             Assert.Equal(22, arguments["intensity"]!.GetValue<int>());
+
             return Task.FromResult(RequestResult.ToolResult(new JsonObject { ["sampleCount"] = 6 }, isError: false));
         }, hostApiSuites: RepositoryJavaScriptApiMethods.StandardHostToolSuites);
 

@@ -14,8 +14,8 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
     private const string AgentActionPropertyName = "ansight.agentAction";
     private const string AnnotationBatchPropertyName = "ansight.annotationBatchId";
     private const int MaximumActiveAnnotationBatchCount = 100;
-    private static readonly TimeSpan AnnotationBatchLifetime = TimeSpan.FromHours(1);
-    private static readonly TimeSpan DefaultAnnotationDuration = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan annotationBatchLifetime = TimeSpan.FromHours(1);
+    private static readonly TimeSpan defaultAnnotationDuration = TimeSpan.FromSeconds(2);
     private readonly RuntimeCoordinator runtime;
     private readonly Lock gate = new();
     private readonly Dictionary<string, StartedAnnotationBatch> startedBatches = new(StringComparer.Ordinal);
@@ -31,10 +31,11 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         IReadOnlyList<RemoteAnnotationSession> sessions = GetLiveSessions()
             .GroupBy(
-                static session => session.DeviceIdentifier,
-                StringComparer.OrdinalIgnoreCase)
+            static session => session.DeviceIdentifier,
+            StringComparer.OrdinalIgnoreCase)
             .Select(static sessions => sessions
                 .OrderByDescending(static session => session.Snapshot.AppState == AppLifecycleState.Foreground)
                 .ThenByDescending(static session => session.Snapshot.LastUpdatedUtc)
@@ -45,6 +46,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
                 session.Snapshot.ClientName,
                 session.Snapshot.AppId))
             .ToArray();
+
         return Task.FromResult(sessions);
     }
 
@@ -54,6 +56,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(SaveAnnotation(request, existing: null));
     }
 
@@ -65,6 +68,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         cancellationToken.ThrowIfCancellationRequested();
 
         var annotationId = NormalizeIdentifier(request.AnnotationId);
+
         if (annotationId is null)
         {
             return Task.FromResult(new RemoteAnnotationResult(false, "The annotation identifier is invalid."));
@@ -73,6 +77,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         var session = ResolveSession(request.DeviceUdid);
         var existing = session?.Snapshot.Annotations.SingleOrDefault(annotation =>
             string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
+
         if (session is null || existing is null)
         {
             return Task.FromResult(new RemoteAnnotationResult(
@@ -92,6 +97,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             request.BatchId,
             request.FrameId,
             request.Strokes);
+
         return Task.FromResult(SaveAnnotation(update, existing));
     }
 
@@ -105,6 +111,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         var annotationId = NormalizeIdentifier(request.AnnotationId);
         var batchId = NormalizeIdentifier(request.BatchId);
         var frameId = NormalizeIdentifier(request.FrameId);
+
         if (annotationId is null || batchId is null || frameId is null)
         {
             return Task.FromResult(new RemoteOperationResult(
@@ -115,6 +122,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         var session = ResolveSession(request.DeviceUdid);
         var existing = session?.Snapshot.Annotations.SingleOrDefault(annotation =>
             string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
+
         if (session is null || existing is null)
         {
             return Task.FromResult(new RemoteOperationResult(
@@ -125,6 +133,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         lock (gate)
         {
             PruneStartedBatches();
+
             if (!startedBatches.TryGetValue(batchId, out var startedBatch)
                 || !string.Equals(startedBatch.SessionId, session.Snapshot.SessionId, StringComparison.Ordinal)
                 || !string.Equals(startedBatch.FrameId, frameId, StringComparison.Ordinal)
@@ -137,6 +146,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         }
 
         var result = runtime.SessionEditing.DeleteAnnotation(session.Snapshot.SessionId, annotationId);
+
         return Task.FromResult(new RemoteOperationResult(
             result.IsSuccess,
             result.IsSuccess ? "Annotation removed from the batch." : result.Message));
@@ -150,6 +160,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         cancellationToken.ThrowIfCancellationRequested();
 
         var batchId = NormalizeIdentifier(request.BatchId);
+
         if (batchId is null)
         {
             return Task.FromResult(new RemoteAnnotationBatchStartResult(
@@ -158,6 +169,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         }
 
         var session = ResolveSession(request.DeviceUdid);
+
         if (session is null)
         {
             return Task.FromResult(new RemoteAnnotationBatchStartResult(
@@ -168,6 +180,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         var frame = session.Snapshot.Images
             .OrderByDescending(static candidate => candidate.CapturedAtUtc)
             .FirstOrDefault();
+
         if (frame is null)
         {
             return Task.FromResult(new RemoteAnnotationBatchStartResult(
@@ -202,6 +215,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         CancellationToken cancellationToken = default)
     {
         var session = ResolveSession(deviceIdentifier);
+
         if (session is null || !string.Equals(session.Snapshot.SessionId, sessionId, StringComparison.Ordinal))
         {
             return null;
@@ -210,9 +224,11 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         lock (gate)
         {
             PruneStartedBatches();
+
             var matchesBatch = startedBatches.TryGetValue(batchId, out var batch)
                 && string.Equals(batch.SessionId, sessionId, StringComparison.Ordinal)
                 && string.Equals(batch.FrameId, frameId, StringComparison.Ordinal);
+
             if (!matchesBatch)
             {
                 return null;
@@ -220,21 +236,25 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         }
 
         var frame = session.Snapshot.Images.FirstOrDefault(candidate => candidate.FrameId == frameId);
+
         if (frame is null)
         {
             return null;
         }
 
         var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session.Snapshot, frame);
+
         if (!File.Exists(path))
         {
             return null;
         }
 
         byte[] content;
+
         try
         {
             await using var stream = File.OpenRead(path);
+
             if (stream.Length is <= 0 or > 20 * 1024 * 1024)
             {
                 return null;
@@ -255,6 +275,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             "webp" or "image/webp" => "image/webp",
             _ => "image/png"
         };
+
         return new RemoteRecordingFrame(contentType, content);
     }
 
@@ -263,12 +284,14 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         SessionAnnotation? existing)
     {
         var comment = NormalizeComment(request.Comment);
+
         if (comment is null)
         {
             return new RemoteAnnotationResult(false, "Describe the issue before saving the annotation.");
         }
 
         var session = ResolveSession(request.DeviceUdid);
+
         if (session is null)
         {
             return new RemoteAnnotationResult(
@@ -280,20 +303,24 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         var requestedFrameId = NormalizeIdentifier(request.FrameId);
         var invalidBatchId = request.BatchId is not null && batchId is null;
         var invalidFrameId = request.FrameId is not null && requestedFrameId is null;
+
         if (invalidBatchId || invalidFrameId)
         {
             return new RemoteAnnotationResult(false, "The annotation batch or frame identifier is invalid.");
         }
 
         AnnotationFrameReference? frame = null;
+
         if (batchId is not null)
         {
             lock (gate)
             {
                 PruneStartedBatches();
+
                 var invalidBatch = !startedBatches.TryGetValue(batchId, out var startedBatch)
                     || !string.Equals(startedBatch.SessionId, session.Snapshot.SessionId, StringComparison.Ordinal)
                     || !string.Equals(startedBatch.FrameId, requestedFrameId, StringComparison.Ordinal);
+
                 if (invalidBatch)
                 {
                     return new RemoteAnnotationResult(
@@ -316,6 +343,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
                     candidate.FrameId,
                     requestedFrameId,
                     StringComparison.Ordinal));
+
             if (sessionFrame is not null)
             {
                 frame = new AnnotationFrameReference(
@@ -341,6 +369,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         }
 
         var shape = CliAnnotationGeometry.Create(request, frame.FrameId, frame.CapturedAtUtc, existing?.Geometry);
+
         if (shape.Error is not null)
         {
             return new RemoteAnnotationResult(false, shape.Error);
@@ -363,7 +392,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         {
             AnnotationId = annotationId,
             StartUtc = existing?.StartUtc ?? capturedAtUtc,
-            EndUtc = existing?.EndUtc ?? capturedAtUtc.Add(DefaultAnnotationDuration),
+            EndUtc = existing?.EndUtc ?? capturedAtUtc.Add(defaultAnnotationDuration),
             Label = BuildLabel(comment),
             Source = AnnotationSource,
             Notes = BuildNotes(comment),
@@ -391,6 +420,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         };
 
         var result = runtime.SessionEditing.UpsertAnnotation(session.Snapshot.SessionId, annotation);
+
         return result.IsSuccess
             ? new RemoteAnnotationResult(
                 true,
@@ -420,6 +450,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
     private IReadOnlyList<SessionSelection> GetLiveSessions()
     {
         var sessions = new List<SessionSelection>();
+
         foreach (var sessionId in runtime.AppTools.GetConnectedSessionIds())
         {
             if (!runtime.AppTools.IsConnected(sessionId)
@@ -430,11 +461,13 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             }
 
             var deviceIdentifier = ResolveRuntimeDeviceIdentifier(snapshot.LogStreams, snapshot.DeviceProfileJson);
+
             if (deviceIdentifier.Length > 0)
             {
                 sessions.Add(new SessionSelection(deviceIdentifier, snapshot));
             }
         }
+
         return sessions;
     }
 
@@ -462,6 +495,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             try
             {
                 using var document = JsonDocument.Parse(deviceProfileJson);
+
                 if (document.RootElement.TryGetProperty("device", out var device)
                     && device.ValueKind == JsonValueKind.Object
                     && device.TryGetProperty("nativeDeviceId", out var nativeDeviceId)
@@ -483,23 +517,25 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
     private static bool BelongsToBatch(SessionAnnotation annotation, string? batchId, string frameId)
     {
         return batchId is not null
-               && string.Equals(annotation.CaptureGroupId, batchId, StringComparison.Ordinal)
-               && annotation.Geometry.Count > 0
-               && annotation.Geometry.All(geometry => string.Equals(
-                   geometry.FrameId,
-                   frameId,
-                   StringComparison.Ordinal));
+            && string.Equals(annotation.CaptureGroupId, batchId, StringComparison.Ordinal)
+            && annotation.Geometry.Count > 0
+            && annotation.Geometry.All(geometry => string.Equals(
+                geometry.FrameId,
+                frameId,
+                StringComparison.Ordinal));
     }
 
     private static string BuildLabel(string comment)
     {
         var lineBreakIndex = comment.IndexOf('\n');
+
         return (lineBreakIndex < 0 ? comment : comment[..lineBreakIndex]).Trim();
     }
 
     private static string? BuildNotes(string comment)
     {
         var lineBreakIndex = comment.IndexOf('\n');
+
         return lineBreakIndex < 0
             ? null
             : NormalizeComment(comment[(lineBreakIndex + 1)..]);
@@ -523,6 +559,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         }
 
         var normalized = value.Trim();
+
         return normalized.Length <= 128 && normalized.All(character =>
             char.IsLetterOrDigit(character) || character is '-' or '_')
             ? normalized
@@ -540,28 +577,32 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
                 ? "act"
                 : "investigate"
         };
+
         if (batchId is not null)
         {
             customData[AnnotationBatchPropertyName] = batchId;
         }
+
         return customData;
     }
 
     private void PruneStartedBatches()
     {
-        var cutoff = DateTimeOffset.UtcNow.Subtract(AnnotationBatchLifetime);
+        var cutoff = DateTimeOffset.UtcNow.Subtract(annotationBatchLifetime);
+
         foreach (var batchId in startedBatches
-                     .Where(batch => batch.Value.StartedAtUtc < cutoff)
-                     .Select(static batch => batch.Key)
-                     .ToArray())
+            .Where(batch => batch.Value.StartedAtUtc < cutoff)
+            .Select(static batch => batch.Key)
+            .ToArray())
         {
             startedBatches.Remove(batchId);
         }
+
         foreach (var batchId in startedBatches
-                     .OrderByDescending(static batch => batch.Value.StartedAtUtc)
-                     .Skip(MaximumActiveAnnotationBatchCount - 1)
-                     .Select(static batch => batch.Key)
-                     .ToArray())
+            .OrderByDescending(static batch => batch.Value.StartedAtUtc)
+            .Skip(MaximumActiveAnnotationBatchCount - 1)
+            .Select(static batch => batch.Key)
+            .ToArray())
         {
             startedBatches.Remove(batchId);
         }
