@@ -1,4 +1,5 @@
 #import "AnsightSimulatorRtc.h"
+#include "AnsightVideoPlayout.h"
 #import "../../../native/AnsightSimulatorFrameworks.h"
 
 #import <Foundation/Foundation.h>
@@ -2287,17 +2288,26 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     }
 
     uint32_t ssrc = arc4random();
-    rtcTrackInit track = {};
-    track.direction = RTC_DIRECTION_SENDONLY;
-    track.codec = RTC_CODEC_H264;
-    track.payloadType = payloadTypes[0];
-    track.ssrc = ssrc;
-    track.mid = mid;
-    track.name = self.externalVideo ? "android" : "simulator";
-    track.msid = self.externalVideo ? "ansight-android" : "ansight-simulator";
-    track.trackId = self.externalVideo ? "android-video" : "simulator-video";
-    track.profile = "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1";
-    int configuredTrack = rtcAddTrackEx(self.peerConnection, &track);
+    rtc::Description::Video video(mid, rtc::Description::Direction::SendOnly);
+    video.addH264Codec(payloadTypes[0], "profile-level-id=42e01f;packetization-mode=1;level-asymmetry-allowed=1");
+    video.addSSRC(
+        ssrc,
+        self.externalVideo ? "android" : "simulator",
+        self.externalVideo ? "ansight-android" : "ansight-simulator",
+        self.externalVideo ? "android-video" : "simulator-video");
+
+    uint8_t playoutDelayId = 0;
+    int descriptionSize = rtcGetTrackDescription(remoteTrack, NULL, 0);
+    if (descriptionSize > 0)
+    {
+        NSMutableData *description = [NSMutableData dataWithLength:(NSUInteger)descriptionSize];
+        if (rtcGetTrackDescription(remoteTrack, (char *)description.mutableBytes, descriptionSize) > 0)
+        {
+            playoutDelayId = ConfigureInteractiveVideoPlayout(video, (const char *)description.bytes);
+        }
+    }
+
+    int configuredTrack = rtcAddTrack(self.peerConnection, video.generateSdp().c_str());
     if (configuredTrack < 0)
     {
         @synchronized (self)
@@ -2318,6 +2328,11 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     packetizer.timestamp = self.rtpTimestamp;
     packetizer.maxFragmentSize = 1200;
     packetizer.nalSeparator = self.nalSeparator;
+    // Interactive control must display decoded frames immediately, rather than
+    // accumulate the receiver's normal smooth-video playout buffer.
+    packetizer.playoutDelayId = playoutDelayId;
+    packetizer.playoutDelayMin = 0;
+    packetizer.playoutDelayMax = 0;
     int result = rtcSetH264Packetizer(configuredTrack, &packetizer);
     if (result >= 0)
     {

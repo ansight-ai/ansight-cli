@@ -7,7 +7,7 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 public sealed class WebRtcInputDispatcherTests
 {
     [Fact]
-    public async Task Enqueue_PreservesMoveCadenceAndGestureBoundaries()
+    public async Task Enqueue_CoalescesBackloggedMovesAndPreservesGestureBoundaries()
     {
         var firstDeliveryStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -55,13 +55,11 @@ public sealed class WebRtcInputDispatcherTests
         Assert.Equal(
             [
                 new DeliveredInput("down", 0.1),
-                new DeliveredInput("move", 0.2),
-                new DeliveredInput("move", 0.3),
                 new DeliveredInput("move", 0.4),
                 new DeliveredInput("up", 0.5)
             ],
             deliveredInputs);
-        Assert.Equal(3, replayDelays.Count);
+        Assert.Single(replayDelays);
         Assert.All(replayDelays, delay => Assert.True(delay > TimeSpan.Zero));
     }
 
@@ -110,11 +108,61 @@ public sealed class WebRtcInputDispatcherTests
         var deliveredMoves = deliveredInputs
             .Where(input => input.Phase == "move")
             .ToArray();
-        Assert.Equal(InputDispatcher.MaximumPendingMovesPerGesture, deliveredMoves.Length);
-        Assert.Equal(new DeliveredInput("move", 0.01), deliveredMoves[0]);
+        Assert.Single(deliveredMoves);
         Assert.Equal(new DeliveredInput("move", 0.2), deliveredMoves[^1]);
         Assert.Equal("down", deliveredInputs[0].Phase);
         Assert.Equal("up", deliveredInputs[^1].Phase);
+    }
+
+    [Theory]
+    [InlineData("up")]
+    [InlineData("cancel")]
+    public async Task Enqueue_PreservesSeparateGesturesWhileBacklogged(string endPhase)
+    {
+        var firstDeliveryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gesturesCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deliveredInputs = new List<DeliveredInput>();
+        await using var dispatcher = new InputDispatcher(
+            async message =>
+            {
+                var input = Deserialize(message);
+                deliveredInputs.Add(input);
+                if (input == new DeliveredInput("down", 0.1))
+                {
+                    firstDeliveryStarted.TrySetResult();
+                    await releaseFirstDelivery.Task;
+                }
+
+                if (input == new DeliveredInput("up", 0.9))
+                {
+                    gesturesCompleted.TrySetResult();
+                }
+            },
+            (_, _) => Task.CompletedTask);
+
+        dispatcher.Enqueue(CreateMessage("down", 0.1));
+        await firstDeliveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        dispatcher.Enqueue(CreateMessage("move", 0.2));
+        dispatcher.Enqueue(CreateMessage("move", 0.3));
+        dispatcher.Enqueue(CreateMessage(endPhase, 0.4));
+        dispatcher.Enqueue(CreateMessage("down", 0.5));
+        dispatcher.Enqueue(CreateMessage("move", 0.6));
+        dispatcher.Enqueue(CreateMessage("move", 0.8));
+        dispatcher.Enqueue(CreateMessage("up", 0.9));
+        releaseFirstDelivery.TrySetResult();
+        await gesturesCompleted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(
+            [
+                new DeliveredInput("down", 0.1),
+                new DeliveredInput("move", 0.3),
+                new DeliveredInput(endPhase, 0.4),
+                new DeliveredInput("down", 0.5),
+                new DeliveredInput("move", 0.8),
+                new DeliveredInput("up", 0.9)
+            ],
+            deliveredInputs);
     }
 
     private static string CreateMessage(string phase, double x)

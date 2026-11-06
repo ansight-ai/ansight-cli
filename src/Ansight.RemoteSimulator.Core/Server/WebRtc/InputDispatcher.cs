@@ -4,7 +4,6 @@ namespace Ansight.RemoteSimulator.Core.Server.WebRtc;
 
 internal sealed class InputDispatcher : IAsyncDisposable
 {
-    internal const int MaximumPendingMovesPerGesture = 4;
     private static readonly TimeSpan BackloggedMoveDeliveryInterval = TimeSpan.FromMilliseconds(16);
 
     private readonly Func<string, Task> deliverAsync;
@@ -38,13 +37,14 @@ internal sealed class InputDispatcher : IAsyncDisposable
             }
 
             var last = pendingInputs.Last;
-            if (pendingInput.CoalescingKey is not null
+            var replacesPendingMove = pendingInput.CoalescingKey is not null
                 && last?.Value.CoalescingKey is not null
-                && pendingInput.CoalescingKey == last.Value.CoalescingKey
-                && CountConsecutivePendingMoves(last, pendingInput.CoalescingKey)
-                    >= MaximumPendingMovesPerGesture)
+                && pendingInput.CoalescingKey == last.Value.CoalescingKey;
+            if (replacesPendingMove)
             {
-                last.Value = pendingInput;
+                // A live drag should follow the current finger position. Replaying old
+                // positions after a slow delivery makes every following input feel late.
+                last!.Value = pendingInput;
             }
             else
             {
@@ -52,23 +52,6 @@ internal sealed class InputDispatcher : IAsyncDisposable
                 pendingSignal.Release();
             }
         }
-    }
-
-    private static int CountConsecutivePendingMoves(
-        LinkedListNode<PendingInput> last,
-        MoveCoalescingKey coalescingKey)
-    {
-        var count = 0;
-        for (var node = last;
-             node is not null
-             && node.Value.CoalescingKey == coalescingKey
-             && count < MaximumPendingMovesPerGesture;
-             node = node.Previous)
-        {
-            count++;
-        }
-
-        return count;
     }
 
     public async ValueTask DisposeAsync()

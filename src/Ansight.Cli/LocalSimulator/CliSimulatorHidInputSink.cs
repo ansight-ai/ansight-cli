@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Ansight.Infrastructure.Logging;
 using Ansight.MacSimulatorHid;
 using Ansight.RemoteSimulator.Core.Input;
 using Ansight.RemoteSimulator.Core.Simulator.Apple;
@@ -6,6 +8,7 @@ namespace Ansight.Cli.LocalSimulator;
 
 internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
 {
+    private readonly ILogger log = Logger.Create();
     private readonly MacSimulatorHidSession session;
     private readonly SemaphoreSlim sendGate = new(1, 1);
     private readonly Lock statusGate = new();
@@ -51,7 +54,8 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
                     normalized.TimestampMilliseconds);
             },
             "Native SimulatorKit touch input delivered.",
-            cancellationToken);
+            cancellationToken,
+            pointerEvent.Phase);
 
     public Task<InputDeliveryResult> SendButtonAsync(
         RemoteButtonEvent buttonEvent,
@@ -124,10 +128,13 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
     private async Task<InputDeliveryResult> SendLockedAsync(
         Action send,
         string successStatus,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string inputKind = "control")
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        var queuedAt = Stopwatch.GetTimestamp();
         await sendGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var deliveryStartedAt = Stopwatch.GetTimestamp();
         try
         {
             send();
@@ -136,12 +143,24 @@ internal sealed class CliSimulatorHidInputSink : ISimulatorInputSink
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            log.Warning($"simulator_input_failed kind={inputKind} message={exception.Message}");
             SetStatus(exception.Message);
             return InputDeliveryResult.Failure(BackendName, exception.Message);
         }
         finally
         {
             sendGate.Release();
+            var queueMilliseconds = Stopwatch.GetElapsedTime(queuedAt, deliveryStartedAt).TotalMilliseconds;
+            var deliveryMilliseconds = Stopwatch.GetElapsedTime(deliveryStartedAt).TotalMilliseconds;
+            var timing = $"simulator_input_timing kind={inputKind} queueMs={queueMilliseconds:F1} deliveryMs={deliveryMilliseconds:F1}";
+            if (queueMilliseconds + deliveryMilliseconds >= 250)
+            {
+                log.Warning(timing);
+            }
+            else if (inputKind != "move")
+            {
+                log.Debug(timing);
+            }
         }
     }
 
