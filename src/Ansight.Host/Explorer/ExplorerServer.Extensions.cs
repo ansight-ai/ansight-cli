@@ -84,6 +84,11 @@ internal sealed partial class ExplorerServer
 
     private Task<bool> TryHandleRunnerGetAsync(string route, HttpListenerResponse response, bool isHead, CancellationToken cancellationToken)
     {
+        if (isExplorer && route == "api/runner/openai")
+        {
+            return ReadRunnerOpenAiAsync(response, isHead, cancellationToken);
+        }
+
         if (route != "api/runner" || !isExplorer)
         {
             return Task.FromResult(false);
@@ -94,6 +99,11 @@ internal sealed partial class ExplorerServer
 
     private Task<bool> TryHandleRunnerPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken)
     {
+        if (isExplorer && route == "api/runner/openai")
+        {
+            return UpdateRunnerOpenAiAsync(request, response, cancellationToken);
+        }
+
         if (!isExplorer || !route.StartsWith("api/runner/", StringComparison.Ordinal))
         {
             return Task.FromResult(false);

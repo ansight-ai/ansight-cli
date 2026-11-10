@@ -16,6 +16,7 @@ using Ansight.Infrastructure.Logging;
 using Ansight.Infrastructure.Preferences;
 using Ansight.Infrastructure.Security;
 using Ansight.Tools;
+using Ansight.Host.SimulatorAgent.OpenAi;
 
 namespace Ansight.Host.Runtime;
 
@@ -25,6 +26,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 {
     internal CancellationToken FeatureLifetime { get; }
     internal IEncryptedStorage ExtensionStorage { get; }
+    internal LocalOpenAiCredentialStore OpenAiCredentials { get; }
     internal RuntimeIdentity ExtensionIdentity { get; }
     public Ansight.Infrastructure.Extensions.OptionalExtensions Extensions { get; }
     private static readonly ILogger log = Ansight.Infrastructure.Logging.Logger.Create();
@@ -87,6 +89,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         Analytics = new ProductAnalytics(BaseFolderPath);
         Activity = SessionActivityService.For(ApplicationPaths);
         ExtensionStorage = encryptedStorage;
+        OpenAiCredentials = new LocalOpenAiCredentialStore(encryptedStorage);
         ExtensionIdentity = hostIdentityStore.Current;
         Extensions = new Ansight.Infrastructure.Extensions.OptionalExtensions(this, hostRuntimeOptions.ExtensionsDirectory);
         this.runtimeState = runtimeState ?? throw new ArgumentNullException(nameof(runtimeState));
@@ -136,7 +139,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             this,
             SimulatorAgent,
             new WorkspaceTestTargetLauncher(Devices, Pairing, FindMonitoredSession),
-            new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>()));
+            new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>(), OpenAiCredentials));
         operationDispatcher.ConfigureScreenshotEvaluator(new ScreenshotEvaluationRunner(WorkspaceTests.RunGateway!));
         Profiling = dotNetProfilingService
             ?? throw new ArgumentNullException(nameof(dotNetProfilingService));
@@ -230,6 +233,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 
         var hostIdentity = composition.Get<IIdentityStore>().Current;
         ExtensionStorage = encryptedStorage;
+        OpenAiCredentials = new LocalOpenAiCredentialStore(encryptedStorage);
         ExtensionIdentity = hostIdentity;
         Extensions = new Ansight.Infrastructure.Extensions.OptionalExtensions(this, options.ExtensionsDirectory);
         Identity = CreateIdentityInfo(hostIdentity);
@@ -254,7 +258,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             this,
             SimulatorAgent,
             new WorkspaceTestTargetLauncher(Devices, Pairing, FindMonitoredSession),
-            new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>()));
+            new CloudWorkspaceTestRunGateway(() => Extensions.GetService<IWorkspaceTestRunGateway>(), OpenAiCredentials));
         operationDispatcher.ConfigureScreenshotEvaluator(new ScreenshotEvaluationRunner(WorkspaceTests.RunGateway!));
         Profiling = composition.Get<DotNetProfilingService>();
         Profiling.ConfigureDeviceService(Devices);

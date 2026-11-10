@@ -1,5 +1,7 @@
 using Ansight.Host.Workspaces.Cloud;
 using Ansight.Host.Workspaces.Execution;
+using Ansight.Host.SimulatorAgent.OpenAi;
+using Ansight.Infrastructure.Security;
 
 namespace Ansight.Host.Tests.Unit.Workspaces;
 
@@ -9,7 +11,8 @@ public sealed class CloudWorkspaceTestRunGatewayTests
     public async Task PreparationDelegatesToCloudOnlyWhenRunStarts()
     {
         var cloud = new RecordingGateway();
-        var gateway = new CloudWorkspaceTestRunGateway(() => cloud);
+        var gateway = new CloudWorkspaceTestRunGateway(() => cloud,
+            new LocalOpenAiCredentialStore(new InMemoryEncryptedStorage()));
         Assert.Equal(0, cloud.Preparations);
 
         var result = await gateway.PrepareAsync(new WorkspaceTestRunPreparationRequest(

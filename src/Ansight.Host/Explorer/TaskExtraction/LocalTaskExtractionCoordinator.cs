@@ -64,7 +64,7 @@ internal sealed class LocalTaskExtractionCoordinator : IDisposable
             SupportsDirectWebSocket: true,
             TaskTypeDefinitions: RepositoryModuleContractArtifacts.GetTaskTypeDefinitions())
         {
-            CanUseModel = runtime.Extensions.IsAvailable()
+            CanUseModel = runtime.OpenAiCredentials.IsConfigured || runtime.Extensions.IsAvailable()
         };
 
     public async Task<LocalTaskAuthoringReferenceCatalog> GetAuthoringReferencesAsync(
