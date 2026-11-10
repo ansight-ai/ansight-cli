@@ -1013,6 +1013,15 @@ internal static partial class HostCommands
     {
         var mode = requestedMode ?? CompanionAccessMode.Disabled;
 
+        var restoreCompanionAccess = !requestedMode.HasValue
+            && OperatingSystem.IsMacOS()
+            && string.Equals(runtime.UserPreferences.ExternalSimulatorAccessMode, "always", StringComparison.OrdinalIgnoreCase);
+
+        if (restoreCompanionAccess)
+        {
+            mode = runtime.Companion.GetPreferredHostedAccessMode();
+        }
+
         if (!OperatingSystem.IsMacOS() && requestedMode.HasValue)
         {
             throw new PlatformNotSupportedException(

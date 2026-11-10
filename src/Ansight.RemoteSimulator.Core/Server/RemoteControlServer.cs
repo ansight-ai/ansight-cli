@@ -35,7 +35,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     private readonly ISimulatorInputSink inputSink;
     private readonly ISimulatorWebRtcSessionFactory? webRtcSessionFactory;
     private readonly IRemoteRecordingSource? recordingSource;
-    private readonly IRemoteAccessAuthorizer? accessAuthorizer;
+    private IRemoteAccessAuthorizer? accessAuthorizer;
     private readonly IRemoteDeviceLifecycleSource? deviceLifecycleSource;
     private readonly IRemoteAnnotationSource? annotationSource;
     private readonly IRemoteAgentChatSource? agentChatSource;
@@ -126,6 +126,12 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     }
 
     public bool IsRunning => listener is not null;
+
+    public void RequireRemoteAuthorization(IRemoteAccessAuthorizer authorizer)
+    {
+        ArgumentNullException.ThrowIfNull(authorizer);
+        Interlocked.CompareExchange(ref accessAuthorizer, authorizer, null);
+    }
 
     public event EventHandler? CompanionConnectionsChanged;
 
