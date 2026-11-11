@@ -6,6 +6,9 @@ namespace Ansight.Host.UiAutomation;
 public static class VisualTreeContract
 {
     public const string AccessibilityKind = "accessibility";
+    public const string AvaloniaAccessibilityKind = "avalonia-accessibility";
+    public const string AvaloniaLogicalKind = "avalonia-logical";
+    public const string AvaloniaVisualKind = "avalonia-visual";
     public const string DomKind = "dom";
     public const string FlutterKind = "flutter";
     public const string MauiKind = "maui";
@@ -16,6 +19,8 @@ public static class VisualTreeContract
     public const string UnknownKind = "unknown";
 
     public const string DeviceAccessibilityFormat = "ansight.device-accessibility.compact.v2";
+    public const string AvaloniaFormat = "ansight.avalonia.visual-tree.compact.v2";
+    public const string AvaloniaAccessibilityFormat = "ansight.avalonia.accessibility-tree.compact.v2";
     public const string DomFormat = "ansight.dom.visual-tree.compact.v2";
     public const string FlutterFormat = "ansight.flutter.visual-tree.compact.v2";
     public const string MauiFormat = "ansight.maui.visual-tree.compact.v2";
@@ -35,6 +40,9 @@ public static class VisualTreeContract
     public const string WindowsRuntimePlatform = "windows";
 
     public const string DomToolId = "dom.get_document";
+    public const string AvaloniaLogicalToolId = "avalonia.get_logical_tree";
+    public const string AvaloniaAccessibilityToolId = "avalonia.get_accessibility_tree";
+    public const string AvaloniaVisualToolId = "avalonia.get_visual_tree";
     public const string FlutterToolId = "flutter.get_widget_tree";
     public const string MauiToolId = "maui.get_visual_tree";
     public const string NativeToolId = "ui.get_visual_tree";
@@ -53,6 +61,29 @@ public static class VisualTreeContract
         string? format)
     {
         var normalizedToolId = Normalize(toolId);
+
+        if (normalizedToolId is AvaloniaAccessibilityToolId)
+        {
+            return AvaloniaAccessibilityKind;
+        }
+
+        if (normalizedToolId is AvaloniaLogicalToolId)
+        {
+            return AvaloniaLogicalKind;
+        }
+
+        if (normalizedToolId is AvaloniaVisualToolId)
+        {
+            return AvaloniaVisualKind;
+        }
+
+        var normalizedSource = Normalize(source);
+
+        // ui.get_visual_tree is also the generic dispatcher for framework providers.
+        if (normalizedSource is AvaloniaLogicalKind or AvaloniaVisualKind or AvaloniaAccessibilityKind)
+        {
+            return normalizedSource;
+        }
 
         if (normalizedToolId is MauiToolId)
         {
@@ -87,6 +118,9 @@ public static class VisualTreeContract
         var normalizedKind = Normalize(reportedKind);
 
         if (normalizedKind is AccessibilityKind
+            or AvaloniaAccessibilityKind
+            or AvaloniaLogicalKind
+            or AvaloniaVisualKind
             or MauiKind
             or ReactComponentKind
             or ReactShadowKind
@@ -108,8 +142,6 @@ public static class VisualTreeContract
             return ReactShadowKind;
         }
 
-        var normalizedSource = Normalize(source);
-
         if (normalizedSource is "device-accessibility" or "core-simulator-ax-service")
         {
             return AccessibilityKind;
@@ -128,6 +160,8 @@ public static class VisualTreeContract
         return NormalizeFormat(format) switch
         {
             DeviceAccessibilityFormat => AccessibilityKind,
+            AvaloniaAccessibilityFormat => AvaloniaAccessibilityKind,
+            AvaloniaFormat => normalizedKind is "logical" ? AvaloniaLogicalKind : AvaloniaVisualKind,
             MauiFormat => MauiKind,
             ReactFormat => normalizedKind is "shadow" ? ReactShadowKind : ReactComponentKind,
             FlutterFormat => FlutterKind,
@@ -141,6 +175,8 @@ public static class VisualTreeContract
         => Normalize(format) switch
         {
             DeviceAccessibilityFormat => DeviceAccessibilityFormat,
+            AvaloniaAccessibilityFormat => AvaloniaAccessibilityFormat,
+            AvaloniaFormat => AvaloniaFormat,
             DomFormat => DomFormat,
             FlutterFormat => FlutterFormat,
             MauiFormat => MauiFormat,

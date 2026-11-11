@@ -19,6 +19,9 @@ public sealed class LiveVisualTreeCaptureServiceTests
 
     [Theory]
     [InlineData(VisualTreeContract.MauiToolId, VisualTreeContract.MauiKind)]
+    [InlineData(VisualTreeContract.AvaloniaVisualToolId, VisualTreeContract.AvaloniaVisualKind)]
+    [InlineData(VisualTreeContract.AvaloniaLogicalToolId, VisualTreeContract.AvaloniaLogicalKind)]
+    [InlineData(VisualTreeContract.AvaloniaAccessibilityToolId, VisualTreeContract.AvaloniaAccessibilityKind)]
     [InlineData(VisualTreeContract.DomToolId, VisualTreeContract.DomKind)]
     [InlineData(VisualTreeContract.ReactComponentToolId, VisualTreeContract.ReactComponentKind)]
     [InlineData(VisualTreeContract.ReactShadowToolId, VisualTreeContract.ReactShadowKind)]

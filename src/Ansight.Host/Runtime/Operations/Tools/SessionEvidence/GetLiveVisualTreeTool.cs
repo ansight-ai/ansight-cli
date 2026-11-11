@@ -20,7 +20,7 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
     protected override string Title => "Get Live Visual Tree";
 
-    protected override string Description => "Describe the rendered UI from the device accessibility hierarchy first. Falls back to the connected app's MAUI, React Native, Flutter widget, Cordova/Capacitor DOM, or native visual tree when device accessibility is unavailable; pass toolId to force an app tree.";
+    protected override string Description => "Describe the rendered UI from the device accessibility hierarchy first. Falls back to the connected app's Avalonia, MAUI, React Native, Flutter widget, Cordova/Capacitor DOM, or native visual tree when device accessibility is unavailable; pass toolId to force an app tree.";
 
     protected override JsonObject InputSchema => ToolSchema.Object(
         properties: new Dictionary<string, ToolSchema>
@@ -32,6 +32,9 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                 nullable: true,
                 enumValues:
                 [
+                    VisualTreeContract.AvaloniaVisualToolId,
+                    VisualTreeContract.AvaloniaLogicalToolId,
+                    VisualTreeContract.AvaloniaAccessibilityToolId,
                     VisualTreeContract.DomToolId,
                     VisualTreeContract.FlutterToolId,
                     VisualTreeContract.MauiToolId,
@@ -214,6 +217,21 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                 : null;
         }
 
+        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaVisualToolId))
+        {
+            return VisualTreeContract.AvaloniaVisualToolId;
+        }
+
+        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaLogicalToolId))
+        {
+            return VisualTreeContract.AvaloniaLogicalToolId;
+        }
+
+        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaAccessibilityToolId))
+        {
+            return VisualTreeContract.AvaloniaAccessibilityToolId;
+        }
+
         if (RemoteAppToolCatalog.HasTool(catalogPayload, RemoteAppToolIds.MauiGetVisualTree))
         {
             return RemoteAppToolIds.MauiGetVisualTree;
@@ -328,6 +346,15 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
 
     internal static JsonObject BuildDefaultVisualTreeArguments(string toolId)
     {
+        if (toolId is VisualTreeContract.AvaloniaVisualToolId or VisualTreeContract.AvaloniaLogicalToolId or VisualTreeContract.AvaloniaAccessibilityToolId)
+        {
+            return new JsonObject
+            {
+                ["maxDepth"] = 24,
+                ["maxNodes"] = 2000
+            };
+        }
+
         if (string.Equals(toolId, RemoteAppToolIds.MauiGetVisualTree, StringComparison.Ordinal))
         {
             return new JsonObject

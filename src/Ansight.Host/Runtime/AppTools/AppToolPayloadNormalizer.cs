@@ -11,12 +11,19 @@ internal static class AppToolPayloadNormalizer
     private const int DefaultReactComponentTreeMaxDepth = 28;
 
     public static bool IsVisualTreeTool(string toolId)
-        => string.Equals(toolId, VisualTreeContract.MauiToolId, StringComparison.Ordinal)
+    {
+        var isVisualTree = string.Equals(toolId, VisualTreeContract.MauiToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.AvaloniaVisualToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.AvaloniaLogicalToolId, StringComparison.Ordinal)
+            || string.Equals(toolId, VisualTreeContract.AvaloniaAccessibilityToolId, StringComparison.Ordinal)
             || string.Equals(toolId, VisualTreeContract.ReactShadowToolId, StringComparison.Ordinal)
             || string.Equals(toolId, VisualTreeContract.ReactComponentToolId, StringComparison.Ordinal)
             || string.Equals(toolId, VisualTreeContract.FlutterToolId, StringComparison.Ordinal)
             || string.Equals(toolId, VisualTreeContract.DomToolId, StringComparison.Ordinal)
             || string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal);
+
+        return isVisualTree;
+    }
 
     public static JsonObject ApplyHostToolDefaults(
         string toolId,

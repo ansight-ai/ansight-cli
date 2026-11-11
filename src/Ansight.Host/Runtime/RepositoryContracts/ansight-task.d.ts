@@ -703,6 +703,9 @@ export interface KeyboardInputResult extends UiActionResult {
 
 /** App tools supported by the host visual-tree capture operation. */
 export type VisualTreeToolId =
+  | "avalonia.get_logical_tree"
+  | "avalonia.get_visual_tree"
+  | "avalonia.get_accessibility_tree"
   | "device.accessibility"
   | "dom.get_document"
   | "flutter.get_widget_tree"
@@ -770,6 +773,10 @@ export interface LiveNavigationStructureArguments {
 
 /** Supported normalized visual-tree representations. */
 export type VisualTreeKind =
+  | "accessibility"
+  | "avalonia-logical"
+  | "avalonia-visual"
+  | "avalonia-accessibility"
   | "dom"
   | "flutter"
   | "maui"
@@ -781,6 +788,9 @@ export type VisualTreeKind =
 
 /** Supported compact visual-tree wire formats. */
 export type VisualTreeFormat =
+  | "ansight.device-accessibility.compact.v2"
+  | "ansight.avalonia.visual-tree.compact.v2"
+  | "ansight.avalonia.accessibility-tree.compact.v2"
   | "ansight.dom.visual-tree.compact.v2"
   | "ansight.flutter.visual-tree.compact.v2"
   | "ansight.maui.visual-tree.compact.v2"

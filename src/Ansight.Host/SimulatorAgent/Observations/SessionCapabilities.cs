@@ -32,6 +32,11 @@ internal sealed record SessionCapabilities(
                 frameworks.Add("maui");
             }
 
+            if (HasAvaloniaTree)
+            {
+                frameworks.Add("avalonia");
+            }
+
             if (VisualTreeToolIds.Contains(VisualTreeContract.ReactShadowToolId, StringComparer.Ordinal)
                 || VisualTreeToolIds.Contains(VisualTreeContract.ReactComponentToolId, StringComparer.Ordinal))
             {
@@ -47,8 +52,23 @@ internal sealed record SessionCapabilities(
             return frameworks.ToArray();
         }
     }
+    private bool HasAvaloniaTree
+    {
+        get
+        {
+            var hasAvaloniaTree = VisualTreeToolIds.Contains(VisualTreeContract.AvaloniaVisualToolId, StringComparer.Ordinal)
+                || VisualTreeToolIds.Contains(VisualTreeContract.AvaloniaLogicalToolId, StringComparer.Ordinal)
+                || VisualTreeToolIds.Contains(VisualTreeContract.AvaloniaAccessibilityToolId, StringComparer.Ordinal);
+
+            return hasAvaloniaTree;
+        }
+    }
+
     private static readonly IReadOnlyList<string> supportedVisualTreeToolIds =
     [
+        VisualTreeContract.AvaloniaVisualToolId,
+        VisualTreeContract.AvaloniaLogicalToolId,
+        VisualTreeContract.AvaloniaAccessibilityToolId,
         VisualTreeContract.MauiToolId,
         VisualTreeContract.ReactShadowToolId,
         VisualTreeContract.ReactComponentToolId,
@@ -126,6 +146,11 @@ internal sealed record SessionCapabilities(
         get
         {
             var technologies = new List<string>();
+
+            if (HasAvaloniaTree)
+            {
+                technologies.Add("Avalonia");
+            }
 
             if (VisualTreeToolIds.Contains(VisualTreeContract.MauiToolId, StringComparer.Ordinal)
                 || NavigationFrameworks.Contains("maui", StringComparer.Ordinal))

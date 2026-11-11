@@ -88,6 +88,9 @@ public sealed class LiveVisualTreeCaptureService
         };
         LiveVisualTreeSource[] supported =
         [
+            new(VisualTreeContract.AvaloniaVisualToolId, "Avalonia visual tree"),
+            new(VisualTreeContract.AvaloniaLogicalToolId, "Avalonia logical tree"),
+            new(VisualTreeContract.AvaloniaAccessibilityToolId, "Avalonia accessibility tree"),
             new(VisualTreeContract.MauiToolId, "MAUI"),
             new(VisualTreeContract.ReactShadowToolId, "React shadow tree"),
             new(VisualTreeContract.ReactComponentToolId, "React component tree"),
