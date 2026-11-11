@@ -70,9 +70,10 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         var evidenceSource = ResolveEvidenceSource(selectedCapture);
         var ocrResult = LiveUiOcrSearchResult.NotAttempted;
 
-        if (semanticSelection.ResolutionMatches.Count == 0
-            && selector.CanUseOcr
-            && RunRequestContext.AllowsScreenshotOcr(correlationId))
+        var needsScreenshotText = ShouldSearchScreenshotText(semanticSelection, selector)
+            && RunRequestContext.AllowsScreenshotOcr(correlationId);
+
+        if (needsScreenshotText)
         {
             attemptedSources.Add("ocr");
             ocrResult = await LiveUiOcrSearch.FindAsync(
@@ -289,6 +290,25 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         return new SemanticSelection(relaxedMatches, matches, relaxedMatches.Count > 0);
     }
 
+    internal static bool ShouldSearchScreenshotText(SemanticSelection selection, LiveUiSelector selector)
+    {
+        // Framework peers can inherit a child's name even when that child lies
+        // beyond the capture depth. The container's bounds do not locate its text.
+        return selector.CanUseOcr
+            && selection.ResolutionMatches.All(IsStructuralContainer);
+    }
+
+    private static bool IsStructuralContainer(LiveUiNodeMatch match)
+    {
+        var actions = LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry);
+        var acceptsDirectInput = actions.Any(action => action is "tap" or "typeText");
+        var role = LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry);
+        var hasContainerRole = role is "view" or "scrollview" or "list" or "window"
+            or "application" or "dialog" or "group" or "pane";
+
+        return !acceptsDirectInput && hasContainerRole;
+    }
+
     internal static JsonObject? BuildTapHint(
         JsonObject root,
         LiveUiNodeMatch match,
@@ -297,12 +317,7 @@ internal sealed class FindLiveUiTool : RemoteAppOperation
         JsonObject? payload = null,
         string? targetSource = null)
     {
-        var actions = LiveUiNodeQuery.ReadSupportedActions(match.Node, match.TypeRegistry);
-        var structuralContainer = !actions.Any(action => action is "tap" or "typeText")
-            && LiveUiNodeQuery.ReadRole(match.Node, match.TypeRegistry)
-                is "view" or "scrollview" or "list" or "window" or "application" or "dialog" or "group";
-
-        if (structuralContainer)
+        if (IsStructuralContainer(match))
         {
             return null;
         }
