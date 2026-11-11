@@ -18,15 +18,15 @@ esac
 rtc_source_root="$rtc_output_root/src"
 rtc_libdatachannel_source="$rtc_source_root/libdatachannel"
 rtc_mbedtls_source="$rtc_source_root/mbedtls"
-rtc_libdatachannel_commit="c6696d157b5612df2a741d9a03b192b47ab6cefb"
-rtc_mbedtls_commit="c765c831e5c2a0971410692f92f7a81d6ec65ec2"
+rtc_libdatachannel_commit="443f6934d9007eb7076ab7825ba330f355fcbead"
+rtc_mbedtls_commit="068ff080b369adfac81509f9b57b2afabaf82dc5"
 rtc_sdk_path=$(/usr/bin/xcrun --sdk macosx --show-sdk-path)
 rtc_cmake=$(command -v cmake)
 
 "$rtc_cmake" -E make_directory "$rtc_source_root"
 
 if [[ ! -d "$rtc_libdatachannel_source/.git" ]]; then
-  /usr/bin/git clone --depth 1 --branch v0.24.3 \
+  /usr/bin/git clone --depth 1 --branch v0.24.5 \
     https://github.com/paullouisageneau/libdatachannel.git \
     "$rtc_libdatachannel_source"
 fi
@@ -39,7 +39,7 @@ fi
 /usr/bin/git -C "$rtc_libdatachannel_source" submodule update --init --recursive --depth 1
 
 if [[ ! -d "$rtc_mbedtls_source/.git" ]]; then
-  /usr/bin/git clone --depth 1 --branch mbedtls-3.6.4 \
+  /usr/bin/git clone --depth 1 --branch mbedtls-3.6.7 \
     https://github.com/Mbed-TLS/mbedtls.git \
     "$rtc_mbedtls_source"
 fi
