@@ -20,6 +20,32 @@ public sealed class SessionActivityTests : IDisposable
     }
 
     [Fact]
+    public void ActiveOperationsFollowTargetsAndDisappearOnCompletionOrDisposal()
+    {
+        var service = new SessionActivityService(Store());
+        using (var run = service.Begin("test.run", "test", displayName: "Open details"))
+        {
+            run.SetDeviceTarget("simulator-one");
+            run.SetTarget("session-one", "com.example.app");
+            run.SetTarget("session-two", "com.example.app");
+            var active = service.ListActive();
+            Assert.Equal(2, active.Count);
+            Assert.All(active, record => Assert.Equal("simulator-one", record.DeviceIdentifier));
+            Assert.All(active, record => Assert.Equal("Open details", record.DisplayName));
+            run.Complete("cancelled");
+            Assert.Empty(service.ListActive());
+        }
+
+        using (service.Begin("agent.run", "agent", "session-one"))
+        {
+            Assert.Single(service.ListActive());
+            Assert.Empty(new SessionActivityService(Store()).ListActive());
+        }
+
+        Assert.Empty(service.ListActive());
+    }
+
+    [Fact]
     public async Task PersistsBeforeDispatchAndRecordsCancellationWithoutPrivateErrorText()
     {
         var store = Store();

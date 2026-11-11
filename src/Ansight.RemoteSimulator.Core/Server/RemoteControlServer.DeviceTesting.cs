@@ -41,7 +41,7 @@ public sealed partial class RemoteControlServer
                 or "app-capabilities" or "permission-grant" or "permission-deny" or "permission-reset"
                 or "app-background" or "app-resume" or "app-restart" or "push" or "open-link"
                 or "display-rotation" or "display-appearance" or "display-text-size"
-                or "task-start" or "task-status" or "task-cancel";
+                or "task-start" or "task-status" or "task-cancel" or "device-activity";
 
         if (!validRequest)
         {
@@ -52,9 +52,14 @@ public sealed partial class RemoteControlServer
             return;
         }
 
+        if (request!.Action != "device-activity")
+        {
+            await RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         // A lease must remain resettable even after its target shuts down.
         var needsBootedDevice = request!.Action is not ("network-get" or "network-reset" or "route-stop" or "route-status"
-            or "task-status" or "task-cancel");
+            or "task-status" or "task-cancel" or "device-activity");
 
         if (needsBootedDevice && !IsBootedDevice(request.DeviceUdid))
         {

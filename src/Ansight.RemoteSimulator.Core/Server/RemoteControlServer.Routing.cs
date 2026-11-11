@@ -85,7 +85,7 @@ public sealed partial class RemoteControlServer
 
         if (target.AbsolutePath is "/api/state" or "/api/location/set" or "/api/location/clear"
             or "/api/webrtc/offer" or "/api/frame" or "/api/input" or "/api/button"
-            or "/api/key" or "/api/text" or "/api/device/testing")
+            or "/api/key" or "/api/text")
         {
             await RefreshDevicesAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -125,7 +125,8 @@ public sealed partial class RemoteControlServer
                 agentChatSource is not null,
                 agentChatSource?.SupportsSubmission == true,
                 appInspectionSource is not null,
-                annotationSource?.SupportsFreeDraw == true);
+                annotationSource?.SupportsFreeDraw == true,
+                deviceTestingSource?.SupportsActivity == true);
             await WriteJsonAsync(stream, HttpStatusCode.OK, response, cancellationToken).ConfigureAwait(false);
 
             return;

@@ -485,6 +485,8 @@ public sealed partial class WorkspaceTestService
         var launchTiming = new WorkspaceLaunchTiming(progress);
         progress = launchTiming;
 
+        using var runActivity = runtime.Activity.Begin("test.run", "test", session?.SessionId, test.AppId,
+            deviceIdentifier: request.Target?.DeviceIdentifier, displayName: test.Name);
         WorkspaceTestTarget? launchedTarget = null;
         IDisposable? deviceClaim = null;
         DeviceRunSession? deviceSession = null;
@@ -547,6 +549,12 @@ public sealed partial class WorkspaceTestService
                     progress,
                     cancellationToken).ConfigureAwait(false);
                 launchedTarget = launchResult.Target;
+
+                if (launchedTarget is not null)
+                {
+                    runActivity.SetDeviceTarget(launchedTarget.DeviceIdentifier);
+                }
+
                 enrollmentInviteId = launchResult.EnrollmentInviteId;
                 deviceClaim = launchResult.DeviceClaim;
 
@@ -631,6 +639,7 @@ public sealed partial class WorkspaceTestService
                     test, session.SessionId, target: launchedTarget);
             }
 
+            runActivity.SetTarget(session.SessionId, test.AppId);
             sessionRun = new SessionUiTestRun(test.TestId, test.Name, Guid.NewGuid().ToString("N"),
                 "running", test.IsTaskOnly ? "task" : "agent", DateTimeOffset.UtcNow,
                 request.BatchRunId, request.BatchIndex, request.BatchCount);

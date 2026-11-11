@@ -25,7 +25,7 @@ internal sealed class SessionActivityOperation : IDisposable
     internal string TraceId => record.TraceId;
 
     internal SessionActivityOperation(SessionActivityService service, string operation, string category,
-        string? sessionId, string? appId, string? requestId)
+        string? sessionId, string? appId, string? requestId, string? deviceIdentifier = null, string? displayName = null)
     {
         this.service = service;
         parent = Current;
@@ -46,6 +46,8 @@ internal sealed class SessionActivityOperation : IDisposable
             Category = category,
             SessionId = ActivityCaller.Limit(sessionId),
             AppId = ActivityCaller.Limit(appId),
+            DeviceIdentifier = ActivityCaller.Limit(deviceIdentifier),
+            DisplayName = ActivityCaller.Limit(displayName),
             Caller = context.Caller,
             RequestId = ActivityCaller.Limit(requestId),
             RunId = context.RunId,
@@ -60,6 +62,18 @@ internal sealed class SessionActivityOperation : IDisposable
 
         service.Append(record);
         current.Value = this;
+    }
+
+    internal void SetDeviceTarget(string deviceIdentifier)
+    {
+        record = record with
+        {
+            DeviceIdentifier = ActivityCaller.Limit(deviceIdentifier),
+            EventId = Guid.NewGuid().ToString("N"),
+            Phase = "target",
+            TimestampUtc = DateTimeOffset.UtcNow
+        };
+        service.Append(record);
     }
 
     internal void SetTarget(string sessionId, string? appId = null)

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ansight.Host.Activity;
 using Ansight.Infrastructure.Security;
 using Ansight.RemoteSimulator.Core.Devices;
 
@@ -6,6 +7,33 @@ namespace Ansight.Cli.Tests.Commands.Companion;
 
 public sealed class CompanionTaskTests
 {
+    [Fact]
+    public async Task DeviceActivityReportsExternalRunsOnOnlyTheirTargetAndClearsOnCompletion()
+    {
+        using var directory = TestDirectory.Create();
+        await using var runtime = CreateRuntime(directory.Path);
+        await using var source = new CliCompanionTestingSource(runtime, new CliRemoteAnnotationSource(runtime));
+        var request = new RemoteDeviceTestingRequest("SIMULATOR-ONE", "device-activity");
+        Assert.True(source.SupportsActivity);
+        using var caller = SessionActivityContext.ExecuteAs("agent", "External agent", "external-run");
+
+        using (var test = runtime.Activity.Begin("test.run", "test", "session", "com.example.app",
+            deviceIdentifier: "simulator-one", displayName: "Open area details"))
+        using (runtime.Activity.Begin("agent.run", "agent", "session", "com.example.app",
+            deviceIdentifier: "simulator-one"))
+        {
+            var current = await source.ExecuteAsync(request);
+            var activity = Assert.Single(current.Details!["activities"]!.AsArray())!;
+            Assert.Equal("Open area details", activity["title"]!.GetValue<string>());
+            Assert.Equal("test", activity["kind"]!.GetValue<string>());
+            var otherDevice = await source.ExecuteAsync(request with { DeviceUdid = "simulator-two" });
+            Assert.Empty(otherDevice.Details!["activities"]!.AsArray());
+        }
+
+        var finished = await source.ExecuteAsync(request);
+        Assert.Empty(finished.Details!["activities"]!.AsArray());
+    }
+
     [Fact]
     public void TestIncludesAnIndependentEvidenceBasedValidationInstruction()
     {

@@ -289,7 +289,8 @@ public sealed partial class SimulatorAgentService : IDisposable
 
         var runId = (request.TrackingRunId ?? Guid.NewGuid()).ToString("N");
         using var callerScope = SessionActivityContext.ExecuteAs("agent", "ansight-agent", runId, request.BatchRunId);
-        using var activityOperation = activity?.Begin("agent.run", "agent", sessionId, appId);
+        using var activityOperation = activity?.Begin("agent.run", "agent", sessionId, appId,
+            deviceIdentifier: request.TargetDeviceIdentifier, displayName: appGraphExplorationName ?? "Agent task");
         using var taskTraceScope = RepositoryTaskTraceScope.Begin(request.CaptureTrace);
         toolGateway.BeginRun(sessionId, secretAccess, request.TargetDeviceIdentifier);
 

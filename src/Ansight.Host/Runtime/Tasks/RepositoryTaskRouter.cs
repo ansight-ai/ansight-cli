@@ -189,7 +189,8 @@ internal sealed class RepositoryTaskRouter
 
         var runId = requestedRunId ?? Guid.NewGuid().ToString("N");
         using var callerScope = SessionActivityContext.ExecuteAs("automation", "repository-task", runId, batchRunId ?? context?.BatchRunId);
-        using var operation = activity.Begin("task." + task.TaskId, "task", sessionId, task.AppId, correlationId);
+        using var operation = activity.Begin("task." + task.TaskId, "task", sessionId, task.AppId, correlationId,
+            displayName: task.Title);
         RepositoryTaskRunResult result;
 
         if (!task.Enabled)

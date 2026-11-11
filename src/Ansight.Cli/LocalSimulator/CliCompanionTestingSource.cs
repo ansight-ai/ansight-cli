@@ -8,7 +8,7 @@ using Ansight.RemoteSimulator.Core.Devices;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed class CliCompanionTestingSource : IRemoteDeviceTestingSource, IAsyncDisposable
+internal sealed partial class CliCompanionTestingSource : IRemoteDeviceTestingSource, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly RuntimeCoordinator runtime;
@@ -46,9 +46,16 @@ internal sealed class CliCompanionTestingSource : IRemoteDeviceTestingSource, IA
         }
     }
 
+    public bool SupportsActivity => true;
+
     public async Task<RemoteDeviceTestingResult> ExecuteAsync(RemoteDeviceTestingRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (request.Action == "device-activity")
+        {
+            return ReadDeviceActivity(request.DeviceUdid);
+        }
+
         if (request.Action is not ("task-start" or "task-status" or "task-cancel"))
         {
             var result = await runtime.CompanionDeviceTesting.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);

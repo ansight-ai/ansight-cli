@@ -16,6 +16,8 @@ public sealed record SessionActivityRecord
     public required string Category { get; init; }
     public string? SessionId { get; init; }
     public string? AppId { get; init; }
+    public string? DeviceIdentifier { get; init; }
+    public string? DisplayName { get; init; }
     public required ActivityCaller Caller { get; init; }
     public string? RequestId { get; init; }
     public string? RunId { get; init; }

@@ -26,6 +26,7 @@ public sealed class RemoteControlServerCompanionTests
     [InlineData("task-status", "stopped", HttpStatusCode.OK, true)]
     [InlineData("task-cancel", "stopped", HttpStatusCode.OK, true)]
     [InlineData("task-start", "stopped", HttpStatusCode.NotFound, false)]
+    [InlineData("device-activity", "stopped", HttpStatusCode.OK, true)]
     public async Task DeviceTesting_ValidatesActionAndTargetBeforeDispatch(
         string action,
         string deviceId,
