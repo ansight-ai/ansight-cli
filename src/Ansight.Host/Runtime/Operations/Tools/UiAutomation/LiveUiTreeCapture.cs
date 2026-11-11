@@ -8,11 +8,24 @@ internal sealed partial class LiveUiTreeCapture
 {
     public const string DeviceAccessibilityToolId = "device.accessibility";
 
+    internal static IReadOnlyList<string> TargetSources { get; } = Array.AsReadOnly<string>(
+    [
+        DeviceAccessibilityToolId,
+        VisualTreeContract.AvaloniaVisualToolId,
+        VisualTreeContract.AvaloniaLogicalToolId,
+        VisualTreeContract.AvaloniaAccessibilityToolId,
+        RemoteAppToolIds.UiGetVisualTree,
+        RemoteAppToolIds.MauiGetVisualTree,
+        RemoteAppToolIds.ReactGetComponentTree,
+        RemoteAppToolIds.ReactGetShadowTree,
+        RemoteAppToolIds.FlutterGetWidgetTree,
+        RemoteAppToolIds.DomGetDocument
+    ]);
+
     internal static bool IsTargetSource(string? source)
-        => source is DeviceAccessibilityToolId or RemoteAppToolIds.UiGetVisualTree
-            or RemoteAppToolIds.MauiGetVisualTree or RemoteAppToolIds.ReactGetComponentTree
-            or RemoteAppToolIds.ReactGetShadowTree or RemoteAppToolIds.FlutterGetWidgetTree
-            or RemoteAppToolIds.DomGetDocument;
+    {
+        return source is not null && TargetSources.Contains(source, StringComparer.Ordinal);
+    }
 
     private LiveUiTreeCapture(
         AppSessionSnapshot session,

@@ -225,6 +225,9 @@ public sealed partial class AppInteractionBackendTests
 
     [Theory]
     [InlineData("ui.get_visual_tree", 1)]
+    [InlineData("avalonia.get_visual_tree", 1)]
+    [InlineData("avalonia.get_logical_tree", 1)]
+    [InlineData("avalonia.get_accessibility_tree", 1)]
     [InlineData("device.accessibility", 0)]
     public async Task TargetSourceKeepsTheObservedProviderEvenWhenAnotherProviderAlsoMatches(string source, int nativeCaptures)
     {
@@ -232,7 +235,12 @@ public sealed partial class AppInteractionBackendTests
         var accessible = CreateFlatModalAccessibility();
         accessible["root"]!["children"]!.AsArray().RemoveAt(0);
 
-        var bridge = new ModalSelectorBridge(session.SessionId, CreateModalNativeTree());
+        var bridge = new ModalSelectorBridge(session.SessionId, CreateModalNativeTree())
+        {
+            ToolId = source == LiveUiTreeCapture.DeviceAccessibilityToolId
+                ? RemoteAppToolIds.UiGetVisualTree
+                : source
+        };
         var router = new UiInputRouter();
         router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
 
@@ -244,8 +252,12 @@ public sealed partial class AppInteractionBackendTests
         Assert.Equal(nativeCaptures, bridge.Captures);
     }
 
-    [Fact]
-    public async Task TargetSourceCannotBypassAnActiveModal()
+    [Theory]
+    [InlineData("ui.get_visual_tree")]
+    [InlineData("avalonia.get_visual_tree")]
+    [InlineData("avalonia.get_logical_tree")]
+    [InlineData("avalonia.get_accessibility_tree")]
+    public async Task TargetSourceCannotBypassAnActiveModal(string source)
     {
         var session = CreateModalTestSession();
         var bridge = new ModalSelectorBridge(session.SessionId, CreateModalNativeTree());
@@ -255,7 +267,7 @@ public sealed partial class AppInteractionBackendTests
         using var target = router.BeginTargetScope(session.SessionId, "simulator-001");
         var selector = LiveUiSelector.Parse(new JsonObject { ["automationId"] = "background-button" });
         var result = await LiveUiTreeCapture.CaptureForSelectorAsync(session, bridge, router,
-            "ansight_tap_ui", null, selector, CancellationToken.None, targetSource: RemoteAppToolIds.UiGetVisualTree);
+            "ansight_tap_ui", null, selector, CancellationToken.None, targetSource: source);
         Assert.True(result.IsSuccess);
         Assert.Equal(LiveUiTreeCapture.DeviceAccessibilityToolId, result.Capture!.ToolId);
         Assert.Empty(LiveUiNodeQuery.Find(result.Capture.Root, selector, result.Capture.TypeRegistry));
@@ -560,6 +572,7 @@ public sealed partial class AppInteractionBackendTests
         }
 
         public int Captures { get; private set; }
+        public string ToolId { get; init; } = RemoteAppToolIds.UiGetVisualTree;
         public string? LastRoot { get; private set; }
         public bool IncludesComputedStyles { get; private set; }
         public bool FailCapture { get; init; }
@@ -588,13 +601,13 @@ public sealed partial class AppInteractionBackendTests
                 Type = ToolProtocolMessageTypes.CatalogType,
                 Id = "catalog",
                 SessionId = id,
-                Payload = new JsonObject { ["tools"] = new JsonArray(new JsonObject { ["id"] = RemoteAppToolIds.UiGetVisualTree }) }
+                Payload = new JsonObject { ["tools"] = new JsonArray(new JsonObject { ["id"] = ToolId }) }
             }));
 
         public Task<AppToolBridgeResponse> CallToolAsync(string id, string toolId, JsonObject? arguments,
             CancellationToken cancellationToken, AppToolBridgeRequestContext? requestContext = null)
         {
-            Assert.Equal(RemoteAppToolIds.UiGetVisualTree, toolId);
+            Assert.Equal(ToolId, toolId);
             LastRoot = arguments?["root"]?.GetValue<string>();
             IncludesComputedStyles = arguments?["includeComputedStyles"]?.GetValue<bool>() == true;
             LastSubtreeRoot = arguments?["rootNodeId"]?.GetValue<string>();

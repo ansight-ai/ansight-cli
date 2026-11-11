@@ -961,9 +961,7 @@ internal sealed class LiveUiActionTool : RemoteAppOperation
         if (actionKind is LiveUiActionKind.Tap or LiveUiActionKind.LongPress or LiveUiActionKind.TypeText
             or LiveUiActionKind.Scroll or LiveUiActionKind.Swipe)
         {
-            properties["targetSource"] = ToolSchema.String(
-                "Copy the capture provider from tapHint.selector unchanged. The host resolves the target in that same provider and checks fresh evidence; never invent a source.",
-                nullable: true);
+            properties["targetSource"] = LiveUiToolSchemas.TargetSource();
             properties["targetFingerprint"] = ToolSchema.String(
                 "Copy this opaque freshness value from tapHint.selector when supplied. The host rechecks the target and nearby text before acting; rediscover if it changed.",
                 nullable: true);

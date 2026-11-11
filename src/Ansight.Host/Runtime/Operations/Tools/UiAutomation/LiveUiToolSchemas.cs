@@ -5,6 +5,14 @@ namespace Ansight.Host.Runtime.Operations.Tools.UiAutomation;
 
 internal static class LiveUiToolSchemas
 {
+    public static ToolSchema TargetSource()
+    {
+        return ToolSchema.String(
+            "Copy targetSource from tapHint.selector unchanged, or leave null when the hint omits it (including screenshot text). This is a capture tool id, not an evidenceSource label. The host recaptures that provider and checks fresh evidence before acting.",
+            enumValues: LiveUiTreeCapture.TargetSources,
+            nullable: true);
+    }
+
     public static Dictionary<string, ToolSchema> SelectorProperties(
         Dictionary<string, ToolSchema>? properties = null)
     {
