@@ -6,6 +6,33 @@ namespace Ansight.Host.Tests.Unit.RemoteSimulator;
 
 public sealed class WebRtcInputDispatcherTests
 {
+    [Theory]
+    [InlineData(1, 65537)]
+    [InlineData(129, 100)]
+    [InlineData(9, 65536)]
+    public async Task Flood_ClosesQueueAndCancelsBlockedDelivery(int messages, int size)
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rejected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deliveries = 0;
+        var dispatcher = new InputDispatcher(async (_, cancellation) =>
+        {
+            Interlocked.Increment(ref deliveries);
+            started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellation);
+        }, onOverflow: () => rejected.TrySetResult());
+        dispatcher.Enqueue("{}");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        for (var index = 0; index < messages; index++)
+        {
+            dispatcher.Enqueue(new string('x', size));
+        }
+
+        await rejected.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await dispatcher.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, deliveries);
+    }
+
     [Fact]
     public async Task Enqueue_CoalescesBackloggedMovesAndPreservesGestureBoundaries()
     {

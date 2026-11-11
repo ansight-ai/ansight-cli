@@ -52,46 +52,90 @@ public sealed partial class RemoteControlServer
         int framesPerSecond,
         WebRtcSessionDescription browserOffer,
         IReadOnlySet<string> grantedScopes,
+        DateTimeOffset? authorizationExpiresAtUtc,
+        string? authorizationLeaseId,
         CancellationToken cancellationToken)
     {
-        var session = webRtcSessionFactory!.Create(deviceUdid, framesPerSecond);
-        var sessionId = CreateSessionToken();
-        var inputDispatcher = new InputDispatcher(
-            message => DeliverWebRtcInputAsync(sessionId, message));
-        EventHandler<WebRtcInputMessageEventArgs>? inputHandler = null;
-        inputHandler = (_, args) => inputDispatcher.Enqueue(args.Message);
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = authorizationExpiresAtUtc ?? now.Add(maximumSessionLease);
+        var invalidLease = expiresAt <= now
+            || expiresAt > now.Add(maximumSessionLease)
+            || (authorizationLeaseId is not null && !Guid.TryParse(authorizationLeaseId, out _));
 
-        var registration = new SessionRegistration(
-            session,
-            inputHandler,
-            inputDispatcher,
-            grantedScopes);
-        session.InputReceived += inputHandler;
-
-        if (!webRtcSessions.TryAdd(sessionId, registration))
+        if (invalidLease)
         {
-            session.InputReceived -= inputHandler;
-            await inputDispatcher.DisposeAsync().ConfigureAwait(false);
-            await session.DisposeAsync().ConfigureAwait(false);
-            throw new InvalidOperationException("Could not allocate a WebRTC session identifier.");
+            throw new UnauthorizedAccessException("The companion authorization has expired.");
         }
+
+        if (!webRtcCapacity.Wait(0))
+        {
+            throw new HttpRequestException("The host has reached its companion connection limit.",
+                null, HttpStatusCode.TooManyRequests);
+        }
+
+        ISimulatorWebRtcSession? session = null;
+        InputDispatcher? inputDispatcher = null;
+        EventHandler<WebRtcInputMessageEventArgs>? inputHandler = null;
+        var sessionId = CreateSessionToken();
+        var registered = false;
 
         try
         {
-            var answer = await session
-                .CreateAnswerAsync(browserOffer, cancellationToken)
-                .ConfigureAwait(false);
+            session = webRtcSessionFactory!.Create(deviceUdid, framesPerSecond);
+            inputDispatcher = new InputDispatcher(
+                (message, cancellation) => DeliverWebRtcInputAsync(sessionId, message, cancellation),
+                onOverflow: () => _ = Task.Run(() => CloseWebRtcSessionAsync(sessionId)));
+            inputHandler = (_, args) => inputDispatcher.Enqueue(args.Message);
+            var registration = new SessionRegistration(session, inputHandler, inputDispatcher,
+                grantedScopes, expiresAt, authorizationLeaseId);
+            session.InputReceived += inputHandler;
+            registered = webRtcSessions.TryAdd(sessionId, registration);
 
-            return new OfferResponse(
-                sessionId,
-                answer.Type,
-                TerminateSdp(answer.Sdp),
-                framesPerSecond,
+            if (!registered)
+            {
+                throw new InvalidOperationException("Could not allocate a WebRTC session identifier.");
+            }
+
+            using var negotiation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            negotiation.CancelAfter(TimeSpan.FromSeconds(30));
+            var answer = await session.CreateAnswerAsync(browserOffer, negotiation.Token)
+                .WaitAsync(negotiation.Token).ConfigureAwait(false);
+
+            return new OfferResponse(sessionId, answer.Type, TerminateSdp(answer.Sdp), framesPerSecond,
                 grantedScopes.OrderBy(scope => scope, StringComparer.Ordinal).ToArray());
         }
         catch
         {
-            await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
+            if (registered)
+            {
+                await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
+            }
+            else
+            {
+                try
+                {
+                    if (session is not null)
+                    {
+                        session.InputReceived -= inputHandler;
+                        await session.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        if (inputDispatcher is not null)
+                        {
+                            await inputDispatcher.DisposeAsync().ConfigureAwait(false);
+                        }
+                    }
+                    finally
+                    {
+                        webRtcCapacity.Release();
+                    }
+                }
+            }
+
             throw;
         }
     }
@@ -101,7 +145,7 @@ public sealed partial class RemoteControlServer
             ? sdp
             : $"{sdp.TrimEnd('\r', '\n')}\r\n";
 
-    private async Task DeliverWebRtcInputAsync(string sessionId, string message)
+    private async Task DeliverWebRtcInputAsync(string sessionId, string message, CancellationToken cancellationToken)
     {
         try
         {
@@ -111,7 +155,22 @@ public sealed partial class RemoteControlServer
                 return;
             }
 
+            if (registration.AuthorizationExpiresAtUtc <= DateTimeOffset.UtcNow)
+            {
+                _ = Task.Run(() => CloseWebRtcSessionAsync(sessionId, registration));
+
+                return;
+            }
+
             using var document = JsonDocument.Parse(message);
+
+            if (document.RootElement.TryGetProperty("kind", out var heartbeatKind)
+                && heartbeatKind.GetString() == "companion_keepalive")
+            {
+                KeepLocalSessionAlive(sessionId, registration);
+
+                return;
+            }
 
             if (document.RootElement.TryGetProperty("kind", out var kind)
                 && string.Equals(kind.GetString(), "companion_presence", StringComparison.Ordinal))
@@ -143,6 +202,11 @@ public sealed partial class RemoteControlServer
                 return;
             }
 
+            if (!registration.GrantedScopes.Contains("control"))
+            {
+                return;
+            }
+
             if (document.RootElement.TryGetProperty("button", out _))
             {
                 var buttonEvent = document.RootElement.Deserialize<RemoteButtonEvent>(jsonOptions)
@@ -154,7 +218,7 @@ public sealed partial class RemoteControlServer
                     return;
                 }
 
-                await inputSink.SendButtonAsync(buttonEvent).ConfigureAwait(false);
+                await inputSink.SendButtonAsync(buttonEvent, cancellationToken).ConfigureAwait(false);
 
                 return;
             }
@@ -170,7 +234,7 @@ public sealed partial class RemoteControlServer
                     return;
                 }
 
-                await inputSink.SendKeyAsync(keyEvent).ConfigureAwait(false);
+                await inputSink.SendKeyAsync(keyEvent, cancellationToken).ConfigureAwait(false);
 
                 return;
             }
@@ -186,7 +250,7 @@ public sealed partial class RemoteControlServer
                     return;
                 }
 
-                await inputSink.SendTextAsync(textEvent).ConfigureAwait(false);
+                await inputSink.SendTextAsync(textEvent, cancellationToken).ConfigureAwait(false);
 
                 return;
             }
@@ -200,7 +264,7 @@ public sealed partial class RemoteControlServer
                 return;
             }
 
-            await inputSink.SendAsync(pointerEvent).ConfigureAwait(false);
+            await inputSink.SendAsync(pointerEvent, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -735,9 +799,14 @@ public sealed partial class RemoteControlServer
         => string.Equals(suppliedUdid, sessionUdid, StringComparison.OrdinalIgnoreCase)
             && IsBootedDevice(suppliedUdid);
 
-    private async Task CloseWebRtcSessionAsync(string sessionId)
+    private async Task CloseWebRtcSessionAsync(string sessionId, SessionRegistration? expected = null)
     {
-        if (!webRtcSessions.TryRemove(sessionId, out var registration))
+        SessionRegistration? registration = expected;
+        var removed = expected is null
+            ? webRtcSessions.TryRemove(sessionId, out registration)
+            : webRtcSessions.TryRemove(new KeyValuePair<string, SessionRegistration>(sessionId, expected));
+
+        if (!removed || registration is null)
         {
             return;
         }
@@ -746,11 +815,20 @@ public sealed partial class RemoteControlServer
 
         try
         {
-            await registration.InputDispatcher.DisposeAsync().ConfigureAwait(false);
-            await registration.Session.DisposeAsync().ConfigureAwait(false);
+            // Close the transport before waiting for in-flight work to stop.
+            try
+            {
+                await registration.Session.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await registration.InputDispatcher.DisposeAsync().ConfigureAwait(false);
+            }
         }
         finally
         {
+            webRtcCapacity.Release();
+
             if (registration.CompanionDevice is not null)
             {
                 CompanionConnectionsChanged?.Invoke(this, EventArgs.Empty);

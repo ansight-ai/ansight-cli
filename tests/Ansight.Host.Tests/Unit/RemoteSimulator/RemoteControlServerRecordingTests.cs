@@ -262,7 +262,7 @@ public sealed class RemoteControlServerRecordingTests
                 framesPerSecond = 30,
                 type = "offer",
                 sdp = "v=0\r\n",
-                grantedScopes = new[] { "view" },
+                grantedScopes = new[] { "view", "control" },
             });
         using var offerResponse = await client.PostAsync(
             Endpoint(server, "/api/webrtc/offer"),
@@ -282,6 +282,133 @@ public sealed class RemoteControlServerRecordingTests
         Assert.Equal("right", pointerEvent.MouseButton);
         Assert.Equal(0.25, pointerEvent.NormalizedX);
         Assert.Equal(0.75, pointerEvent.NormalizedY);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InputKinds_RequireControlScope(bool grantControl)
+    {
+        var sink = new FakeRemoteSimulatorInputSink();
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(CreateMinimalRecordingSource(), factory, sink);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        using var offer = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), new
+        {
+            deviceUdid = "device-1", framesPerSecond = 30, type = "offer", sdp = "v=0\r\n",
+            grantedScopes = grantControl ? new[] { "view", "control" } : new[] { "view" }
+        });
+        Assert.True(offer.IsSuccessStatusCode, await offer.Content.ReadAsStringAsync());
+        var session = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        session.Receive("""{"udid":"device-1","phase":"down","x":0.2,"y":0.3,"pointerId":1}""");
+        session.Receive("""{"udid":"device-1","button":"home"}""");
+        session.Receive("""{"udid":"device-1","usageCode":4,"phase":"down"}""");
+        session.Receive("""{"udid":"device-1","text":"forbidden"}""");
+        // The reply is a queue barrier: all earlier input has been processed.
+        session.Receive("""{"kind":"recording_request","requestId":"barrier","operation":"list"}""");
+        await session.WaitForMessageAsync();
+        Assert.Equal(grantControl ? 4 : 0, sink.DeliveredCount);
+    }
+
+    [Fact]
+    public async Task SessionCapacity_IsReleasedWhenAPeerCloses()
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(CreateMinimalRecordingSource(), factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var body = new { deviceUdid = "device-1", framesPerSecond = 30, type = "offer", sdp = "v=0\r\n", grantedScopes = new[] { "view" } };
+        string? firstSessionId = null;
+        for (var index = 0; index < 8; index++)
+        {
+            using var offer = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), body);
+            Assert.True(offer.IsSuccessStatusCode, await offer.Content.ReadAsStringAsync());
+            var answer = await offer.Content.ReadFromJsonAsync<JsonElement>();
+            firstSessionId ??= answer.GetProperty("sessionId").GetString();
+        }
+
+        using var overflow = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), body);
+        Assert.Equal(HttpStatusCode.TooManyRequests, overflow.StatusCode);
+        await server.DisconnectCompanionAsync(firstSessionId!);
+        using var replacement = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), body);
+        Assert.True(replacement.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task RemoteSession_ExpiresDespiteDataChannelKeepalive_AndRejectsWrongLease()
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(CreateMinimalRecordingSource(), factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var leaseId = Guid.NewGuid().ToString("D");
+        using var offer = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), new
+        {
+            deviceUdid = "device-1", framesPerSecond = 30, type = "offer", sdp = "v=0\r\n",
+            grantedScopes = new[] { "view" }, authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(1)
+        });
+        Assert.True(offer.IsSuccessStatusCode, await offer.Content.ReadAsStringAsync());
+        var answer = await offer.Content.ReadFromJsonAsync<JsonElement>();
+        var sessionId = answer.GetProperty("sessionId").GetString();
+        var session = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        session.Receive("""{"kind":"companion_keepalive"}""");
+        using var localKeepalive = await client.PostAsync(
+            Endpoint(server, "/api/webrtc/keepalive") + "&session=" + Uri.EscapeDataString(sessionId!), null);
+        Assert.Equal(HttpStatusCode.Forbidden, localKeepalive.StatusCode);
+        using var wrongLease = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/renew"), new
+        {
+            sessionId, authorizationLeaseId = Guid.NewGuid().ToString("D"),
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(90)
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, wrongLease.StatusCode);
+        await Task.Delay(TimeSpan.FromMilliseconds(1100));
+        await server.RemoveExpiredWebRtcSessionsAsync();
+        Assert.True(session.IsDisposed);
+        using var expiredRenewal = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/renew"), new
+        {
+            sessionId, authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(90)
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, expiredRenewal.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ValidRenewal_PreservesThePeerPastItsOriginalExpiry(bool localViewer)
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(CreateMinimalRecordingSource(), factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var leaseId = localViewer ? null : Guid.NewGuid().ToString("D");
+        using var offer = await PostJsonAsync(client, Endpoint(server, "/api/webrtc/offer"), new
+        {
+            deviceUdid = "device-1", framesPerSecond = 30, type = "offer", sdp = "v=0\r\n",
+            grantedScopes = new[] { "view" }, authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(1)
+        });
+        Assert.True(offer.IsSuccessStatusCode, await offer.Content.ReadAsStringAsync());
+        var answer = await offer.Content.ReadFromJsonAsync<JsonElement>();
+        using var renewal = localViewer
+            ? await client.PostAsync(Endpoint(server, "/api/webrtc/keepalive")
+                + "&session=" + Uri.EscapeDataString(answer.GetProperty("sessionId").GetString()!), null)
+            : await PostJsonAsync(client, Endpoint(server, "/api/webrtc/renew"), new
+        {
+            sessionId = answer.GetProperty("sessionId").GetString(), authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(90)
+        });
+        Assert.True(renewal.IsSuccessStatusCode);
+        await Task.Delay(TimeSpan.FromMilliseconds(1100));
+        await server.RemoveExpiredWebRtcSessionsAsync();
+        Assert.False(Assert.IsType<FakeWebRtcSession>(factory.LastSession).IsDisposed);
+    }
+
+    private static Task<HttpResponseMessage> PostJsonAsync(HttpClient client, string endpoint, object body)
+    {
+        return client.PostAsync(endpoint, new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
     }
 
     [Theory]
@@ -615,6 +742,12 @@ public sealed class RemoteControlServerRecordingTests
         public Task<string> WaitForMessageAsync()
             => messageSent.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public bool IsDisposed { get; private set; }
+
+        public ValueTask DisposeAsync()
+        {
+            IsDisposed = true;
+            return ValueTask.CompletedTask;
+        }
     }
 }

@@ -6,7 +6,11 @@ internal sealed class InputDispatcher : IAsyncDisposable
 {
     private static readonly TimeSpan backloggedMoveDeliveryInterval = TimeSpan.FromMilliseconds(16);
 
-    private readonly Func<string, Task> deliverAsync;
+    private const int MaximumMessageCharacters = 64 * 1024;
+    private const int MaximumPendingMessages = 128;
+    private const int MaximumPendingCharacters = 512 * 1024;
+    private readonly Func<string, CancellationToken, Task> deliverAsync;
+    private readonly Action? onOverflow;
     private readonly Func<TimeSpan, CancellationToken, Task> delayAsync;
     private readonly Lock gate = new();
     private readonly LinkedList<PendingInput> pendingInputs = [];
@@ -14,13 +18,24 @@ internal sealed class InputDispatcher : IAsyncDisposable
     private readonly CancellationTokenSource stopSource = new();
     private readonly Task processingTask;
     private bool disposed;
+    private bool overloaded;
+    private int pendingCharacters;
 
     public InputDispatcher(
         Func<string, Task> deliverAsync,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
+        : this((message, _) => deliverAsync(message), delayAsync)
+    {
+    }
+
+    public InputDispatcher(
+        Func<string, CancellationToken, Task> deliverAsync,
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        Action? onOverflow = null)
     {
         this.deliverAsync = deliverAsync ?? throw new ArgumentNullException(nameof(deliverAsync));
         this.delayAsync = delayAsync ?? Task.Delay;
+        this.onOverflow = onOverflow;
         processingTask = ProcessAsync();
     }
 
@@ -28,19 +43,39 @@ internal sealed class InputDispatcher : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var pendingInput = new PendingInput(message, ResolveMoveCoalescingKey(message));
-
         lock (gate)
         {
-            if (disposed)
+            if (disposed || overloaded)
             {
                 return;
             }
 
+            // Check size before parsing or retaining attacker-controlled JSON.
+            if (message.Length > MaximumMessageCharacters)
+            {
+                RejectOverflow();
+
+                return;
+            }
+
+            var pendingInput = new PendingInput(message, ResolveMoveCoalescingKey(message));
             var last = pendingInputs.Last;
             var replacesPendingMove = pendingInput.CoalescingKey is not null
                 && last?.Value.CoalescingKey is not null
                 && pendingInput.CoalescingKey == last.Value.CoalescingKey;
+            var nextCharacters = pendingCharacters + message.Length
+                - (replacesPendingMove ? last!.Value.Message.Length : 0);
+            var exceedsCapacity = nextCharacters > MaximumPendingCharacters
+                || (!replacesPendingMove && pendingInputs.Count >= MaximumPendingMessages);
+
+            if (exceedsCapacity)
+            {
+                RejectOverflow();
+
+                return;
+            }
+
+            pendingCharacters = nextCharacters;
 
             if (replacesPendingMove)
             {
@@ -56,6 +91,14 @@ internal sealed class InputDispatcher : IAsyncDisposable
         }
     }
 
+    private void RejectOverflow()
+    {
+        overloaded = true;
+        pendingInputs.Clear();
+        pendingCharacters = 0;
+        onOverflow?.Invoke();
+    }
+
     public async ValueTask DisposeAsync()
     {
         lock (gate)
@@ -67,6 +110,7 @@ internal sealed class InputDispatcher : IAsyncDisposable
 
             disposed = true;
             pendingInputs.Clear();
+            pendingCharacters = 0;
         }
 
         await stopSource.CancelAsync().ConfigureAwait(false);
@@ -97,12 +141,14 @@ internal sealed class InputDispatcher : IAsyncDisposable
                 {
                     pendingInput = first.Value;
                     pendingInputs.RemoveFirst();
+                    pendingCharacters -= pendingInput.Message.Length;
                 }
             }
 
             if (pendingInput is not null)
             {
-                await deliverAsync(pendingInput.Message).ConfigureAwait(false);
+                await deliverAsync(pendingInput.Message, stopSource.Token)
+                    .WaitAsync(stopSource.Token).ConfigureAwait(false);
 
                 if (pendingInput.CoalescingKey is not null && HasPendingInputs())
                 {
@@ -130,10 +176,20 @@ internal sealed class InputDispatcher : IAsyncDisposable
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            if (!root.TryGetProperty("phase", out var phase)
-                || !string.Equals(phase.GetString(), "move", StringComparison.OrdinalIgnoreCase)
-                || !root.TryGetProperty("udid", out var deviceUdid)
-                || string.IsNullOrWhiteSpace(deviceUdid.GetString())
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var isMove = root.TryGetProperty("phase", out var phase)
+                && string.Equals(phase.GetString(), "move", StringComparison.OrdinalIgnoreCase);
+
+            if (!isMove || !root.TryGetProperty("udid", out var deviceUdid))
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(deviceUdid.GetString())
                 || !root.TryGetProperty("pointerId", out var pointerId))
             {
                 return null;

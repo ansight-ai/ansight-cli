@@ -33,7 +33,13 @@ public sealed partial class RemoteControlServer
                 {
                     await WriteJsonAsync(
                         client.GetStream(),
-                        HttpStatusCode.InternalServerError,
+                        ex switch
+                        {
+                            HttpRequestException { StatusCode: { } statusCode } => statusCode,
+                            UnauthorizedAccessException => HttpStatusCode.Forbidden,
+                            InvalidDataException or JsonException => HttpStatusCode.BadRequest,
+                            _ => HttpStatusCode.InternalServerError
+                        },
                         new ErrorResponse(ex.Message),
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -803,8 +809,32 @@ public sealed partial class RemoteControlServer
                 framesPerSecond,
                 browserOffer,
                 NormalizeScopes(offerRequest.GrantedScopes),
+                offerRequest.AuthorizationExpiresAtUtc,
+                offerRequest.AuthorizationLeaseId,
                 cancellationToken).ConfigureAwait(false);
             await WriteJsonAsync(stream, HttpStatusCode.OK, response, cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (request.Method == "POST" && target.AbsolutePath == "/api/webrtc/renew")
+        {
+            var renewal = JsonSerializer.Deserialize<WebRtcRenewal>(request.Body, jsonOptions)
+                ?? throw new InvalidDataException("A session renewal is required.");
+            var renewed = RenewWebRtcSession(renewal);
+            await WriteJsonAsync(stream, renewed ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                new { renewed }, cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (request.Method == "POST" && target.AbsolutePath == "/api/webrtc/keepalive")
+        {
+            var renewed = query.TryGetValue("session", out var localSessionId)
+                && webRtcSessions.TryGetValue(localSessionId, out var registration)
+                && KeepLocalSessionAlive(localSessionId, registration);
+            await WriteJsonAsync(stream, renewed ? HttpStatusCode.OK : HttpStatusCode.Forbidden,
+                new { renewed }, cancellationToken).ConfigureAwait(false);
 
             return;
         }

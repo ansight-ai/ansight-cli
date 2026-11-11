@@ -8,5 +8,7 @@ internal sealed record SessionRegistration(
     EventHandler<WebRtcInputMessageEventArgs> InputHandler,
     InputDispatcher InputDispatcher,
     IReadOnlySet<string> GrantedScopes,
+    DateTimeOffset AuthorizationExpiresAtUtc,
+    string? AuthorizationLeaseId,
     RemoteCompanionDevice? CompanionDevice = null,
     DateTimeOffset? ConnectedAtUtc = null);

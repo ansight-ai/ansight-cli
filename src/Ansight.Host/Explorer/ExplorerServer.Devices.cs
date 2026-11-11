@@ -190,10 +190,11 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             case "offer":
                 endpoint = "/api/webrtc/offer";
                 body["deviceUdid"] = target.DeviceIdentifier;
-                body["grantedScopes"] = new JsonArray();
+                body["grantedScopes"] = new JsonArray("view", "control");
                 break;
+            case "keepalive":
             case "close":
-                endpoint = "/api/webrtc/close";
+                endpoint = operation == "close" ? "/api/webrtc/close" : "/api/webrtc/keepalive";
                 var remoteSessionId = ReadOptionalString(body, "sessionId");
                 if (string.IsNullOrWhiteSpace(remoteSessionId))
                 {

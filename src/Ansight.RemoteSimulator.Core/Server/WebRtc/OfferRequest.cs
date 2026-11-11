@@ -5,4 +5,6 @@ internal sealed record OfferRequest(
     int? FramesPerSecond,
     string Type,
     string Sdp,
-    IReadOnlyList<string>? GrantedScopes);
+    IReadOnlyList<string>? GrantedScopes,
+    DateTimeOffset? AuthorizationExpiresAtUtc = null,
+    string? AuthorizationLeaseId = null);

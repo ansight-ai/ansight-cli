@@ -46,9 +46,11 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     private readonly int requestedPort;
     private readonly string sessionToken;
     private readonly ConcurrentDictionary<string, SessionRegistration> webRtcSessions = new();
+    private readonly SemaphoreSlim webRtcCapacity = new(8, 8);
     private TcpListener? listener;
     private CancellationTokenSource? serverCancellation;
     private Task? acceptTask;
+    private Task? sessionExpiryTask;
 
     public RemoteControlServer(
         SimulatorTracker tracker,
@@ -262,6 +264,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         Port = ((IPEndPoint)nextListener.LocalEndpoint).Port;
         serverCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         acceptTask = AcceptConnectionsAsync(nextListener, serverCancellation.Token);
+        sessionExpiryTask = ExpireWebRtcSessionsAsync(serverCancellation.Token);
 
         return Task.CompletedTask;
     }
@@ -303,6 +306,12 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
             {
                 // This exception is an expected fallback for the best-effort operation.
             }
+        }
+
+        if (sessionExpiryTask is not null)
+        {
+            await sessionExpiryTask.ConfigureAwait(false);
+            sessionExpiryTask = null;
         }
 
         serverCancellation?.Dispose();

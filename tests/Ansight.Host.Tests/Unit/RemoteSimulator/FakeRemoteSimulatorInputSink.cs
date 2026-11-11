@@ -8,6 +8,8 @@ internal sealed class FakeRemoteSimulatorInputSink : ISimulatorInputSink
     private readonly TaskCompletionSource<RemotePointerEvent> pointerReceived = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
 
+    public int DeliveredCount { get; private set; }
+
     public string BackendName => "fake";
 
     public string Status => "Ready";
@@ -16,6 +18,7 @@ internal sealed class FakeRemoteSimulatorInputSink : ISimulatorInputSink
         RemotePointerEvent pointerEvent,
         CancellationToken cancellationToken = default)
     {
+        DeliveredCount++;
         pointerReceived.TrySetResult(pointerEvent);
 
         return Task.FromResult(InputDeliveryResult.Success(BackendName));
@@ -27,17 +30,26 @@ internal sealed class FakeRemoteSimulatorInputSink : ISimulatorInputSink
     public Task<InputDeliveryResult> SendButtonAsync(
         RemoteButtonEvent buttonEvent,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(InputDeliveryResult.Success(BackendName));
+    {
+        DeliveredCount++;
+        return Task.FromResult(InputDeliveryResult.Success(BackendName));
+    }
 
     public Task<InputDeliveryResult> SendKeyAsync(
         RemoteKeyEvent keyEvent,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(InputDeliveryResult.Success(BackendName));
+    {
+        DeliveredCount++;
+        return Task.FromResult(InputDeliveryResult.Success(BackendName));
+    }
 
     public Task<InputDeliveryResult> SendTextAsync(
         RemoteTextEvent textEvent,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(InputDeliveryResult.Success(BackendName));
+    {
+        DeliveredCount++;
+        return Task.FromResult(InputDeliveryResult.Success(BackendName));
+    }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
