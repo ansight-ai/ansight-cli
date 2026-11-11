@@ -54,6 +54,7 @@ internal static class LiveUiNodeQuery
             .OrderByDescending(candidate => IsActionReady(candidate.Match, viewport))
             .ThenByDescending(candidate => hasActivePageContext
                 && LiveUiMauiContext.IsInActivePage(candidate.Match, payload))
+            .ThenByDescending(candidate => ReadBoolean(candidate.Match.Node, "interactable", fallback: false))
             .ThenByDescending(candidate => HasUsableBoundsInViewport(candidate.Match, viewport))
             .ThenBy(candidate => candidate.Index)
             .Select(candidate => candidate.Match)

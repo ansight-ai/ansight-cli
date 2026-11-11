@@ -451,6 +451,19 @@ internal sealed partial class LiveUiTreeCapture
             requestContext,
             cancellationToken);
 
+        if (selector is not null && toolId.StartsWith("avalonia.", StringComparison.Ordinal))
+        {
+            preferredResult = AddAttemptedToolIds(preferredResult, [toolId]);
+            preferredResult = await CaptureAvaloniaFallbackAsync(
+                preferredResult,
+                session,
+                appToolBridge,
+                catalogPayload,
+                requestContext,
+                selector,
+                cancellationToken);
+        }
+
         if (!ShouldTryNativeFallback(preferredResult, toolId, catalogPayload, selector))
         {
             return preferredResult;
@@ -462,7 +475,10 @@ internal sealed partial class LiveUiTreeCapture
             RemoteAppToolIds.UiGetVisualTree,
             requestContext,
             cancellationToken);
-        var attemptedToolIds = new[] { toolId, RemoteAppToolIds.UiGetVisualTree };
+        var attemptedToolIds = preferredResult.AttemptedToolIds
+            .Append(RemoteAppToolIds.UiGetVisualTree)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         if (!nativeResult.IsSuccess)
         {

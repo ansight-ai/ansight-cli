@@ -47,6 +47,9 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                 properties: new Dictionary<string, ToolSchema>(),
                 additionalProperties: true,
                 nullable: true),
+            ["rootNodeId"] = ToolSchema.String(
+                "Optional subtree root copied from a preceding framework tree. Avalonia pages are depth-bounded; use a captured descendant ID to continue deeper into that subtree instead of increasing maxDepth.",
+                nullable: true),
             ["root"] = ToolSchema.String(
                 "MAUI root scope. Defaults to currentPage.",
                 nullable: true,
@@ -79,8 +82,13 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         var includeProperties = arguments?["includeProperties"]?.GetValue<bool>() ?? false;
         var includeBounds = arguments?["includeBounds"]?.GetValue<bool>() ?? true;
 
-        if (NormalizeOptionalString(arguments?["toolId"]?.GetValue<string>()) is null
-            && !includeProperties)
+        var rootNodeId = NormalizeOptionalString(arguments?["rootNodeId"]?.GetValue<string>())
+            ?? NormalizeOptionalString(arguments?["arguments"]?["rootNodeId"]?.GetValue<string>());
+        var useDeviceAccessibility = NormalizeOptionalString(arguments?["toolId"]?.GetValue<string>()) is null
+            && !includeProperties
+            && rootNodeId is null;
+
+        if (useDeviceAccessibility)
         {
             var maxNodes = Math.Clamp(
                 LiveUiToolSchemas.ReadInteger(arguments, "maxNodes", 256),
@@ -217,9 +225,9 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
                 : null;
         }
 
-        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaVisualToolId))
+        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaAccessibilityToolId))
         {
-            return VisualTreeContract.AvaloniaVisualToolId;
+            return VisualTreeContract.AvaloniaAccessibilityToolId;
         }
 
         if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaLogicalToolId))
@@ -227,9 +235,9 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
             return VisualTreeContract.AvaloniaLogicalToolId;
         }
 
-        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaAccessibilityToolId))
+        if (RemoteAppToolCatalog.HasTool(catalogPayload, VisualTreeContract.AvaloniaVisualToolId))
         {
-            return VisualTreeContract.AvaloniaAccessibilityToolId;
+            return VisualTreeContract.AvaloniaVisualToolId;
         }
 
         if (RemoteAppToolCatalog.HasTool(catalogPayload, RemoteAppToolIds.MauiGetVisualTree))
@@ -318,6 +326,13 @@ internal sealed class GetLiveVisualTreeTool : RemoteAppOperation
         if (root is not null)
         {
             remoteArguments["root"] = root;
+        }
+
+        var rootNodeId = NormalizeOptionalString(arguments?["rootNodeId"]?.GetValue<string>());
+
+        if (rootNodeId is not null)
+        {
+            remoteArguments["rootNodeId"] = rootNodeId;
         }
 
         if (string.Equals(toolId, RemoteAppToolIds.MauiGetVisualTree, StringComparison.Ordinal)
