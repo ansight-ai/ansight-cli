@@ -5,6 +5,126 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed partial class AppInteractionBackendTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AvaloniaSubtreeSearchFindsDeepControlsWithoutChangingTheViewport(bool explicitProvider)
+    {
+        var session = CreateModalTestSession();
+        var initial = CreateAvaloniaSelectorTree("Other content");
+        initial["root"]!["children"] = new JsonArray(CreateAvaloniaFrontier("options"));
+        var page = CreateAvaloniaSelectorTree("IsEnabled");
+        page.Remove("coordinateSpace");
+        page["root"]!["id"] = "options";
+        page["root"]!["bounds"] = new JsonArray(20, 480, 300, 160);
+        page["root"]!["children"]![0]!["bounds"] = new JsonArray(30, 510, 140, 40);
+        var bridge = new AvaloniaSelectorBridge(session.SessionId, matchingTool: null)
+        {
+            InitialVisualTree = initial,
+            Pages = new Dictionary<string, JsonObject> { ["options"] = page }
+        };
+        var selector = LiveUiSelector.Parse(new JsonObject { ["text"] = "IsEnabled", ["visible"] = true });
+        LiveUiCaptureResult result;
+
+        if (explicitProvider)
+        {
+            var router = new UiInputRouter();
+            var accessible = DeviceAccessibilityTreeNormalizer.NormalizeIos(
+                """
+                <AppiumAUT>
+                  <XCUIElementTypeApplication type="XCUIElementTypeApplication" name="Test App" enabled="true" visible="true" x="0" y="0" width="390" height="844" />
+                </AppiumAUT>
+                """, viewportWidth: 390, viewportHeight: 844, maxNodes: 40, maxDepth: 16);
+            router.ConfigureAccessibility(new ModalSelectorAccessibility(accessible));
+            using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
+            result = await LiveUiTreeCapture.CaptureForSelectorAsync(
+                session, bridge, router, "ansight_tap_ui", null, selector, CancellationToken.None,
+                targetSource: VisualTreeContract.AvaloniaVisualToolId);
+        }
+        else
+        {
+            result = await LiveUiTreeCapture.CaptureForSelectorAsync(
+                session, bridge, "ansight_find_ui", null, selector, CancellationToken.None);
+        }
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(VisualTreeContract.AvaloniaVisualToolId, result.Capture?.ToolId);
+        Assert.Equal(new LiveUiBounds(0, 0, 390, 844), result.Capture?.Viewport);
+        var found = Assert.Single(LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry));
+        Assert.Equal(510, LiveUiNodeQuery.ReadBounds(found.Node)?.Y);
+        var request = Assert.Single(bridge.SubtreeArguments);
+        Assert.Equal("options", request["rootNodeId"]!.GetValue<string>());
+        Assert.Equal(12, request["maxDepth"]!.GetValue<int>());
+        Assert.Equal(400, request["maxNodes"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task AvaloniaSubtreeSearchRejectsAMismatchedRoot()
+    {
+        var session = CreateModalTestSession();
+        var initial = CreateAvaloniaSelectorTree("Other content");
+        initial["root"]!["children"] = new JsonArray(CreateAvaloniaFrontier("options"));
+        var bridge = new AvaloniaSelectorBridge(session.SessionId, matchingTool: null)
+        {
+            InitialVisualTree = initial,
+            Pages = new Dictionary<string, JsonObject>
+            {
+                ["options"] = CreateAvaloniaSelectorTree("IsEnabled")
+            }
+        };
+        var selector = LiveUiSelector.Parse(new JsonObject { ["text"] = "IsEnabled", ["visible"] = true });
+
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(
+            session, bridge, "ansight_find_ui", null, selector, CancellationToken.None);
+
+        Assert.Single(bridge.SubtreeArguments);
+        Assert.Empty(LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry));
+    }
+
+    [Fact]
+    public async Task AvaloniaSubtreeSearchHasAFixedBudgetAndDoesNotFollowOffscreenBranches()
+    {
+        var session = CreateModalTestSession();
+        var initial = CreateAvaloniaSelectorTree("Other content");
+        var offscreen = CreateAvaloniaFrontier("offscreen");
+        offscreen["bounds"] = new JsonArray(0, 1200, 300, 200);
+        initial["root"]!["children"] = new JsonArray(offscreen, CreateAvaloniaFrontier("page-0"));
+        var pages = new Dictionary<string, JsonObject>();
+
+        for (var index = 0; index < 10; index++)
+        {
+            var page = CreateAvaloniaSelectorTree("Other content");
+            page["root"]!["id"] = $"page-{index}";
+            page["root"]!["children"] = new JsonArray(CreateAvaloniaFrontier($"page-{index + 1}"));
+            pages.Add($"page-{index}", page);
+        }
+
+        var bridge = new AvaloniaSelectorBridge(session.SessionId, matchingTool: null)
+        {
+            InitialVisualTree = initial,
+            Pages = pages
+        };
+        var selector = LiveUiSelector.Parse(new JsonObject { ["text"] = "Missing checkbox", ["visible"] = true });
+
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(
+            session, bridge, "ansight_find_ui", null, selector, CancellationToken.None);
+
+        Assert.Equal(6, bridge.SubtreeArguments.Count);
+        Assert.DoesNotContain(bridge.SubtreeArguments, arguments => arguments["rootNodeId"]!.GetValue<string>() == "offscreen");
+        Assert.Empty(LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry));
+    }
+
+    private static JsonObject CreateAvaloniaFrontier(string nodeId) => new()
+    {
+        ["id"] = nodeId,
+        ["typeId"] = 0,
+        ["visible"] = true,
+        ["enabled"] = true,
+        ["bounds"] = new JsonArray(20, 480, 300, 160),
+        ["childCount"] = 1,
+        ["children"] = new JsonArray()
+    };
+
+    [Theory]
     [InlineData("avalonia.get_accessibility_tree", 1)]
     [InlineData("avalonia.get_logical_tree", 2)]
     [InlineData("avalonia.get_visual_tree", 3)]
@@ -148,6 +268,9 @@ public sealed partial class AppInteractionBackendTests
 
         public List<string> CapturedTools { get; } = [];
         public bool FailAccessibility { get; init; }
+        public JsonObject? InitialVisualTree { get; init; }
+        public Dictionary<string, JsonObject> Pages { get; init; } = new();
+        public List<JsonObject> SubtreeArguments { get; } = [];
 
         public event EventHandler? ConnectionsChanged
         {
@@ -196,6 +319,19 @@ public sealed partial class AppInteractionBackendTests
                 return Task.FromResult(AppToolBridgeResponse.FromFailure("Accessibility unavailable."));
             }
 
+            var tree = CreateAvaloniaSelectorTree(toolId == matchingTool ? "Standard button" : "Other content");
+
+            if (toolId == VisualTreeContract.AvaloniaVisualToolId && InitialVisualTree is not null)
+            {
+                var rootNodeId = arguments?["rootNodeId"]?.GetValue<string>();
+                tree = rootNodeId is not null ? Pages[rootNodeId] : InitialVisualTree;
+
+                if (rootNodeId is not null)
+                {
+                    SubtreeArguments.Add(arguments!.DeepClone().AsObject());
+                }
+            }
+
             return Task.FromResult(AppToolBridgeResponse.FromSuccess("Tree.", new ToolProtocolEnvelope
             {
                 Type = ToolProtocolMessageTypes.ResultType,
@@ -205,7 +341,7 @@ public sealed partial class AppInteractionBackendTests
                 {
                     ["toolId"] = toolId,
                     ["success"] = true,
-                    ["result"] = CreateAvaloniaSelectorTree(toolId == matchingTool ? "Standard button" : "Other content")
+                    ["result"] = tree.DeepClone()
                 }
             }));
         }

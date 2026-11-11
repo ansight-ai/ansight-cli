@@ -351,6 +351,14 @@ internal sealed partial class LiveUiTreeCapture
                 new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
                 cancellationToken).ConfigureAwait(false);
 
+            if (selector is not null && targetSource.StartsWith("avalonia.", StringComparison.Ordinal))
+            {
+                targetedResult = await ExpandAvaloniaSelectorAsync(
+                    targetedResult, session, appToolBridge,
+                    new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
+                    selector, cancellationToken).ConfigureAwait(false);
+            }
+
             return ValidateForegroundTargets(deviceResult, targetedResult, selector);
         }
 
@@ -509,9 +517,10 @@ internal sealed partial class LiveUiTreeCapture
         IAppToolBridge appToolBridge,
         string toolId,
         AppToolBridgeRequestContext requestContext,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        JsonObject? requestedArguments = null)
     {
-        var visualTreeArguments = string.Equals(
+        var visualTreeArguments = requestedArguments ?? (string.Equals(
             toolId,
             RemoteAppToolIds.MauiGetVisualTree,
             StringComparison.Ordinal)
@@ -525,7 +534,7 @@ internal sealed partial class LiveUiTreeCapture
                     ["maxNodes"] = 2000,
                     ["maxDepth"] = 24,
                     ["includeComputedStyles"] = true
-                } : null;
+                } : null);
 
         if (!GetLiveVisualTreeTool.TryBuildVisualTreeArguments(
             visualTreeArguments,
