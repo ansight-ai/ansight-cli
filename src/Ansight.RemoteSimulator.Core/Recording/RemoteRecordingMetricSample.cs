@@ -4,4 +4,7 @@ public sealed record RemoteRecordingMetricSample(
     int ChannelId,
     long Value,
     DateTimeOffset CapturedAtUtc,
-    int SegmentId);
+    int SegmentId)
+{
+    public double? NumericValue { get; init; }
+}

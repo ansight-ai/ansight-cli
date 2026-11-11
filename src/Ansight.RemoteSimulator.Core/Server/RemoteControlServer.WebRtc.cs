@@ -8,6 +8,7 @@ using System.Text.Json;
 using Ansight.RemoteSimulator.Core.Annotations;
 using Ansight.RemoteSimulator.Core.AppInspection;
 using Ansight.RemoteSimulator.Core.Input;
+using Ansight.RemoteSimulator.Core.Recording;
 using Ansight.RemoteSimulator.Core.Server.WebRtc;
 using Ansight.RemoteSimulator.Core.WebRtc;
 using static Ansight.RemoteSimulator.Core.Server.RemoteControlHttpTransport;
@@ -548,14 +549,16 @@ public sealed partial class RemoteControlServer
                     && request.EndUtc.HasValue
                     && request.EndUtc.Value >= request.StartUtc.Value:
                     {
-                        var evidence = await recordingSource
-                            .GetEvidenceAsync(
-                            request.RecordingId!,
-                            request.StartUtc.Value,
-                            request.EndUtc.Value,
-                            Math.Clamp(request.MaximumLogCount ?? 250, 1, 1_000),
-                            Math.Clamp(request.MaximumMetricSampleCount ?? 2_000, 1, 10_000))
-                            .ConfigureAwait(false);
+                        var logLimit = Math.Clamp(request.MaximumLogCount ?? 250, 1, 1_000);
+                        var metricLimit = Math.Clamp(request.MaximumMetricSampleCount ?? 2_000, 1, 10_000);
+                        var query = new RemoteRecordingEvidenceQuery(
+                            request.RecordingId!, request.StartUtc.Value, request.EndUtc.Value,
+                            request.CursorUtc ?? request.StartUtc.Value, logLimit, metricLimit, request.LogStreamId);
+                        var evidence = recordingSource is IRemoteRecordingReviewSource reviewSource
+                            ? await reviewSource.GetEvidenceAsync(query).ConfigureAwait(false)
+                            : await recordingSource.GetEvidenceAsync(
+                                request.RecordingId!, request.StartUtc.Value, request.EndUtc.Value,
+                                logLimit, metricLimit).ConfigureAwait(false);
 
                         if (evidence is null)
                         {
@@ -575,6 +578,33 @@ public sealed partial class RemoteControlServer
                             "application/json",
                             JsonSerializer.SerializeToUtf8Bytes(evidence, jsonOptions)).ConfigureAwait(false);
 
+                        return;
+                    }
+                case "network.list":
+                case "network.details":
+                case "artifacts.list":
+                case "artifacts.download":
+                case "trends.history":
+                    {
+                        var needsRecording = request.Operation != "trends.history";
+                        if (needsRecording && !IsValidRecordingIdentifier(request.RecordingId))
+                        {
+                            await SendRecordingFailureAsync(session, request.RequestId,
+                                HttpStatusCode.BadRequest, "The recording ID is invalid.").ConfigureAwait(false);
+                            return;
+                        }
+
+                        if (recordingSource is not IRemoteRecordingReviewSource reviewSource)
+                        {
+                            await SendRecordingFailureAsync(session, request.RequestId,
+                                HttpStatusCode.NotImplemented, "Update the Mac host to browse this recording data.").ConfigureAwait(false);
+                            return;
+                        }
+
+                        var arguments = request.Arguments ?? JsonSerializer.SerializeToElement(new { });
+                        var result = await reviewSource.ReviewAsync(request.Operation, request.RecordingId, arguments).ConfigureAwait(false);
+                        await SendRecordingResponseAsync(session, request.RequestId, result.StatusCode,
+                            "application/json", result.Content).ConfigureAwait(false);
                         return;
                     }
                 default:

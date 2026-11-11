@@ -4,7 +4,7 @@ using Ansight.RemoteSimulator.Core.Recording;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed class CliRemoteRecordingSource : IRemoteRecordingSource
+internal sealed partial class CliRemoteRecordingSource : IRemoteRecordingSource, IRemoteRecordingReviewSource
 {
     private readonly RuntimeCoordinator runtime;
 
@@ -72,34 +72,60 @@ internal sealed class CliRemoteRecordingSource : IRemoteRecordingSource
             ContentType(icon.Format), cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<RemoteRecordingEvidenceSlice?> GetEvidenceAsync(string recordingId, DateTimeOffset startUtc,
+    public Task<RemoteRecordingEvidenceSlice?> GetEvidenceAsync(string recordingId, DateTimeOffset startUtc,
         DateTimeOffset endUtc, int maximumLogCount, int maximumMetricSampleCount, CancellationToken cancellationToken = default)
     {
-        var session = await runtime.Sessions.LoadSnapshotAsync(recordingId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return GetEvidenceAsync(new RemoteRecordingEvidenceQuery(recordingId, startUtc, endUtc, startUtc,
+            maximumLogCount, maximumMetricSampleCount), cancellationToken);
+    }
+
+    public async Task<RemoteRecordingEvidenceSlice?> GetEvidenceAsync(
+        RemoteRecordingEvidenceQuery query, CancellationToken cancellationToken = default)
+    {
+        var session = await runtime.Sessions.LoadSnapshotAsync(query.RecordingId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (session is null)
         {
             return null;
         }
 
-        var logs = session.Logs.Where(log => log.TimestampUtc >= startUtc && log.TimestampUtc <= endUtc)
-            .OrderBy(log => log.TimestampUtc).ToArray();
-        var metrics = session.Metrics.Where(sample => sample.CapturedAtUtc >= startUtc && sample.CapturedAtUtc <= endUtc)
-            .OrderBy(sample => sample.CapturedAtUtc).ToArray();
-        var logLimit = Math.Clamp(maximumLogCount, 1, 1000);
-        var metricLimit = Math.Clamp(maximumMetricSampleCount, 1, 10000);
+        var logs = session.Logs.Where(log =>
+        {
+            var inWindow = log.TimestampUtc >= query.StartUtc
+                && log.TimestampUtc <= query.EndUtc;
+            var matchesStream = string.IsNullOrEmpty(query.LogStreamId)
+                || log.StreamId == query.LogStreamId;
+            return inWindow && matchesStream;
+        }).ToArray();
+        var metrics = session.Metrics.Where(sample => sample.CapturedAtUtc >= query.StartUtc && sample.CapturedAtUtc <= query.EndUtc).ToArray();
+        var events = session.ApplicationEvents.Where(item => item.CapturedAtUtc >= query.StartUtc && item.CapturedAtUtc <= query.EndUtc).ToArray();
+        var logLimit = Math.Clamp(query.MaximumLogCount, 1, 1000);
+        var metricLimit = Math.Clamp(query.MaximumMetricSampleCount, 1, 10000);
 
-        return new RemoteRecordingEvidenceSlice(startUtc, endUtc,
-            logs.Take(logLimit).Select(log => new RemoteRecordingLogEntry(log.TimestampUtc, log.StreamId,
-                log.Priority.ToString().ToLowerInvariant(), log.Source, log.Tag, log.Message, log.EventId)).ToArray(),
-            session.Annotations.Where(annotation => annotation.StartUtc <= endUtc && (annotation.EndUtc ?? annotation.StartUtc) >= startUtc)
+        return new RemoteRecordingEvidenceSlice(query.StartUtc, query.EndUtc,
+            logs.OrderBy(log => Math.Abs((log.TimestampUtc - query.CursorUtc).TotalMilliseconds))
+                .Take(logLimit).OrderBy(log => log.TimestampUtc)
+                .Select(log => new RemoteRecordingLogEntry(log.TimestampUtc, log.StreamId,
+                    log.Priority.ToString().ToLowerInvariant(), log.Source, log.Tag, log.Message, log.EventId)).ToArray(),
+            session.Annotations.Where(annotation => annotation.StartUtc <= query.EndUtc && (annotation.EndUtc ?? annotation.StartUtc) >= query.StartUtc)
                 .Select(Annotation).ToArray(),
             session.MetricChannels.Select(Channel).ToArray(),
-            metrics.Take(metricLimit).Select(sample => new RemoteRecordingMetricSample(sample.ChannelId,
-                (long)Math.Round(sample.Value), sample.CapturedAtUtc, sample.SegmentId)).ToArray(),
+            metrics.OrderBy(sample => Math.Abs((sample.CapturedAtUtc - query.CursorUtc).TotalMilliseconds))
+                .Take(metricLimit).OrderBy(sample => sample.CapturedAtUtc)
+                .Select(sample => new RemoteRecordingMetricSample(sample.ChannelId,
+                    (long)Math.Round(sample.Value), sample.CapturedAtUtc, sample.SegmentId)
+                {
+                    NumericValue = sample.Value
+                }).ToArray(),
             logs.Length > logLimit, metrics.Length > metricLimit)
         {
-            Touches = session.Touches.Where(touch => touch.CapturedAtUtc >= startUtc && touch.CapturedAtUtc <= endUtc)
+            Events = events.OrderBy(item => Math.Abs((item.CapturedAtUtc - query.CursorUtc).TotalMilliseconds))
+                .Take(1000).OrderBy(item => item.CapturedAtUtc)
+                .Select(item => new RemoteRecordingEvent(item.EventId, item.Label, item.EventType,
+                    item.Details, item.CapturedAtUtc, item.ChannelId)).ToArray(),
+            EventsTruncated = events.Length > 1000,
+            Touches = session.Touches.OrderBy(touch => Math.Abs((touch.CapturedAtUtc - query.CursorUtc).TotalMilliseconds))
+                .Take(10000).OrderBy(touch => touch.CapturedAtUtc)
                 .Select(touch => new RemoteRecordingTouchInput(touch.Id, touch.Action, touch.CapturedAtUtc,
                     touch.PointerId, touch.PointerIndex, touch.PointerCount, touch.X, touch.Y, touch.NormalizedX, touch.NormalizedY,
                     touch.SurfaceWidth, touch.SurfaceHeight, touch.CoordinateSpace, touch.CoordinateUnit, touch.SurfaceScale)).ToArray()

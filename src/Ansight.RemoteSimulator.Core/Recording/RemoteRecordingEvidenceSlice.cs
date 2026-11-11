@@ -10,5 +10,17 @@ public sealed record RemoteRecordingEvidenceSlice(
     bool LogsTruncated,
     bool TelemetryTruncated)
 {
+    public IReadOnlyList<RemoteRecordingEvent> Events { get; init; } = [];
+
+    public bool EventsTruncated { get; init; }
+
     public IReadOnlyList<RemoteRecordingTouchInput> Touches { get; init; } = [];
 }
+
+public sealed record RemoteRecordingEvent(
+    string Id,
+    string Label,
+    string EventType,
+    string Details,
+    DateTimeOffset CapturedAtUtc,
+    int ChannelId);

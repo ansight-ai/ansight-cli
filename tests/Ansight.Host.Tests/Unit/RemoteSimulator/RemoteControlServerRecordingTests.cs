@@ -187,10 +187,17 @@ public sealed class RemoteControlServerRecordingTests
     }
 
     [Theory]
-    [InlineData(false, HttpStatusCode.Forbidden)]
-    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, "list", HttpStatusCode.Forbidden)]
+    [InlineData(true, "list", HttpStatusCode.OK)]
+    [InlineData(false, "network.list", HttpStatusCode.Forbidden)]
+    [InlineData(true, "network.list", HttpStatusCode.OK)]
+    [InlineData(false, "artifacts.download", HttpStatusCode.Forbidden)]
+    [InlineData(true, "artifacts.download", HttpStatusCode.OK)]
+    [InlineData(false, "trends.history", HttpStatusCode.Forbidden)]
+    [InlineData(true, "trends.history", HttpStatusCode.OK)]
     public async Task RecordingDataChannel_RequiresBrokerGrantedReadScope(
         bool grantRecordingRead,
+        string operation,
         HttpStatusCode expectedStatusCode)
     {
         var webRtcSessionFactory = new FakeWebRtcSessionFactory();
@@ -223,9 +230,11 @@ public sealed class RemoteControlServerRecordingTests
             .ToArray();
 
         var session = Assert.IsType<FakeWebRtcSession>(webRtcSessionFactory.LastSession);
-        session.Receive("""
-            {"kind":"recording_request","requestId":"request-1","operation":"list"}
-            """);
+        session.Receive(JsonSerializer.Serialize(new
+        {
+            kind = "recording_request", requestId = "request-1", operation,
+            recordingId = "recording-1", arguments = new { }
+        }));
 
         var responseMessage = await session.WaitForMessageAsync();
         using var responseDocument = JsonDocument.Parse(responseMessage);
@@ -455,7 +464,7 @@ public sealed class RemoteControlServerRecordingTests
             null);
     }
 
-    private sealed class FakeRemoteRecordingSource : IRemoteRecordingSource
+    private sealed class FakeRemoteRecordingSource : IRemoteRecordingSource, IRemoteRecordingReviewSource
     {
         private readonly RemoteRecordingSummary summary;
         private readonly RemoteRecordingFrameSummary frameSummary;
@@ -477,6 +486,19 @@ public sealed class RemoteControlServerRecordingTests
         public Task<IReadOnlyList<RemoteRecordingSummary>> ListAsync(
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<RemoteRecordingSummary>>([summary]);
+
+        public Task<RemoteRecordingEvidenceSlice?> GetEvidenceAsync(
+            RemoteRecordingEvidenceQuery query, CancellationToken cancellationToken = default)
+        {
+            return GetEvidenceAsync(query.RecordingId, query.StartUtc, query.EndUtc,
+                query.MaximumLogCount, query.MaximumMetricSampleCount, cancellationToken);
+        }
+
+        public Task<RemoteRecordingReviewResult> ReviewAsync(
+            string operation, string? recordingId, JsonElement arguments, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new RemoteRecordingReviewResult(HttpStatusCode.OK, Encoding.UTF8.GetBytes("{}")));
+        }
 
         public Task<RemoteRecordingDetails?> GetAsync(
             string recordingId,

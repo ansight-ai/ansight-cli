@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Ansight.RemoteSimulator.Core.Server.WebRtc;
 
 internal sealed record RecordingRequest(
@@ -10,4 +12,7 @@ internal sealed record RecordingRequest(
     DateTimeOffset? EndUtc,
     int? MaximumLogCount,
     int? MaximumMetricSampleCount,
-    string? BatchId = null);
+    string? BatchId = null,
+    DateTimeOffset? CursorUtc = null,
+    string? LogStreamId = null,
+    JsonElement? Arguments = null);
