@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Ansight.RemoteSimulator.Core.Input;
+using Ansight.RemoteSimulator.Core.Devices;
 using Ansight.RemoteSimulator.Core.Runtime;
 using Ansight.RemoteSimulator.Core.Server;
 using Ansight.RemoteSimulator.Core.Streaming;
@@ -17,8 +18,8 @@ public sealed class RemoteControlServerCompanionConnectionTests
     public async Task CompanionPresence_TracksConnectedDeviceUntilSessionCloses()
     {
         var sessionFactory = new FakeWebRtcSessionFactory();
-        await using var server = CreateServer(sessionFactory);
         using var connectionChanged = new SemaphoreSlim(0);
+        await using var server = CreateServer(sessionFactory);
         server.CompanionConnectionsChanged += (_, _) => connectionChanged.Release();
         await server.StartAsync();
 
@@ -66,12 +67,27 @@ public sealed class RemoteControlServerCompanionConnectionTests
         Assert.Equal("26.5.2", connection.Device.OperatingSystemVersion);
         Assert.Equal("runtime-device-1", connection.TargetDeviceUdid);
 
+        using var activityResponse = await client.PostAsync(
+            Endpoint(server, "/api/device/testing"),
+            new StringContent(JsonSerializer.Serialize(new RemoteDeviceTestingRequest("runtime-device-1", "device-activity")), Encoding.UTF8, "application/json"));
+        activityResponse.EnsureSuccessStatusCode();
+        var activity = await activityResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var reported = Assert.Single(activity.GetProperty("details").GetProperty("companionConnections").EnumerateArray());
+        Assert.Equal("Matthew's iPhone", reported.GetProperty("device").GetProperty("name").GetString());
+        Assert.Equal("runtime-device-1", reported.GetProperty("targetDeviceUdid").GetString());
+
         using var closeResponse = await client.PostAsync(
             Endpoint(server, "/api/webrtc/close", $"session={Uri.EscapeDataString(sessionId!)}"),
             content: null);
         Assert.True(closeResponse.IsSuccessStatusCode, await closeResponse.Content.ReadAsStringAsync());
         Assert.True(await connectionChanged.WaitAsync(TimeSpan.FromSeconds(2)));
         Assert.Empty(server.GetConnectedCompanionConnections());
+
+        using var closedActivityResponse = await client.PostAsync(
+            Endpoint(server, "/api/device/testing"),
+            new StringContent(JsonSerializer.Serialize(new RemoteDeviceTestingRequest("runtime-device-1", "device-activity")), Encoding.UTF8, "application/json"));
+        var closedActivity = await closedActivityResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(closedActivity.GetProperty("details").GetProperty("companionConnections").EnumerateArray());
     }
 
     [Fact]
@@ -119,7 +135,18 @@ public sealed class RemoteControlServerCompanionConnectionTests
             new FakeRemoteSimulatorInputSink(),
             requestedPort: 0,
             sessionToken: SessionToken,
-            webRtcSessionFactory: sessionFactory);
+            webRtcSessionFactory: sessionFactory,
+            deviceTestingSource: new FakeDeviceTestingSource());
+
+    private sealed class FakeDeviceTestingSource : IRemoteDeviceTestingSource
+    {
+        public Task<RemoteDeviceTestingResult> ExecuteAsync(
+            RemoteDeviceTestingRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new RemoteDeviceTestingResult(true, "Activity loaded."));
+        }
+    }
 
     private static string Endpoint(RemoteControlServer server, string path, string? query = null)
     {

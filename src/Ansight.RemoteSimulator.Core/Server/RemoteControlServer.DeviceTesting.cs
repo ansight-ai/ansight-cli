@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Ansight.RemoteSimulator.Core.Devices;
 using static Ansight.RemoteSimulator.Core.Server.RemoteControlHttpTransport;
 
@@ -78,6 +79,15 @@ public sealed partial class RemoteControlServer
         };
 
         var result = await deviceTestingSource.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
+
+        if (request.Action == "device-activity" && result.IsSuccess)
+        {
+            var details = result.Details?.DeepClone().AsObject() ?? new JsonObject();
+            details["companionConnections"] = JsonSerializer.SerializeToNode(
+                GetConnectedCompanionConnections(), jsonOptions);
+            result = result with { Details = details };
+        }
+
         await WriteJsonAsync(stream,
             result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict,
             result.IsSuccess ? (object)result : new ErrorResponse(result.Message), cancellationToken)
