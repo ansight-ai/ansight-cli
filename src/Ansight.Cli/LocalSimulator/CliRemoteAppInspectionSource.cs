@@ -52,6 +52,14 @@ internal sealed class CliRemoteAppInspectionSource : IRemoteAppInspectionSource
                 operations.Add("files.download");
             }
 
+            foreach (var operation in CliRemoteFileMutation.operations)
+            {
+                if (toolIDs.Contains(operation.Value) && toolIDs.Contains("files.download_file"))
+                {
+                    operations.Add(operation.Key);
+                }
+            }
+
             return Json(new { request.SessionId, operations, tools });
         }
 
@@ -90,6 +98,34 @@ internal sealed class CliRemoteAppInspectionSource : IRemoteAppInspectionSource
         if (request.Operation == "artifacts.download")
         {
             return await DownloadArtifactAsync(snapshot, arguments, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (CliRemoteFileMutation.operations.ContainsKey(request.Operation))
+        {
+            CliRemoteFileMutation mutation;
+
+            try
+            {
+                mutation = CliRemoteFileMutation.Create(request.Operation, arguments);
+            }
+            catch (ArgumentException exception)
+            {
+                return RemoteAppInspectionResult.Failure(HttpStatusCode.BadRequest, exception.Message);
+            }
+
+            var verification = await runtime.AppTools.CallForCompanionAsync(request.SessionId, "files.download_file",
+                mutation.VerificationArguments, request.RequestId + "-verify", cancellationToken).ConfigureAwait(false);
+
+            if (!verification.Success)
+            {
+                return RemoteAppInspectionResult.Failure(HttpStatusCode.Conflict,
+                    "The file changed or is no longer available. Reopen it before trying again. " + verification.Message);
+            }
+
+            var mutationResponse = await runtime.AppTools.CallForCompanionAsync(request.SessionId, mutation.ToolId,
+                mutation.Arguments, request.RequestId, cancellationToken).ConfigureAwait(false);
+
+            return ReadToolResult(mutationResponse);
         }
 
         var toolId = request.Operation switch

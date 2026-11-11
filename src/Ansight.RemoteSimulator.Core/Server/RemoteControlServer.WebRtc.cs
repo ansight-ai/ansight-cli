@@ -233,6 +233,19 @@ public sealed partial class RemoteControlServer
             return;
         }
 
+        var mutatesFile = request.Operation is "files.write" or "files.rename" or "files.delete";
+
+        if (mutatesFile && !grantedScopes.Contains("control"))
+        {
+            await SendInspectionFailureAsync(
+                session,
+                request.RequestId,
+                HttpStatusCode.Forbidden,
+                "Changing app files requires the control scope.").ConfigureAwait(false);
+
+            return;
+        }
+
         if (appInspectionSource is null)
         {
             await SendInspectionFailureAsync(

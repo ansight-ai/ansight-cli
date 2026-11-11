@@ -276,10 +276,18 @@ public sealed class RemoteControlServerRecordingTests
     }
 
     [Theory]
-    [InlineData(false, HttpStatusCode.Forbidden)]
-    [InlineData(true, HttpStatusCode.OK)]
+    [InlineData(false, false, "files.list", HttpStatusCode.Forbidden)]
+    [InlineData(true, false, "files.list", HttpStatusCode.OK)]
+    [InlineData(true, false, "files.write", HttpStatusCode.Forbidden)]
+    [InlineData(true, false, "files.rename", HttpStatusCode.Forbidden)]
+    [InlineData(true, false, "files.delete", HttpStatusCode.Forbidden)]
+    [InlineData(true, true, "files.write", HttpStatusCode.OK)]
+    [InlineData(true, true, "files.rename", HttpStatusCode.OK)]
+    [InlineData(true, true, "files.delete", HttpStatusCode.OK)]
     public async Task InspectionDataChannel_RequiresScopeAndBindsRequestToDevice(
         bool grantInspectionRead,
+        bool grantControl,
+        string operation,
         HttpStatusCode expectedStatusCode)
     {
         var inspectionSource = new FakeRemoteAppInspectionSource();
@@ -291,7 +299,18 @@ public sealed class RemoteControlServerRecordingTests
         await server.StartAsync();
 
         using var client = new HttpClient();
-        var grantedScopes = grantInspectionRead ? new[] { "view", "inspect.read" } : ["view"];
+        var grantedScopes = new List<string> { "view" };
+
+        if (grantInspectionRead)
+        {
+            grantedScopes.Add("inspect.read");
+        }
+
+        if (grantControl)
+        {
+            grantedScopes.Add("control");
+        }
+
         var offerBody = JsonSerializer.Serialize(
             new
             {
@@ -307,11 +326,11 @@ public sealed class RemoteControlServerRecordingTests
         Assert.True(offerResponse.IsSuccessStatusCode, await offerResponse.Content.ReadAsStringAsync());
 
         var session = Assert.IsType<FakeWebRtcSession>(webRtcSessionFactory.LastSession);
-        session.Receive("""
+        session.Receive($$"""
             {
               "kind":"inspection_request",
               "requestId":"request-1",
-              "operation":"files.list",
+              "operation":"{{operation}}",
               "sessionId":"app-session-1",
               "arguments":{"path":"logs"}
             }
@@ -323,12 +342,12 @@ public sealed class RemoteControlServerRecordingTests
         Assert.Equal("inspection_response", responseDocument.RootElement.GetProperty("kind").GetString());
         Assert.Equal((int)expectedStatusCode, responseDocument.RootElement.GetProperty("statusCode").GetInt32());
 
-        if (grantInspectionRead)
+        if (expectedStatusCode == HttpStatusCode.OK)
         {
             var invocation = await inspectionSource.WaitForInvocationAsync();
             Assert.Equal("device-1", invocation.DeviceUdid);
             Assert.Equal("app-session-1", invocation.Request.SessionId);
-            Assert.Equal("files.list", invocation.Request.Operation);
+            Assert.Equal(operation, invocation.Request.Operation);
 
             var content = Convert.FromBase64String(responseDocument.RootElement.GetProperty("data").GetString()!);
             Assert.Equal("{\"ok\":true}", Encoding.UTF8.GetString(content));
