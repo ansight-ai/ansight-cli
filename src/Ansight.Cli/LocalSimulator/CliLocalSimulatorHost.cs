@@ -238,6 +238,8 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             allowUnauthenticatedLoopback: true,
             deviceLifecycleSource: lifecycleSource,
             annotationSource: annotationSource,
+            recordingSource: new CliRemoteRecordingSource(runtime),
+            appInspectionSource: new CliRemoteAppInspectionSource(runtime, annotationSource),
             agentChatSource: new CliRemoteAgentChatSource(runtime),
             deviceLocationSource: locationSource,
             deviceTestingSource: testingSource);
