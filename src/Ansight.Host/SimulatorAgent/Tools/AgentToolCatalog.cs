@@ -14,6 +14,8 @@ internal sealed class AgentToolCatalog
             "ansight_type_text", "ansight_back_ui", AgentToolBatch.UiToolName],
         ["extended-ui"] = ["ansight_assert_ui", "ansight_type_secret", "ansight_scroll_ui"],
         ["gestures"] = ["ansight_long_press_ui", "ansight_swipe_ui", "ansight_pinch_ui", "ansight_run_ui_sequence"],
+        ["keyboard"] = ["ansight_open_keyboard", "ansight_is_keyboard_open", "ansight_dismiss_keyboard",
+            "ansight_press_keyboard", "ansight_submit_keyboard"],
         ["app-tools"] = ["ansight_list_app_tools", "ansight_call_app_tool"],
         ["evidence"] = ["ansight_take_screenshot", "ansight_evaluate_screenshot", "ansight_get_live_navigation_structure"],
         ["lifecycle"] = ["ansight_list_host_devices", "ansight_start_device", "ansight_launch_app", "ansight_terminate_app"],
@@ -105,7 +107,8 @@ internal sealed class AgentToolCatalog
         }
 
         // Gestures often need discovery of their target. Load that dependency in the same turn.
-        var bundles = bundle is "gestures" or "extended-ui" ? new[] { "manual-ui", bundle } : [bundle];
+        var needsTargetDiscovery = bundle is "gestures" or "extended-ui" or "keyboard";
+        var bundles = needsTargetDiscovery ? new[] { "manual-ui", bundle } : [bundle];
         var additionalTools = new JsonArray();
         var guidance = new List<string>();
         var wasLoaded = loadedBundles.Contains(bundle);
@@ -184,6 +187,7 @@ internal sealed class AgentToolCatalog
         => bundle switch
         {
             "extended-ui" => "Use exact observed selectors. Scrolling changes the visible content; verify its requested postcondition. Secret entry requires an explicitly granted alias.",
+            "keyboard" => "Use ansight_press_keyboard with key: Enter for an Enter key through device input; use ansight_submit_keyboard for the focused editor action when the SDK exposes ui.submit_keyboard. Discover an input before ansight_open_keyboard. Use ansight_is_keyboard_open and ansight_dismiss_keyboard to verify visibility. A delivered key does not prove activation: inspect the requested outcome immediately and report unavailable input as a gap.",
             "diagnostics" => "Read only evidence required by the instruction. Scope logs and telemetry to the run's time interval and relevant streams.",
             "files" => "Use discovered app-sandbox paths and bounded reads. Preserve file evidence in the audit.",
             "screen-text" => "Screen OCR is evidence for visible text only, not an automation ID or framework type. Respect the run's screen-scan policy.",
@@ -192,14 +196,14 @@ internal sealed class AgentToolCatalog
         };
 
     public static string FullGuidance()
-        => string.Join("\n\n", new[] { "manual-ui", "extended-ui", "gestures", "app-tools", "evidence" }.Select(ReadGuidance));
+        => string.Join("\n\n", new[] { "manual-ui", "extended-ui", "gestures", "keyboard", "app-tools", "evidence" }.Select(ReadGuidance));
 
     private static JsonObject BuildLoaderDefinition(bool hasTaskDeclaration)
         => new()
         {
             ["type"] = "function",
             ["name"] = LoadToolName,
-            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; app-tools: domain tools; evidence: screenshots/visual assessment/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: discovery/details for a concrete gap in preloaded tasks. No app action. Accepted manual-step declarations load manual-ui automatically.",
+            ["description"] = "Load only needed capabilities. manual-ui: find/wait/tap/type/back/batch; extended-ui: assert/scroll/secrets; gestures: long-press/swipe/pinch/sequences; keyboard: open/visibility/dismiss/Enter/submit; app-tools: domain tools; evidence: screenshots/visual assessment/navigation; screen-text: OCR; diagnostics: logs/telemetry/capabilities; files: sandbox; lifecycle: app/device; tasks: discovery/details for a concrete gap in preloaded tasks. No app action. Accepted manual-step declarations load manual-ui automatically.",
             ["strict"] = true,
             ["parameters"] = new JsonObject
             {

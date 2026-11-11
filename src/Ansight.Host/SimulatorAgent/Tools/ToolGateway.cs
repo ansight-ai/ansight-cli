@@ -31,6 +31,10 @@ internal sealed class ToolGateway : IToolGateway
         "ansight_scroll_ui",
         "ansight_pinch_ui",
         "ansight_back_ui",
+        "ansight_open_keyboard",
+        "ansight_dismiss_keyboard",
+        "ansight_press_keyboard",
+        "ansight_submit_keyboard",
         "ansight_run_ui_sequence"
     };
     private static readonly HashSet<string> allowedToolNames = new(StringComparer.Ordinal)
@@ -50,6 +54,11 @@ internal sealed class ToolGateway : IToolGateway
         "ansight_scroll_ui",
         "ansight_pinch_ui",
         "ansight_back_ui",
+        "ansight_open_keyboard",
+        "ansight_is_keyboard_open",
+        "ansight_dismiss_keyboard",
+        "ansight_press_keyboard",
+        "ansight_submit_keyboard",
         "ansight_run_ui_sequence",
         "ansight_list_host_devices",
         "ansight_start_device",

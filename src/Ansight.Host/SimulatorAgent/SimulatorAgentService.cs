@@ -3162,6 +3162,7 @@ public sealed partial class SimulatorAgentService : IDisposable
             or "ansight_evaluate_screenshot"
             or "ansight_wait_for_ui"
             or "ansight_assert_ui"
+            or "ansight_is_keyboard_open"
             or "ansight_list_host_devices"
             or "ansight_list_tasks"
             or "ansight_describe_module"
@@ -3169,16 +3170,23 @@ public sealed partial class SimulatorAgentService : IDisposable
     }
 
     private static bool IsManualUiMutationTool(string toolName)
-        => toolName is "ansight_tap_ui"
+    {
+        var isManualUiMutation = toolName is "ansight_tap_ui"
             or "ansight_scroll_ui"
             or "ansight_long_press_ui"
             or "ansight_type_text"
             or "ansight_type_secret"
             or "ansight_swipe_ui"
-            or "ansight_scroll_ui"
             or "ansight_pinch_ui"
             or "ansight_back_ui"
+            or "ansight_open_keyboard"
+            or "ansight_dismiss_keyboard"
+            or "ansight_press_keyboard"
+            or "ansight_submit_keyboard"
             or "ansight_run_ui_sequence";
+
+        return isManualUiMutation;
+    }
 
     private static bool RequiresTaskReassessmentAfterAction(
         OpenAiFunctionCall call,
