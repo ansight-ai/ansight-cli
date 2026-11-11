@@ -18,7 +18,7 @@ esac
 rtc_source_root="$rtc_output_root/src"
 rtc_libdatachannel_source="$rtc_source_root/libdatachannel"
 rtc_mbedtls_source="$rtc_source_root/mbedtls"
-rtc_libdatachannel_commit="443f6934d9007eb7076ab7825ba330f355fcbead"
+rtc_libdatachannel_commit="6b1e2e620f1e37f0eafeee702eaea0043cb305fd"
 rtc_mbedtls_commit="068ff080b369adfac81509f9b57b2afabaf82dc5"
 rtc_sdk_path=$(/usr/bin/xcrun --sdk macosx --show-sdk-path)
 rtc_cmake=$(command -v cmake)
@@ -26,7 +26,7 @@ rtc_cmake=$(command -v cmake)
 "$rtc_cmake" -E make_directory "$rtc_source_root"
 
 if [[ ! -d "$rtc_libdatachannel_source/.git" ]]; then
-  /usr/bin/git clone --depth 1 --branch v0.24.5 \
+  /usr/bin/git clone --depth 1 --branch v0.24.6 \
     https://github.com/paullouisageneau/libdatachannel.git \
     "$rtc_libdatachannel_source"
 fi

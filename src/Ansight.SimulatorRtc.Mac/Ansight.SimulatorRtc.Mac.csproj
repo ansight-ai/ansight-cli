@@ -8,7 +8,7 @@
     <NativeMacArchitecture Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</NativeMacArchitecture>
     <NativeMacArchitecture Condition="'$(NativeMacArchitecture)' == ''">arm64</NativeMacArchitecture>
     <NativeTargetTriple>$(NativeMacArchitecture)-apple-macos12.0</NativeTargetTriple>
-    <NativeDependencyRoot>$(MSBuildProjectDirectory)/obj/native-rtc/libdatachannel-0.24.5-mbedtls-3.6.7/osx-$(NativeMacArchitecture)</NativeDependencyRoot>
+    <NativeDependencyRoot>$(MSBuildProjectDirectory)/obj/native-rtc/libdatachannel-0.24.6-mbedtls-3.6.7/osx-$(NativeMacArchitecture)</NativeDependencyRoot>
     <NativeDependencyScript>$(MSBuildProjectDirectory)/Native/build-native-dependencies.sh</NativeDependencyScript>
     <NativeWrapperSource>$(MSBuildProjectDirectory)/Native/AnsightSimulatorRtc/AnsightSimulatorRtc.mm</NativeWrapperSource>
     <NativeWrapperHeader>$(MSBuildProjectDirectory)/Native/AnsightSimulatorRtc/AnsightSimulatorRtc.h</NativeWrapperHeader>
