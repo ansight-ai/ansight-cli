@@ -36,9 +36,17 @@ internal sealed partial class CliRemoteRecordingSource
                     history = history.History.Take(5000).Select(entry => new
                     {
                         entry.EvaluationId, entry.SessionId, entry.AppId, entry.DecisionId, entry.MetricKey,
+                        entry.DefinitionHash,
                         status = entry.Status.ToString(), entry.CurrentValue, entry.BaselineValue,
                         entry.AbsoluteDelta, entry.RelativeDeltaPercent, entry.Message, entry.Unit,
                         entry.EvaluatedAtUtc, entry.AppVersion, entry.SpanGroup
+                    }),
+                    charts = history.Charts.Select(chart => new
+                    {
+                        chart.DecisionId,
+                        chart.MetricKey,
+                        chart.Title,
+                        chart.DefinitionHash
                     }),
                     isTruncated = history.Metrics.Count > 5000 || history.History.Count > 5000
                 });

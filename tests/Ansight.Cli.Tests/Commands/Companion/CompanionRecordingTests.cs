@@ -10,6 +10,53 @@ namespace Ansight.Cli.Tests.Commands.Companion;
 public sealed class CompanionRecordingTests
 {
     [Fact]
+    public async Task TrendsReview_IncludesConfiguredDisplayTitlesForTheSelectedApp()
+    {
+        using var directory = TestDirectory.Create();
+        await using var runtime = CreateRuntime(directory.Path);
+        var workspace = Path.Combine(directory.Path, "workspace");
+        var trendsPath = Path.Combine(workspace, "ansight", "trends");
+        Directory.CreateDirectory(trendsPath);
+        File.WriteAllText(Path.Combine(trendsPath, "loading.json"), """
+            {
+              "schemaVersion": 1,
+              "id": "loading",
+              "appId": "com.example.checkout",
+              "span": {
+                "start": { "event": { "label": "loading.started" } },
+                "end": { "event": { "label": "loading.completed" } }
+              },
+              "metrics": [{
+                "id": "memory-average",
+                "channel": { "type": "memory" },
+                "statistic": "average",
+                "budget": { "lte": 200 },
+                "regression": { "percent": 10, "confirmRuns": 2 },
+                "display": { "title": "Memory while loading", "unit": "MiB" }
+              }]
+            }
+            """);
+        var registration = runtime.Apps.Register(new AppRegistrationRequest("com.example.checkout", "Checkout", workspace));
+        Assert.True(registration.IsSuccess);
+        var source = new CliRemoteRecordingSource(runtime);
+
+        var response = await source.ReviewAsync("trends.history", null,
+            JsonSerializer.SerializeToElement(new { appId = "com.example.checkout" }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(response.Content);
+        var chart = Assert.Single(json.RootElement.GetProperty("charts").EnumerateArray());
+        Assert.Equal("Memory while loading", chart.GetProperty("title").GetString());
+        Assert.NotEmpty(chart.GetProperty("decisionId").GetString()!);
+        Assert.NotEmpty(chart.GetProperty("definitionHash").GetString()!);
+
+        var otherApp = await source.ReviewAsync("trends.history", null,
+            JsonSerializer.SerializeToElement(new { appId = "com.example.other" }));
+        using var otherJson = JsonDocument.Parse(otherApp.Content);
+        Assert.Empty(otherJson.RootElement.GetProperty("charts").EnumerateArray());
+    }
+
+    [Fact]
     public async Task SavedRecordings_ListDetailsFrameAndBoundedEvidence()
     {
         using var directory = TestDirectory.Create();
