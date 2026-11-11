@@ -29,7 +29,8 @@ public sealed partial class SessionCaptureStoreTests
         {
             ChannelId = 1,
             Name = "FPS",
-            ColorHex = "#00FF00"
+            ColorHex = "#00FF00",
+            MetricGroup = new SessionMetricGroup("rendering", "Rendering")
         };
         var firstSample = new SessionMetricSample
         {
@@ -126,6 +127,7 @@ public sealed partial class SessionCaptureStoreTests
         });
         Assert.True(store.TryLoad("session-live-segments", out var liveSnapshot));
         Assert.NotNull(liveSnapshot);
+        Assert.Equal(channel.MetricGroup, Assert.Single(liveSnapshot!.MetricChannels).MetricGroup);
         Assert.Equal(["log-1", "log-2", "log-3"], liveSnapshot!.Logs.Select(log => log.EventId).Where(eventId => eventId is not null).Cast<string>().ToArray());
         Assert.Equal([60, 58, 55], liveSnapshot.Metrics.Select(metric => metric.Value).ToArray());
         Assert.Equal(["down", "up", "down"], liveSnapshot.Touches.Select(touch => touch.Action).ToArray());

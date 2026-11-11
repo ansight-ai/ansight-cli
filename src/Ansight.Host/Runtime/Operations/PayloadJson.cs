@@ -197,6 +197,7 @@ internal static class PayloadJson
                     ["colorHex"] = channel?.ColorHex,
                     ["source"] = channel?.Source,
                     ["group"] = channel?.Group,
+                    ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
                     ["kind"] = channel?.Kind,
                     ["sampleCount"] = group.Count(),
                     ["samples"] = CreateJsonArray(group.Select(metric => (JsonNode?)new JsonObject

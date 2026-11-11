@@ -44,6 +44,7 @@ internal sealed class TelemetryTimelineChannelStats
             ["type"] = PayloadJson.ResolveTelemetryType(ChannelId, channelMap),
             ["source"] = channel?.Source,
             ["group"] = channel?.Group,
+            ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
             ["kind"] = channel?.Kind,
             ["unit"] = channel?.Unit,
             ["count"] = Count,

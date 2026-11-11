@@ -180,6 +180,7 @@ internal sealed class GetNearestArtifactsTool : Operation
                     ["channelName"] = channel?.Name ?? $"Channel {sample.ChannelId}",
                     ["channelSource"] = channel?.Source,
                     ["channelGroup"] = channel?.Group,
+                    ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
                     ["channelKind"] = channel?.Kind,
                     ["type"] = PayloadJson.ResolveTelemetryType(sample.ChannelId, channelMap),
                     ["value"] = sample.Value,

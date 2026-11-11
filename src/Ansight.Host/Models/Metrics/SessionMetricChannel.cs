@@ -9,5 +9,6 @@ public sealed class SessionMetricChannel
     public string Type { get; init; } = "custom";
     public string? Source { get; init; }
     public string? Group { get; init; }
+    public SessionMetricGroup? MetricGroup { get; init; }
     public string? Kind { get; init; }
 }

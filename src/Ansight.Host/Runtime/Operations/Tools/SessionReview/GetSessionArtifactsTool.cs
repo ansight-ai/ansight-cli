@@ -198,6 +198,7 @@ internal sealed class GetSessionArtifactsTool : Operation
                     ["colorHex"] = channel?.ColorHex,
                     ["source"] = channel?.Source,
                     ["group"] = channel?.Group,
+                    ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
                     ["kind"] = channel?.Kind,
                     ["sampleCount"] = samples.Length,
                     ["firstSampleUtc"] = samples[0].CapturedAtUtc,

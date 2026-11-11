@@ -102,6 +102,7 @@ internal static class SessionEvidencePayloads
             ["colorHex"] = channel.ColorHex,
             ["source"] = channel.Source,
             ["group"] = channel.Group,
+            ["metricGroup"] = channel.MetricGroup?.ToPayload(),
             ["kind"] = channel.Kind
         };
     }
@@ -119,6 +120,7 @@ internal static class SessionEvidencePayloads
             ["channelName"] = channel?.Name,
             ["channelSource"] = channel?.Source,
             ["channelGroup"] = channel?.Group,
+            ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
             ["channelKind"] = channel?.Kind,
             ["type"] = PayloadJson.ResolveTelemetryType(sample.ChannelId, channelMap),
             ["value"] = sample.Value

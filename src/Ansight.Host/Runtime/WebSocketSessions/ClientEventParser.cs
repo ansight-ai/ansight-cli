@@ -136,6 +136,8 @@ internal static class ClientEventParser
                 continue;
             }
 
+            var metricGroup = SessionMetricGroup.Read(channelElement);
+
             channels.Add(new SessionMetricChannel
             {
                 ChannelId = id.Value,
@@ -144,7 +146,8 @@ internal static class ClientEventParser
                 Unit = NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "unit")),
                 Type = NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "type")) ?? "custom",
                 Source = NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "source")),
-                Group = NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "group")),
+                Group = metricGroup?.Name ?? NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "group")),
+                MetricGroup = metricGroup,
                 Kind = NormalizeOptionalString(JsonUtil.TryGetString(channelElement, "kind"))
             });
         }

@@ -543,10 +543,16 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
                         ch = new[]
                         {
                             new
-{                            id = 1,
-                            n = "FPS",
-                            c = "#00ff00"
-}
+                            {
+                                id = 1,
+                                n = "FPS",
+                                c = "#00ff00",
+                                metricGroup = new
+                                {
+                                    id = "rendering",
+                                    name = "Rendering"
+                                }
+                            }
                         }
                     }));
                 await WriteArchiveTextEntryAsync(
@@ -628,6 +634,7 @@ public sealed partial class RuntimeCoordinatorIntegrationTests
         var channel = Assert.Single(importResult.ImportedSession.MetricChannels);
         Assert.Equal("FPS", channel.Name);
         Assert.Equal("#00FF00", channel.ColorHex);
+        Assert.Equal(new SessionMetricGroup("rendering", "Rendering"), channel.MetricGroup);
 
         var metric = Assert.Single(importResult.ImportedSession.Metrics);
         Assert.Equal(72.125, metric.Value);

@@ -3,6 +3,31 @@ namespace Ansight.Host.Tests.Unit.Metrics;
 public sealed class TelemetryContractsTests
 {
     [Fact]
+    public void MetricGroups_SurviveWireParsingPersistenceAndEvidencePayloads()
+    {
+        var parsed = ClientEventParser.ParseText("""
+            {"type":"CLIENT_METRIC_CHANNELS","channels":[
+              {"id":64,"name":"Latency","group":"Old label","metricGroup":{"id":"checkout","name":"Checkout"}},
+              {"id":65,"name":"Legacy","group":"Legacy group"},
+              {"id":66,"name":"Invalid group","group":"Fallback","metricGroup":{"id":3,"name":"Invalid"}}
+            ]}
+            """);
+        var channel = Assert.Single(parsed.MetricChannels, value => value.ChannelId == 64);
+        Assert.Equal("checkout", channel.MetricGroup?.Id);
+        Assert.Equal("Checkout", channel.Group);
+        Assert.Null(parsed.MetricChannels.Single(value => value.ChannelId == 65).MetricGroup);
+        Assert.Null(parsed.MetricChannels.Single(value => value.ChannelId == 66).MetricGroup);
+        Assert.Equal("Fallback", parsed.MetricChannels.Single(value => value.ChannelId == 66).Group);
+
+        var saved = JsonSerializer.Serialize(channel, JsonUtil.Compact);
+        var restored = JsonSerializer.Deserialize<SessionMetricChannel>(saved, JsonUtil.Compact)!;
+        Assert.Equal(channel.MetricGroup, restored.MetricGroup);
+        var payload = SessionEvidencePayloads.BuildMetricChannelPayload(restored);
+        Assert.Equal("checkout", payload["metricGroup"]?["id"]?.GetValue<string>());
+        Assert.Equal("Checkout", payload["metricGroup"]?["name"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void NumericSamples_PreserveFractionsAndRejectNonFiniteValues()
     {
         var parsed = ClientEventParser.ParseText("""

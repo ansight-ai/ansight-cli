@@ -89,6 +89,7 @@ internal static class TelemetryReviewPayloads
             ["colorHex"] = channel?.ColorHex,
             ["source"] = channel?.Source,
             ["group"] = channel?.Group,
+            ["metricGroup"] = channel?.MetricGroup?.ToPayload(),
             ["kind"] = channel?.Kind,
             ["unit"] = channel?.Unit,
             ["sampleCount"] = orderedSamples.Length,

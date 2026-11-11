@@ -468,6 +468,8 @@ internal static partial class SessionArchiveExternalPayloadReader
             colorHex = compactColorElement.GetString();
         }
 
+        var metricGroup = SessionMetricGroup.Read(element);
+
         channel = new SessionMetricChannel
         {
             ChannelId = channelId.Value,
@@ -476,7 +478,8 @@ internal static partial class SessionArchiveExternalPayloadReader
             Unit = NormalizeOptionalString(FirstString(element, "unit")),
             Type = NormalizeOptionalString(FirstString(element, "type")) ?? "custom",
             Source = NormalizeOptionalString(FirstString(element, "source")),
-            Group = NormalizeOptionalString(FirstString(element, "group")),
+            Group = metricGroup?.Name ?? NormalizeOptionalString(FirstString(element, "group")),
+            MetricGroup = metricGroup,
             Kind = NormalizeOptionalString(FirstString(element, "kind"))
         };
 
