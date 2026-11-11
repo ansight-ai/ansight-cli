@@ -191,19 +191,6 @@ internal sealed class TesseractSessionScreenshotOcrScanner : ISessionScreenshotO
             return File.Exists(absolutePath) ? absolutePath : null;
         }
 
-        var executableName = OperatingSystem.IsWindows() ? "tesseract.exe" : "tesseract";
-
-        foreach (var directoryPath in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var candidate = Path.Combine(directoryPath, executableName);
-
-            if (File.Exists(candidate))
-            {
-                return Path.GetFullPath(candidate);
-            }
-        }
-
-        return null;
+        return Ansight.Host.Diagnostics.DiagnosticProcess.FindExecutables("tesseract").FirstOrDefault();
     }
 }
