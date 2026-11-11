@@ -59,6 +59,28 @@
       "type": "object",
       "description": "Input arguments for a task-only test. Validated against the task input schema before launch. Only supported when prompt is omitted."
     },
+    "preTasks": {
+      "type": "array",
+      "maxItems": 16,
+      "description": "Ordered repository tasks run after a stable session connection and before the agent or main task. Every pre-task must pass; failure or cancellation prevents the test body from starting.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "taskId"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input": {
+            "type": "object",
+            "description": "Optional arguments validated against the referenced task schema."
+          }
+        }
+      }
+    },
     "hintTasks": {
       "type": "array",
       "description": "Optional repository task IDs suggested to the agent and preloaded ahead of search matches. Hints do not bypass starting-state, scope, or assertion checks.",

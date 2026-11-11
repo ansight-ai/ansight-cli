@@ -9,6 +9,8 @@ public sealed record WorkspaceTestRunResult(
     IReadOnlyList<string> MissingSecrets,
     WorkspaceTestTarget? Target = null)
 {
+    public IReadOnlyList<Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult> PreTaskResults { get; init; } = [];
+
     public TestVideoResult? Video { get; init; }
     public Ansight.Host.Runtime.Tasks.RepositoryTaskRunResult? TaskResult { get; init; }
     public SimulatorAgentRunAudit? TaskAudit { get; init; }

@@ -357,6 +357,48 @@ public sealed partial class WorkspaceTestService
             }
         }
 
+        var preTaskDefinitions = new List<RepositoryTask>();
+
+        if (test.PreTasks.Count > 0)
+        {
+            if (!request.EnableWorkspaceTools)
+            {
+                return WorkspaceTestRunResult.Failure("Pre-tasks require workspace tools to be enabled.", test);
+            }
+
+            var setupCatalog = runtime.InspectRepositoryTasks(test.AppId,
+                RepositoryTaskWorkspaceScope.Resolve(test.AppId, catalog.WorkspacePath));
+
+            foreach (var preTask in test.PreTasks)
+            {
+                var definition = setupCatalog.Tasks.FirstOrDefault(candidate =>
+                    candidate.Enabled && string.Equals(candidate.TaskId, preTask.TaskId, StringComparison.Ordinal));
+
+                if (definition is null)
+                {
+                    return WorkspaceTestRunResult.Failure($"Unknown or disabled pre-task '{preTask.TaskId}'.", test);
+                }
+
+                if (!RepositoryTaskInputValidator.TryValidateAndApplyDefaults(
+                    definition.InputSchema, preTask.Input, out _, out var inputError))
+                {
+                    return WorkspaceTestRunResult.Failure($"Pre-task '{preTask.TaskId}': {inputError}", test);
+                }
+
+                if (!SupportsRequestedTarget(definition, request.Target))
+                {
+                    return WorkspaceTestRunResult.Skipped(BuildUnsupportedTargetMessage(test, definition, request.Target), test);
+                }
+
+                preTaskDefinitions.Add(definition);
+
+                if (string.IsNullOrWhiteSpace(request.SessionId))
+                {
+                    request = request with { Target = ApplyTaskTargetMetadata(definition, request.Target) };
+                }
+            }
+        }
+
         RepositoryTask? declaredTask = null;
 
         if (!string.IsNullOrWhiteSpace(test.TaskId))
@@ -649,6 +691,47 @@ public sealed partial class WorkspaceTestService
                 "session.selected",
                 $"Using Ansight session '{session.SessionId}' for '{test.AppId}'."));
 
+            IReadOnlyList<RepositoryTaskRunResult> preTaskResults = [];
+
+            if (test.PreTasks.Count > 0)
+            {
+                progress?.Report(new WorkspaceTestRunProgress("session.stabilizing",
+                    "Confirming the selected session connection is stable before pre-tasks."));
+                var stableSession = await WaitForSessionAsync(test.AppId, session.SessionId, launchedTarget,
+                    targetLaunchStartedUtc, request.SessionWaitTimeout ?? defaultSessionWaitTimeout,
+                    cancellationToken, sessionClaim).ConfigureAwait(false);
+
+                if (stableSession is null)
+                {
+                    return WorkspaceTestRunResult.Failure("The selected session did not remain stably connected before pre-tasks.",
+                        test, session.SessionId, target: launchedTarget);
+                }
+
+                foreach (var definition in preTaskDefinitions)
+                {
+                    if (!SupportsSession(definition, stableSession))
+                    {
+                        return WorkspaceTestRunResult.Skipped(BuildUnsupportedSessionMessage(test, definition, stableSession),
+                            test, stableSession.SessionId, target: launchedTarget);
+                    }
+                }
+
+                progress?.Report(new WorkspaceTestRunProgress("session.stable",
+                    "The same live session passed consecutive connection checks; running pre-tasks before the test body."));
+                preTaskResults = await RunPreTasksAsync(test, request, catalog.WorkspacePath,
+                    stableSession, launchedTarget, sessionRun.RunId, progress, cancellationToken).ConfigureAwait(false);
+
+                if (preTaskResults.LastOrDefault() is { Status: not RepositoryTaskRunStatus.Passed } failedSetup)
+                {
+                    sessionRunResult = AttachPreTaskResults(CreateTaskRunResult(test, request, catalog.WorkspacePath,
+                        stableSession, launchedTarget, launchTiming.Complete(), failedSetup, progress), preTaskResults) with
+                    {
+                        Message = $"Pre-task '{failedSetup.TaskId}' did not pass. {failedSetup.Message}"
+                    };
+                    return sessionRunResult;
+                }
+            }
+
             if (test.IsTaskOnly)
             {
                 videoCapture = await StartRunVideoAsync(test.Video, session, launchedTarget, sessionRun.RunId,
@@ -663,6 +746,7 @@ public sealed partial class WorkspaceTestService
 
                 sessionRunResult = await RunTaskOnlyAsync(test, request, catalog.WorkspacePath, session,
                     launchedTarget, sessionRun.RunId, launchTiming.Complete(), progress, cancellationToken).ConfigureAwait(false);
+                sessionRunResult = AttachPreTaskResults(sessionRunResult, preTaskResults);
                 await StopExecutionCaptureAsync().ConfigureAwait(false);
                 sessionRunResult = await CompleteTestVideoAsync(videoCapture, sessionRunResult, progress).ConfigureAwait(false);
 
@@ -680,11 +764,12 @@ public sealed partial class WorkspaceTestService
 
             if (!preparation.IsSuccess)
             {
-                return WorkspaceTestRunResult.Failure(
+                sessionRunResult = AttachPreTaskResults(WorkspaceTestRunResult.Failure(
                     preparation.Message,
                     test,
                     session.SessionId,
-                    target: launchedTarget);
+                    target: launchedTarget), preTaskResults);
+                return sessionRunResult;
             }
 
             if (preparation.HasResolvedTeam && preparation.TeamId is { } activeBusiness)
@@ -779,6 +864,7 @@ public sealed partial class WorkspaceTestService
             }
 
             stopwatch.Stop();
+            runResult = AttachPreTaskResults(runResult, preTaskResults);
             await StopExecutionCaptureAsync().ConfigureAwait(false);
             runResult = await CompleteTestVideoAsync(videoCapture, runResult, progress).ConfigureAwait(false);
             sessionRunResult = runResult;

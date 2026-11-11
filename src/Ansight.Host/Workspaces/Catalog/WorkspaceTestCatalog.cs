@@ -189,8 +189,54 @@ public static class WorkspaceTestCatalog
             Video = TestVideoOptions.Read(root),
             TaskId = taskId,
             TaskInput = taskInput,
-            HintTasks = hintTasks
+            HintTasks = hintTasks,
+            PreTasks = ReadPreTasks(root)
         };
+    }
+
+    private static IReadOnlyList<WorkspaceTestPreTask> ReadPreTasks(JsonElement root)
+    {
+        if (!root.TryGetProperty("preTasks", out var entries))
+        {
+            return [];
+        }
+
+        if (entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() > 16)
+        {
+            throw new InvalidDataException("preTasks must be an array of at most 16 task mappings.");
+        }
+
+        var tasks = new List<WorkspaceTestPreTask>();
+
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidDataException("Each preTasks entry must contain a taskId and optional input mapping.");
+            }
+
+            if (entry.EnumerateObject().Any(property => property.Name is not "taskId" and not "input"))
+            {
+                throw new InvalidDataException("preTasks entries support only taskId and input.");
+            }
+
+            var taskId = NormalizeRequiredString(entry, "taskId");
+            JsonObject? input = null;
+
+            if (entry.TryGetProperty("input", out var arguments))
+            {
+                if (arguments.ValueKind != JsonValueKind.Object)
+                {
+                    throw new InvalidDataException("preTasks input must be an object.");
+                }
+
+                input = JsonNode.Parse(arguments.GetRawText())!.AsObject();
+            }
+
+            tasks.Add(new WorkspaceTestPreTask(taskId, input));
+        }
+
+        return tasks;
     }
 
     private static IReadOnlyList<string> ReadHintTasks(JsonElement root)
@@ -433,8 +479,14 @@ public static class WorkspaceTestCatalog
                     throw new InvalidDataException("YAML mapping keys must be unique strings.");
                 }
 
-                result[name] = ConvertYamlNode(value, name, depth + 1, ref nodeCount,
-                    taskInput || depth == 0 && name == "taskInput");
+                var isTaskInput = depth == 0 && name == "taskInput";
+                var isPreTaskInput = depth == 2
+                    && propertyName == "preTasks"
+                    && name == "input";
+                var preserveInputTypes = taskInput
+                    || isTaskInput
+                    || isPreTaskInput;
+                result[name] = ConvertYamlNode(value, name, depth + 1, ref nodeCount, preserveInputTypes);
             }
 
             return result;

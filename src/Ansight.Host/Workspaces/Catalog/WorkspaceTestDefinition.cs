@@ -17,6 +17,8 @@ public sealed record WorkspaceTestDefinition(
     public System.Text.Json.Nodes.JsonObject? TaskInput { get; init; }
     public bool IsTaskOnly => !string.IsNullOrWhiteSpace(TaskId) && string.IsNullOrWhiteSpace(Prompt);
 
+    public IReadOnlyList<WorkspaceTestPreTask> PreTasks { get; init; } = [];
+
     public IReadOnlyList<string> HintTasks { get; init; } = [];
 
     public IReadOnlyList<string> GetReferencedTaskIds()

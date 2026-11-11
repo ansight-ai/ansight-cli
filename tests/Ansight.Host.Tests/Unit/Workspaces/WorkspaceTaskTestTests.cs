@@ -35,6 +35,125 @@ public sealed class WorkspaceTaskTestTests
         => Assert.Throws<InvalidDataException>(() => WorkspaceTestCatalog.Parse(
             "ansight/tests", "ansight/tests/checkout.yaml", "appId: demo\n" + fields));
 
+    [Theory]
+    [InlineData("prompt: Verify the screen.")]
+    [InlineData("taskId: example")]
+    public void PreTasksPreserveOrderAndTypedInputsWithoutChangingThePrompt(string body)
+    {
+        var test = WorkspaceTestCatalog.Parse("ansight/tests", "ansight/tests/example.yaml", "appId: demo\n" + body + """
+
+            preTasks:
+              - taskId: prepare
+                input:
+                  count: 2
+                  enabled: false
+                  values: [null, "false", 1.25]
+              - taskId: authenticate
+            """);
+        Assert.Equal(["prepare", "authenticate"], test.PreTasks.Select(task => task.TaskId));
+        Assert.Equal(2, test.PreTasks[0].Input!["count"]!.GetValue<int>());
+        Assert.False(test.PreTasks[0].Input!["enabled"]!.GetValue<bool>());
+        Assert.Null(test.PreTasks[0].Input!["values"]![0]);
+        Assert.Equal("false", test.PreTasks[0].Input!["values"]![1]!.GetValue<string>());
+        Assert.Equal(1.25m, test.PreTasks[0].Input!["values"]![2]!.GetValue<decimal>());
+        Assert.Null(test.PreTasks[1].Input);
+        Assert.DoesNotContain("prepare", test.BuildRunnerPrompt());
+    }
+
+    [Theory]
+    [InlineData("preTasks: prepare")]
+    [InlineData("preTasks: [prepare]")]
+    [InlineData("preTasks: [{ taskId: '' }]")]
+    [InlineData("preTasks: [{ taskId: prepare, input: [] }]")]
+    [InlineData("preTasks: [{ taskId: prepare, inputs: {} }]")]
+    public void MalformedPreTasksAreRejected(string fields)
+    {
+        Assert.Throws<InvalidDataException>(() => WorkspaceTestCatalog.Parse("ansight/tests",
+            "ansight/tests/example.yaml", "appId: demo\nprompt: Check screen.\n" + fields));
+    }
+
+    [Fact]
+    public async Task PreTasksRunAfterStableConnectionAndBeforeTheMainTaskAndPersistEvidence()
+    {
+        using var fixture = new Fixture("expect(input.count > 0, { id: 'positive' }).toBe(true); return { count: input.count };");
+        fixture.WriteTest("""
+            taskId: example
+            taskInput: { count: 3 }
+            preTasks:
+              - taskId: example
+                input: { count: 1 }
+              - taskId: example
+                input: { count: 2 }
+            """);
+        var stages = new List<string>();
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value => stages.Add(value.Stage));
+        var result = await fixture.Service.RunAsync(fixture.Request, progress);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal([1, 2], result.PreTaskResults.Select(task => task.Output!["count"]!.GetValue<int>()));
+        Assert.Equal(3, result.TaskResult!.Output!["count"]!.GetValue<int>());
+        Assert.True(stages.IndexOf("session.stable") > stages.IndexOf("session.stabilizing"));
+        Assert.True(stages.IndexOf("pre-task.running") > stages.IndexOf("session.stable"));
+        Assert.True(stages.IndexOf("task.running") > stages.LastIndexOf("pre-task.completed"));
+        Assert.Equal(0, fixture.Gateway.Calls);
+        Assert.All(result.PreTaskResults, task => Assert.NotNull(task.SourceTrace));
+        var saved = Assert.Single(fixture.Service.History.Inspect(result.RunAudit!.RunId)!.Runs).Audit;
+        Assert.Equal(2, saved.PreTaskResults.Count);
+    }
+
+    [Theory]
+    [InlineData("taskId: example\ntaskInput: { count: 2 }")]
+    [InlineData("prompt: The agent must never start.")]
+    public async Task FailedPreTaskStopsRemainingSetupAndTheAgentOrMainTask(string body)
+    {
+        using var fixture = new Fixture("expect(input.count, { id: 'count' }).toBe(2);");
+        fixture.WriteTest(body + "\npreTasks:\n  - taskId: example\n    input: { count: 1 }\n  - taskId: example\n");
+        var stages = new List<string>();
+        var result = await fixture.Service.RunAsync(fixture.Request,
+            new DelegatingProgress<WorkspaceTestRunProgress>(value => stages.Add(value.Stage)));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RepositoryTaskRunStatus.Failed, Assert.Single(result.PreTaskResults).Status);
+        Assert.Null(result.AgentResult);
+        Assert.DoesNotContain("task.running", stages);
+        Assert.Equal(0, fixture.Gateway.Calls);
+        Assert.Single(result.RunAudit!.PreTaskResults);
+        Assert.Equal(0, result.RunAudit.ModelPassCount);
+    }
+
+    [Theory]
+    [InlineData("preTasks: [{ taskId: missing }]", "Unknown or disabled pre-task")]
+    [InlineData("preTasks: [{ taskId: example, input: { count: wrong } }]", "Pre-task 'example'")]
+    public async Task InvalidPreTasksFailBeforeLaunching(string setup, string message)
+    {
+        using var fixture = new Fixture("expect(true).toBe(true);");
+        fixture.WriteTest("taskId: example\n" + setup);
+        var result = await fixture.Service.RunAsync(fixture.Request with { SessionId = null, Target = fixture.TargetRequest });
+        Assert.False(result.IsSuccess);
+        Assert.Contains(message, result.Message);
+        Assert.Equal(0, fixture.Launcher.Launches);
+        Assert.Equal(0, fixture.Gateway.Calls);
+    }
+
+    [Fact]
+    public async Task CancelledPreTaskDoesNotStartTheAgent()
+    {
+        using var fixture = new Fixture("await new Promise(() => {});");
+        fixture.WriteTest("prompt: The agent must never start.\npreTasks: [{ taskId: example }]");
+        using var cancellation = new CancellationTokenSource();
+        var progress = new DelegatingProgress<WorkspaceTestRunProgress>(value =>
+        {
+            if (value.Stage == "pre-task.running")
+            {
+                cancellation.CancelAfter(300);
+            }
+        });
+        var result = await fixture.Service.RunAsync(fixture.Request, progress, cancellation.Token);
+        Assert.True(result.WasCancelled, result.Message);
+        Assert.Equal(RepositoryTaskRunStatus.Cancelled, Assert.Single(result.PreTaskResults).Status);
+        Assert.Equal(0, fixture.Gateway.Calls);
+    }
+
     [Fact]
     public void PromptWithTaskRetainsAgentBehavior()
     {
