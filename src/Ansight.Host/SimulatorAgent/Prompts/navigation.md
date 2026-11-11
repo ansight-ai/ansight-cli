@@ -9,6 +9,18 @@ its bounded depth before declaring a control missing.
 Treat Shell, FlyoutPage, FlyoutItem, TabbedPage, TabBar, and other persistent navigation roots as hosts. Preserve FlyoutPage.Detail and Shell containment: a flyout owns the tabbed-page host, which owns its tab screens. Record direct children only; a flyout with one tabbed-page child is complete when the structural inventory confirms it. Do not flatten its tabs into peer flyout destinations. Inventory every host child from rootPage or window structure, and model NavigationPage and modal stacks as routes. For an internal tab set, record the currently selected tab before using any tab action.
 <!-- /template -->
 
+<!-- template:avalonia -->
+Use the published Avalonia visual tree for rendered controls and template children, the logical tree for framework
+containment, and the accessibility tree for automation-peer names, roles, values, and supported actions. Native
+accessibility may expose only the Avalonia host; that does not establish that the framework controls are absent.
+Inspect attached top levels and popup roots when a dialog or menu appears, and scope interaction to the visible
+foreground content. A truncated tree is incomplete evidence; query a bounded subtree using its observed stable ID.
+Record observed tab selection and drawer state before changing them. Preserve nested containment and use only
+exposed state for navigation structure; do not infer routes from control or view-model class names. For user journeys,
+use real device input on observed controls and verify the resulting visible state. Property mutation and remote
+method invocation do not prove that the corresponding touch, keyboard, focus, or accessibility interaction works.
+<!-- /template -->
+
 <!-- template:react-native -->
 When exposed by the app, use React Navigation drawer, tab, and stack router state as the authoritative host hierarchy. Preserve nested route state, route keys, and each router's active index. Record the active route of every tab router before changing tabs. Do not infer unexposed router state from component names.
 <!-- /template -->

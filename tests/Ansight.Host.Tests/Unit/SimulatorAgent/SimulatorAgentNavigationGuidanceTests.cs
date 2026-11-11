@@ -6,6 +6,9 @@ public sealed class SimulatorAgentNavigationGuidanceTests
 {
     [Theory]
     [InlineData("maui.get_visual_tree", "maui")]
+    [InlineData("avalonia.get_visual_tree", "avalonia")]
+    [InlineData("avalonia.get_logical_tree", "avalonia")]
+    [InlineData("avalonia.get_accessibility_tree", "avalonia")]
     [InlineData("react.get_component_tree", "react-native")]
     [InlineData("react.get_shadow_tree", "react-native")]
     [InlineData("flutter.get_widget_tree", "flutter")]
