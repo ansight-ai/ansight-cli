@@ -44,13 +44,13 @@ public sealed partial class WorkspaceTestService
             return 0;
         }
 
-        var audits = simulatorAgent.ListRunHistory();
+        var audits = simulatorAgent.ListRunSummaries();
 
         foreach (var candidate in candidates)
         {
             var run = candidate.Run;
-            var audit = audits.FirstOrDefault(entry => entry.Audit.RunId == run.RunId
-                && entry.Audit.SessionId == candidate.SessionId)?.Audit;
+            var audit = audits.FirstOrDefault(entry => entry.RunId == run.RunId
+                && entry.SessionId == candidate.SessionId);
             runtime.SessionEditing.SetUiTestRun(candidate.SessionId, run with
             {
                 Status = audit?.Status.ToString().ToLowerInvariant() ?? "cancelled",

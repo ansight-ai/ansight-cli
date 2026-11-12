@@ -3,7 +3,7 @@ using Ansight.Host.Workspaces;
 
 namespace Ansight.Host.Tests.Unit.Workspaces;
 
-public sealed class WorkspaceTestServiceTests
+public sealed partial class WorkspaceTestServiceTests
 {
     [Fact]
     public void RunnerPromptRendersEveryOptionalEmbeddedSection()

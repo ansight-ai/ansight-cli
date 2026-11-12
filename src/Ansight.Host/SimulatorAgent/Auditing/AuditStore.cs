@@ -5,7 +5,7 @@ using Ansight.Host.Workspaces;
 
 namespace Ansight.Host.SimulatorAgent.Auditing;
 
-internal sealed class AuditStore : IAuditStore
+internal sealed partial class AuditStore : IAuditStore
 {
     private const string AuditDirectoryName = "simulator-agent-runs";
     private readonly string auditDirectoryPath;
@@ -50,6 +50,12 @@ internal sealed class AuditStore : IAuditStore
             File.Move(meteringPath + ".tmp", meteringPath, overwrite: true);
             File.WriteAllText(temporaryPath, JsonSerializer.Serialize(persistedAudit, jsonOptions));
             File.Move(temporaryPath, filePath, overwrite: true);
+
+            lock (summaryGate)
+            {
+                summariesByPath.Remove(filePath);
+            }
+
             RestrictFile(meteringPath);
             RestrictFile(filePath);
             BoundedAuditHistory.Prune(auditDirectoryPath, filePath, includeTraceDirectories: true);
@@ -187,41 +193,11 @@ internal sealed class AuditStore : IAuditStore
 
             foreach (var filePath in Directory.EnumerateFiles(auditDirectoryPath, "*.json", SearchOption.TopDirectoryOnly))
             {
-                try
+                var entry = ReadEntry(filePath);
+
+                if (entry is not null)
                 {
-                    var audit = JsonSerializer.Deserialize<SimulatorAgentRunAudit>(
-                        File.ReadAllText(filePath),
-                        jsonOptions);
-
-                    if (audit is not null)
-                    {
-                        var meteringPath = filePath + ".metering";
-
-                        if (File.Exists(meteringPath))
-                        {
-                            try
-                            {
-                                audit = audit with
-                                {
-                                    MeteringResponses = JsonSerializer.Deserialize<SimulatorAgentModelPassUsage[]>(
-                                        File.ReadAllText(meteringPath), jsonOptions)
-                                };
-                            }
-                            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
-                            {
-                                // Billing metadata must not hide a readable trace.
-                            }
-                        }
-
-                        entries.Add(new SimulatorAgentRunHistoryEntry(audit, filePath));
-                    }
-                }
-                catch (Exception exception) when (exception is IOException
-                    or UnauthorizedAccessException
-                    or JsonException
-                    or NotSupportedException)
-                {
-                    // A partial or incompatible audit must not hide the rest of the run history.
+                    entries.Add(entry);
                 }
             }
 
@@ -233,6 +209,50 @@ internal sealed class AuditStore : IAuditStore
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return Array.Empty<SimulatorAgentRunHistoryEntry>();
+        }
+    }
+
+    private SimulatorAgentRunHistoryEntry? ReadEntry(string filePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            var audit = JsonSerializer.Deserialize<SimulatorAgentRunAudit>(stream, jsonOptions);
+
+            if (audit is null)
+            {
+                return null;
+            }
+
+            var meteringPath = filePath + ".metering";
+
+            if (File.Exists(meteringPath))
+            {
+                try
+                {
+                    using var meteringStream = File.OpenRead(meteringPath);
+                    audit = audit with
+                    {
+                        MeteringResponses = JsonSerializer.Deserialize<SimulatorAgentModelPassUsage[]>(
+                            meteringStream,
+                            jsonOptions)
+                    };
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+                {
+                    // Billing metadata must not hide a readable trace.
+                }
+            }
+
+            return new SimulatorAgentRunHistoryEntry(audit, filePath);
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or NotSupportedException)
+        {
+            // A partial or incompatible audit must not hide the rest of the run history.
+            return null;
         }
     }
 }

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
-public sealed class SimulatorAgentAuditStoreTests
+public sealed partial class SimulatorAgentAuditStoreTests
 {
     [Fact]
     public void Save_RecordsChargedCostAndReasoningWithoutModelOrProviderCost()

@@ -127,6 +127,20 @@ public sealed partial class SimulatorAgentService : IDisposable
         return auditStore.List();
     }
 
+    internal IReadOnlyList<SimulatorAgentRunSummary> ListRunSummaries()
+    {
+        ThrowIfDisposed();
+
+        return auditStore.ListSummaries();
+    }
+
+    internal SimulatorAgentRunHistoryEntry? LoadRunHistory(SimulatorAgentRunSummary summary)
+    {
+        ThrowIfDisposed();
+
+        return auditStore.Load(summary);
+    }
+
     public SimulatorAgentAuditPersistenceResult PersistRunAudit(SimulatorAgentRunAudit audit)
     {
         ThrowIfDisposed();
