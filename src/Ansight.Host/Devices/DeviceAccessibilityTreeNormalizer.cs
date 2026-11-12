@@ -742,7 +742,7 @@ internal static partial class DeviceAccessibilityTreeNormalizer
     {
         var normalized = type.ToLowerInvariant();
 
-        if (normalized.Contains("edittext", StringComparison.Ordinal))
+        if (normalized.EndsWith("edittext", StringComparison.Ordinal))
         {
             return "textbox";
         }
@@ -765,12 +765,16 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             return "button";
         }
 
-        if (normalized.Contains("switch", StringComparison.Ordinal))
+        var isSwitch = normalized.EndsWith("switch", StringComparison.Ordinal)
+            || normalized.EndsWith("switchcompat", StringComparison.Ordinal)
+            || normalized.EndsWith("switchmaterial", StringComparison.Ordinal);
+
+        if (isSwitch)
         {
             return "switch";
         }
 
-        if (checkable || normalized.Contains("checkbox", StringComparison.Ordinal))
+        if (checkable || normalized.EndsWith("checkbox", StringComparison.Ordinal))
         {
             return "checkbox";
         }

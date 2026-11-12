@@ -10,10 +10,17 @@ public sealed class DeviceAccessibilityTreeNormalizerTests
     [InlineData("ControlCatalog.Pages.ButtonsPage", "view", false)]
     [InlineData("ButtonPanel", "view", false)]
     [InlineData("com.example.buttons.Panel", "view", false)]
+    [InlineData("CheckBoxPage", "view", false)]
+    [InlineData("SwitchPage", "view", false)]
+    [InlineData("EditTextContainer", "text", false)]
     [InlineData("Button", "button", true)]
     [InlineData("android.widget.ImageButton", "button", true)]
     [InlineData("androidx.appcompat.widget.AppCompatButton", "button", true)]
     [InlineData("android.widget.RadioButton", "radio", true)]
+    [InlineData("android.widget.CheckBox", "checkbox", true)]
+    [InlineData("android.widget.Switch", "switch", true)]
+    [InlineData("androidx.appcompat.widget.SwitchCompat", "switch", true)]
+    [InlineData("com.google.android.material.switchmaterial.SwitchMaterial", "switch", true)]
     public void NormalizeAndroid_DistinguishesButtonClassesFromContainers(
         string type, string expectedRole, bool expectsTap)
     {
