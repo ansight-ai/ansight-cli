@@ -76,7 +76,7 @@
       <SimulatorRtcArchitecture Condition="'$(SimulatorRtcArchitecture)' == ''">arm64</SimulatorRtcArchitecture>
     </PropertyGroup>
     <ItemGroup>
-      <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.SimulatorRtc.Mac/obj/native-rtc/osx-$(SimulatorRtcArchitecture)/libAnsightSimulatorRtc.dylib'))">
+      <ResolvedFileToPublish Include="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../Ansight.SimulatorRtc.Mac/obj/native-rtc/libdatachannel-0.24.6-mbedtls-3.6.7/osx-$(SimulatorRtcArchitecture)/libAnsightSimulatorRtc.dylib'))">
         <RelativePath>libAnsightSimulatorRtc.dylib</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
