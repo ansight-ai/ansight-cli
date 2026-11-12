@@ -480,7 +480,7 @@ public sealed class NotificationCoordinator : IDisposable
     private Notification[] GetAnalysisNotifications(AppSessionSnapshot snapshot)
     {
         var notifications = new List<Notification>();
-        var appLabel = ResolveAppLabel(snapshot.AppId, snapshot.ClientName);
+        string? appLabel = null;
 
         lock (gate)
         {
@@ -491,6 +491,8 @@ public sealed class NotificationCoordinator : IDisposable
                 {
                     continue;
                 }
+
+                appLabel ??= ResolveAppLabel(snapshot.AppId, snapshot.ClientName);
 
                 var resultText = analysis.Success ? "completed" : "failed";
                 var analysisKind = SessionAnalysisKind.ToDisplayName(analysis.AnalysisKind);
@@ -543,7 +545,7 @@ public sealed class NotificationCoordinator : IDisposable
 
     private string ResolveAppLabel(string appId, string clientName)
     {
-        var app = hostRuntime.Apps.Get(appId);
+        hostRuntime.Apps.TryGetDefinition(appId, out var app);
 
         if (app is not null && !string.IsNullOrWhiteSpace(app.Name))
         {

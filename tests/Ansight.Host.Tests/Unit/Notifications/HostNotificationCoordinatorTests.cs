@@ -1,6 +1,6 @@
 namespace Ansight.Host.Tests.Unit.Notifications;
 
-public sealed class HostNotificationCoordinatorTests
+public sealed partial class HostNotificationCoordinatorTests
 {
     [Fact]
     public void SessionCachePressure_WarnsOnceAndReportsAutomaticCleanup()
