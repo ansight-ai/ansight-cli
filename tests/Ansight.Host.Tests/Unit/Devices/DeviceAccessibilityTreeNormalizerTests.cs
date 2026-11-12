@@ -6,6 +6,34 @@ namespace Ansight.Host.Tests.Unit.Devices;
 public sealed class DeviceAccessibilityTreeNormalizerTests
 {
     [Theory]
+    [InlineData("ButtonsPage", "view", false)]
+    [InlineData("ControlCatalog.Pages.ButtonsPage", "view", false)]
+    [InlineData("ButtonPanel", "view", false)]
+    [InlineData("com.example.buttons.Panel", "view", false)]
+    [InlineData("Button", "button", true)]
+    [InlineData("android.widget.ImageButton", "button", true)]
+    [InlineData("androidx.appcompat.widget.AppCompatButton", "button", true)]
+    [InlineData("android.widget.RadioButton", "radio", true)]
+    public void NormalizeAndroid_DistinguishesButtonClassesFromContainers(
+        string type, string expectedRole, bool expectsTap)
+    {
+        var source = $"""
+            <hierarchy>
+              <node class="{type}" resource-id="target" text="Buttons" clickable="false"
+                enabled="true" bounds="[0,0][100,100]" />
+            </hierarchy>
+            """;
+        var payload = DeviceAccessibilityTreeNormalizer.NormalizeAndroid(source, 100, 100, 40, 16);
+        Assert.True(VisualTreeTypeRegistry.TryCreateCompactV2(payload, out var types, out var root));
+
+        var match = Assert.Single(LiveUiNodeQuery.Find(root!,
+            LiveUiSelector.Parse(new JsonObject { ["automationId"] = "target" }), types!));
+
+        Assert.Equal(expectedRole, LiveUiNodeQuery.ReadRole(match.Node, types!));
+        Assert.Equal(expectsTap, LiveUiNodeQuery.ReadSupportedActions(match.Node, types!).Contains("tap"));
+    }
+
+    [Theory]
     [InlineData("", "false", "false", "")]
     [InlineData("Search", "true", "false", "")]
     [InlineData("Search", "false", "false", "Search")]

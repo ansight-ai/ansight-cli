@@ -752,7 +752,15 @@ internal static partial class DeviceAccessibilityTreeNormalizer
             return "scrollview";
         }
 
-        if (normalized.Contains("button", StringComparison.Ordinal))
+        // Frameworks can expose custom class names such as ButtonsPage. Only a
+        // control suffix establishes a button role; a container must not become
+        // a tappable foreground surface just because its name mentions buttons.
+        if (normalized.EndsWith("radiobutton", StringComparison.Ordinal))
+        {
+            return "radio";
+        }
+
+        if (normalized.EndsWith("button", StringComparison.Ordinal))
         {
             return "button";
         }
@@ -760,11 +768,6 @@ internal static partial class DeviceAccessibilityTreeNormalizer
         if (normalized.Contains("switch", StringComparison.Ordinal))
         {
             return "switch";
-        }
-
-        if (normalized.Contains("radiobutton", StringComparison.Ordinal))
-        {
-            return "radio";
         }
 
         if (checkable || normalized.Contains("checkbox", StringComparison.Ordinal))

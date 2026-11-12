@@ -4,6 +4,52 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 
 public sealed partial class AppInteractionBackendTests
 {
+    [Fact]
+    public async Task AndroidButtonsPageDoesNotOccludeAnAvaloniaSubtreeTarget()
+    {
+        var session = CreateModalTestSession();
+        var initial = CreateAvaloniaSelectorTree("Other content");
+        initial["root"]!["children"] = new JsonArray(CreateAvaloniaFrontier("options"));
+        var page = CreateAvaloniaSelectorTree("Click the first button to raise Click.");
+        page["root"]!["id"] = "options";
+        page["root"]!["bounds"] = new JsonArray(20, 480, 300, 160);
+        page["types"]![1] = "Avalonia.Automation.Peers.TextBlockAutomationPeer";
+        page["root"]!["children"]![0]!["automationId"] = "ClickStatus";
+        page["root"]!["children"]![0]!["bounds"] = new JsonArray(30, 510, 140, 40);
+        var bridge = new AvaloniaSelectorBridge(session.SessionId, matchingTool: null)
+        {
+            InitialVisualTree = initial,
+            Pages = new Dictionary<string, JsonObject> { ["options"] = page }
+        };
+        var accessibility = DeviceAccessibilityTreeNormalizer.NormalizeAndroid(
+            """
+            <hierarchy>
+              <node class="ButtonsPage" text="Buttons" clickable="false" enabled="true" bounds="[0,0][390,844]">
+                <node class="TextBlock" resource-id="ClickStatus" text="Click the first button to raise Click."
+                  clickable="false" enabled="true" bounds="[30,510][170,550]" />
+              </node>
+            </hierarchy>
+            """, 390, 844, 40, 16);
+        var router = new UiInputRouter();
+        router.ConfigureAccessibility(new ModalSelectorAccessibility(accessibility));
+        using var scope = router.BeginTargetScope(session.SessionId, "simulator-001");
+        var selector = LiveUiSelector.Parse(new JsonObject
+        {
+            ["automationId"] = "ClickStatus",
+            ["type"] = "Avalonia.Automation.Peers.TextBlockAutomationPeer",
+            ["visible"] = true
+        });
+
+        var result = await LiveUiTreeCapture.CaptureForSelectorAsync(
+            session, bridge, router, "ansight_find_ui", null, selector, CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(VisualTreeContract.AvaloniaVisualToolId, result.Capture?.ToolId);
+        Assert.Single(LiveUiNodeQuery.Find(result.Capture!.Root, selector, result.Capture.TypeRegistry));
+        Assert.Equal(new LiveUiBounds(0, 0, 390, 844), result.Capture.Viewport);
+        Assert.Single(bridge.SubtreeArguments);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
