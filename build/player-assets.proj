@@ -5,11 +5,16 @@
     <AnsightPlayerRepository Condition="'$(AnsightPlayerRepository)' == ''">$(AnsightCliRepositoryRoot)/node_modules/@ansight/player</AnsightPlayerRepository>
     <AnsightPlayerAssets>$([System.IO.Path]::GetFullPath('$(AnsightPlayerRepository)/dist/local', '$(AnsightCliRepositoryRoot)'))</AnsightPlayerAssets>
     <AnsightEmbeddedPlayerAssets>$(AnsightCliRepositoryRoot)/src/Ansight.Host/Replay/Assets</AnsightEmbeddedPlayerAssets>
+    <AnsightPlayerSource Condition="Exists('$(AnsightPlayerRepository)/src')">$(AnsightPlayerRepository)</AnsightPlayerSource>
+    <AnsightPlayerSource Condition="'$(AnsightPlayerSource)' == '' and Exists('$(AnsightCliRepositoryRoot)/../ansight-player/package.json')">$([System.IO.Path]::GetFullPath('$(AnsightCliRepositoryRoot)/../ansight-player'))</AnsightPlayerSource>
   </PropertyGroup>
 
   <Target Name="PreparePlayerAssets">
     <Error Condition="!Exists('$(AnsightPlayerAssets)/session-replay.html') or !Exists('$(AnsightPlayerAssets)/session-replay.js') or !Exists('$(AnsightPlayerAssets)/session-replay.css') or !Exists('$(AnsightPlayerAssets)/chat-replay.html')"
            Text="Missing player build in $(AnsightPlayerAssets). Build ansight-player or install its release package with npm ci." />
+    <Error Condition="!Exists('$(AnsightPlayerRepository)/scripts/verify-build.mjs')"
+           Text="The installed player package has no build verifier. Update the pinned player archive and run npm ci before packaging the CLI." />
+    <Exec Command="node &quot;$(AnsightPlayerRepository)/scripts/verify-build.mjs&quot; &quot;$(AnsightPlayerRepository)&quot; &quot;$(AnsightPlayerSource)&quot;" />
     <ItemGroup>
       <PlayerAsset Include="$(AnsightPlayerAssets)/**/*" />
     </ItemGroup>
