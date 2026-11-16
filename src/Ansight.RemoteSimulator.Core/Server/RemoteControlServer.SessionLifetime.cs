@@ -24,6 +24,8 @@ public sealed partial class RemoteControlServer
 
     internal async Task RemoveExpiredWebRtcSessionsAsync()
     {
+        RemoveExpiredCompanionAccess();
+
         foreach (var entry in webRtcSessions)
         {
             if (entry.Value.AuthorizationExpiresAtUtc <= DateTimeOffset.UtcNow)

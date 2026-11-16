@@ -62,7 +62,7 @@ public sealed partial class RemoteControlServer
             || expiresAt > now.Add(maximumSessionLease)
             || (authorizationLeaseId is not null && !Guid.TryParse(authorizationLeaseId, out _));
 
-        if (invalidLease)
+        if (invalidLease || IsCompanionLeaseDisconnected(authorizationLeaseId ?? string.Empty))
         {
             throw new UnauthorizedAccessException("The companion authorization has expired.");
         }
@@ -96,10 +96,21 @@ public sealed partial class RemoteControlServer
                 throw new InvalidOperationException("Could not allocate a WebRTC session identifier.");
             }
 
+            // A disconnect can race with an offer that was already being negotiated.
+            if (IsCompanionLeaseDisconnected(authorizationLeaseId ?? string.Empty))
+            {
+                throw new UnauthorizedAccessException("The host disconnected this companion. Connect again to start a new session.");
+            }
+
             using var negotiation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             negotiation.CancelAfter(TimeSpan.FromSeconds(30));
             var answer = await session.CreateAnswerAsync(browserOffer, negotiation.Token)
                 .WaitAsync(negotiation.Token).ConfigureAwait(false);
+
+            if (IsCompanionLeaseDisconnected(authorizationLeaseId ?? string.Empty))
+            {
+                throw new UnauthorizedAccessException("The host disconnected this companion. Connect again to start a new session.");
+            }
 
             return new OfferResponse(sessionId, answer.Type, TerminateSdp(answer.Sdp), framesPerSecond,
                 grantedScopes.OrderBy(scope => scope, StringComparer.Ordinal).ToArray());
@@ -155,7 +166,8 @@ public sealed partial class RemoteControlServer
                 return;
             }
 
-            if (registration.AuthorizationExpiresAtUtc <= DateTimeOffset.UtcNow)
+            if (registration.AuthorizationExpiresAtUtc <= DateTimeOffset.UtcNow
+                || IsCompanionLeaseDisconnected(registration.AuthorizationLeaseId ?? string.Empty))
             {
                 _ = Task.Run(() => CloseWebRtcSessionAsync(sessionId, registration));
 
@@ -860,6 +872,14 @@ public sealed partial class RemoteControlServer
 
             if (webRtcSessions.TryUpdate(sessionId, updated, current))
             {
+                var hasTrackedAccess = Guid.TryParse(updated.AuthorizationLeaseId, out var leaseId)
+                    && companionAccess.TryGetValue(leaseId, out _);
+
+                if (hasTrackedAccess)
+                {
+                    TrackCompanionAccess(leaseId.ToString("D"), updated.AuthorizationExpiresAtUtc, payload);
+                }
+
                 if (current.CompanionDevice != device)
                 {
                     CompanionConnectionsChanged?.Invoke(this, EventArgs.Empty);

@@ -11,6 +11,8 @@ public sealed class OptionalExtensions : IDisposable
     private readonly Dictionary<string, IOptionalExtension> modules = new(StringComparer.Ordinal);
     private bool disposed;
 
+    public event EventHandler<object>? ServiceResolved;
+
     public OptionalExtensions(object context, string? directory = null)
     {
         this.context = context ?? throw new ArgumentNullException(nameof(context));
@@ -52,6 +54,8 @@ public sealed class OptionalExtensions : IDisposable
 
     public T GetService<T>(string module = "Ansight.Cloud.Host") where T : class
     {
+        T service;
+
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
@@ -74,9 +78,13 @@ public sealed class OptionalExtensions : IDisposable
                 modules.Add(module, extension);
             }
 
-            return extension.GetService(typeof(T)) as T
+            service = extension.GetService(typeof(T)) as T
                 ?? throw new InvalidOperationException($"Extension '{module}' does not implement {typeof(T).FullName}.");
         }
+
+        ServiceResolved?.Invoke(this, service);
+
+        return service;
     }
 
     public T? TryGetLoadedService<T>(string module = "Ansight.Cloud.Host") where T : class

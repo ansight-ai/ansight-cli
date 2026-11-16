@@ -128,6 +128,149 @@ public sealed class RemoteControlServerCompanionConnectionTests
         Assert.False(await server.DisconnectCompanionAsync(sessionId));
     }
 
+    [Fact]
+    public async Task MachineConnection_IsVisibleAndCanBeDisconnectedWithoutVideo()
+    {
+        await using var server = CreateServer(new FakeWebRtcSessionFactory());
+        await server.StartAsync();
+        var leaseId = Guid.NewGuid().ToString("D");
+        var presence = JsonSerializer.SerializeToElement(new
+        {
+            deviceId = "phone-1",
+            deviceName = "Test phone",
+            platform = "iOS"
+        });
+        server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(90), presence);
+        var connection = Assert.Single(server.GetConnectedCompanionConnections());
+        Assert.Equal("Test phone", connection.Device.Name);
+        Assert.Equal("companion:" + leaseId, connection.SessionId);
+
+        server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(90), null);
+        Assert.Equal(connection, Assert.Single(server.GetConnectedCompanionConnections()));
+        Assert.True(await server.DisconnectCompanionAsync(connection.SessionId));
+        Assert.Empty(server.GetConnectedCompanionConnections());
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(90), presence));
+    }
+
+    [Fact]
+    public async Task MachineConnection_ExpiresWhenItsClientStopsRenewing()
+    {
+        await using var server = CreateServer(new FakeWebRtcSessionFactory());
+        await server.StartAsync();
+        var leaseId = Guid.NewGuid().ToString("D");
+        server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(90), null);
+        Assert.Single(server.GetConnectedCompanionConnections());
+        server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(-1), null);
+        await server.RemoveExpiredWebRtcSessionsAsync();
+        Assert.Empty(server.GetConnectedCompanionConnections());
+    }
+
+    [Fact]
+    public async Task DisconnectMachineConnection_ClosesItsVideoAndPreservesOtherClients()
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var leaseId = Guid.NewGuid().ToString("D");
+        server.TrackCompanionAccess(leaseId, DateTimeOffset.UtcNow.AddSeconds(90), null);
+        await OpenCompanionAsync(server, client, factory, leaseId, "phone-1");
+        var video = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        var connection = Assert.Single(server.GetConnectedCompanionConnections());
+        Assert.Equal("phone-1", connection.Device.Name);
+        Assert.Equal("runtime-device-1", connection.TargetDeviceUdid);
+        await OpenCompanionAsync(server, client, factory, Guid.NewGuid().ToString("D"), "phone-2");
+
+        Assert.True(await server.DisconnectCompanionAsync(connection.SessionId));
+        Assert.True(video.IsDisposed);
+        Assert.Equal("phone-2", Assert.Single(server.GetConnectedCompanionConnections()).Device.Name);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Disconnect_ClosesAllDeviceSessionsAndRejectsAutomaticReconnect(bool disconnectAll)
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var leaseId = Guid.NewGuid().ToString("D");
+        var firstId = await OpenCompanionAsync(server, client, factory, leaseId, "phone-1");
+        var first = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        await OpenCompanionAsync(server, client, factory, leaseId, "phone-1");
+        var second = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        var otherLease = Guid.NewGuid().ToString("D");
+        await OpenCompanionAsync(server, client, factory, otherLease, "phone-2");
+        var other = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+
+        if (disconnectAll)
+        {
+            Assert.Equal(3, await server.DisconnectAllCompanionsAsync());
+        }
+        else
+        {
+            Assert.True(await server.DisconnectCompanionAsync(firstId));
+        }
+
+        Assert.True(first.IsDisposed);
+        Assert.True(second.IsDisposed);
+        Assert.Equal(disconnectAll, other.IsDisposed);
+        Assert.True(server.IsCompanionLeaseDisconnected(leaseId));
+        Assert.Equal(disconnectAll, server.IsCompanionLeaseDisconnected(otherLease));
+
+        using var retry = await client.PostAsync(Endpoint(server, "/api/webrtc/offer"), new StringContent(JsonSerializer.Serialize(new
+        {
+            deviceUdid = "runtime-device-1",
+            framesPerSecond = 30,
+            type = "offer",
+            sdp = "v=0\r\n",
+            grantedScopes = new[] { "view" },
+            authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(90)
+        }), Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.Forbidden, retry.StatusCode);
+
+        await OpenCompanionAsync(server, client, factory, Guid.NewGuid().ToString("D"), "phone-1");
+    }
+
+    private static async Task<string> OpenCompanionAsync(RemoteControlServer server, HttpClient client,
+        FakeWebRtcSessionFactory factory, string leaseId, string deviceId)
+    {
+        using var response = await client.PostAsync(Endpoint(server, "/api/webrtc/offer"), new StringContent(JsonSerializer.Serialize(new
+        {
+            deviceUdid = "runtime-device-1",
+            framesPerSecond = 30,
+            type = "offer",
+            sdp = "v=0\r\n",
+            grantedScopes = new[] { "view" },
+            authorizationLeaseId = leaseId,
+            authorizationExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(90)
+        }), Encoding.UTF8, "application/json"));
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var answer = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var id = answer.GetProperty("sessionId").GetString()!;
+        using var changed = new SemaphoreSlim(0);
+        EventHandler onChanged = (_, _) => changed.Release();
+        server.CompanionConnectionsChanged += onChanged;
+
+        try
+        {
+            Assert.IsType<FakeWebRtcSession>(factory.LastSession).Receive(JsonSerializer.Serialize(new
+            {
+                kind = "companion_presence", deviceId, deviceName = deviceId
+            }));
+            Assert.True(await changed.WaitAsync(TimeSpan.FromSeconds(2)));
+        }
+        finally
+        {
+            server.CompanionConnectionsChanged -= onChanged;
+        }
+
+        return id;
+    }
+
     private static RemoteControlServer CreateServer(ISimulatorWebRtcSessionFactory sessionFactory)
         => new(
             new FakeRuntimeSource(),
@@ -200,6 +343,8 @@ public sealed class RemoteControlServerCompanionConnectionTests
 
         public string DeviceUdid { get; }
 
+        public bool IsDisposed { get; private set; }
+
         public Task<WebRtcSessionDescription> CreateAnswerAsync(
             WebRtcSessionDescription offer,
             CancellationToken cancellationToken = default)
@@ -210,6 +355,11 @@ public sealed class RemoteControlServerCompanionConnectionTests
         public void Receive(string message)
             => InputReceived?.Invoke(this, new WebRtcInputMessageEventArgs(message));
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            IsDisposed = true;
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

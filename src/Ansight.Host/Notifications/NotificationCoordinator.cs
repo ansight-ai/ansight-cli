@@ -17,6 +17,7 @@ public sealed class NotificationCoordinator : IDisposable
     private readonly HashSet<string> recordingSessionIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> analysisIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> companionSessionIds = new(StringComparer.Ordinal);
+    private ICompanionService? observedCompanion;
     private bool? companionAccessReminderScheduled;
     private bool sessionCacheWarningSent;
     private bool initialized;
@@ -56,11 +57,6 @@ public sealed class NotificationCoordinator : IDisposable
                 SeedSnapshot(snapshot);
             }
 
-            if (hostRuntime.ActiveCompanion is { } companion)
-            {
-                SeedCompanionConnections(companion.GetConnections());
-            }
-
             hostRuntime.PairingEventOccurred += RuntimeOnPairingEventOccurred;
             hostRuntime.TrendsEventOccurred += RuntimeOnTrendsEventOccurred;
             hostRuntime.SessionTransferEventOccurred += RuntimeOnSessionTransferEventOccurred;
@@ -69,11 +65,11 @@ public sealed class NotificationCoordinator : IDisposable
             hostRuntime.SessionDeleted += RuntimeOnSessionDeleted;
             hostRuntime.SessionCacheMaintenanceCompleted += RuntimeOnSessionCacheMaintenanceCompleted;
 
+            hostRuntime.Extensions.ServiceResolved += ExtensionsOnServiceResolved;
+
             if (hostRuntime.ActiveCompanion is { } activeCompanion)
             {
-                activeCompanion.ConnectionsChanged += CompanionOnConnectionsChanged;
-                activeCompanion.AccessStatusChanged += CompanionOnAccessStatusChanged;
-                HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+                ObserveCompanion(activeCompanion);
             }
             else
             {
@@ -423,19 +419,45 @@ public sealed class NotificationCoordinator : IDisposable
     private void RuntimeOnSessionCacheMaintenanceCompleted(object? sender, SessionCacheMaintenanceResult result)
         => HandleSessionCacheMaintenanceCompleted(result);
 
-    private void CompanionOnConnectionsChanged(object? sender, EventArgs eventArgs)
+    private void ExtensionsOnServiceResolved(object? sender, object service)
     {
-        _ = sender;
-        _ = eventArgs;
-
-        if (hostRuntime.ActiveCompanion is { } companion)
+        if (service is ICompanionService companion)
         {
-            HandleCompanionConnectionsChanged(companion.GetConnections());
+            ObserveCompanion(companion);
+        }
+    }
+
+    private void ObserveCompanion(ICompanionService companion)
+    {
+        lock (gate)
+        {
+            if (disposed || ReferenceEquals(observedCompanion, companion))
+            {
+                return;
+            }
+
+            if (observedCompanion is not null)
+            {
+                observedCompanion.ConnectionsChanged -= CompanionOnConnectionsChanged;
+                observedCompanion.AccessStatusChanged -= CompanionOnAccessStatusChanged;
+            }
+
+            observedCompanion = companion;
+            companionSessionIds.Clear();
+            SeedCompanionConnections(companion.GetConnections());
+            companion.ConnectionsChanged += CompanionOnConnectionsChanged;
+            companion.AccessStatusChanged += CompanionOnAccessStatusChanged;
         }
 
-        if (hostRuntime.ActiveCompanion is { } activeCompanion)
+        HandleCompanionAccessStatusChanged(companion.GetAccessStatus());
+    }
+
+    private void CompanionOnConnectionsChanged(object? sender, EventArgs eventArgs)
+    {
+        if (sender is ICompanionService companion)
         {
-            HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
+            HandleCompanionConnectionsChanged(companion.GetConnections());
+            HandleCompanionAccessStatusChanged(companion.GetAccessStatus());
         }
     }
 
@@ -444,7 +466,7 @@ public sealed class NotificationCoordinator : IDisposable
         _ = sender;
         _ = eventArgs;
 
-        if (hostRuntime.ActiveCompanion is { } activeCompanion)
+        if (sender is ICompanionService activeCompanion)
         {
             HandleCompanionAccessStatusChanged(activeCompanion.GetAccessStatus());
         }
@@ -603,11 +625,16 @@ public sealed class NotificationCoordinator : IDisposable
         hostRuntime.SessionUpdated -= RuntimeOnSessionUpdated;
         hostRuntime.SessionDeleted -= RuntimeOnSessionDeleted;
         hostRuntime.SessionCacheMaintenanceCompleted -= RuntimeOnSessionCacheMaintenanceCompleted;
+        hostRuntime.Extensions.ServiceResolved -= ExtensionsOnServiceResolved;
 
-        if (hostRuntime.ActiveCompanion is { } companion)
+        lock (gate)
         {
-            companion.ConnectionsChanged -= CompanionOnConnectionsChanged;
-            companion.AccessStatusChanged -= CompanionOnAccessStatusChanged;
+            if (observedCompanion is not null)
+            {
+                observedCompanion.ConnectionsChanged -= CompanionOnConnectionsChanged;
+                observedCompanion.AccessStatusChanged -= CompanionOnAccessStatusChanged;
+                observedCompanion = null;
+            }
         }
     }
 }

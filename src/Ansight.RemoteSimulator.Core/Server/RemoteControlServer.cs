@@ -22,7 +22,7 @@ using static Ansight.RemoteSimulator.Core.Server.RemoteControlHttpTransport;
 
 namespace Ansight.RemoteSimulator.Core.Server;
 
-public sealed partial class RemoteControlServer : IAsyncDisposable
+public sealed partial class RemoteControlServer : IAsyncDisposable, ICompanionConnectionTracker
 {
     private const int MaximumRequestBodyBytes = 64 * 1024;
     private const int RecordingResponseChunkBytes = 12 * 1024;
@@ -46,6 +46,7 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     private readonly int requestedPort;
     private readonly string sessionToken;
     private readonly ConcurrentDictionary<string, SessionRegistration> webRtcSessions = new();
+    private readonly ConcurrentDictionary<Guid, byte> disconnectedCompanionLeases = new();
     private readonly SemaphoreSlim webRtcCapacity = new(8, 8);
     private TcpListener? listener;
     private CancellationTokenSource? serverCancellation;
@@ -210,7 +211,24 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
 
     public IReadOnlyList<RemoteCompanionConnection> GetConnectedCompanionConnections()
     {
-        return webRtcSessions
+        var accessConnections = companionAccess.Values
+            .Where(connection => connection.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            .Select(connection => new RemoteCompanionConnection(
+                CompanionAccessSessionPrefix + connection.LeaseId.ToString("D"),
+                connection.Device,
+                GetCompanionTargetDevice(connection.LeaseId),
+                connection.ConnectedAtUtc));
+        var videoConnections = webRtcSessions
+            .Where(pair =>
+            {
+                var hasTrackedAccess = Guid.TryParse(pair.Value.AuthorizationLeaseId, out var leaseId)
+                    && companionAccess.ContainsKey(leaseId);
+                var isVisible = !hasTrackedAccess
+                    && pair.Value.AuthorizationExpiresAtUtc > DateTimeOffset.UtcNow
+                    && !IsCompanionLeaseDisconnected(pair.Value.AuthorizationLeaseId ?? string.Empty);
+
+                return isVisible;
+            })
             .Select(pair => pair.Value.CompanionDevice is null || !pair.Value.ConnectedAtUtc.HasValue
                 ? null
                 : new RemoteCompanionConnection(
@@ -219,7 +237,9 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
                     pair.Value.Session.DeviceUdid,
                     pair.Value.ConnectedAtUtc.Value))
             .Where(static connection => connection is not null)
-            .Cast<RemoteCompanionConnection>()
+            .Cast<RemoteCompanionConnection>();
+
+        return accessConnections.Concat(videoConnections)
             .GroupBy(connection => connection.Device.Identifier, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(connection => connection.ConnectedAtUtc).First())
             .OrderBy(connection => connection.Device.Name, StringComparer.OrdinalIgnoreCase)
@@ -231,6 +251,11 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
+        if (TryReadCompanionAccessSession(sessionId.Trim(), out var leaseId))
+        {
+            return DisconnectCompanionAccessAsync(leaseId);
+        }
+
         if (!webRtcSessions.ContainsKey(sessionId.Trim()))
         {
             return Task.FromResult(false);
@@ -239,16 +264,36 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         return DisconnectCompanionCoreAsync(sessionId.Trim());
     }
 
+    public bool IsCompanionLeaseDisconnected(string leaseId)
+    {
+        return Guid.TryParse(leaseId, out var identifier)
+            && disconnectedCompanionLeases.ContainsKey(identifier);
+    }
+
     public async Task<int> DisconnectAllCompanionsAsync()
     {
-        var sessionIds = webRtcSessions.Keys.ToArray();
+        var accessCount = companionAccess.Count;
 
-        foreach (var sessionId in sessionIds)
+        foreach (var leaseId in companionAccess.Keys)
         {
-            await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
+            DisconnectCompanionLease(leaseId);
         }
 
-        return sessionIds.Length;
+        var sessions = webRtcSessions.ToArray();
+
+        foreach (var session in sessions)
+        {
+            MarkCompanionLeaseDisconnected(session.Value);
+        }
+
+        foreach (var session in sessions)
+        {
+            await CloseWebRtcSessionAsync(session.Key).ConfigureAwait(false);
+        }
+
+        CompanionConnectionsChanged?.Invoke(this, EventArgs.Empty);
+
+        return Math.Max(accessCount, sessions.Length);
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -271,9 +316,47 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
 
     private async Task<bool> DisconnectCompanionCoreAsync(string sessionId)
     {
-        await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
+        if (!webRtcSessions.TryGetValue(sessionId, out var selected))
+        {
+            return false;
+        }
+
+        MarkCompanionLeaseDisconnected(selected);
+
+        var sessions = webRtcSessions.Where(entry =>
+        {
+            var sameLease = selected.AuthorizationLeaseId is not null
+                && entry.Value.AuthorizationLeaseId == selected.AuthorizationLeaseId;
+            var sameDevice = selected.CompanionDevice is not null
+                && string.Equals(entry.Value.CompanionDevice?.Identifier,
+                    selected.CompanionDevice.Identifier, StringComparison.OrdinalIgnoreCase);
+
+            var matchesConnection = entry.Key == sessionId
+                || sameLease
+                || sameDevice;
+
+            return matchesConnection;
+        }).ToArray();
+
+        foreach (var session in sessions)
+        {
+            MarkCompanionLeaseDisconnected(session.Value);
+        }
+
+        foreach (var session in sessions)
+        {
+            await CloseWebRtcSessionAsync(session.Key).ConfigureAwait(false);
+        }
 
         return true;
+    }
+
+    private void MarkCompanionLeaseDisconnected(SessionRegistration registration)
+    {
+        if (Guid.TryParse(registration.AuthorizationLeaseId, out var leaseId))
+        {
+            DisconnectCompanionLease(leaseId);
+        }
     }
 
     public async Task StopAsync()
@@ -322,6 +405,9 @@ public sealed partial class RemoteControlServer : IAsyncDisposable
         {
             await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
         }
+
+        companionAccess.Clear();
+        CompanionConnectionsChanged?.Invoke(this, EventArgs.Empty);
 
         Port = 0;
     }
