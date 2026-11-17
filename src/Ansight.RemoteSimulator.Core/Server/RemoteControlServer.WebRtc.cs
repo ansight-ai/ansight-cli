@@ -860,6 +860,24 @@ public sealed partial class RemoteControlServer
             return;
         }
 
+        var hasViewOnlyLease = !registration.GrantedScopes.Contains("control")
+            && !string.IsNullOrEmpty(registration.AuthorizationLeaseId);
+
+        if (hasViewOnlyLease)
+        {
+            // Read-only guests cannot impersonate another phone's disconnect group.
+            device = device with { Identifier = "view:" + registration.AuthorizationLeaseId };
+            payload = JsonSerializer.SerializeToElement(new
+            {
+                deviceId = device.Identifier,
+                deviceName = device.Name,
+                device.Model,
+                device.Platform,
+                device.OperatingSystemVersion,
+                device.AppVersion
+            }, jsonOptions);
+        }
+
         var current = registration;
 
         while (true)

@@ -843,6 +843,18 @@ public sealed partial class RemoteControlServer
         {
             if (query.TryGetValue("session", out var sessionId))
             {
+                var hasWrongLease = query.TryGetValue("lease", out var leaseId)
+                    && webRtcSessions.TryGetValue(sessionId, out var registration)
+                    && registration.AuthorizationLeaseId != leaseId;
+
+                if (hasWrongLease)
+                {
+                    await WriteJsonAsync(stream, HttpStatusCode.Forbidden,
+                        new ErrorResponse("This session belongs to a different companion."), cancellationToken).ConfigureAwait(false);
+
+                    return;
+                }
+
                 await CloseWebRtcSessionAsync(sessionId).ConfigureAwait(false);
             }
 

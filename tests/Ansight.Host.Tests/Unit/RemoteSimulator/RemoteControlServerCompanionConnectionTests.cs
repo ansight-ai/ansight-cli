@@ -15,6 +15,37 @@ public sealed class RemoteControlServerCompanionConnectionTests
     private const string SessionToken = "companion-connection-test-token";
 
     [Fact]
+    public async Task ViewOnlyGuests_CannotCloseOrImpersonateAnotherCompanion()
+    {
+        var factory = new FakeWebRtcSessionFactory();
+        await using var server = CreateServer(factory);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        var firstLease = Guid.NewGuid().ToString("D");
+        var secondLease = Guid.NewGuid().ToString("D");
+        var firstId = await OpenCompanionAsync(server, client, factory, firstLease, "same-reported-phone");
+        var first = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+        var secondId = await OpenCompanionAsync(server, client, factory, secondLease, "same-reported-phone");
+        var second = Assert.IsType<FakeWebRtcSession>(factory.LastSession);
+
+        using var wrongClose = await client.PostAsync(
+            Endpoint(server, "/api/webrtc/close", $"session={firstId}&lease={secondLease}"), null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, wrongClose.StatusCode);
+        Assert.False(first.IsDisposed);
+        Assert.True(await server.DisconnectCompanionAsync(secondId));
+        Assert.True(second.IsDisposed);
+        Assert.False(first.IsDisposed);
+
+        using var ownClose = await client.PostAsync(
+            Endpoint(server, "/api/webrtc/close", $"session={firstId}&lease={firstLease}"), null);
+
+        Assert.True(ownClose.IsSuccessStatusCode);
+        Assert.True(first.IsDisposed);
+        Assert.False(server.IsCompanionLeaseDisconnected(firstLease));
+    }
+
+    [Fact]
     public async Task CompanionPresence_TracksConnectedDeviceUntilSessionCloses()
     {
         var sessionFactory = new FakeWebRtcSessionFactory();
