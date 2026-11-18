@@ -8,4 +8,5 @@ public sealed record RemoteAgentChatSession(
     DateTimeOffset UpdatedAtUtc,
     string Status,
     bool IsNewSession = false,
-    bool IsPinned = false);
+    bool IsPinned = false,
+    string? Branch = null);

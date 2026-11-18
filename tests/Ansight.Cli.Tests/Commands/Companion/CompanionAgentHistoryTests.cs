@@ -8,7 +8,7 @@ namespace Ansight.Cli.Tests.Commands.Companion;
 public sealed class CompanionAgentHistoryTests
 {
     [Fact]
-    public async Task EmptyHistory_IsSuccessfulWithoutClaimingAgentSubmissionSupport()
+    public async Task EmptyHistory_IsSuccessfulWithProjectAndSubmissionSupport()
     {
         using var directory = TestDirectory.Create();
         await using var runtime = CreateRuntime(directory.Path);
@@ -18,7 +18,8 @@ public sealed class CompanionAgentHistoryTests
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Tasks);
-        Assert.False(source.SupportsSubmission);
+        Assert.True(source.SupportsSubmission);
+        Assert.True(source.SupportsProjects);
     }
 
     [Fact]

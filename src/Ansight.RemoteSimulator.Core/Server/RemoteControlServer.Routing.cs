@@ -132,7 +132,8 @@ public sealed partial class RemoteControlServer
                 agentChatSource?.SupportsSubmission == true,
                 appInspectionSource is not null,
                 annotationSource?.SupportsFreeDraw == true,
-                deviceTestingSource?.SupportsActivity == true);
+                deviceTestingSource?.SupportsActivity == true,
+                agentChatSource?.SupportsProjects == true);
             await WriteJsonAsync(stream, HttpStatusCode.OK, response, cancellationToken).ConfigureAwait(false);
 
             return;
@@ -457,6 +458,40 @@ public sealed partial class RemoteControlServer
             return;
         }
 
+        if (request.Method == "POST" && target.AbsolutePath == "/api/agent/projects")
+        {
+            var result = agentChatSource is null
+                ? new RemoteAgentProjectCatalog(false, "Codex projects are unavailable on this host.", [], [], false)
+                : await agentChatSource.ListProjectsAsync(cancellationToken).ConfigureAwait(false);
+
+            await WriteJsonAsync(stream, result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable,
+                result.IsSuccess ? (object)result : new ErrorResponse(result.Message), cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (request.Method == "POST" && target.AbsolutePath == "/api/agent/project")
+        {
+            var projectRequest = JsonSerializer.Deserialize<RemoteAgentProjectUpdateRequest>(request.Body, jsonOptions);
+
+            if (projectRequest is null || string.IsNullOrWhiteSpace(projectRequest.AppId))
+            {
+                await WriteJsonAsync(stream, HttpStatusCode.BadRequest,
+                    new ErrorResponse("An app is required to link a Codex project."), cancellationToken).ConfigureAwait(false);
+
+                return;
+            }
+
+            var result = agentChatSource is null
+                ? new RemoteAgentProjectUpdateResult(false, "Codex projects are unavailable on this host.")
+                : await agentChatSource.UpdateProjectAsync(projectRequest, cancellationToken).ConfigureAwait(false);
+
+            await WriteJsonAsync(stream, result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.Conflict,
+                result.IsSuccess ? (object)result : new ErrorResponse(result.Message), cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
         if (request.Method == "POST" && target.AbsolutePath == "/api/agent/chats")
         {
             if (agentChatSource is null)
@@ -550,14 +585,16 @@ public sealed partial class RemoteControlServer
                 request.Body,
                 jsonOptions);
 
-            if (submissionRequest is null
+            var isIncompleteSubmission = submissionRequest is null
                 || string.IsNullOrWhiteSpace(submissionRequest.BatchId)
                 || string.IsNullOrWhiteSpace(submissionRequest.SessionId)
                 || string.IsNullOrWhiteSpace(submissionRequest.FrameId)
                 || submissionRequest.AnnotationIds is null
                 || submissionRequest.AnnotationIds.Count == 0
                 || string.IsNullOrWhiteSpace(submissionRequest.Provider)
-                || string.IsNullOrWhiteSpace(submissionRequest.ChatSessionId))
+                || (!submissionRequest.StartNewTask && string.IsNullOrWhiteSpace(submissionRequest.ChatSessionId));
+
+            if (isIncompleteSubmission)
             {
                 await WriteJsonAsync(
                     stream,
@@ -569,7 +606,7 @@ public sealed partial class RemoteControlServer
             }
 
             var result = await agentChatSource
-                .SubmitAnnotationBatchAsync(submissionRequest, cancellationToken)
+                .SubmitAnnotationBatchAsync(submissionRequest!, cancellationToken)
                 .ConfigureAwait(false);
             await WriteJsonAsync(
                 stream,

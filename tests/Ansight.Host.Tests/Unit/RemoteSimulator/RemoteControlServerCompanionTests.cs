@@ -319,6 +319,39 @@ public sealed class RemoteControlServerCompanionTests
         Assert.Equal(["annotation-1", "annotation-2"], agentChatSource.LastSubmission?.AnnotationIds);
     }
 
+    [Fact]
+    public async Task AgentProjects_RoundTripConfigurationAndNewTaskRequestsThroughAuthenticatedRoutes()
+    {
+        var source = new FakeAgentChatSource();
+        await using var server = CreateServer(new FakeDeviceLifecycleSource(), new FakeAnnotationSource(), source);
+        await server.StartAsync();
+        using var client = new HttpClient();
+        using var unauthorized = await PostJsonAsync(client, $"http://127.0.0.1:{server.Port}/api/agent/projects", new { });
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+
+        using var catalogResponse = await PostJsonAsync(client, Endpoint(server, "/api/agent/projects"), new { });
+        Assert.True(catalogResponse.IsSuccessStatusCode);
+        var catalog = await catalogResponse.Content.ReadFromJsonAsync<RemoteAgentProjectCatalog>();
+        Assert.Equal("project-1", Assert.Single(catalog!.Projects).Id);
+
+        using var linked = await PostJsonAsync(client, Endpoint(server, "/api/agent/project"),
+            new RemoteAgentProjectUpdateRequest("app-1", "project-1", "/workspace"));
+        Assert.True(linked.IsSuccessStatusCode);
+        Assert.Equal("project-1", source.LastProjectUpdate?.ProjectId);
+
+        using var unlinked = await PostJsonAsync(client, Endpoint(server, "/api/agent/project"),
+            new RemoteAgentProjectUpdateRequest("app-1", null));
+        Assert.True(unlinked.IsSuccessStatusCode);
+        Assert.Null(source.LastProjectUpdate?.ProjectId);
+
+        using var newTask = await PostJsonAsync(client, Endpoint(server, "/api/annotation/batch/submit"),
+            new RemoteAnnotationBatchSubmissionRequest("batch-1", "live-session", "frame-1", ["annotation-1"],
+                "codex", "", ProjectId: "project-1", StartNewTask: true));
+        Assert.Equal(HttpStatusCode.Accepted, newTask.StatusCode);
+        Assert.True(source.LastSubmission?.StartNewTask);
+        Assert.Equal("project-1", source.LastSubmission?.ProjectId);
+    }
+
     private static RemoteControlServer CreateServer(
         IRemoteDeviceLifecycleSource lifecycleSource,
         IRemoteAnnotationSource annotationSource,
@@ -539,6 +572,20 @@ public sealed class RemoteControlServerCompanionTests
     private sealed class FakeAgentChatSource : IRemoteAgentChatSource
     {
         public RemoteAnnotationBatchSubmissionRequest? LastSubmission { get; private set; }
+        public RemoteAgentProjectUpdateRequest? LastProjectUpdate { get; private set; }
+        public bool SupportsProjects => true;
+
+        public Task<RemoteAgentProjectCatalog> ListProjectsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new RemoteAgentProjectCatalog(true, "Loaded", [],
+                [new RemoteAgentProject("project-1", "My app", ["/workspace"])], true));
+
+        public Task<RemoteAgentProjectUpdateResult> UpdateProjectAsync(
+            RemoteAgentProjectUpdateRequest request, CancellationToken cancellationToken = default)
+        {
+            LastProjectUpdate = request;
+
+            return Task.FromResult(new RemoteAgentProjectUpdateResult(true, "Saved"));
+        }
 
         public Task<RemoteAgentChatListResult> ListAgentChatsAsync(
             RemoteAgentChatListRequest request,

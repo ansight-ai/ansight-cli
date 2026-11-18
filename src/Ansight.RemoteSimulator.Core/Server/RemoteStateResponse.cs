@@ -29,4 +29,5 @@ internal sealed record RemoteStateResponse(
     bool SupportsAgentSubmission,
     bool SupportsLiveFiles,
     bool SupportsFreeDrawAnnotations,
-    bool SupportsDeviceActivity);
+    bool SupportsDeviceActivity,
+    bool SupportsAgentProjects = false);

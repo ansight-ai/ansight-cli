@@ -7,4 +7,6 @@ public sealed record RemoteAnnotationBatchSubmissionRequest(
     IReadOnlyList<string> AnnotationIds,
     string Provider,
     string ChatSessionId,
-    string? ChatTitle = null);
+    string? ChatTitle = null,
+    string? ProjectId = null,
+    bool StartNewTask = false);
