@@ -1,5 +1,6 @@
 #import "AnsightSimulatorRtc.h"
 #include "AnsightVideoPlayout.h"
+#include "AnsightVideoFlowControl.h"
 #import "../../../native/AnsightSimulatorFrameworks.h"
 
 #import <Foundation/Foundation.h>
@@ -20,8 +21,8 @@
 #import <time.h>
 
 static const uint32_t AnsightH264ClockRate = 90000;
-static const int64_t AnsightMaximumVideoBufferDurationMilliseconds = 200;
-static const int32_t AnsightMinimumVideoBufferBytes = 64 * 1024;
+static const int64_t AnsightMaximumVideoBufferDurationMilliseconds = 100;
+static const int32_t AnsightMinimumVideoBufferBytes = 4 * 1024;
 static const NSInteger AnsightMacWindowDiscoveryMaximumAttemptCount = 20;
 static const int64_t AnsightMacWindowDiscoveryRetryNanoseconds = 250 * NSEC_PER_MSEC;
 static const void *AnsightScreenQueueKey = &AnsightScreenQueueKey;
@@ -77,6 +78,7 @@ static void AnsightRtcErrorCallback(int identifier, const char *message, void *p
 static void AnsightRtcInputCallback(int dataChannel, const char *message, int size, void *pointer);
 static void AnsightRtcBufferedAmountLowCallback(int track, void *pointer);
 static void AnsightRtcPliCallback(int track, void *pointer);
+static void AnsightRtcRembCallback(int track, unsigned int bitrate, void *pointer);
 static void AnsightVideoCompressionCallback(
     void *outputCallbackRefCon,
     void *sourceFrameRefCon,
@@ -1226,6 +1228,10 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 @end
 
 @interface AnsightSimulatorRtcSession : NSObject <SCStreamOutput, SCStreamDelegate>
+{
+    AnsightVideoFrameScheduler frameScheduler;
+    AnsightVideoBitrateController bitrateController;
+}
 
 @property(nonatomic, strong) id serviceContext;
 @property(nonatomic, strong) id deviceSet;
@@ -1253,9 +1259,9 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 @property(nonatomic, assign) rtcNalUnitSeparator nalSeparator;
 @property(nonatomic, assign) NSInteger windowDiscoveryAttemptCount;
 @property(nonatomic, assign) BOOL externalVideo;
-@property(nonatomic, assign) double nextEncodeTime;
-@property(nonatomic, assign) BOOL encodeInFlight;
-@property(nonatomic, assign) BOOL videoRefreshPending;
+@property(nonatomic, assign) BOOL frameWakeScheduled;
+@property(nonatomic, assign) CVPixelBufferRef latestWindowPixelBuffer;
+@property(nonatomic, assign) int32_t appliedBitRate;
 @property(nonatomic, assign) BOOL forceKeyFrame;
 @property(nonatomic, assign) BOOL answerStarted;
 @property(nonatomic, assign) BOOL shuttingDown;
@@ -1280,10 +1286,17 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
                                       inputContext:(void *)inputContext
                                              error:(NSError **)error;
 - (void)handleFrame;
+- (void)encodeLatestFrameIfReady;
+- (void)scheduleFrameAfterDelay:(double)delay;
+- (void)finishEncoding;
+- (void)finishEncodingRetryingLatestFrame:(BOOL)retryLatestFrame;
 - (void)encodePixelBuffer:(CVPixelBufferRef)pixelBuffer;
 - (void)startMacWindowCaptureForProcessIdentifier:(int32_t)processIdentifier;
 - (void)handleSurfacesChanged:(id)unmaskedSurface maskedSurface:(id)maskedSurface;
 - (void)handleEncodedSample:(CMSampleBufferRef)sampleBuffer status:(OSStatus)status;
+- (void)sendEncodedSample:(CMSampleBufferRef)sampleBuffer status:(OSStatus)status;
+- (void)applyEncoderBitrate;
+- (void)handleEstimatedBitrate:(uint32_t)bitrate forTrack:(int)track;
 - (BOOL)canSendVideoFrame;
 - (void)handleVideoBufferedAmountLow:(int)track;
 - (void)handleInputMessage:(const char *)message size:(int)size;
@@ -1322,6 +1335,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
     self.framesPerSecond = framesPerSecond;
     self.averageBitRate = averageBitRate;
+    bitrateController.Configure(averageBitRate);
     self.inputCallback = inputCallback;
     self.inputContext = inputContext;
     self.peerConnection = -1;
@@ -1404,6 +1418,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         self.externalVideo = NO;
         self.nalSeparator = RTC_NAL_SEPARATOR_LENGTH;
         self.averageBitRate = averageBitRate;
+        bitrateController.Configure(averageBitRate);
         self.screenQueue = dispatch_queue_create("com.ansight-ai.mac-window-rtc.screen", DISPATCH_QUEUE_SERIAL);
         dispatch_queue_set_specific(
             self.screenQueue,
@@ -1558,9 +1573,15 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         return;
     }
     CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    if (pixelBuffer != NULL)
+    if (pixelBuffer != NULL && !self.shuttingDown)
     {
-        [self encodePixelBuffer:pixelBuffer];
+        CVPixelBufferRetain(pixelBuffer);
+        if (self.latestWindowPixelBuffer != NULL)
+        {
+            CVPixelBufferRelease(self.latestWindowPixelBuffer);
+        }
+        self.latestWindowPixelBuffer = pixelBuffer;
+        [self handleFrame];
     }
 }
 
@@ -1828,35 +1849,78 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
 - (void)handleFrame
 {
+    if (self.shuttingDown)
+    {
+        return;
+    }
+
+    frameScheduler.RequestFrame();
+    [self encodeLatestFrameIfReady];
+}
+
+- (void)scheduleFrameAfterDelay:(double)delay
+{
+    if (self.frameWakeScheduled || self.shuttingDown)
+    {
+        return;
+    }
+
+    self.frameWakeScheduled = YES;
+    __weak AnsightSimulatorRtcSession *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), self.screenQueue, ^{
+        AnsightSimulatorRtcSession *session = weakSelf;
+        if (session == nil || session.shuttingDown)
+        {
+            return;
+        }
+
+        session.frameWakeScheduled = NO;
+        [session encodeLatestFrameIfReady];
+    });
+}
+
+- (void)encodeLatestFrameIfReady
+{
     id surface = nil;
     @synchronized (self)
     {
-        if (self.shuttingDown || self.encodeInFlight || self.currentSurface == nil)
-        {
-            return;
-        }
-
-        double now = MonotonicSeconds();
-        double frameInterval = 1.0 / (double)self.framesPerSecond;
-        double frameDeadlineTolerance = MIN(frameInterval * 0.2, 0.0025);
-        if (self.nextEncodeTime > 0 && now + frameDeadlineTolerance < self.nextEncodeTime)
-        {
-            return;
-        }
-
-        if (self.nextEncodeTime <= 0 || now - self.nextEncodeTime > frameInterval * 2)
-        {
-            self.nextEncodeTime = now + frameInterval;
-        }
-        else
-        {
-            self.nextEncodeTime += frameInterval;
-        }
         surface = self.currentSurface;
+    }
+
+    const BOOL hasNoFrame = surface == nil
+        && self.latestWindowPixelBuffer == NULL;
+    if (self.shuttingDown || hasNoFrame)
+    {
+        return;
+    }
+
+    const auto delay = frameScheduler.NextFrameDelay(MonotonicSeconds());
+    if (!delay)
+    {
+        return;
+    }
+    if (*delay > 0)
+    {
+        [self scheduleFrameAfterDelay:*delay];
+        return;
     }
 
     if (![self canSendVideoFrame])
     {
+        if (self.videoTrack >= 0 && rtcIsOpen(self.videoTrack))
+        {
+            [self scheduleFrameAfterDelay:0.05];
+        }
+        return;
+    }
+    if (!frameScheduler.TryBeginFrame(MonotonicSeconds(), self.framesPerSecond))
+    {
+        return;
+    }
+
+    if (self.latestWindowPixelBuffer != NULL)
+    {
+        [self encodePixelBuffer:self.latestWindowPixelBuffer];
         return;
     }
 
@@ -1865,6 +1929,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     size_t height = IOSurfaceGetHeight(ioSurface);
     if (width == 0 || height == 0)
     {
+        [self finishEncoding];
         return;
     }
 
@@ -1884,6 +1949,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         {
             self.lastError = [NSString stringWithFormat:@"Could not wrap the Simulator IOSurface (%d).", pixelResult];
         }
+        [self finishEncoding];
         return;
     }
 
@@ -1893,17 +1959,26 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
 - (void)encodePixelBuffer:(CVPixelBufferRef)pixelBuffer
 {
-    if (pixelBuffer == NULL || ![self canSendVideoFrame])
+    if (pixelBuffer == NULL || self.shuttingDown)
     {
+        [self finishEncoding];
         return;
     }
 
     size_t width = CVPixelBufferGetWidth(pixelBuffer);
     size_t height = CVPixelBufferGetHeight(pixelBuffer);
-    if (width == 0 || height == 0 || ![self ensureEncoderWidth:width height:height])
+    if (width == 0 || height == 0)
     {
+        [self finishEncoding];
         return;
     }
+    if (![self ensureEncoderWidth:width height:height])
+    {
+        [self finishEncoding];
+        return;
+    }
+
+    [self applyEncoderBitrate];
 
     BOOL forceKeyFrame = NO;
     VTCompressionSessionRef encoder = NULL;
@@ -1912,7 +1987,6 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     {
         if (!self.shuttingDown)
         {
-            self.encodeInFlight = YES;
             forceKeyFrame = self.forceKeyFrame;
             self.forceKeyFrame = NO;
             encoder = self.compressionSession;
@@ -1930,6 +2004,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
     if (encoder == NULL)
     {
+        [self finishEncoding];
         return;
     }
 
@@ -1948,9 +2023,10 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     {
         @synchronized (self)
         {
-            self.encodeInFlight = NO;
+            self.forceKeyFrame = YES;
             self.lastError = [NSString stringWithFormat:@"VideoToolbox rejected a captured frame (%d).", encodeStatus];
         }
+        [self finishEncoding];
     }
 }
 
@@ -1965,7 +2041,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
             return NO;
         }
         track = self.videoTrack;
-        maximumBufferedBytes = MaximumBufferedVideoBytes(self.averageBitRate);
+        maximumBufferedBytes = MaximumBufferedVideoBytes(bitrateController.CurrentBitrate());
     }
 
     if (track < 0 || !rtcIsOpen(track))
@@ -1977,12 +2053,9 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         return YES;
     }
 
-    @synchronized (self)
+    if (bitrateController.ObserveCongestion(MonotonicSeconds()))
     {
-        if (track == self.videoTrack && !self.externalVideo && self.currentSurface != nil)
-        {
-            self.videoRefreshPending = YES;
-        }
+        [self applyEncoderBitrate];
     }
     return NO;
 }
@@ -1992,12 +2065,10 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     dispatch_queue_t queue = nil;
     @synchronized (self)
     {
-        if (self.shuttingDown || track != self.videoTrack || !self.videoRefreshPending)
+        if (self.shuttingDown || track != self.videoTrack)
         {
             return;
         }
-        self.videoRefreshPending = NO;
-        self.nextEncodeTime = 0;
         queue = self.screenQueue;
     }
 
@@ -2006,13 +2077,16 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         return;
     }
     dispatch_async(queue, ^{
-        [self handleFrame];
+        [self encodeLatestFrameIfReady];
     });
 }
 
 - (BOOL)ensureEncoderWidth:(size_t)width height:(size_t)height
 {
-    if (self.compressionSession != NULL && self.encodedWidth == width && self.encodedHeight == height)
+    const BOOL matchesCurrentEncoder = self.compressionSession != NULL
+        && self.encodedWidth == width
+        && self.encodedHeight == height;
+    if (matchesCurrentEncoder)
     {
         return YES;
     }
@@ -2046,17 +2120,15 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     VTSessionSetProperty(encoder, kVTCompressionPropertyKey_AllowFrameReordering, kCFBooleanFalse);
     VTSessionSetProperty(encoder, kVTCompressionPropertyKey_ProfileLevel, kVTProfileLevel_H264_Baseline_AutoLevel);
     CFNumberRef frameRate = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &_framesPerSecond);
-    CFNumberRef bitRate = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &_averageBitRate);
     int32_t keyFrameInterval = self.framesPerSecond * 2;
     CFNumberRef keyFrameIntervalValue = CFNumberCreate(
         kCFAllocatorDefault,
         kCFNumberSInt32Type,
         &keyFrameInterval);
     VTSessionSetProperty(encoder, kVTCompressionPropertyKey_ExpectedFrameRate, frameRate);
-    VTSessionSetProperty(encoder, kVTCompressionPropertyKey_AverageBitRate, bitRate);
+    [self applyEncoderBitrate];
     VTSessionSetProperty(encoder, kVTCompressionPropertyKey_MaxKeyFrameInterval, keyFrameIntervalValue);
     CFRelease(frameRate);
-    CFRelease(bitRate);
     CFRelease(keyFrameIntervalValue);
     status = VTCompressionSessionPrepareToEncodeFrames(encoder);
     if (status != noErr)
@@ -2074,29 +2146,120 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
 - (void)handleEncodedSample:(CMSampleBufferRef)sampleBuffer status:(OSStatus)status
 {
+    [self sendEncodedSample:sampleBuffer status:status];
+    const BOOL wasDropped = status == noErr && sampleBuffer == NULL;
+    [self finishEncodingRetryingLatestFrame:wasDropped];
+}
+
+- (void)finishEncoding
+{
+    [self finishEncodingRetryingLatestFrame:NO];
+}
+
+- (void)finishEncodingRetryingLatestFrame:(BOOL)retryLatestFrame
+{
+    __weak AnsightSimulatorRtcSession *weakSelf = self;
+    dispatch_async(self.screenQueue, ^{
+        AnsightSimulatorRtcSession *session = weakSelf;
+        if (session == nil || session.shuttingDown)
+        {
+            return;
+        }
+
+        // VideoToolbox may drop a frame to respect its rate limit. Keep the
+        // latest surface pending so a final update can still reach the viewer.
+        session->frameScheduler.FinishFrame(retryLatestFrame);
+        [session encodeLatestFrameIfReady];
+    });
+}
+
+- (void)applyEncoderBitrate
+{
+    int32_t bitrate = bitrateController.CurrentBitrate();
+    if (self.compressionSession == NULL || bitrate == self.appliedBitRate)
+    {
+        return;
+    }
+
+    NSNumber *average = @(bitrate);
+    OSStatus status = VTSessionSetProperty(self.compressionSession,
+        kVTCompressionPropertyKey_AverageBitRate, (__bridge CFNumberRef)average);
+    if (status != noErr)
+    {
+        return;
+    }
+
+    // AverageBitRate alone allows large bursts. Leave room for keyframes while
+    // bounding a one-second burst to 1.5 times the current target.
+    NSArray *limits = @[@((int64_t)bitrate * 3 / 16), @1];
+    VTSessionSetProperty(self.compressionSession,
+        kVTCompressionPropertyKey_DataRateLimits, (__bridge CFArrayRef)limits);
+    self.appliedBitRate = bitrate;
+
+    if (self.videoTrack >= 0)
+    {
+        rtcSetBufferedAmountLowThreshold(self.videoTrack, MaximumBufferedVideoBytes(bitrate) / 2);
+    }
+}
+
+- (void)handleEstimatedBitrate:(uint32_t)bitrate forTrack:(int)track
+{
+    dispatch_queue_t queue = self.screenQueue;
+    if (queue == nil || self.externalVideo)
+    {
+        return;
+    }
+
+    __weak AnsightSimulatorRtcSession *weakSelf = self;
+    dispatch_async(queue, ^{
+        AnsightSimulatorRtcSession *session = weakSelf;
+        if (session == nil || session.shuttingDown)
+        {
+            return;
+        }
+        if (track != session.videoTrack)
+        {
+            return;
+        }
+
+        if (session->bitrateController.ObserveReceiverEstimate(bitrate, MonotonicSeconds()))
+        {
+            [session applyEncoderBitrate];
+        }
+    });
+}
+
+- (void)sendEncodedSample:(CMSampleBufferRef)sampleBuffer status:(OSStatus)status
+{
     @synchronized (self)
     {
-        self.encodeInFlight = NO;
         if (self.shuttingDown)
         {
             return;
         }
     }
 
-    if (status != noErr || sampleBuffer == NULL || !CMSampleBufferDataIsReady(sampleBuffer))
+    const BOOL cannotSendSample = status != noErr
+        || sampleBuffer == NULL
+        || !CMSampleBufferDataIsReady(sampleBuffer);
+    if (cannotSendSample)
     {
         if (status != noErr)
         {
             @synchronized (self)
             {
                 self.lastError = [NSString stringWithFormat:@"VideoToolbox encoding failed (%d).", status];
+                self.forceKeyFrame = YES;
             }
         }
         return;
     }
 
     NSData *accessUnit = CreateH264AccessUnit(sampleBuffer);
-    if (accessUnit.length == 0 || self.videoTrack < 0 || !rtcIsOpen(self.videoTrack))
+    const BOOL cannotSendAccessUnit = accessUnit.length == 0
+        || self.videoTrack < 0
+        || !rtcIsOpen(self.videoTrack);
+    if (cannotSendAccessUnit)
     {
         return;
     }
@@ -2124,6 +2287,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         @synchronized (self)
         {
             self.lastError = RtcFailure(@"Sending an encoded Simulator frame", result);
+            self.forceKeyFrame = YES;
         }
     }
 }
@@ -2348,6 +2512,10 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     }
     if (result >= 0)
     {
+        result = rtcChainRembHandler(configuredTrack, AnsightRtcRembCallback);
+    }
+    if (result >= 0)
+    {
         result = rtcSetBufferedAmountLowThreshold(
             configuredTrack,
             MaximumBufferedVideoBytes(self.averageBitRate) / 2);
@@ -2452,7 +2620,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
 
 - (void)requestKeyFrame
 {
-    BOOL shouldRenderCurrentSurface = NO;
+    dispatch_queue_t queue = nil;
     @synchronized (self)
     {
         // scrcpy owns the external encoder. Setting this flag cannot request
@@ -2462,24 +2630,20 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         {
             self.forceKeyFrame = YES;
         }
-        self.nextEncodeTime = 0;
-        shouldRenderCurrentSurface = !self.externalVideo
-            && self.currentSurface != nil
-            && self.screenQueue != nil;
+        queue = self.externalVideo ? nil : self.screenQueue;
     }
 
-    if (shouldRenderCurrentSurface)
+    if (queue != nil)
     {
-        if (dispatch_get_specific(AnsightScreenQueueKey) != NULL)
-        {
-            [self handleFrame];
-        }
-        else
-        {
-            dispatch_async(self.screenQueue, ^{
-                [self handleFrame];
-            });
-        }
+        dispatch_async(queue, ^{
+            if (self.shuttingDown)
+            {
+                return;
+            }
+
+            self->frameScheduler.RequestImmediateFrame();
+            [self encodeLatestFrameIfReady];
+        });
     }
 }
 
@@ -2544,7 +2708,7 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
     self.compressionSession = NULL;
     self.encodedWidth = 0;
     self.encodedHeight = 0;
-    self.encodeInFlight = NO;
+    self.appliedBitRate = 0;
     if (encoder != NULL)
     {
         VTCompressionSessionCompleteFrames(encoder, kCMTimeInvalid);
@@ -2595,6 +2759,11 @@ static NSArray<NSData *> *SplitH264AccessUnit(NSData *accessUnit)
         dispatch_sync(self.screenQueue, ^{});
     }
     [self destroyEncoder];
+    if (self.latestWindowPixelBuffer != NULL)
+    {
+        CVPixelBufferRelease(self.latestWindowPixelBuffer);
+        self.latestWindowPixelBuffer = NULL;
+    }
     self.currentSurface = nil;
     self.screenDescriptor = nil;
     self.screenCallbackUuid = nil;
@@ -3270,6 +3439,11 @@ static void AnsightRtcPliCallback(int track, void *pointer)
 {
     (void)track;
     [SessionFromPointer(pointer) requestKeyFrame];
+}
+
+static void AnsightRtcRembCallback(int track, unsigned int bitrate, void *pointer)
+{
+    [SessionFromPointer(pointer) handleEstimatedBitrate:bitrate forTrack:track];
 }
 
 static void AnsightVideoCompressionCallback(
