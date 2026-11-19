@@ -1,8 +1,14 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Net;
 using System.Text.Json;
 using Ansight.Infrastructure.Security;
+using Ansight.RemoteSimulator.Core.Agent;
+using Ansight.RemoteSimulator.Core.Annotations;
 using Ansight.RemoteSimulator.Core.AppInspection;
+using SkiaSharp;
 using Ansight.RemoteSimulator.Core.Recording;
 
 namespace Ansight.Cli.Tests.Commands.Companion;
@@ -192,7 +198,135 @@ public sealed class CompanionRecordingTests
         Assert.Empty(response.Content);
     }
 
-    private static RuntimeCoordinator CreateRuntime(string path)
+    [Fact]
+    public async Task AnnotationBatchCanBeEditedAndSentAfterAppDisconnects()
+    {
+        const string appId = "com.example.companion-annotation";
+        const string deviceId = "annotation-test-device";
+        const string batchId = "annotation-test-batch";
+        using var directory = TestDirectory.Create();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var cancellationToken = timeout.Token;
+        int discoveryPort;
+
+        using (var portProbe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+        {
+            discoveryPort = ((IPEndPoint)portProbe.Client.LocalEndPoint!).Port;
+        }
+
+        await using var runtime = CreateRuntime(directory.Path, discoveryPort);
+        await runtime.StartAsync();
+        using var socket = await ConnectAnnotationAppAsync(runtime, appId, deviceId, discoveryPort, cancellationToken);
+        var annotations = new CliRemoteAnnotationSource(runtime);
+        RemoteAnnotationBatchStartResult batch;
+
+        do
+        {
+            batch = await annotations.StartAnnotationBatchAsync(new(deviceId, batchId), cancellationToken);
+
+            if (!batch.IsSuccess)
+            {
+                await Task.Delay(50, cancellationToken);
+            }
+        }
+        while (!batch.IsSuccess);
+
+        var sessionId = Assert.IsType<string>(batch.SessionId);
+        var frameId = Assert.IsType<string>(batch.FrameId);
+        var disconnect = runtime.AppTools.ForceDisconnect(sessionId);
+
+        Assert.True(disconnect.IsSuccess, disconnect.Message);
+        Assert.Empty(await annotations.ListLiveSessionsAsync(cancellationToken));
+        Assert.NotNull(await annotations.GetBatchFrameAsync(deviceId, batchId, sessionId, frameId, cancellationToken));
+        Assert.Null(await annotations.GetBatchFrameAsync("another-device", batchId, sessionId, frameId, cancellationToken));
+
+        var draft = new RemoteAnnotationRequest(deviceId, "point", 0.5, 0.5, null, null,
+            "Check this control", "investigate", batchId, frameId);
+        Assert.False((await annotations.CreateAnnotationAsync(draft with { DeviceUdid = "another-device" }, cancellationToken)).IsSuccess);
+
+        var saved = await annotations.CreateAnnotationAsync(draft, cancellationToken);
+        Assert.True(saved.IsSuccess, saved.Message);
+        Assert.Equal(sessionId, saved.SessionId);
+        var annotationId = Assert.IsType<string>(saved.AnnotationId);
+        var updated = await annotations.UpdateAnnotationAsync(new(deviceId, annotationId, "point", 0.5, 0.5, null, null,
+            "Check the control with the keyboard open", "investigate", batchId, frameId), cancellationToken);
+        Assert.True(updated.IsSuccess, updated.Message);
+
+        runtime.Apps.Register(new AppRegistrationRequest(appId, "Annotation test", directory.Path));
+        var codex = new ScriptedCompanionCodex(directory.Path);
+        var agent = new CliRemoteAgentChatSource(runtime, codex);
+        var project = await agent.UpdateProjectAsync(new(appId, "project-1", directory.Path), cancellationToken);
+        Assert.True(project.IsSuccess, project.Message);
+
+        var submission = await agent.SubmitAnnotationBatchAsync(new(batchId, sessionId, frameId, [annotationId],
+            "codex", "", ProjectId: "project-1", StartNewTask: true), cancellationToken);
+        Assert.True(submission.IsSuccess, submission.Message);
+        Assert.Equal("accepted", submission.Status);
+        Assert.Equal("new-thread", submission.ProviderTaskId);
+
+        var removed = await annotations.DeleteAnnotationAsync(new(deviceId, annotationId, batchId, frameId), cancellationToken);
+        Assert.True(removed.IsSuccess, removed.Message);
+    }
+
+    private static async Task<ClientWebSocket> ConnectAnnotationAppAsync(
+        RuntimeCoordinator runtime, string appId, string deviceId, int discoveryPort, CancellationToken cancellationToken)
+    {
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var invite = runtime.Pairing.Issue(appId);
+        Assert.True(invite.IsSuccess, invite.Message);
+        var config = runtime.Pairing.FindLocalConfig(invite.Invite!.InviteId)!.Config;
+        var connect = JsonSerializer.SerializeToUtf8Bytes(new EnrollmentConnectRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"),
+            AppId = appId,
+            InviteId = config.ConfigId,
+            AccessToken = config.Enrollment!.Secret,
+            DeviceId = deviceId,
+            DeviceName = deviceId
+        }, json);
+        using var udp = new UdpClient();
+        await udp.SendAsync(connect, new IPEndPoint(IPAddress.Loopback, discoveryPort), cancellationToken);
+        var reply = await udp.ReceiveAsync(cancellationToken);
+        var response = JsonSerializer.Deserialize<ConnectResponse>(reply.Buffer, json)!;
+        Assert.True(response.Accepted, response.ReasonMessage);
+
+        var socket = new ClientWebSocket();
+
+        try
+        {
+            var url = new Uri($"ws://127.0.0.1:{response.WebSocketPort}{response.WebSocketPath}?token={response.WebSocketToken}");
+            await socket.ConnectAsync(url, cancellationToken);
+            var profile = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                type = "DeviceAppProfile",
+                device = new { nativeDeviceId = deviceId }
+            }, json);
+            await socket.SendAsync(profile.AsMemory(), WebSocketMessageType.Text, true, cancellationToken);
+            using var bitmap = new SKBitmap(2, 2);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 80);
+            var payload = new byte[28 + checked((int)jpeg.Size)];
+            "ASJP"u8.CopyTo(payload);
+            payload[4] = 1;
+            payload[5] = 1;
+            payload[6] = 80;
+            BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(8), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(16), 2);
+            BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(20), 2);
+            BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(24), (int)jpeg.Size);
+            jpeg.AsSpan().CopyTo(payload.AsSpan(28));
+            await socket.SendAsync(payload.AsMemory(), WebSocketMessageType.Binary, true, cancellationToken);
+
+            return socket;
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
+
+    private static RuntimeCoordinator CreateRuntime(string path, int? discoveryPort = null)
     {
         var storagePath = Path.Combine(path, "storage.json");
         var keyPath = FileEncryptionKeyProvider.ResolveDefaultKeyFilePath(storagePath);
@@ -202,7 +336,8 @@ public sealed class CompanionRecordingTests
         {
             BaseFolderPath = path,
             SecureStorageFilePath = storagePath,
-            SecureStorageKeyFilePath = keyPath
+            SecureStorageKeyFilePath = keyPath,
+            DiscoveryPort = discoveryPort
         });
     }
 

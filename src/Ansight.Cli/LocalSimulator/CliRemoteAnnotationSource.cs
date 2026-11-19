@@ -14,6 +14,8 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
     private const string AgentActionPropertyName = "ansight.agentAction";
     private const string AnnotationBatchPropertyName = "ansight.annotationBatchId";
     private const int MaximumActiveAnnotationBatchCount = 100;
+    private const string UnavailableBatchMessage =
+        "This annotation set or its original screenshot is no longer available on your Mac.";
     private static readonly TimeSpan annotationBatchLifetime = TimeSpan.FromHours(1);
     private static readonly TimeSpan defaultAnnotationDuration = TimeSpan.FromSeconds(2);
     private readonly RuntimeCoordinator runtime;
@@ -57,7 +59,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(SaveAnnotation(request, existing: null));
+        return Task.FromResult(SaveAnnotation(request, annotationId: null));
     }
 
     public Task<RemoteAnnotationResult> UpdateAnnotationAsync(
@@ -74,17 +76,6 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             return Task.FromResult(new RemoteAnnotationResult(false, "The annotation identifier is invalid."));
         }
 
-        var session = ResolveSession(request.DeviceUdid);
-        var existing = session?.Snapshot.Annotations.SingleOrDefault(annotation =>
-            string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
-
-        if (session is null || existing is null)
-        {
-            return Task.FromResult(new RemoteAnnotationResult(
-                false,
-                "The annotation is no longer available in the live Ansight session."));
-        }
-
         var update = new RemoteAnnotationRequest(
             request.DeviceUdid,
             request.Kind,
@@ -98,7 +89,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             request.FrameId,
             request.Strokes);
 
-        return Task.FromResult(SaveAnnotation(update, existing));
+        return Task.FromResult(SaveAnnotation(update, annotationId));
     }
 
     public Task<RemoteOperationResult> DeleteAnnotationAsync(
@@ -119,33 +110,28 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
                 "The annotation batch delete request is invalid."));
         }
 
-        var session = ResolveSession(request.DeviceUdid);
-        var existing = session?.Snapshot.Annotations.SingleOrDefault(annotation =>
-            string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal));
+        var batch = FindStartedBatch(request.DeviceUdid, batchId, frameId);
 
-        if (session is null || existing is null)
+        if (batch is null)
+        {
+            return Task.FromResult(new RemoteOperationResult(false, UnavailableBatchMessage));
+        }
+
+        if (!runtime.Sessions.TryGetSnapshot(batch.SessionId, out var session) || session is null)
+        {
+            return Task.FromResult(new RemoteOperationResult(false, UnavailableBatchMessage));
+        }
+
+        var existing = session.Annotations.SingleOrDefault(annotation => annotation.AnnotationId == annotationId);
+
+        if (existing is null || !BelongsToBatch(existing, batchId, frameId))
         {
             return Task.FromResult(new RemoteOperationResult(
                 false,
-                "The annotation is no longer available in the live Ansight session."));
+                "The annotation does not belong to this set and screenshot."));
         }
 
-        lock (gate)
-        {
-            PruneStartedBatches();
-
-            if (!startedBatches.TryGetValue(batchId, out var startedBatch)
-                || !string.Equals(startedBatch.SessionId, session.Snapshot.SessionId, StringComparison.Ordinal)
-                || !string.Equals(startedBatch.FrameId, frameId, StringComparison.Ordinal)
-                || !BelongsToBatch(existing, batchId, frameId))
-            {
-                return Task.FromResult(new RemoteOperationResult(
-                    false,
-                    "The annotation does not belong to this active batch and frame."));
-            }
-        }
-
-        var result = runtime.SessionEditing.DeleteAnnotation(session.Snapshot.SessionId, annotationId);
+        var result = runtime.SessionEditing.DeleteAnnotation(session.SessionId, annotationId);
 
         return Task.FromResult(new RemoteOperationResult(
             result.IsSuccess,
@@ -192,10 +178,17 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         {
             PruneStartedBatches();
             startedBatches[batchId] = new StartedAnnotationBatch(
+                session.DeviceIdentifier,
                 session.Snapshot.SessionId,
                 frame.FrameId,
                 frame.CapturedAtUtc.ToUniversalTime(),
                 DateTimeOffset.UtcNow);
+
+            if (startedBatches.Count > MaximumActiveAnnotationBatchCount)
+            {
+                var oldestBatch = startedBatches.MinBy(static batch => batch.Value.StartedAtUtc);
+                startedBatches.Remove(oldestBatch.Key);
+            }
         }
 
         return Task.FromResult(new RemoteAnnotationBatchStartResult(
@@ -214,35 +207,29 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         string frameId,
         CancellationToken cancellationToken = default)
     {
-        var session = ResolveSession(deviceIdentifier);
+        var batch = FindStartedBatch(deviceIdentifier, batchId, frameId);
 
-        if (session is null || !string.Equals(session.Snapshot.SessionId, sessionId, StringComparison.Ordinal))
+        if (batch is null || !string.Equals(batch.SessionId, sessionId, StringComparison.Ordinal))
         {
             return null;
         }
 
-        lock (gate)
+        var session = await runtime.Sessions.LoadSnapshotAsync(batch.SessionId,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (session is null)
         {
-            PruneStartedBatches();
-
-            var matchesBatch = startedBatches.TryGetValue(batchId, out var batch)
-                && string.Equals(batch.SessionId, sessionId, StringComparison.Ordinal)
-                && string.Equals(batch.FrameId, frameId, StringComparison.Ordinal);
-
-            if (!matchesBatch)
-            {
-                return null;
-            }
+            return null;
         }
 
-        var frame = session.Snapshot.Images.FirstOrDefault(candidate => candidate.FrameId == frameId);
+        var frame = session.Images.FirstOrDefault(candidate => candidate.FrameId == batch.FrameId);
 
         if (frame is null)
         {
             return null;
         }
 
-        var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session.Snapshot, frame);
+        var path = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session, frame);
 
         if (!File.Exists(path))
         {
@@ -281,22 +268,13 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
 
     private RemoteAnnotationResult SaveAnnotation(
         RemoteAnnotationRequest request,
-        SessionAnnotation? existing)
+        string? annotationId)
     {
         var comment = NormalizeComment(request.Comment);
 
         if (comment is null)
         {
             return new RemoteAnnotationResult(false, "Describe the issue before saving the annotation.");
-        }
-
-        var session = ResolveSession(request.DeviceUdid);
-
-        if (session is null)
-        {
-            return new RemoteAnnotationResult(
-                false,
-                "The selected simulator no longer has a live Ansight session.");
         }
 
         var batchId = NormalizeIdentifier(request.BatchId);
@@ -309,63 +287,68 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             return new RemoteAnnotationResult(false, "The annotation batch or frame identifier is invalid.");
         }
 
-        AnnotationFrameReference? frame = null;
+        AppSessionSnapshot session;
+        AnnotationFrameReference frame;
 
         if (batchId is not null)
         {
-            lock (gate)
+            var batch = FindStartedBatch(request.DeviceUdid, batchId, requestedFrameId);
+
+            if (batch is null)
             {
-                PruneStartedBatches();
-
-                var invalidBatch = !startedBatches.TryGetValue(batchId, out var startedBatch)
-                    || !string.Equals(startedBatch.SessionId, session.Snapshot.SessionId, StringComparison.Ordinal)
-                    || !string.Equals(startedBatch.FrameId, requestedFrameId, StringComparison.Ordinal);
-
-                if (invalidBatch)
-                {
-                    return new RemoteAnnotationResult(
-                        false,
-                        "The annotation batch is no longer active or does not match its saved CLI host frame.");
-                }
-
-                frame = new AnnotationFrameReference(
-                    startedBatch!.FrameId,
-                    startedBatch.FrameCapturedAtUtc);
+                return new RemoteAnnotationResult(false, UnavailableBatchMessage);
             }
+
+            if (!runtime.Sessions.TryGetSnapshot(batch.SessionId, out var originalSession) || originalSession is null)
+            {
+                return new RemoteAnnotationResult(false, UnavailableBatchMessage);
+            }
+
+            session = originalSession;
+
+            if (!session.Images.Any(candidate => candidate.FrameId == batch.FrameId))
+            {
+                return new RemoteAnnotationResult(false, UnavailableBatchMessage);
+            }
+
+            frame = new AnnotationFrameReference(batch.FrameId, batch.FrameCapturedAtUtc);
         }
         else
         {
-            var sessionFrame = requestedFrameId is null
-                ? session.Snapshot.Images
-                    .OrderByDescending(static candidate => candidate.CapturedAtUtc)
-                    .FirstOrDefault()
-                : session.Snapshot.Images.FirstOrDefault(candidate => string.Equals(
-                    candidate.FrameId,
-                    requestedFrameId,
-                    StringComparison.Ordinal));
+            var live = ResolveSession(request.DeviceUdid);
 
-            if (sessionFrame is not null)
+            if (live is null)
             {
-                frame = new AnnotationFrameReference(
-                    sessionFrame.FrameId,
-                    sessionFrame.CapturedAtUtc.ToUniversalTime());
+                return new RemoteAnnotationResult(false, "The selected device no longer has a live Ansight session.");
             }
+
+            session = live.Snapshot;
+            var sessionFrame = requestedFrameId is null
+                ? session.Images.OrderByDescending(static candidate => candidate.CapturedAtUtc).FirstOrDefault()
+                : session.Images.FirstOrDefault(candidate => candidate.FrameId == requestedFrameId);
+
+            if (sessionFrame is null)
+            {
+                return new RemoteAnnotationResult(
+                    false,
+                    requestedFrameId is null
+                        ? "Wait for the live Ansight session to capture a screenshot before annotating it."
+                        : "The screenshot is no longer available in the live Ansight session.");
+            }
+
+            frame = new AnnotationFrameReference(sessionFrame.FrameId, sessionFrame.CapturedAtUtc.ToUniversalTime());
         }
 
-        if (frame is null)
-        {
-            return new RemoteAnnotationResult(
-                false,
-                requestedFrameId is null
-                    ? "Wait for the live Ansight session to capture a screenshot before annotating it."
-                    : "The annotation batch frame is no longer available in the live Ansight session.");
-        }
+        SessionAnnotation? existing = null;
 
-        if (existing is not null && !BelongsToBatch(existing, batchId, frame.FrameId))
+        if (annotationId is not null)
         {
-            return new RemoteAnnotationResult(
-                false,
-                "The annotation does not belong to this active batch and frame.");
+            existing = session.Annotations.SingleOrDefault(annotation => annotation.AnnotationId == annotationId);
+
+            if (existing is null || !BelongsToBatch(existing, batchId, frame.FrameId))
+            {
+                return new RemoteAnnotationResult(false, "The annotation does not belong to this set and screenshot.");
+            }
         }
 
         var shape = CliAnnotationGeometry.Create(request, frame.FrameId, frame.CapturedAtUtc, existing?.Geometry);
@@ -379,18 +362,18 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             ? SessionAnnotationGeometryKind.FreeDraw
             : shape.Geometry[0].Kind;
         var bounds = shape.Bounds;
-        var visualTreeSnapshot = session.Snapshot.VisualTreeSnapshots
+        var visualTreeSnapshot = session.VisualTreeSnapshots
             .OrderByDescending(candidate => string.Equals(
                 candidate.ScreenshotFrameId,
                 frame.FrameId,
                 StringComparison.Ordinal))
             .ThenByDescending(static candidate => candidate.CapturedAtUtc)
             .FirstOrDefault();
-        var annotationId = existing?.AnnotationId ?? Guid.NewGuid().ToString("N");
+        var savedAnnotationId = existing?.AnnotationId ?? Guid.NewGuid().ToString("N");
         var capturedAtUtc = frame.CapturedAtUtc;
         var annotation = new SessionAnnotation
         {
-            AnnotationId = annotationId,
+            AnnotationId = savedAnnotationId,
             StartUtc = existing?.StartUtc ?? capturedAtUtc,
             EndUtc = existing?.EndUtc ?? capturedAtUtc.Add(defaultAnnotationDuration),
             Label = BuildLabel(comment),
@@ -419,20 +402,34 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             }
         };
 
-        var result = runtime.SessionEditing.UpsertAnnotation(session.Snapshot.SessionId, annotation);
+        var result = runtime.SessionEditing.UpsertAnnotation(session.SessionId, annotation);
 
         return result.IsSuccess
             ? new RemoteAnnotationResult(
                 true,
                 existing is null
-                    ? "Annotation saved to the live CLI host session."
-                    : "Annotation updated in the live CLI host session.",
-                annotationId,
-                session.Snapshot.SessionId,
+                    ? "Annotation saved to the original Ansight session."
+                    : "Annotation updated in the original Ansight session.",
+                savedAnnotationId,
+                session.SessionId,
                 batchId,
                 frame.FrameId,
                 capturedAtUtc)
             : new RemoteAnnotationResult(false, result.Message);
+    }
+
+    private StartedAnnotationBatch? FindStartedBatch(string deviceIdentifier, string batchId, string? frameId)
+    {
+        lock (gate)
+        {
+            PruneStartedBatches();
+
+            var matchesBatch = startedBatches.TryGetValue(batchId, out var batch)
+                && string.Equals(batch.DeviceIdentifier, deviceIdentifier, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(batch.FrameId, frameId, StringComparison.Ordinal);
+
+            return matchesBatch ? batch : null;
+        }
     }
 
     private SessionSelection? ResolveSession(string deviceIdentifier)
@@ -597,15 +594,6 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         {
             startedBatches.Remove(batchId);
         }
-
-        foreach (var batchId in startedBatches
-            .OrderByDescending(static batch => batch.Value.StartedAtUtc)
-            .Skip(MaximumActiveAnnotationBatchCount - 1)
-            .Select(static batch => batch.Key)
-            .ToArray())
-        {
-            startedBatches.Remove(batchId);
-        }
     }
 
     private sealed record SessionSelection(
@@ -617,6 +605,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         DateTimeOffset CapturedAtUtc);
 
     private sealed record StartedAnnotationBatch(
+        string DeviceIdentifier,
         string SessionId,
         string FrameId,
         DateTimeOffset FrameCapturedAtUtc,
