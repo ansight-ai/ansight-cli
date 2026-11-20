@@ -44,7 +44,7 @@ BOOL _Xcode27SimulatorHidIsAvailable(void)
 
 @property(nonatomic, strong) xpc_connection_t connection;
 @property(nonatomic, strong) dispatch_queue_t queue;
-@property(atomic, strong) NSError *connectionError;
+@property(atomic, strong, readwrite) NSError *connectionError;
 @property(nonatomic, copy) NSString *developerDirectory;
 @property(nonatomic, copy) NSString *deviceUdid;
 @property(nonatomic, strong) NSTask *stylusTask;
@@ -115,7 +115,7 @@ BOOL _Xcode27SimulatorHidIsAvailable(void)
         {
             const char *description = xpc_dictionary_get_string(event, XPC_ERROR_KEY_DESCRIPTION);
             weakSelf.connectionError = Xcode27HidError(53, [NSString stringWithFormat:
-                @"Simulator DTUHID connection interrupted: %s. Restart the input session before continuing the gesture.",
+                @"Simulator DTUHID connection interrupted: %s.",
                 description ?: "unknown XPC error"]);
         }
     });
@@ -180,7 +180,7 @@ BOOL _Xcode27SimulatorHidIsAvailable(void)
     {
         // A timeout has uncertain delivery. Never replay the input over another
         // connection or fall back to the suppressed Indigo channel.
-        self.connectionError = Xcode27HidError(55, @"Timed out waiting for the simulator's DTUHID service. Input receipt is unknown; restart the input session.");
+        self.connectionError = Xcode27HidError(55, @"Timed out waiting for the simulator's DTUHID service. Input receipt is unknown.");
         if (error != NULL)
         {
             *error = self.connectionError;
