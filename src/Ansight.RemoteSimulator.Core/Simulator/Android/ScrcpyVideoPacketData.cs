@@ -13,4 +13,6 @@ internal sealed record ScrcpyVideoPacketData(
     byte[] Data,
     bool IsConfiguration,
     bool IsKeyFrame,
-    long PresentationTimestampMicroseconds);
+    long PresentationTimestampMicroseconds,
+    int? VideoWidth = null,
+    int? VideoHeight = null);

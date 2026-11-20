@@ -13,7 +13,6 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
     private const uint H264CodecIdentifier = 0x68323634;
     private const ulong ConfigurationPacketFlag = 1UL << 63;
     private const ulong KeyFramePacketFlag = 1UL << 62;
-    private const ulong PresentationTimestampMask = KeyFramePacketFlag - 1;
     private const int MaximumPacketSize = 16 * 1024 * 1024;
     private readonly AdbClient adbClient;
     private readonly ScrcpyToolResolution toolResolution;
@@ -139,7 +138,8 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
 
     internal static async Task<ScrcpyVideoPacketData?> ReadPacketAsync(
         Stream stream,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool sessionMetadata = false)
     {
         var header = new byte[12];
 
@@ -150,6 +150,15 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
 
         var presentationTimestampAndFlags = BinaryPrimitives.ReadUInt64BigEndian(header.AsSpan(0, 8));
         var packetSize = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(8, 4));
+        if (sessionMetadata && (presentationTimestampAndFlags & ConfigurationPacketFlag) != 0)
+        {
+            var width = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(4, 4));
+            ValidateVideoSize(width, packetSize);
+            return new ScrcpyVideoPacketData([], false, false, 0, (int)width, (int)packetSize);
+        }
+
+        var configurationFlag = sessionMetadata ? 1UL << 62 : ConfigurationPacketFlag;
+        var keyFrameFlag = sessionMetadata ? 1UL << 61 : KeyFramePacketFlag;
 
         if (packetSize is 0 or > MaximumPacketSize)
         {
@@ -161,9 +170,9 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
 
         return new ScrcpyVideoPacketData(
             data,
-            (presentationTimestampAndFlags & ConfigurationPacketFlag) != 0,
-            (presentationTimestampAndFlags & KeyFramePacketFlag) != 0,
-            checked((long)(presentationTimestampAndFlags & PresentationTimestampMask)));
+            (presentationTimestampAndFlags & configurationFlag) != 0,
+            (presentationTimestampAndFlags & keyFrameFlag) != 0,
+            checked((long)(presentationTimestampAndFlags & (keyFrameFlag - 1))));
     }
 
     private async Task PushServerAsync(string remoteServerPath, CancellationToken cancellationToken)
@@ -302,20 +311,35 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
             throw new InvalidDataException($"scrcpy selected unsupported video codec 0x{codecIdentifier:x8}; H.264 is required.");
         }
 
-        if (width is 0 or > 16384 || height is 0 or > 16384)
+        // scrcpy 5 sends a four-byte codec ID followed by session metadata,
+        // rather than codec ID + width + height. Its packet flags also shifted.
+        var sessionMetadata = (width & 0x80000000) != 0;
+        if (sessionMetadata)
         {
-            throw new InvalidDataException($"scrcpy reported an invalid video size ({width}x{height}).");
+            width = height;
+            var remainingHeader = new byte[4];
+            await stream.ReadExactlyAsync(remainingHeader, cancellationToken).ConfigureAwait(false);
+            height = BinaryPrimitives.ReadUInt32BigEndian(remainingHeader);
         }
+        ValidateVideoSize(width, height);
 
         byte[]? configurationPacket = null;
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var packet = await ReadPacketAsync(stream, cancellationToken).ConfigureAwait(false);
+            var packet = await ReadPacketAsync(stream, cancellationToken, sessionMetadata).ConfigureAwait(false);
 
             if (packet is null)
             {
                 return;
+            }
+
+            if (packet.VideoWidth is { } sessionWidth && packet.VideoHeight is { } sessionHeight)
+            {
+                width = (uint)sessionWidth;
+                height = (uint)sessionHeight;
+                configurationPacket = null;
+                continue;
             }
 
             if (packet.IsConfiguration)
@@ -337,6 +361,14 @@ public sealed class ScrcpyVideoStream : IAsyncDisposable
                     checked((int)width),
                     checked((int)height)),
                 cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static void ValidateVideoSize(uint width, uint height)
+    {
+        if (width is 0 or > 16384 || height is 0 or > 16384)
+        {
+            throw new InvalidDataException($"scrcpy reported an invalid video size ({width}x{height}).");
         }
     }
 
