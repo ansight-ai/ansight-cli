@@ -383,6 +383,15 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
             return true;
         }
 
+        if (string.Equals(toolId, "electron.video.stop", StringComparison.Ordinal))
+        {
+            var size = ReadRequiredInt64(result, "sizeBytes");
+            if (size < 1 || size > 64 * 1024 * 1024) { throw new InvalidOperationException("Invalid Electron video transfer size."); }
+            descriptor = CreateFileDownloadDescriptor(result) with
+            { ToolId = "electron.video.stop", Kind = "video", ProviderId = "electron.video", CaptureSessionArtifactSnapshot = false };
+            return true;
+        }
+
         if (string.Equals(toolId, FilesBeginBinaryDownloadToolId, StringComparison.Ordinal))
         {
             descriptor = CreateFileDownloadDescriptor(result);

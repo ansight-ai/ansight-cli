@@ -7,7 +7,9 @@ internal static class NavigationGuidance
     public static string Read(string framework)
     {
         var guidance = EmbeddedTextResource.ReadSection(
-            "SimulatorAgent/Prompts/navigation.md",
+            framework == "electron"
+                ? "SimulatorAgent/Prompts/navigation-electron.txt"
+                : "SimulatorAgent/Prompts/navigation.md",
             framework);
         var paradigms = AppGraphNavigationTechnologyCatalog.GetKinds(framework).Select(kind =>
             $"{kind.Kind} ({kind.Paradigm.Topology}): {kind.Paradigm.ChildInventory} "

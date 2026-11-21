@@ -584,7 +584,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                 var instructionToolCalls = 0;
                 RecordSetupStep("Build agent instructions");
 
-                var repositoryTasks = appGraphExplorationName is null
+                var repositoryTasks = request.EnableWorkspaceTools && appGraphExplorationName is null
                     ? await toolGateway.GetRepositoryTaskShortcutsAsync(
                         sessionId,
                         instruction,
@@ -619,6 +619,10 @@ public sealed partial class SimulatorAgentService : IDisposable
                     repositoryTasks,
                     sessionCapabilities,
                     appGraphContextEnabled);
+                if (!request.EnableWorkspaceTools)
+                {
+                    AgentWorkspaceToolPolicy.RemoveWorkspaceTools(tools);
+                }
                 RemoveIrrelevantLifecycleTools(tools, sessionContext, instruction);
 
                 if (appGraphExplorationName is not null)
@@ -1129,6 +1133,7 @@ public sealed partial class SimulatorAgentService : IDisposable
                     foreach (var receivedCall in plannedCalls.ReadCalls())
                     {
                         var call = toolGateway.NormalizeFunctionCall(receivedCall);
+                        AgentWorkspaceToolPolicy.EnsureAllowed(call.Name, request.EnableWorkspaceTools);
                         cancellationToken.ThrowIfCancellationRequested();
 
                         if (string.Equals(call.Name, CompleteInstructionToolName, StringComparison.Ordinal))

@@ -827,6 +827,7 @@ public sealed partial class WorkspaceTestService
                     TrackingRunId = Guid.Parse(sessionRun.RunId),
                     TargetDeviceIdentifier = launchedTarget?.DeviceIdentifier,
                     WorkspacePath = catalog.WorkspacePath,
+                    EnableWorkspaceTools = request.EnableWorkspaceTools,
                     WorkspaceTestId = test.TestId,
                     WorkspaceTestName = test.Name,
                     PreferredTaskIds = referencedTaskIds.Concat(request.PreferredTaskIds).Concat(test.HintTasks)

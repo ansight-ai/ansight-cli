@@ -4,6 +4,16 @@ namespace Ansight.Host.Tests.Unit.SimulatorAgent;
 
 public sealed class SimulatorAgentNavigationGuidanceTests
 {
+    [Fact]
+    public void EveryRegisteredControllerHasEmbeddedNavigationGuidance()
+    {
+        foreach (var controller in Ansight.Host.UiAutomation.Navigation.NavigationControllerCatalog.All)
+        {
+            var guidance = Ansight.Host.Runtime.Operations.Tools.UiAutomation.NavigationGuidance.Read(controller.Framework);
+            Assert.False(string.IsNullOrWhiteSpace(guidance));
+        }
+    }
+
     [Theory]
     [InlineData("maui.get_visual_tree", "maui")]
     [InlineData("avalonia.get_visual_tree", "avalonia")]
@@ -55,7 +65,8 @@ public sealed class SimulatorAgentNavigationGuidanceTests
             "macos-swiftui",
             "android-views",
             "android-compose",
-            "capacitor"
+            "capacitor",
+            "electron"
         })
         {
             Assert.Equal(Section(framework), new AgentNavigationGuidance().TakeKnownGuidance(

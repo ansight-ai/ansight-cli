@@ -315,11 +315,15 @@ internal sealed partial class LiveUiTreeCapture
             return LiveUiCaptureResult.Failure("Unknown targetSource. Rediscover and copy the complete target hint.");
         }
 
-        var deviceResult = await CaptureDeviceAccessibilityAsync(
-            session,
-            uiInputRouter,
-            cancellationToken: cancellationToken,
-            allowCached: allowCached).ConfigureAwait(false);
+        // Electron's attached-window DOM is its foreground UI provider. It has no
+        // simulator accessibility target, so retain modal arbitration on that tree.
+        var deviceResult = session.DeviceProfile?.Sdk?.PackageId == "@ansight/electron"
+            && session.CaptureSource != WorkspaceExecutionModes.Device
+            ? await CaptureWithToolAsync(session, appToolBridge, RemoteAppToolIds.UiGetVisualTree,
+                new AppToolBridgeRequestContext("host-ui", operationName, correlationId),
+                cancellationToken).ConfigureAwait(false)
+            : await CaptureDeviceAccessibilityAsync(session, uiInputRouter,
+                cancellationToken: cancellationToken, allowCached: allowCached).ConfigureAwait(false);
 
         if (session.CaptureSource == WorkspaceExecutionModes.Device)
         {

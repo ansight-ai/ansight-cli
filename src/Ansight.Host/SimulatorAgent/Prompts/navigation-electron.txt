@@ -1,0 +1,10 @@
+<!-- template:electron -->
+Use the attached BrowserWindow and its published DOM tree for visible renderer controls. Inspect
+windows explicitly and scope actions to the active window, dialog, or overlay. Native desktop menus
+and windows outside the attached renderer are not represented by the DOM tree; do not infer them.
+Use observed automation IDs, node IDs, roles, labels, and enabled state. Node IDs expire across
+navigation, so refresh the tree after changing pages. Record selected tab panels before invoking
+siblings, and use observed URL/history state or app-published router state for navigation structure.
+Do not infer a React router or hidden routes from the presence of Electron or Chromium. Use real
+pointer and keyboard input on observed controls and verify the resulting visible state.
+<!-- /template -->

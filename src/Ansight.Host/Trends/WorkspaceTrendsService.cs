@@ -864,14 +864,10 @@ public sealed class WorkspaceTrendsService
             return null;
         }
 
-        // The lightweight telemetry snapshot deliberately omits logs. Log anchors need
-        // the complete retained streams, including entries older than the live tail.
-        var needsLogs = catalog.Definitions.Any(definition =>
-            evaluatableTrendsIds.Contains(definition.TrendsId, StringComparer.OrdinalIgnoreCase)
-                && (definition.Span.Start.Log is not null || definition.Span.End.Log is not null));
-        var snapshot = !needsLogs && runtime.Sessions.TryGetLiveContentSnapshot(sessionId, out var liveSnapshot)
-            ? liveSnapshot
-            : await runtime.Sessions.LoadSnapshotAsync(sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+        // A span can precede the live telemetry tail by minutes or hours. Evaluate
+        // retained evidence so finalization does not silently discard earlier samples.
+        var snapshot = await runtime.Sessions.LoadSnapshotAsync(
+            sessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (snapshot is null)
         {

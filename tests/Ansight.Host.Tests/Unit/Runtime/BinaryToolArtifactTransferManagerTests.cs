@@ -6,6 +6,31 @@ namespace Ansight.Host.Tests.Unit.Runtime;
 public sealed class BinaryToolArtifactTransferManagerTests
 {
     [Fact]
+    public async Task ElectronVideo_UsesBinaryTransferWithoutCreatingDuplicateArtifactSnapshot()
+    {
+        using var manager = new BinaryToolArtifactTransferManager();
+        var sessionId = $"sess_{Guid.NewGuid():N}";
+        var transferId = Guid.NewGuid();
+        var envelope = CreateJsonArtifactResponse(sessionId, transferId);
+        envelope.Payload!["toolId"] = "electron.video.stop";
+        var result = envelope.Payload["result"]!.AsObject();
+        result["sizeBytes"] = 2;
+        result["fileName"] = "recording.webm";
+        result["mimeType"] = "video/webm";
+        var registered = Assert.IsType<BinaryToolArtifactTransferRegistration>(manager.TryRegister(sessionId, "app_1", envelope));
+        try
+        {
+            CompleteJsonTransfer(manager, sessionId, transferId);
+            await registered.Completion;
+            Assert.Equal("video", registered.Kind);
+            Assert.False(registered.CaptureSessionArtifactSnapshot);
+            Assert.Equal("{}", await File.ReadAllTextAsync(registered.ArtifactPath));
+            Assert.Equal(registered.ArtifactPath, result["artifactPath"]!.GetValue<string>());
+        }
+        finally { DeleteArtifactDirectory(registered); }
+    }
+
+    [Fact]
     public async Task TinyJsonCompletedBeforeCallerWait_RemainsAvailableForOneSnapshotCapture()
     {
         using var manager = new BinaryToolArtifactTransferManager();

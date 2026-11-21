@@ -506,6 +506,10 @@ internal sealed partial class RuntimeState : IRuntimeState
             {
                 session.IsHistorical = true;
             }
+            else if (string.Equals(status, "WebSocket Open", StringComparison.Ordinal))
+            {
+                session.IsHistorical = false;
+            }
         });
 
         log.Info($"session_status_changed sessionId={sessionId} status={status} message={message}");

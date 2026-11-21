@@ -191,7 +191,9 @@ internal sealed class UiInputRouter
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var preflightDriver = GetInputPreflightDriver();
+        var preflightDriver = ElectronUiInputDriver.IsElectron(request.DeviceIdentifier)
+            ? GetDriver() as IUiInputPreflightDriver
+            : GetInputPreflightDriver();
         var result = preflightDriver is null
             ? new UiInputResult(true, string.Empty, "The configured input driver does not require a preflight.")
             : await preflightDriver.PrepareForInputAsync(request, cancellationToken).ConfigureAwait(false);

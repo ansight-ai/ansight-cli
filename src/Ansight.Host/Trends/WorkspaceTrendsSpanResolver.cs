@@ -52,12 +52,19 @@ public static class WorkspaceTrendsSpanResolver
                 continue;
             }
 
-            var end = matchingEnds[nextEndIndex++];
-            nextEndIndexByGroup[start.GroupKey] = nextEndIndex;
-
+            var end = matchingEnds[nextEndIndex];
             var duration = end.CapturedAtUtc - start.CapturedAtUtc;
 
-            if (duration <= TimeSpan.Zero || duration > span.MaximumDuration)
+            // An abandoned start must not consume an end belonging to a later,
+            // valid start in the same group.
+            if (duration > span.MaximumDuration)
+            {
+                nextEndIndexByGroup[start.GroupKey] = nextEndIndex;
+                continue;
+            }
+
+            nextEndIndexByGroup[start.GroupKey] = nextEndIndex + 1;
+            if (duration <= TimeSpan.Zero)
             {
                 continue;
             }

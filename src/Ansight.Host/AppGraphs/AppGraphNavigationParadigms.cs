@@ -7,7 +7,7 @@ internal static partial class AppGraphNavigationParadigms
         "maui" => Maui(kind),
         "react-native" => ReactNative(kind),
         "flutter" => Flutter(kind),
-        "capacitor" => Web(kind),
+        "capacitor" or "electron" => Web(kind),
         "ios-uikit" or "maccatalyst-uikit" => UIKit(kind),
         "ios-swiftui" or "maccatalyst-swiftui" or "macos-swiftui" => SwiftUI(kind),
         "macos-appkit" => AppKit(kind),

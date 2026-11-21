@@ -15,6 +15,19 @@ internal sealed class SessionConnectionRegistry
         }
     }
 
+    internal bool RunWhenDisconnected(string sessionId, Action action)
+    {
+        lock (gate)
+        {
+            if (connectionsBySessionId.ContainsKey(sessionId))
+            {
+                return false;
+            }
+            action();
+            return true;
+        }
+    }
+
     internal bool Contains(string sessionId)
     {
         lock (gate)

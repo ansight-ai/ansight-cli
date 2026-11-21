@@ -19,6 +19,9 @@ internal static class NavigationControllerCatalog
         ["flutter.get_navigation_state"],
         [VisualTreeContract.FlutterToolId]);
 
+    private static readonly NavigationController electron = new(
+        "electron", [], [VisualTreeContract.DomToolId]);
+
     private static readonly NavigationController capacitor = new(
         "capacitor",
         [],
@@ -75,6 +78,7 @@ internal static class NavigationControllerCatalog
         reactNative,
         flutter,
         capacitor,
+        electron,
         iosUIKit,
         iosSwiftUi,
         macCatalystUIKit,
@@ -106,6 +110,11 @@ internal static class NavigationControllerCatalog
         string? toolId)
     {
         ArgumentNullException.ThrowIfNull(visualTree);
+
+        if (ReadString(visualTree, "adapter") == "@ansight/electron")
+        {
+            return [electron];
+        }
 
         if (!string.Equals(toolId, VisualTreeContract.NativeToolId, StringComparison.Ordinal))
         {

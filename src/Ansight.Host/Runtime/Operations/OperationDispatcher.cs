@@ -108,7 +108,7 @@ internal sealed class OperationDispatcher : IOperationDispatcher
 
     public void ConfigureUiInputDriver(IUiInputDriver? driver)
     {
-        uiInputRouter.Configure(driver);
+        uiInputRouter.Configure(new ElectronUiInputDriver(runtimeState, appToolBridge, driver));
     }
 
     public IAppInteractionContext CreateAppInteractionContext(string sessionId, string? repositoryRootPath = null)

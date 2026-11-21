@@ -33,6 +33,7 @@ public sealed record SimulatorAgentRunRequest(
 
     public string? TargetDeviceIdentifier { get; init; }
     public string? WorkspacePath { get; init; }
+    public bool EnableWorkspaceTools { get; init; } = true;
     public string? WorkspaceTestId { get; init; }
     public string? WorkspaceTestName { get; init; }
     internal IReadOnlyList<string> PreferredTaskIds { get; init; } = [];

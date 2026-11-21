@@ -21,7 +21,8 @@ public sealed partial class WorkspaceTestService
             target?.DeviceIdentifier ?? DeviceLifecycleTool.ResolveNativeDeviceIdentifier(session),
             target?.Platform ?? device?.OsName?.ToLowerInvariant() ?? string.Empty,
             DeviceKinds.IsVirtual(target?.DeviceKind) || device?.IsVirtual == true || device?.IsEmulator == true,
-            options, videoRecorder,
+            options, session.DeviceProfile?.Sdk?.PackageId == "@ansight/electron"
+                ? new ElectronTestVideoRecorder(runtime.AppTools, session.SessionId) : videoRecorder,
             (recording, path) => runtime.SessionEditing.AddVideoRecording(session.SessionId, recording, path),
             cancellationToken, runtime.SessionVideoTranscoder,
             () => runtime.SuspendPeriodicScreenshots(session.SessionId)).ConfigureAwait(false);

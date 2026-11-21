@@ -52,6 +52,21 @@ public sealed class WorkspaceTrendsSpanResolverTests
         Assert.Null(Assert.Single(result.Instances).Group);
     }
 
+    [Fact]
+    public void Resolve_ExpiredStartDoesNotConsumeLaterCompletedSpan()
+    {
+        var start = DateTimeOffset.Parse("2026-11-21T00:00:00Z");
+        var snapshot = CreateSnapshot(
+            Event("abandoned", "guide.started", "", start),
+            Event("retry", "guide.started", "", start.AddMinutes(5)),
+            Event("done", "guide.completed", "", start.AddMinutes(5).AddSeconds(2)));
+        var result = WorkspaceTrendsSpanResolver.Resolve(snapshot, CreateSpan(WorkspaceTrendsSpanSelection.All));
+        Assert.Equal(WorkspaceTrendsStatus.Passed, result.Status);
+        var span = Assert.Single(result.Instances);
+        Assert.Equal("retry", span.StartEventId);
+        Assert.Equal("done", span.EndEventId);
+    }
+
     private static WorkspaceTrendsSpanDefinition CreateSpan(WorkspaceTrendsSpanSelection selection)
         => new(
             new WorkspaceEventAnchor("guide.started"),

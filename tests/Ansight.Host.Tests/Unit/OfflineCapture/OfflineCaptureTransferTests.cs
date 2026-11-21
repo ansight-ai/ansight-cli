@@ -33,11 +33,15 @@ public sealed class OfflineCaptureTransferTests
         Assert.True(restarted.TryGetSessionSnapshot("offline-" + source, out var imported));
         Assert.Single(imported!.Metrics);
         Assert.Single(imported.Images);
-        Assert.Single(imported.ApplicationEvents);
+        Assert.Equal(4, imported.ApplicationEvents.Count);
         Assert.Single(imported.VisualTreeSnapshots);
         Assert.Single(imported.Touches);
         Assert.Single(imported.NetworkRequests);
         Assert.Contains(imported.Logs, log => log.Message == "Offline log");
+
+        Assert.Contains(imported.Logs, log => log.Message == "Offline warning" && log.Priority == LogPriority.Warning);
+        Assert.Contains(imported.Logs, log => log.Message == "Offline exception" && log.Priority == LogPriority.Error);
+        Assert.Contains(imported.Logs, log => log.Message == "Offline debug" && log.Priority == LogPriority.Debug);
 
         var nextLive = restarted.CreateSession("app.test", "App", IPAddress.Loopback, null, null);
         using var retry = new OfflineCaptureTransferManager(restarted);
@@ -157,6 +161,7 @@ public sealed class OfflineCaptureTransferTests
                 {"type":"CLIENT_METRICS","metrics":[{"value":60,"channel":1,"capturedAtUtc":"2026-10-11T01:00:01Z"}]}
                 {"type":"CLIENT_VISUAL_TREE","snapshotId":"tree","capturedAtUtc":"2026-10-11T01:00:01Z","payload":{"type":"root"}}
                 {"type":"CLIENT_EVENTS","events":[{"id":"event","label":"Tapped","eventType":"Event","channel":1,"capturedAtUtc":"2026-10-11T01:00:01Z"}]}
+                {"type":"CLIENT_EVENTS","events":[{"id":"warning","label":"Offline warning","eventType":"Warning","capturedAtUtc":"2026-10-11T01:00:01Z"},{"id":"exception","label":"Offline exception","eventType":"Exception","capturedAtUtc":"2026-10-11T01:00:01Z"},{"id":"debug","label":"Offline debug","eventType":"Debug","capturedAtUtc":"2026-10-11T01:00:01Z"}]}
                 """);
             Add(zip, "screenshots/index/frames.jsonl", """{"path":"screenshots/one.jpg","capturedAtUtc":"2026-10-11T01:00:01Z","width":1,"height":1,"quality":70}""");
 

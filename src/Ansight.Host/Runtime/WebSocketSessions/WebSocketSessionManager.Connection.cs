@@ -44,18 +44,18 @@ internal sealed partial class WebSocketSessionManager
         }
         catch (OperationCanceledException)
         {
-            runtimeState.SetSessionStatus(
+            SetDisconnectedSessionStatus(
                 sessionId,
                 "WebSocket Timeout",
                 "WebSocket session timed out before client completed exchange.");
         }
         catch (SocketException ex)
         {
-            runtimeState.SetSessionStatus(sessionId, "WebSocket Error", $"WebSocket listener error: {ex.Message}");
+            SetDisconnectedSessionStatus(sessionId, "WebSocket Error", $"WebSocket listener error: {ex.Message}");
         }
         catch (Exception ex)
         {
-            runtimeState.SetSessionStatus(sessionId, "WebSocket Error", $"WebSocket session error: {ex.Message}");
+            SetDisconnectedSessionStatus(sessionId, "WebSocket Error", $"WebSocket session error: {ex.Message}");
         }
         finally
         {
@@ -63,6 +63,10 @@ internal sealed partial class WebSocketSessionManager
             portLeasePool.Release(session.Port);
         }
     }
+
+    private void SetDisconnectedSessionStatus(string sessionId, string status, string message)
+        => connectionRegistry.RunWhenDisconnected(sessionId,
+            () => runtimeState.SetSessionStatus(sessionId, status, message));
 
     internal async Task<bool> RunConnectedSessionAsync(
         string sessionId,

@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json.Nodes;
 using Ansight.Pairing.Models;
+using Ansight.Host.Runtime.WebSocketSessions;
 using static Ansight.Host.Runtime.Archives.SessionArchiveJsonValueReader;
 
 namespace Ansight.Host.Runtime.Archives;
@@ -171,25 +172,15 @@ internal static partial class SessionArchiveExternalPayloadReader
                 ? (byte)channelIdValue.Value
                 : (byte)0;
             var eventId = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("D") : id.Trim();
-            builder.AddApplicationEvent(new SessionApplicationEvent(
+            var applicationEvent = new SessionApplicationEvent(
                 eventId,
                 label.Trim(),
                 eventType.Trim(),
                 details.Trim(),
                 capturedAtUtc.ToUniversalTime(),
-                channelId));
-
-            var message = string.IsNullOrWhiteSpace(details)
-                ? label.Trim()
-                : $"{label.Trim()}: {details.Trim()}";
-
-            builder.AddLog(new LogEntry(capturedAtUtc, message)
-            {
-                Source = "Client",
-                Tag = eventType.Trim().ToUpperInvariant(),
-                EventId = eventId,
-                Priority = LogPriority.Information
-            });
+                channelId);
+            builder.AddApplicationEvent(applicationEvent);
+            builder.AddLog(WebSocketSessionProtocol.CreateClientEventLog(applicationEvent));
         }
     }
 
