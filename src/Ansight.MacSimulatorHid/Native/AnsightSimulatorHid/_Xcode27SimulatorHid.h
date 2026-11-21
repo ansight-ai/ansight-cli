@@ -8,6 +8,8 @@ BOOL _Xcode27SimulatorHidIsAvailable(void);
 
 @interface _Xcode27SimulatorHid : NSObject
 
+@property(atomic, strong, readonly) NSError *connectionError;
+
 - (instancetype)initWithDevice:(id)device
             developerDirectory:(NSString *)developerDirectory
                     deviceUdid:(NSString *)deviceUdid

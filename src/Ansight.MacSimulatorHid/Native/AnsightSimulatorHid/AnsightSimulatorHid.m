@@ -181,6 +181,12 @@ static const IndigoHIDTarget AnsightMainScreenButtonTarget = 0x33;
                           error:(NSError **)error;
 - (id)clientForUdid:(NSString *)udid error:(NSError **)error;
 - (_Xcode27SimulatorHid *)xcode27ClientForUdid:(NSString *)udid error:(NSError **)error;
+- (_Xcode27SimulatorHid *)createXcode27ClientForUdid:(NSString *)udid error:(NSError **)error;
+- (BOOL)sendXcode27InputToDevice:(NSString *)deviceUdid
+                    messageType:(NSString *)messageType
+                        payload:(xpc_object_t)payload
+                    startsInput:(BOOL)startsInput
+                          error:(NSError **)error;
 - (id)createClientForUdid:(NSString *)udid error:(NSError **)error;
 - (id)deviceForUdid:(NSString *)udid error:(NSError **)error;
 - (IndigoHIDMessage)digitizerMessageForPoint:(CGPoint)point
@@ -892,8 +898,11 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
             xpc_object_t payload = xpc_dictionary_create(NULL, NULL, 0);
             xpc_dictionary_set_uint64(payload, "usageCode", usageCode);
             xpc_dictionary_set_uint64(payload, "state", operation);
-            return [[self xcode27ClientForUdid:deviceUdid error:error]
-                sendMessageType:@"IndigoKeyboardButtonEvent" payload:payload error:error];
+            return [self sendXcode27InputToDevice:deviceUdid
+                                     messageType:@"IndigoKeyboardButtonEvent"
+                                         payload:payload
+                                     startsInput:phase == AnsightSimulatorKeyPhaseDown
+                                           error:error];
         }
 
         uint32_t modifierBit = 0;
@@ -993,8 +1002,11 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
             xpc_dictionary_set_uint64(payload, "eventType", phase == AnsightSimulatorPointerPhaseCancel ? 2 : phase);
             xpc_dictionary_set_uint64(payload, "edge", 0);
             xpc_dictionary_set_uint64(payload, "target", 0);
-            return [[self xcode27ClientForUdid:deviceUdid error:error]
-                sendMessageType:@"IndigoDigitizerEvent" payload:payload error:error];
+            return [self sendXcode27InputToDevice:deviceUdid
+                                     messageType:@"IndigoDigitizerEvent"
+                                         payload:payload
+                                     startsInput:phase == AnsightSimulatorPointerPhaseDown
+                                           error:error];
         }
 
         AnsightHidMessageBuilder messageBuilder = ^IndigoHIDMessage(NSError **messageError) {
@@ -1268,8 +1280,11 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
             xpc_dictionary_set_uint64(payload, "usagePage", 0x0c);
             xpc_dictionary_set_uint64(payload, "usageCode", usageCodes[keyCode]);
             xpc_dictionary_set_uint64(payload, "state", operation);
-            return [[self xcode27ClientForUdid:deviceUdid error:error]
-                sendMessageType:@"IndigoButtonEvent" payload:payload error:error];
+            return [self sendXcode27InputToDevice:deviceUdid
+                                     messageType:@"IndigoButtonEvent"
+                                         payload:payload
+                                     startsInput:phase == AnsightSimulatorButtonPhaseDown
+                                           error:error];
         }
 
         AnsightHidMessageBuilder messageBuilder = ^IndigoHIDMessage(NSError **messageError) {
@@ -1367,6 +1382,40 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
     return client;
 }
 
+- (BOOL)sendXcode27InputToDevice:(NSString *)deviceUdid
+                    messageType:(NSString *)messageType
+                        payload:(xpc_object_t)payload
+                    startsInput:(BOOL)startsInput
+                          error:(NSError **)error
+{
+    _Xcode27SimulatorHid *client = self.xcode27ClientsByUdid[deviceUdid];
+    NSError *connectionError = client.connectionError;
+
+    if (connectionError != nil)
+    {
+        // A failed send may have reached the simulator. Reconnect for a new
+        // press, without replaying input from the interrupted gesture.
+        if (!startsInput)
+        {
+            if (error != NULL)
+            {
+                *error = connectionError;
+            }
+            return NO;
+        }
+
+        client = [self createXcode27ClientForUdid:deviceUdid error:error];
+        if (client == nil)
+        {
+            return NO;
+        }
+        self.xcode27ClientsByUdid[deviceUdid] = client;
+    }
+
+    client = client ?: [self xcode27ClientForUdid:deviceUdid error:error];
+    return [client sendMessageType:messageType payload:payload error:error];
+}
+
 - (_Xcode27SimulatorHid *)xcode27ClientForUdid:(NSString *)udid error:(NSError **)error
 {
     _Xcode27SimulatorHid *client = self.xcode27ClientsByUdid[udid];
@@ -1375,21 +1424,26 @@ static BOOL SendHidMessage(id receiver, IndigoHIDMessage message, NSError **erro
         return client;
     }
 
+    client = [self createXcode27ClientForUdid:udid error:error];
+    if (client != nil)
+    {
+        self.xcode27ClientsByUdid[udid] = client;
+    }
+    return client;
+}
+
+- (_Xcode27SimulatorHid *)createXcode27ClientForUdid:(NSString *)udid error:(NSError **)error
+{
     id device = [self deviceForUdid:udid error:error];
     if (device == nil)
     {
         return nil;
     }
 
-    client = [[_Xcode27SimulatorHid alloc] initWithDevice:device
-                                    developerDirectory:self.developerDirectory
-                                            deviceUdid:udid
-                                                 error:error];
-    if (client != nil)
-    {
-        self.xcode27ClientsByUdid[udid] = client;
-    }
-    return client;
+    return [[_Xcode27SimulatorHid alloc] initWithDevice:device
+                                  developerDirectory:self.developerDirectory
+                                          deviceUdid:udid
+                                               error:error];
 }
 
 - (id)createClientForUdid:(NSString *)udid error:(NSError **)error

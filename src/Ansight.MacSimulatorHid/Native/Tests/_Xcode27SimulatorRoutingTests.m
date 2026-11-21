@@ -13,9 +13,15 @@ static void Require(BOOL condition, NSString *message)
 @property(nonatomic, copy) NSString *messageType;
 @property(nonatomic, strong) xpc_object_t payload;
 @property(nonatomic, assign) NSUInteger sends;
+@property(nonatomic, strong) NSError *interruption;
 @end
 
 @implementation _Xcode27RecordingHid
+- (NSError *)connectionError
+{
+    return self.interruption;
+}
+
 - (BOOL)sendMessageType:(NSString *)messageType payload:(xpc_object_t)payload error:(NSError **)error
 {
     (void)error;
@@ -25,6 +31,55 @@ static void Require(BOOL condition, NSString *message)
     return YES;
 }
 @end
+
+@interface _Xcode27RecoverySession : AnsightSimulatorHidSession
+@property(nonatomic, strong) _Xcode27RecordingHid *replacement;
+@property(nonatomic, assign) NSUInteger connectionAttempts;
+@end
+
+@implementation _Xcode27RecoverySession
+- (_Xcode27SimulatorHid *)createXcode27ClientForUdid:(NSString *)udid error:(NSError **)error
+{
+    (void)udid;
+    (void)error;
+    self.connectionAttempts++;
+    return self.replacement;
+}
+@end
+
+static BOOL SendTouch(AnsightSimulatorHidSession *session, AnsightSimulatorPointerPhase phase, NSError **error)
+{
+    return [session sendPointerToDevice:@"test-device" phase:phase
+        normalizedX:0.25 normalizedY:0.75 hasSecondaryContact:NO
+        secondaryNormalizedX:0 secondaryNormalizedY:0 pointerId:17
+        timestampMilliseconds:0 error:error];
+}
+
+static void VerifyRecoveryOnNewGesture(void)
+{
+    _Xcode27RecordingHid *interrupted = [_Xcode27RecordingHid new];
+    interrupted.interruption = [NSError errorWithDomain:@"DTUHIDTest" code:53 userInfo:nil];
+    _Xcode27RecoverySession *session = [_Xcode27RecoverySession new];
+    session.requiresXcode27Hid = YES;
+    session.xcode27ClientsByUdid = [@{@"test-device": interrupted} mutableCopy];
+
+    NSError *error = nil;
+    Require(!SendTouch(session, AnsightSimulatorPointerPhaseMove, &error),
+        @"An interrupted gesture must not send another move.");
+    Require(error == interrupted.interruption, @"Return the interruption to the caller.");
+    Require(session.connectionAttempts == 0, @"An interrupted move must not open a connection.");
+
+    Require(!SendTouch(session, AnsightSimulatorPointerPhaseDown, NULL), @"A failed reconnect must fail the press.");
+    Require(!SendTouch(session, AnsightSimulatorPointerPhaseUp, NULL), @"Do not send a release after reconnect failed.");
+    Require(session.connectionAttempts == 1, @"Only the new press may attempt to reconnect.");
+
+    session.replacement = [_Xcode27RecordingHid new];
+    Require(SendTouch(session, AnsightSimulatorPointerPhaseDown, NULL), @"The next press can reconnect.");
+    Require(SendTouch(session, AnsightSimulatorPointerPhaseUp, NULL), @"The release uses the replacement connection.");
+    Require(session.connectionAttempts == 2, @"Keep the recovered connection for the rest of the gesture.");
+    Require(interrupted.sends == 0 && session.replacement.sends == 2,
+        @"Send only the new gesture, and send each event once.");
+}
 
 int main(void)
 {
@@ -84,7 +139,8 @@ int main(void)
             secondaryNormalizedX:0 secondaryNormalizedY:0 pointerId:17
             timestampMilliseconds:0 error:&error], @"Invalid phases fail before sending.");
         Require(client.sends == sends, @"Invalid phases must not enqueue input.");
-        puts("PASS: DTUHID pointer phases, two contacts, wire types, hardware buttons, modifiers and invalid input.");
+        VerifyRecoveryOnNewGesture();
+        puts("PASS: DTUHID routing and reconnection on a new gesture after an interruption.");
     }
     return 0;
 }
