@@ -9,19 +9,24 @@ namespace Ansight.Cli.LocalSimulator;
 
 internal sealed partial class CliRemoteAgentChatSource
 {
-    private CompanionAnnotationEvidence PrepareEvidence(AppSessionSnapshot session, RemoteAnnotationBatchSubmissionRequest request)
+    private CompanionAnnotationEvidence PrepareEvidence(AppSessionSnapshot session, RemoteAnnotationBatchSubmissionRequest request, bool local = false)
     {
-        var frame = session.Images.FirstOrDefault(frame => frame.FrameId == request.FrameId)
-            ?? throw new InvalidDataException("The annotated screenshot is no longer available.");
+        var frame = session.Images.FirstOrDefault(frame => frame.FrameId == request.FrameId);
+        if ((!local || !string.IsNullOrEmpty(request.FrameId)) && frame is null)
+        {
+            throw new InvalidDataException("The annotated screenshot is no longer available.");
+        }
+
         var annotations = new List<SessionAnnotation>();
 
         foreach (var annotationId in request.AnnotationIds.Distinct(StringComparer.Ordinal))
         {
             var annotation = session.Annotations.FirstOrDefault(candidate => candidate.AnnotationId == annotationId);
-            var belongsToBatch = annotation is not null
-                && annotation.CaptureGroupId == request.BatchId
-                && annotation.Geometry.Count > 0
-                && annotation.Geometry.All(geometry => geometry.FrameId == request.FrameId);
+            var recording = annotation?.Source == "companion.exploration";
+            var belongsToBatch = annotation is not null && (local || (
+                annotation.CaptureGroupId == request.BatchId && (recording
+                    ? annotation.Geometry.All(g => session.Images.Any(image => image.FrameId == g.FrameId))
+                    : annotation.Geometry.Count > 0 && annotation.Geometry.All(g => g.FrameId == request.FrameId))));
 
             if (!belongsToBatch)
             {
@@ -35,50 +40,79 @@ internal sealed partial class CliRemoteAgentChatSource
         {
             session.SessionId,
             session.AppId,
-            frame.FrameId,
-            frame.CapturedAtUtc,
+            FrameId = frame?.FrameId,
+            CapturedAtUtc = frame?.CapturedAtUtc,
             annotations
         });
-        var fingerprintInput = JsonSerializer.Serialize(new
+        var fingerprintInput = local ? JsonSerializer.Serialize(new
         {
+            request.Provider,
             request.ProjectId,
             request.StartNewTask,
             request.ChatSessionId,
             evidenceJson
-        });
+        }) : JsonSerializer.Serialize(new { request.ProjectId, request.StartNewTask, request.ChatSessionId, evidenceJson });
+        if (request.QueueAfterCurrent)
+        {
+            fingerprintInput += "\nqueue-after-current";
+        }
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprintInput)));
         var evidenceDirectory = Path.Combine(runtime.BaseFolderPath, "companion-agents", "evidence", fingerprint);
-        var imagePath = Path.Combine(evidenceDirectory, "annotations.png");
+        var imagePath = frame is null ? null : Path.Combine(evidenceDirectory, "annotations.png");
         var evidencePath = Path.Combine(evidenceDirectory, "annotations.json");
 
-        if (!File.Exists(imagePath) || !File.Exists(evidencePath))
+        if ((imagePath is not null && !File.Exists(imagePath)) || !File.Exists(evidencePath))
         {
-            var sourcePath = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session, frame);
-
-            if (!File.Exists(sourcePath))
-            {
-                throw new InvalidDataException("The annotated screenshot file is unavailable. Capture another annotation set.");
-            }
-
             Directory.CreateDirectory(evidenceDirectory);
-            RenderAnnotations(sourcePath, imagePath, annotations);
+            if (frame is not null && imagePath is not null)
+            {
+                var sourcePath = SessionFileLocator.ResolveScreenshotPath(runtime.ApplicationPaths, session, frame);
+
+                if (!File.Exists(sourcePath))
+                {
+                    throw new InvalidDataException("The annotated screenshot file is unavailable. Capture another annotation set.");
+                }
+
+                Directory.CreateDirectory(evidenceDirectory);
+                RenderAnnotations(sourcePath, imagePath, annotations, frame.FrameId);
+            }
             File.WriteAllText(evidencePath, evidenceJson);
         }
 
         var prompt = new StringBuilder();
-        prompt.AppendLine("The user sent this annotation set from Ansight Companion to direct work on the app.");
+        prompt.AppendLine($"The user sent this annotation set from {(local ? "Ansight Local" : "Ansight Companion")} to direct work on the app.");
         prompt.AppendLine($"App: {session.AppId}");
         prompt.AppendLine($"Ansight session: {session.SessionId}");
-        prompt.AppendLine($"Screenshot: {frame.FrameId}, captured {frame.CapturedAtUtc:O}");
+        if (frame is not null)
+        {
+            prompt.AppendLine($"Screenshot: {frame.FrameId}, captured {frame.CapturedAtUtc:O}");
+        }
+
         prompt.AppendLine($"Annotation set: {request.BatchId}");
-        prompt.AppendLine($"Marked screenshot: {imagePath}");
+        if (imagePath is not null)
+        {
+            prompt.AppendLine($"Marked screenshot: {imagePath}");
+        }
+
         prompt.AppendLine($"Structured annotations and geometry: {evidencePath}");
+        if (annotations.Count > 1)
+        {
+            prompt.AppendLine("These comments and screen markings share a timeline. Correlate them by Time range and Recording ID. "
+                + "The preview only shows markings belonging to its screenshot; inspect each other marking's Frame ID in the Ansight session. "
+                + "No original microphone audio is retained.");
+        }
         prompt.AppendLine();
 
         for (var index = 0; index < annotations.Count; index++)
         {
             var annotation = annotations[index];
-            prompt.AppendLine($"{index + 1}. {annotation.Notes ?? annotation.Label}");
+            prompt.AppendLine($"{index + 1}. {annotation.Label}");
+            if (!string.IsNullOrWhiteSpace(annotation.Notes))
+            {
+                prompt.AppendLine(annotation.Notes);
+            }
+
+            prompt.AppendLine($"Time range: {annotation.StartUtc:O} – {annotation.EndUtc:O}");
 
             if (annotation.CustomData?["ansight.agentAction"] is { } action)
             {
@@ -86,6 +120,14 @@ internal sealed partial class CliRemoteAgentChatSource
             }
 
             prompt.AppendLine($"Annotation ID: {annotation.AnnotationId}");
+            if (!string.IsNullOrEmpty(annotation.CaptureGroupId))
+            {
+                prompt.AppendLine($"Recording ID: {annotation.CaptureGroupId}");
+            }
+            foreach (var geometry in annotation.Geometry)
+            {
+                prompt.AppendLine($"Screen marking: Frame ID {geometry.FrameId}, captured {geometry.CapturedAtUtc:O}");
+            }
         }
 
         prompt.AppendLine();
@@ -97,7 +139,7 @@ internal sealed partial class CliRemoteAgentChatSource
         return new CompanionAnnotationEvidence(prompt.ToString(), imagePath, fingerprint);
     }
 
-    private static void RenderAnnotations(string sourcePath, string destinationPath, IReadOnlyList<SessionAnnotation> annotations)
+    private static void RenderAnnotations(string sourcePath, string destinationPath, IReadOnlyList<SessionAnnotation> annotations, string? frameId = null)
     {
         using var bitmap = SKBitmap.Decode(sourcePath)
             ?? throw new InvalidDataException("The annotated screenshot could not be decoded.");
@@ -112,6 +154,7 @@ internal sealed partial class CliRemoteAgentChatSource
         {
             foreach (var geometry in annotations[index].Geometry)
             {
+                if (frameId is not null && geometry.FrameId != frameId) { continue; }
                 var x = (float)geometry.X * bitmap.Width;
                 var y = (float)geometry.Y * bitmap.Height;
 
@@ -140,6 +183,11 @@ internal sealed partial class CliRemoteAgentChatSource
                 {
                     canvas.DrawCircle(x, y, 8 * scale, stroke);
                 }
+            }
+
+            if (annotations[index].Geometry.Count == 0)
+            {
+                continue;
             }
 
             var anchor = annotations[index].Geometry[0];

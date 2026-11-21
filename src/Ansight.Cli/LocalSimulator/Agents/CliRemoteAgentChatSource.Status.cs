@@ -14,7 +14,7 @@ internal sealed partial class CliRemoteAgentChatSource
         try
         {
             var receipts = store.ReadReceipts()
-                .Where(receipt => sessionId is null || receipt.Link.SessionId == sessionId)
+                .Where(receipt => receipt.Link.Provider == "codex" && (sessionId is null || receipt.Link.SessionId == sessionId))
                 .ToArray();
 
             for (var index = 0; index < receipts.Length; index++)

@@ -58,6 +58,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Workspaces/ReadmeTemplates/*.md" />
+    <EmbeddedResource Include="SimulatorAgent/OpenAi/moonshine-manifest.json" />
     <EmbeddedResource Include="Workspaces/Authoring/Resources/**/*" />
     <EmbeddedResource Include="Workspaces/Catalog/Prompts/**/*" />
     <EmbeddedResource Include="Runtime/RepositoryContracts/*.json" />

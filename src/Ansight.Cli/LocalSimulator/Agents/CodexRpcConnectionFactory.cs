@@ -146,13 +146,13 @@ internal sealed class CodexRpcConnectionFactory : ICodexRpcConnectionFactory
             return configured;
         }
 
-        var candidates = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+        var candidates = new[]
+        {
+            "/Applications/Codex.app/Contents/Resources/codex",
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+        }.Concat((Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Select(path => Path.Combine(path, OperatingSystem.IsWindows() ? "codex.exe" : "codex"))
-            .Concat([
-                "/Applications/Codex.app/Contents/Resources/codex",
-                "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
-            ]);
+            .Select(path => Path.Combine(path, OperatingSystem.IsWindows() ? "codex.exe" : "codex")));
 
         return candidates.FirstOrDefault(File.Exists)
             ?? throw new FileNotFoundException("Install and sign in to Codex on this Mac, then retry from the companion.");

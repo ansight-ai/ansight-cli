@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed partial class CliRemoteAgentChatSource : IRemoteAgentChatSource
+internal sealed partial class CliRemoteAgentChatSource : IRemoteAgentChatSource, Ansight.Host.Agents.ILocalAnnotationAgentSource
 {
     private readonly RuntimeCoordinator runtime;
     private readonly ICodexRpcConnectionFactory connections;

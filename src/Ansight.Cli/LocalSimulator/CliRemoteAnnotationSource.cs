@@ -8,7 +8,7 @@ using Ansight.RemoteSimulator.Core.Recording;
 
 namespace Ansight.Cli.LocalSimulator;
 
-internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemoteAnnotationFrameSource
+internal sealed partial class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemoteAnnotationFrameSource
 {
     private const string AnnotationSource = "simulator.remote.mobile";
     private const string AgentActionPropertyName = "ansight.agentAction";
@@ -197,7 +197,7 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
             batchId,
             session.Snapshot.SessionId,
             frame.FrameId,
-            frame.CapturedAtUtc.ToUniversalTime()));
+            frame.CapturedAtUtc.ToUniversalTime(), true, DateTimeOffset.UtcNow));
     }
 
     public async Task<RemoteRecordingFrame?> GetBatchFrameAsync(
@@ -270,6 +270,8 @@ internal sealed class CliRemoteAnnotationSource : IRemoteAnnotationSource, IRemo
         RemoteAnnotationRequest request,
         string? annotationId)
     {
+        if (request.RecordingItemId is not null) return SaveRecordingItem(request);
+
         var comment = NormalizeComment(request.Comment);
 
         if (comment is null)

@@ -6,4 +6,6 @@ public sealed record RemoteAnnotationBatchStartResult(
     string? BatchId = null,
     string? SessionId = null,
     string? FrameId = null,
-    DateTimeOffset? FrameCapturedAtUtc = null);
+    DateTimeOffset? FrameCapturedAtUtc = null,
+    bool SupportsRecording = false,
+    DateTimeOffset? HostTimeUtc = null);

@@ -54,7 +54,9 @@ internal static class CliRuntime
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return new RuntimeCoordinator(CreateHostOptions(options));
+        var runtime = new RuntimeCoordinator(CreateHostOptions(options));
+        runtime.LocalAnnotationAgents = new LocalSimulator.CliRemoteAgentChatSource(runtime);
+        return runtime;
     }
 
     public static RuntimeOptions CreateHostOptions(CliRuntimeOptions options)

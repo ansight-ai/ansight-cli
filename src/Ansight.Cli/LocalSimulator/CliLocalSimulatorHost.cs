@@ -240,7 +240,7 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             annotationSource: annotationSource,
             recordingSource: new CliRemoteRecordingSource(runtime),
             appInspectionSource: new CliRemoteAppInspectionSource(runtime, annotationSource),
-            agentChatSource: new CliRemoteAgentChatSource(runtime),
+            agentChatSource: runtime.LocalAnnotationAgents as CliRemoteAgentChatSource ?? new CliRemoteAgentChatSource(runtime),
             deviceLocationSource: locationSource,
             deviceTestingSource: testingSource);
         await server.StartAsync(cancellationToken).ConfigureAwait(false);

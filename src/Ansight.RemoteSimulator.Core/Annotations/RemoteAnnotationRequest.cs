@@ -11,4 +11,7 @@ public sealed record RemoteAnnotationRequest(
     string AgentAction,
     string? BatchId = null,
     string? FrameId = null,
-    IReadOnlyList<RemoteAnnotationStroke>? Strokes = null);
+    IReadOnlyList<RemoteAnnotationStroke>? Strokes = null,
+    DateTimeOffset? RecordingStartUtc = null,
+    DateTimeOffset? RecordingEndUtc = null,
+    string? RecordingItemId = null);

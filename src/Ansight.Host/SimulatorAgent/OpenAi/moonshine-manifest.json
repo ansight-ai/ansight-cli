@@ -1,0 +1,75 @@
+{
+  "version": "0.1.6-tiny-streaming-en-26_11_02",
+  "models": [
+    {
+      "name": "adapter.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/adapter.ort",
+      "size": 1319616,
+      "sha256": "c5f9f7cc98c27a965d8e200816f7e5c07b892712bb30cf07444bbde4ffd38199"
+    },
+    {
+      "name": "cross_kv.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/cross_kv.ort",
+      "size": 1287504,
+      "sha256": "5f68900da4ea20f40fbe67bbec36399f0d47faedbd7198b29abd9dc5f472ef9f"
+    },
+    {
+      "name": "decoder_kv.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/decoder_kv.ort",
+      "size": 32748720,
+      "sha256": "6564f2c9a19de44195a53e336e07d05108f14babab57105d623bb68b79572d75"
+    },
+    {
+      "name": "encoder.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/encoder.ort",
+      "size": 7675392,
+      "sha256": "617e403b2aae48f2474e0b148bf835deb9510bc8692efeabfe27203959a3256e"
+    },
+    {
+      "name": "frontend.model.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/frontend.model.ort",
+      "size": 23392,
+      "sha256": "5662679f0e5758646d8eade3bc4b5d9ebda875feb6e696c0cc5f1a08fea2219e"
+    },
+    {
+      "name": "frontend.weights.ort",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/frontend.weights.ort",
+      "size": 2093416,
+      "sha256": "55c91d7efab9f7506d7d753131cba72145ff016be3447319fe414a31e13f25b4"
+    },
+    {
+      "name": "streaming_config.json",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/streaming_config.json",
+      "size": 509,
+      "sha256": "74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950"
+    },
+    {
+      "name": "tokenizer.bin",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_11_02/tokenizer.bin",
+      "size": 249974,
+      "sha256": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
+    }
+  ],
+  "runtimes": {
+    "osx-arm64": {
+      "url": "https://files.pythonhosted.org/packages/25/ad/91ef5908f592faff47dd4e03073b3eb073ce88f984f6bc86031e02057a69/moonshine_voice-0.1.6-py3-none-macosx_15_0_arm64.whl",
+      "sha256": "71f0fa9d0b01fa317f86a85e846e9faa247be985f92b50970817dd999e400ff4",
+      "size": 18670056
+    },
+    "linux-arm64": {
+      "url": "https://files.pythonhosted.org/packages/3f/ad/f6cad5893e822303fed6c0931127274e7bfc19ebdad5aaa7af87888d242b/moonshine_voice-0.1.6-py3-none-manylinux_2_31_aarch64.whl",
+      "sha256": "16589b0e86e4a66fbbb7bb1429deaa56a47f33fdc1cd0aef4b781ccbf49c95df",
+      "size": 18607530
+    },
+    "linux-x64": {
+      "url": "https://files.pythonhosted.org/packages/54/47/20993e0676642cf05273b6b2fed13076a5b4028156c938dd86136bb71797/moonshine_voice-0.1.6-py3-none-manylinux_2_34_x86_64.whl",
+      "sha256": "04e438f393af3f963ac7988204f379d04a9c8949801595cab4bd68a7ceedf6c7",
+      "size": 20020861
+    },
+    "win-x64": {
+      "url": "https://files.pythonhosted.org/packages/7f/07/aafde753e2819bc5dca333b45a90f3dad475a41da2c97ddd60ccc6e37479/moonshine_voice-0.1.6-py3-none-win_amd64.whl",
+      "sha256": "29a54f9249d41735db62b1f97272905cf114554f293c166f0f4f81655a4a2cfc",
+      "size": 16616460
+    }
+  }
+}

@@ -303,7 +303,7 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
     {
         response.Headers["Cache-Control"] = "no-store";
         response.Headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: blob: https://*.mapbox.com; script-src 'self' 'wasm-unsafe-eval' https://api.mapbox.com; style-src 'self' 'unsafe-inline' https://api.mapbox.com; connect-src 'self' blob: https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
-        response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        response.Headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()";
         response.Headers["Referrer-Policy"] = "no-referrer";
         response.Headers["X-Content-Type-Options"] = "nosniff";
         response.Headers["X-Frame-Options"] = "DENY";

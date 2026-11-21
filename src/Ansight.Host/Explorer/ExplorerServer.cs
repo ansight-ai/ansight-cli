@@ -327,6 +327,13 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
             {
                 EnsureArchiveRequest(request);
             }
+            else if (route.Split('/') is ["api", "sessions", _, "annotation-transcription"])
+            {
+                if (request.ContentType?.Split(';')[0].Trim() != "audio/wav")
+                {
+                    throw new InvalidDataException("Dictation requires audio/wav.");
+                }
+            }
             else
             {
                 EnsureJsonRequest(request);

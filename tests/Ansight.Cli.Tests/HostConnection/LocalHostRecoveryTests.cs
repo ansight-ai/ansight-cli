@@ -56,8 +56,10 @@ public sealed class LocalHostRecoveryTests
         Assert.Null(await reader.ReadLineAsync(timeout.Token));
     }
 
-    [Fact]
-    public async Task AuthorizedGatewayStreamsBinaryUploadsAndPreservesTheResponse()
+    [Theory]
+    [InlineData("api/sessions/import", "application/zip")]
+    [InlineData("api/sessions/test/annotation-transcription", "audio/wav")]
+    public async Task AuthorizedGatewayStreamsBinaryUploadsAndPreservesTheResponse(string route, string mediaType)
     {
         using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
         probe.Start();
@@ -77,12 +79,12 @@ public sealed class LocalHostRecoveryTests
         await using var server = new CliLocalHostServer(0, "/player/", access, (_, _) => Task.CompletedTask, CancellationToken.None);
         using var client = new HttpClient { BaseAddress = server.Url };
         using var upload = new ByteArrayContent([1, 2, 3]);
-        upload.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/zip");
+        upload.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mediaType);
 
-        var requestTask = client.PostAsync("api/sessions/import", upload);
+        var requestTask = client.PostAsync(route, upload);
         var context = await upstream.GetContextAsync().WaitAsync(TimeSpan.FromSeconds(3));
-        Assert.Equal("/source/api/sessions/import", context.Request.Url!.AbsolutePath);
-        Assert.Equal("application/zip", context.Request.ContentType);
+        Assert.Equal("/source/" + route, context.Request.Url!.AbsolutePath);
+        Assert.Equal(mediaType, context.Request.ContentType);
         Assert.Equal(3, context.Request.ContentLength64);
 
         using var body = new MemoryStream();
@@ -99,6 +101,23 @@ public sealed class LocalHostRecoveryTests
         using var result = await requestTask.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
         Assert.Equal("invalid_test_archive", JsonNode.Parse(await result.Content.ReadAsStringAsync())!["error"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("api/sessions/test/annotation-transcription", "https://untrusted.example", null)]
+    [InlineData("api/sessions/test/annotation-transcription", null, "cross-site")]
+    [InlineData("api/sessions/test/annotations", null, null)]
+    public async Task BinaryDictationStillRejectsCrossSiteAndUnrelatedRoutes(string route, string? origin, string? site)
+    {
+        var access = new CliLocalHostAccess();
+        await using var server = new CliLocalHostServer(0, "/player/", access, (_, _) => Task.CompletedTask, CancellationToken.None);
+        using var client = new HttpClient { BaseAddress = server.Url };
+        using var request = new HttpRequestMessage(HttpMethod.Post, route) { Content = new ByteArrayContent([1, 2]) };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/wav");
+        if (origin is not null) { request.Headers.Add("Origin", origin); }
+        if (site is not null) { request.Headers.Add("Sec-Fetch-Site", site); }
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Theory]

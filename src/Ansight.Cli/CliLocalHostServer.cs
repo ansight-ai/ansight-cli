@@ -102,7 +102,7 @@ internal sealed class CliLocalHostServer : IAsyncDisposable
         response.Headers["X-Content-Type-Options"] = "nosniff";
         response.Headers["X-Frame-Options"] = "DENY";
         response.Headers["Referrer-Policy"] = "no-referrer";
-        response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        response.Headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()";
         response.Headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: blob: https://*.mapbox.com; script-src 'self' 'wasm-unsafe-eval' https://api.mapbox.com; style-src 'self' 'unsafe-inline' https://api.mapbox.com; connect-src 'self' blob: https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 
         if (request.Url is null || request.Url.Authority != Url.Authority
@@ -118,8 +118,10 @@ internal sealed class CliLocalHostServer : IAsyncDisposable
         var contentType = request.ContentType?.Split(';')[0].Trim().ToLowerInvariant();
         var isArchive = route == "api/sessions/import" && contentType is "application/zip" or "application/octet-stream";
 
+        var isDictation = contentType == "audio/wav" && route.Split('/') is ["api", "sessions", _, "annotation-transcription"];
+
         if (request.HttpMethod == "POST" &&
-            (contentType != "application/json" && !isArchive
+            (contentType != "application/json" && !isArchive && !isDictation
                 || request.Headers["Origin"] is { } origin && origin != Url.GetLeftPart(UriPartial.Authority)
                 || request.Headers["Sec-Fetch-Site"] == "cross-site"))
         {

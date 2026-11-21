@@ -6,14 +6,18 @@ namespace Ansight.Cli.LocalSimulator;
 
 internal sealed partial class CliRemoteAgentChatSource
 {
-    public async Task<RemoteAnnotationBatchSubmissionResult> SubmitAnnotationBatchAsync(
-        RemoteAnnotationBatchSubmissionRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<RemoteAnnotationBatchSubmissionResult> SubmitAnnotationBatchAsync(
+        RemoteAnnotationBatchSubmissionRequest request, CancellationToken cancellationToken = default)
+        => SubmitAnnotationBatchCoreAsync(request, false, cancellationToken);
+
+    private async Task<RemoteAnnotationBatchSubmissionResult> SubmitAnnotationBatchCoreAsync(
+        RemoteAnnotationBatchSubmissionRequest request, bool local, CancellationToken cancellationToken)
     {
         var invalidRequest = request.Provider != "codex"
             || string.IsNullOrWhiteSpace(request.ProjectId)
             || string.IsNullOrWhiteSpace(request.BatchId)
-            || request.AnnotationIds.Count is < 1 or > 100;
+            || (request.AnnotationIds.Count < 1 || request.AnnotationIds.Count > (local ? 1000 : 100))
+            || (request.QueueAfterCurrent && request.StartNewTask);
 
         if (invalidRequest)
         {
@@ -28,7 +32,7 @@ internal sealed partial class CliRemoteAgentChatSource
             var session = await runtime.Sessions.LoadSnapshotAsync(request.SessionId,
                 cancellationToken: cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidDataException("The Ansight session is no longer available.");
-            var evidence = PrepareEvidence(session, request);
+            var evidence = PrepareEvidence(session, request, local);
             receipt = store.ReadReceipt(request.SessionId, request.BatchId);
 
             if (receipt is not null)
@@ -60,8 +64,10 @@ internal sealed partial class CliRemoteAgentChatSource
                 }
             }
 
-            var projectLink = store.ReadProject(session.AppId)
-                ?? throw new InvalidOperationException("Choose a Codex project for this app before sending annotations.");
+            var projectLink = local
+                ? new Ansight.RemoteSimulator.Core.Agent.RemoteAgentProjectLink(request.ProjectId!, "", runtime.Apps.Get(session.AppId)?.CodebasePath, DateTimeOffset.UtcNow)
+                : store.ReadProject(session.AppId)
+                    ?? throw new InvalidOperationException("Choose a Codex project for this app before sending annotations.");
 
             if (projectLink.ProjectId != request.ProjectId)
             {
@@ -70,10 +76,15 @@ internal sealed partial class CliRemoteAgentChatSource
 
             await using var connection = await connections.ConnectAsync(cancellationToken).ConfigureAwait(false);
             var project = await ReadProjectAsync(connection, projectLink.ProjectId, cancellationToken).ConfigureAwait(false);
+            if (local && !project.Roots.Contains(projectLink.WorkingDirectory ?? "", StringComparer.Ordinal))
+            {
+                projectLink = projectLink with { WorkingDirectory = project.Roots.FirstOrDefault(Directory.Exists) };
+            }
+
             var now = DateTimeOffset.UtcNow;
             receipt ??= new CompanionAgentReceipt(evidence.Fingerprint, new RemoteAgentTaskLink(
                 Guid.NewGuid().ToString("N"), project.Id, session.SessionId, request.BatchId,
-                request.AnnotationIds.ToArray(), [request.FrameId], "simulator.remote.mobile", "codex",
+                request.AnnotationIds.ToArray(), [request.FrameId], local ? "localPortal" : "simulator.remote.mobile", "codex",
                 request.StartNewTask ? string.Empty : request.ChatSessionId, null, request.ChatTitle,
                 projectLink.WorkingDirectory, evidence.Prompt, "prepared", "Preparing annotation delivery.", now, now));
 
@@ -134,7 +145,7 @@ internal sealed partial class CliRemoteAgentChatSource
                 }
             });
 
-            if (task.Status == "notLoaded")
+            if (request.QueueAfterCurrent || task.Status == "notLoaded")
             {
                 receipt = SaveReceipt(receipt with { Link = receipt.Link with { Status = "dispatching" } });
                 await connections.QueueAsync(task.SessionId, evidence.Prompt, cancellationToken).ConfigureAwait(false);
@@ -143,7 +154,9 @@ internal sealed partial class CliRemoteAgentChatSource
                     Link = receipt.Link with
                     {
                         Status = "queued",
-                        StatusMessage = "Annotations queued in the original Codex task. Codex will continue it when available.",
+                        StatusMessage = request.QueueAfterCurrent
+                            ? "Annotation queued in Codex. It will run after the current work finishes."
+                            : "Annotations queued in the original Codex task. Codex will continue it when available.",
                         UpdatedAtUtc = DateTimeOffset.UtcNow
                     }
                 };
@@ -152,11 +165,12 @@ internal sealed partial class CliRemoteAgentChatSource
                 return ToSubmission(receipt.Link);
             }
 
-            var input = new object[]
+            var input = new List<object> { new { type = "text", text = evidence.Prompt } };
+            if (evidence.ImagePath is not null)
             {
-                new { type = "text", text = evidence.Prompt },
-                new { type = "localImage", path = evidence.ImagePath }
-            };
+                input.Add(new { type = "localImage", path = evidence.ImagePath });
+            }
+
             string? activeTurnId = null;
 
             if (task.Status == "active")

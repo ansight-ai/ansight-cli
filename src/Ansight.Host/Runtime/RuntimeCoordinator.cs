@@ -353,6 +353,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
     public SessionActivityService Activity { get; }
     public SessionQueryService Sessions { get; }
     public SessionEditingService SessionEditing { get; }
+    public Ansight.Host.Agents.ILocalAnnotationAgentSource? LocalAnnotationAgents { get; set; }
     internal ISessionVideoEncoder? SessionVideoEncoder { get; }
     internal ISessionVideoTranscoder? SessionVideoTranscoder { get; }
     internal ISessionVideoFrameExtractor? SessionVideoFrameExtractor { get; }
@@ -772,6 +773,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         RepositoryAutomations.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
         SessionReplays.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        LocalAnnotationAgents?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         audioInjectionEngine.DisposeAsync().AsTask().GetAwaiter().GetResult();
         DeviceLocationPlayback.DisposeAsync().AsTask().GetAwaiter().GetResult();
         ownedExtensionRunnerControl?.DisposeAsync().AsTask().GetAwaiter().GetResult();
