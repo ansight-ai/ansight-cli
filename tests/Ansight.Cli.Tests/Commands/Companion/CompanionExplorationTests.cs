@@ -11,6 +11,48 @@ namespace Ansight.Cli.Tests.Commands.Companion;
 public sealed class CompanionExplorationTests
 {
     [Fact]
+    public async Task CompletedSpeechOnlyRecordingCanStartATaskAndRetryWithoutDuplicateDelivery()
+    {
+        await using var context = await CompanionCodexTestContext.CreateAsync();
+        await context.LinkAsync();
+        var recordingId = Guid.NewGuid();
+        var sessionId = context.Session.SessionId;
+        var start = DateTimeOffset.UtcNow.AddSeconds(-5);
+        var segment = new SessionTranscriptSegment("1", start, start.AddSeconds(1), "Update the save button.");
+        Assert.True(SessionRecordingTranscript.SaveSegment(context.Runtime, sessionId, recordingId,
+            "Companion microphone", segment).IsSuccess);
+        Assert.True(SessionRecordingTranscript.SaveSegment(context.Runtime, sessionId, Guid.NewGuid(),
+            "Companion microphone", segment with { Text = "Unrelated speech." }).IsSuccess);
+        var request = context.Submission(newTask: true) with
+        {
+            BatchId = recordingId.ToString("D"),
+            AnnotationIds = [],
+            IsRecording = true
+        };
+
+        var unfinished = await context.Source.SubmitAnnotationBatchAsync(request);
+        Assert.False(unfinished.IsSuccess);
+        Assert.Contains("Finish saving", unfinished.Message);
+        Assert.DoesNotContain(context.Codex.Calls, call => call.Method == "turn/start");
+
+        Assert.True(context.Runtime.UpdateRecordingTranscript(sessionId, SessionRecordingTranscript.RecordingKey(recordingId),
+            current => current! with { CompletedUtc = segment.EndUtc }).IsSuccess);
+        var submitted = await context.Source.SubmitAnnotationBatchAsync(request);
+        var retry = await context.Source.SubmitAnnotationBatchAsync(request);
+        Assert.True(submitted.IsSuccess, submitted.Message);
+        Assert.True(retry.IsSuccess, retry.Message);
+        Assert.Equal("new-thread", submitted.ProviderTaskId);
+        Assert.Equal(submitted.TaskLink?.LinkId, retry.TaskLink?.LinkId);
+        var prompt = Assert.Single(context.Codex.Calls, call => call.Method == "turn/start").Parameters.ToString();
+        Assert.Contains($"--recording {recordingId:D}", prompt);
+        var evidenceDirectory = Path.Combine(context.Path, "companion-agents", "evidence");
+        var evidencePath = Assert.Single(Directory.GetFiles(evidenceDirectory, "annotations.json", SearchOption.AllDirectories));
+        var evidence = await File.ReadAllTextAsync(evidencePath);
+        Assert.Contains(segment.Text, evidence);
+        Assert.DoesNotContain("Unrelated speech.", evidence);
+    }
+
+    [Fact]
     public async Task SpeechAndMarkingsSendTogetherAndRetryDoesNotDuplicate()
     {
         await using var context = await CompanionCodexTestContext.CreateAsync();

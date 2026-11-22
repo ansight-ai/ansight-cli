@@ -6,4 +6,5 @@ public sealed record RemoteAgentChatListResult(
     IReadOnlyList<RemoteAgentChatSession> Sessions,
     string? AppId = null,
     RemoteAgentProjectLink? Project = null,
-    string? PreferredSessionId = null);
+    string? PreferredSessionId = null,
+    bool SupportsRecordingHandoff = false);

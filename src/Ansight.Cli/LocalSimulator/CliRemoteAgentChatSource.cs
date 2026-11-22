@@ -39,7 +39,8 @@ internal sealed partial class CliRemoteAgentChatSource : IRemoteAgentChatSource,
 
             if (project is null)
             {
-                return new RemoteAgentChatListResult(true, "Choose a Codex project for this app.", [], session.AppId);
+                return new RemoteAgentChatListResult(true, "Choose a Codex project for this app.", [], session.AppId,
+                    SupportsRecordingHandoff: true);
             }
 
             await using var connection = await connections.ConnectAsync(cancellationToken).ConfigureAwait(false);
@@ -95,24 +96,61 @@ internal sealed partial class CliRemoteAgentChatSource : IRemoteAgentChatSource,
                 threads.Add(read.GetProperty("thread").Clone());
             }
 
+            var linkedTaskIds = session.AgentTaskLinks
+                .Where(link => link.Provider == "codex" && link.WorkContextId == project.ProjectId)
+                .OrderByDescending(static link => link.UpdatedAtUtc)
+                .Select(link => link.ProviderTaskId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var latestLinkedTaskId = linkedTaskIds.FirstOrDefault();
+            var preferredCandidates = new[] { latestLinkedTaskId, request.RememberedTaskId }
+                .OfType<string>()
+                .Where(id => id.Length is > 0 and <= 200)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            foreach (var taskId in preferredCandidates)
+            {
+                if (threads.Any(thread => ReadString(thread, "id") == taskId))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var read = await connection.CallAsync("thread/read", new { threadId = taskId }, cancellationToken)
+                        .ConfigureAwait(false);
+                    var thread = read.GetProperty("thread");
+                    if (!thread.TryGetProperty("archived", out var archived) || archived.ValueKind != JsonValueKind.True)
+                    {
+                        threads.Add(thread.Clone());
+                    }
+                }
+                catch (CodexRpcException)
+                {
+                    // A previously selected task may have been removed.
+                }
+            }
+
             var tasks = threads
                 .Where(thread => BelongsToProject(thread, definition))
                 .Select(ParseThread)
                 .DistinctBy(static task => task.SessionId)
-                .OrderByDescending(static task => task.UpdatedAtUtc)
+                .OrderByDescending(task => task.SessionId == latestLinkedTaskId)
+                .ThenByDescending(task => task.SessionId == request.RememberedTaskId)
+                .ThenByDescending(static task => task.UpdatedAtUtc)
                 .Take(Math.Clamp(request.Limit, 1, 100))
+                .OrderByDescending(static task => task.UpdatedAtUtc)
                 .ToArray();
-            var preferred = session.AgentTaskLinks
-                .Where(link => link.Provider == "codex" && tasks.Any(task => task.SessionId == link.ProviderTaskId))
-                .OrderByDescending(static link => link.UpdatedAtUtc)
-                .FirstOrDefault()?.ProviderTaskId;
+            var preferred = linkedTaskIds.FirstOrDefault(id => tasks.Any(task => task.SessionId == id));
 
             return new RemoteAgentChatListResult(true, "Recent tasks in the linked Codex project.", tasks,
-                session.AppId, project, preferred);
+                session.AppId, project, preferred, SupportsRecordingHandoff: true);
         }
         catch (Exception error) when (!cancellationToken.IsCancellationRequested)
         {
-            return new RemoteAgentChatListResult(false, DescribeError(error), [], session.AppId);
+            return new RemoteAgentChatListResult(false, DescribeError(error), [], session.AppId,
+                SupportsRecordingHandoff: true);
         }
     }
 

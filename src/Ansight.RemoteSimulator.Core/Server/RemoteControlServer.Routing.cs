@@ -590,7 +590,7 @@ public sealed partial class RemoteControlServer
                 || string.IsNullOrWhiteSpace(submissionRequest.SessionId)
                 || string.IsNullOrWhiteSpace(submissionRequest.FrameId)
                 || submissionRequest.AnnotationIds is null
-                || submissionRequest.AnnotationIds.Count == 0
+                || (!submissionRequest.IsRecording && submissionRequest.AnnotationIds.Count == 0)
                 || string.IsNullOrWhiteSpace(submissionRequest.Provider)
                 || (!submissionRequest.StartNewTask && string.IsNullOrWhiteSpace(submissionRequest.ChatSessionId));
 

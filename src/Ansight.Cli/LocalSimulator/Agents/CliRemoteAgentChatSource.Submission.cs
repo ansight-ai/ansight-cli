@@ -16,7 +16,8 @@ internal sealed partial class CliRemoteAgentChatSource
         var invalidRequest = request.Provider != "codex"
             || string.IsNullOrWhiteSpace(request.ProjectId)
             || string.IsNullOrWhiteSpace(request.BatchId)
-            || (request.AnnotationIds.Count < 1 || request.AnnotationIds.Count > (local ? 1000 : 100))
+            || (!request.IsRecording && request.AnnotationIds.Count == 0)
+            || request.AnnotationIds.Count > (local ? 1000 : 100)
             || (request.QueueAfterCurrent && request.StartNewTask);
 
         if (invalidRequest)
