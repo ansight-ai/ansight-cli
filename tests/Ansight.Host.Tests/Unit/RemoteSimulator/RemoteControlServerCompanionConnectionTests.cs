@@ -98,13 +98,31 @@ public sealed class RemoteControlServerCompanionConnectionTests
         Assert.Equal("26.5.2", connection.Device.OperatingSystemVersion);
         Assert.Equal("runtime-device-1", connection.TargetDeviceUdid);
 
+        session.Receive("""
+            {
+              "kind": "companion_presence",
+              "deviceId": "companion-device-1",
+              "deviceName": "QA phone",
+              "model": "iPhone",
+              "platform": "iOS",
+              "operatingSystemVersion": "26.5.2",
+              "appVersion": "0.17.1 (2026080500)"
+            }
+            """);
+        Assert.True(await connectionChanged.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        var renamed = Assert.Single(server.GetConnectedCompanionConnections());
+        Assert.Equal(connection.SessionId, renamed.SessionId);
+        Assert.Equal(connection.Device.Identifier, renamed.Device.Identifier);
+        Assert.Equal("QA phone", renamed.Device.Name);
+
         using var activityResponse = await client.PostAsync(
             Endpoint(server, "/api/device/testing"),
             new StringContent(JsonSerializer.Serialize(new RemoteDeviceTestingRequest("runtime-device-1", "device-activity")), Encoding.UTF8, "application/json"));
         activityResponse.EnsureSuccessStatusCode();
         var activity = await activityResponse.Content.ReadFromJsonAsync<JsonElement>();
         var reported = Assert.Single(activity.GetProperty("details").GetProperty("companionConnections").EnumerateArray());
-        Assert.Equal("Matthew's iPhone", reported.GetProperty("device").GetProperty("name").GetString());
+        Assert.Equal("QA phone", reported.GetProperty("device").GetProperty("name").GetString());
         Assert.Equal("runtime-device-1", reported.GetProperty("targetDeviceUdid").GetString());
 
         using var closeResponse = await client.PostAsync(
