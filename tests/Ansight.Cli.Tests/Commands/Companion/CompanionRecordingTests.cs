@@ -268,6 +268,69 @@ public sealed class CompanionRecordingTests
         Assert.True(removed.IsSuccess, removed.Message);
     }
 
+    [Fact]
+    public async Task RecordingDeletionSupportsSpeechAndLaterFramesButRejectsOtherBatches()
+    {
+        const string appId = "com.example.recording-delete";
+        const string deviceId = "annotation-test-device";
+        const string batchId = "annotation-test-batch";
+        using var directory = TestDirectory.Create();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var cancellationToken = timeout.Token;
+        int discoveryPort;
+
+        using (var portProbe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+        {
+            discoveryPort = ((IPEndPoint)portProbe.Client.LocalEndPoint!).Port;
+        }
+
+        await using var runtime = CreateRuntime(directory.Path, discoveryPort);
+        await runtime.StartAsync();
+        using var socket = await ConnectAnnotationAppAsync(runtime, appId, deviceId, discoveryPort, cancellationToken);
+        var annotations = new CliRemoteAnnotationSource(runtime);
+        RemoteAnnotationBatchStartResult batch;
+
+        do
+        {
+            batch = await annotations.StartAnnotationBatchAsync(new(deviceId, batchId), cancellationToken);
+
+            if (!batch.IsSuccess)
+            {
+                await Task.Delay(50, cancellationToken);
+            }
+        }
+        while (!batch.IsSuccess);
+
+        var sessionId = Assert.IsType<string>(batch.SessionId);
+        var frameId = Assert.IsType<string>(batch.FrameId);
+
+        foreach (var (id, source, captureGroup, geometry, allowed) in new[]
+        {
+            ("speech", "companion.exploration", batchId, false, true),
+            ("marking", "companion.exploration", batchId, true, true),
+            ("foreign", "companion.exploration", "another-batch", false, false),
+            ("ordinary", "simulator.remote.mobile", batchId, false, false)
+        })
+        {
+            var annotation = new SessionAnnotation
+            {
+                AnnotationId = id, Source = source, CaptureGroupId = captureGroup,
+                StartUtc = DateTimeOffset.UtcNow, Label = "Comment",
+                Geometry = geometry ? [new SessionAnnotationGeometry
+                {
+                    GeometryId = "later-mark", FrameId = "later-frame", CapturedAtUtc = DateTimeOffset.UtcNow,
+                    Kind = SessionAnnotationGeometryKind.Point, X = 0.5, Y = 0.5
+                }] : []
+            };
+            Assert.True(runtime.SessionEditing.UpsertAnnotation(sessionId, annotation).IsSuccess);
+            Assert.False((await annotations.DeleteAnnotationAsync(new("wrong-device", id, batchId, frameId), cancellationToken)).IsSuccess);
+            var result = await annotations.DeleteAnnotationAsync(new(deviceId, id, batchId, frameId), cancellationToken);
+            Assert.Equal(allowed, result.IsSuccess);
+            Assert.True(runtime.Sessions.TryGetSnapshot(sessionId, out var snapshot));
+            Assert.Equal(!allowed, snapshot!.Annotations.Any(item => item.AnnotationId == id));
+        }
+    }
+
     private static async Task<ClientWebSocket> ConnectAnnotationAppAsync(
         RuntimeCoordinator runtime, string appId, string deviceId, int discoveryPort, CancellationToken cancellationToken)
     {

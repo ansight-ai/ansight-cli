@@ -127,6 +127,12 @@ internal sealed class ScriptedCompanionCodex : ICodexRpcConnectionFactory, ICode
 
     public List<CompanionCodexCall> Calls { get; } = [];
     public string Status { get; set; } = "idle";
+    public bool UsesDesktopDelivery { get; set; }
+    public Task OpenDesktopAsync(string threadId, CancellationToken cancellationToken)
+    {
+        Calls.Add(new CompanionCodexCall("desktop/open", JsonSerializer.SerializeToElement(new { threadId })));
+        return Task.CompletedTask;
+    }
     public string? ThreadProjectId { get; set; } = "project-1";
     public string? WorkingDirectory { get; set; }
     public string TurnStatus { get; set; } = "inProgress";
@@ -161,6 +167,7 @@ internal sealed class ScriptedCompanionCodex : ICodexRpcConnectionFactory, ICode
             throw DeliveryError;
         }
 
+        if (method == "thread/unsubscribe") Status = "notLoaded";
         var project = new { id = "project-1", name = "My app", roots = new[] { new { path = root } } };
         object result = method switch
         {
@@ -169,6 +176,7 @@ internal sealed class ScriptedCompanionCodex : ICodexRpcConnectionFactory, ICode
             "thread/list" => new { data = new[] { Thread("thread-1", ThreadProjectId), Thread("foreign-thread", "other-project") } },
             "thread/read" => new { thread = Thread(value.GetProperty("threadId").GetString()!, ThreadProjectId) },
             "thread/start" => new { thread = Thread("new-thread", "project-1") },
+            "thread/unsubscribe" => new { status = "unsubscribed" },
             "thread/resume" => new { thread = Thread("thread-1", "project-1") },
             "thread/turns/list" => new { data = new[] { new { id = Status == "active" ? "active-turn" : "new-turn", status = TurnStatus } } },
             "turn/start" => new { turn = new { id = "new-turn" } },

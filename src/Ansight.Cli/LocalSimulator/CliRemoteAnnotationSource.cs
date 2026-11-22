@@ -124,7 +124,10 @@ internal sealed partial class CliRemoteAnnotationSource : IRemoteAnnotationSourc
 
         var existing = session.Annotations.SingleOrDefault(annotation => annotation.AnnotationId == annotationId);
 
-        if (existing is null || !BelongsToBatch(existing, batchId, frameId))
+        var isRecordingItem = existing is not null
+            && existing.Source == "companion.exploration"
+            && string.Equals(existing.CaptureGroupId, batchId, StringComparison.Ordinal);
+        if (existing is null || (!isRecordingItem && !BelongsToBatch(existing, batchId, frameId)))
         {
             return Task.FromResult(new RemoteOperationResult(
                 false,
