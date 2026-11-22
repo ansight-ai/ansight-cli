@@ -1,4 +1,11 @@
+using Ansight.Cli.Commands.Session;
+using System.Text.Json;
+using System.Net;
+using System.Net.Http.Json;
+using Ansight.Host.Replay;
+using Ansight.Host.Transcription;
 using Ansight.RemoteSimulator.Core.Annotations;
+
 namespace Ansight.Cli.Tests.Commands.Companion;
 
 public sealed class CompanionExplorationTests
@@ -52,4 +59,72 @@ public sealed class CompanionExplorationTests
             RecordingEndUtc: DateTimeOffset.UtcNow.AddSeconds(1), RecordingItemId: "line-1"));
         Assert.False(result.IsSuccess);
     }
+
+    [Fact]
+    public async Task DesktopTranscriptUpdatesOneRecordingWithoutCreatingSpeechAnnotations()
+    {
+        await using var context = await CompanionCodexTestContext.CreateAsync();
+        var explorer = await context.Runtime.SessionReplays.StartExplorerAsync(new SessionExplorerStartRequest());
+        using var client = new HttpClient { BaseAddress = explorer.ExplorerUrl };
+        var sessionRoute = $"api/sessions/{context.Session.SessionId}";
+        var recordingId = Guid.NewGuid().ToString("D");
+        var recordingRoute = $"{sessionRoute}/recording-transcripts/{recordingId}";
+        var start = DateTimeOffset.UtcNow.AddSeconds(-5);
+        var first = new SessionTranscriptSegment("1", start, start.AddSeconds(1), "The button is disabled.");
+        var second = new SessionTranscriptSegment("2", start.AddSeconds(1), start.AddSeconds(2), "Here is a second observation.");
+
+        using var saved = await client.PostAsJsonAsync($"{recordingRoute}/segment", first);
+        saved.EnsureSuccessStatusCode();
+        using var retry = await client.PostAsJsonAsync($"{recordingRoute}/segment", first);
+        retry.EnsureSuccessStatusCode();
+        using var conflict = await client.PostAsJsonAsync($"{recordingRoute}/segment", first with { Text = "Different content" });
+        Assert.Equal(HttpStatusCode.BadRequest, conflict.StatusCode);
+        using var appended = await client.PostAsJsonAsync($"{recordingRoute}/segment", second);
+        appended.EnsureSuccessStatusCode();
+
+        var update = await client.GetFromJsonAsync<SessionLiveUpdate>($"{sessionRoute}/updates?analysisCount=1&transcriptRevision=1");
+        var transcript = Assert.Single(update!.Analyses);
+        Assert.Equal("recordingTranscript", transcript.AnalysisKind);
+        Assert.Equal(2, transcript.TranscriptRevision);
+        Assert.Equal(new[] { first, second }, transcript.TranscriptSegments);
+        Assert.DoesNotContain(update.Annotations, item => item.Label == first.Text || item.Label == second.Text);
+
+        var snapshot = await context.Runtime.Sessions.LoadSnapshotAsync(context.Session.SessionId);
+        var page = SessionTranscriptCommand.ReadPage(snapshot!, offset: 0, limit: 1);
+        Assert.Equal(2, page.TotalCount);
+        Assert.Equal(1, page.NextOffset);
+        var firstLine = Assert.Single(page.Segments);
+        Assert.Equal(first.Text, firstLine.Text);
+        Assert.Equal(recordingId, firstLine.RecordingId);
+        Assert.Equal(transcript.AnalysisId, firstLine.TranscriptId);
+
+        var filtered = SessionTranscriptCommand.ReadPage(snapshot!, offset: 0, limit: 10,
+            recordingId: recordingId, start: first.EndUtc.AddMilliseconds(1));
+        Assert.Equal(second.Text, Assert.Single(filtered.Segments).Text);
+        Assert.Null(filtered.NextOffset);
+
+        var remote = new CliRemoteRecordingSource(context.Runtime);
+        Assert.True((await remote.GetAsync(context.Session.SessionId))!.HasTranscript);
+        var response = await remote.ReviewAsync("transcript.list", context.Session.SessionId,
+            JsonSerializer.SerializeToElement(new { offset = 1 }));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(response.Content);
+        var mobileSegment = Assert.Single(document.RootElement.GetProperty("segments").EnumerateArray());
+        Assert.Equal(second.Text, mobileSegment.GetProperty("text").GetString());
+
+    }
+
+    [Theory]
+    [InlineData("transcript")]
+    [InlineData("transcript-complete")]
+    public async Task CompanionTranscriptRequiresAnIssuedBatch(string kind)
+    {
+        await using var context = await CompanionCodexTestContext.CreateAsync();
+        var source = new CliRemoteAnnotationSource(context.Runtime);
+        var result = await source.CreateAnnotationAsync(new RemoteAnnotationRequest("device", kind, 0, 0, null, null,
+            "Hello", "investigate", Guid.NewGuid().ToString("D"), "frame-1", RecordingStartUtc: DateTimeOffset.UtcNow,
+            RecordingEndUtc: DateTimeOffset.UtcNow.AddSeconds(1), RecordingItemId: "line-1"));
+        Assert.False(result.IsSuccess);
+    }
+
 }

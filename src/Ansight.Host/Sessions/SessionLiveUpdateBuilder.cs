@@ -40,6 +40,9 @@ internal static class SessionLiveUpdateBuilder
             })
             .ToArray();
 
+        var analysesChanged = cursor.AnalysisCount != session.Analyses.Count
+            || cursor.TranscriptRevision != session.Analyses.Sum(item => item.TranscriptRevision);
+
         return new SessionLiveUpdate(
             session.SessionId,
             requiresReset,
@@ -61,9 +64,7 @@ internal static class SessionLiveUpdateBuilder
             cursor.AnnotationCount == session.Annotations.Count
                 ? Array.Empty<SessionAnnotation>()
                 : session.GetSnapshotAnnotations(),
-            cursor.AnalysisCount == session.Analyses.Count
-                ? Array.Empty<SessionAnalysisRecord>()
-                : session.GetSnapshotAnalyses(),
+            analysesChanged ? session.GetSnapshotAnalyses() : Array.Empty<SessionAnalysisRecord>(),
             session.TotalLogCount,
             session.Images.Count,
             session.Touches.Count,

@@ -190,7 +190,8 @@ internal sealed partial class ExplorerServer
 
     private async Task<bool> TryHandleSessionsDynamicPostAsync(string route, HttpListenerRequest request, HttpListenerResponse response, CancellationToken cancellationToken, string[] segments)
     {
-        if (await TryHandleAnnotationTranscriptionAsync(request, response, segments, false, cancellationToken)
+        if (await TryHandleRecordingTranscriptAsync(request, response, segments, cancellationToken)
+            || await TryHandleAnnotationTranscriptionAsync(request, response, segments, false, cancellationToken)
             || await TryHandleAnnotationAgentsAsync(request, response, segments, false, cancellationToken))
         {
             return true;

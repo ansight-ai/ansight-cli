@@ -205,6 +205,49 @@ internal sealed partial class RuntimeState
         return OperationResult.Success($"Session '{trimmedSessionId}' metadata updated.");
     }
 
+    public OperationResult UpdateRecordingTranscript(
+        string sessionId,
+        string recordingId,
+        Func<SessionAnalysisRecord?, SessionAnalysisRecord?> update)
+    {
+        if (!EnsureSessionLoaded(sessionId))
+        {
+            return OperationResult.Failure("The recording session was not found.");
+        }
+
+        lock (gate)
+        {
+            if (!sessionsById.TryGetValue(sessionId, out var session))
+            {
+                return OperationResult.Failure("The recording session was not found.");
+            }
+
+            var index = session.Analyses.FindIndex(item => item.AnalysisId == recordingId
+                && item.AnalysisKind == Ansight.Host.Transcription.SessionRecordingTranscript.Kind);
+            var current = index < 0 ? null : session.Analyses[index];
+            var next = update(current);
+            if (next is null || ReferenceEquals(current, next))
+            {
+                return OperationResult.Success("Transcript is current.");
+            }
+
+            next = next with { TranscriptRevision = (current?.TranscriptRevision ?? 0) + 1 };
+            if (index < 0)
+            {
+                session.Analyses.Add(next);
+            }
+            else
+            {
+                session.Analyses[index] = next;
+            }
+
+            session.MarkAnalysesChanged();
+        }
+
+        PersistAndBroadcast(sessionId);
+        return OperationResult.Success("Transcript saved.");
+    }
+
     public OperationResult UpsertSessionAnnotation(string sessionId, SessionAnnotation annotation)
     {
         if (string.IsNullOrWhiteSpace(sessionId))

@@ -533,6 +533,12 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
 
     public event EventHandler<string>? StatusChanged;
 
+    internal OperationResult UpdateRecordingTranscript(
+        string sessionId,
+        string recordingId,
+        Func<SessionAnalysisRecord?, SessionAnalysisRecord?> update)
+        => runtimeState.UpdateRecordingTranscript(sessionId, recordingId, update);
+
     public IApplicationPaths ApplicationPaths { get; }
     internal IUserPreferences UserPreferences { get; }
     public string BaseFolderPath { get; }

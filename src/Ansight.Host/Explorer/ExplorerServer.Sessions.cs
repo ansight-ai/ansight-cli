@@ -596,7 +596,18 @@ internal sealed partial class ExplorerServer : IAsyncDisposable
 
     private async Task WriteSessionUpdateAsync(HttpListenerRequest request, HttpListenerResponse response, string sessionId, bool isHead, CancellationToken cancellationToken)
     {
-        var cursor = new SessionLiveUpdateCursor(ReadNonNegativeQueryInteger(request, "logIndex"), ReadNonNegativeQueryInteger(request, "imageIndex"), ReadNonNegativeQueryInteger(request, "touchIndex"), ReadNonNegativeQueryInteger(request, "networkRequestIndex"), ReadNonNegativeQueryInteger(request, "visualTreeIndex"), ReadNonNegativeQueryInteger(request, "artifactIndex"), ReadNonNegativeQueryInteger(request, "metricIndex"), ReadNonNegativeQueryInteger(request, "metricChannelCount"), ReadNonNegativeQueryInteger(request, "annotationCount"), ReadNonNegativeQueryInteger(request, "analysisCount"));
+        var cursor = new SessionLiveUpdateCursor(
+            ReadNonNegativeQueryInteger(request, "logIndex"),
+            ReadNonNegativeQueryInteger(request, "imageIndex"),
+            ReadNonNegativeQueryInteger(request, "touchIndex"),
+            ReadNonNegativeQueryInteger(request, "networkRequestIndex"),
+            ReadNonNegativeQueryInteger(request, "visualTreeIndex"),
+            ReadNonNegativeQueryInteger(request, "artifactIndex"),
+            ReadNonNegativeQueryInteger(request, "metricIndex"),
+            ReadNonNegativeQueryInteger(request, "metricChannelCount"),
+            ReadNonNegativeQueryInteger(request, "annotationCount"),
+            ReadNonNegativeQueryInteger(request, "analysisCount"),
+            ReadNonNegativeQueryInteger(request, "transcriptRevision"));
 
         if (!runtime.Sessions.TryGetLiveUpdate(sessionId, cursor, out var update) || update is null)
         {

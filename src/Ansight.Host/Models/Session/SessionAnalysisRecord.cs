@@ -1,6 +1,6 @@
 namespace Ansight.Host.Models.Session;
 
-public sealed class SessionAnalysisRecord
+public sealed record SessionAnalysisRecord
 {
     public required string AnalysisId { get; init; }
     public required string AgentId { get; init; }
@@ -11,6 +11,8 @@ public sealed class SessionAnalysisRecord
     public string? StatusMessage { get; init; }
     public string? Prompt { get; init; }
     public string? Transcript { get; init; }
+    public IReadOnlyList<SessionTranscriptSegment>? TranscriptSegments { get; init; }
+    public int TranscriptRevision { get; init; }
     public string? FinalResponse { get; init; }
     public string? MermaidDefinition { get; init; }
 }
