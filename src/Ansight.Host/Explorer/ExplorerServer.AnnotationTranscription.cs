@@ -1,5 +1,5 @@
 using System.Net;
-using Ansight.Host.SimulatorAgent.OpenAi;
+using Ansight.Host.Transcription;
 
 namespace Ansight.Host.Explorer;
 

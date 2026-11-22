@@ -279,6 +279,9 @@ if [[ "${RID}" == osx-* ]]; then
 
   case "${RID}" in
     osx-arm64)
+      python3 "${SCRIPT_DIR}/stage-moonshine.py" \
+        "${REPO_ROOT}/src/Ansight.Host/Transcription/moonshine-manifest.json" "${OUTPUT_DIR}"
+      cp "${SCRIPT_DIR}"/moonshine-notices/ONNX-Runtime-1.23.2-* "${OUTPUT_DIR}/"
       MACOS_TRAY_TARGET="arm64-apple-macos13.0"
       ;;
     osx-x64)
