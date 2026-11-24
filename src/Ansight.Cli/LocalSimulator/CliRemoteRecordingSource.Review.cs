@@ -1,3 +1,4 @@
+using Ansight.Cli.Commands.Session;
 using System.Net;
 using System.Text.Json;
 using Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
@@ -65,6 +66,13 @@ internal sealed partial class CliRemoteRecordingSource
 
             switch (operation)
             {
+                case "transcript.list":
+                    var offset = arguments.TryGetProperty("offset", out var offsetValue) ? offsetValue.GetInt32() : 0;
+                    if (offset < 0)
+                    {
+                        return ReviewError(HttpStatusCode.BadRequest, "Transcript offset cannot be negative.");
+                    }
+                    return ReviewJson(SessionTranscriptCommand.ReadPage(session, offset, limit: 100));
                 case "network.list":
                     return ReviewJson(new
                     {

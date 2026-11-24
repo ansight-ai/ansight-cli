@@ -59,6 +59,11 @@ internal sealed partial class CliRemoteAnnotationSource : IRemoteAnnotationSourc
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (request.Kind is "transcript" or "transcript-complete")
+        {
+            return Task.FromResult(SaveTranscript(request));
+        }
+
         return Task.FromResult(SaveAnnotation(request, annotationId: null));
     }
 
@@ -200,7 +205,7 @@ internal sealed partial class CliRemoteAnnotationSource : IRemoteAnnotationSourc
             batchId,
             session.Snapshot.SessionId,
             frame.FrameId,
-            frame.CapturedAtUtc.ToUniversalTime(), true, DateTimeOffset.UtcNow));
+            frame.CapturedAtUtc.ToUniversalTime(), true, DateTimeOffset.UtcNow, SupportsTranscript: true));
     }
 
     public async Task<RemoteRecordingFrame?> GetBatchFrameAsync(
@@ -273,7 +278,10 @@ internal sealed partial class CliRemoteAnnotationSource : IRemoteAnnotationSourc
         RemoteAnnotationRequest request,
         string? annotationId)
     {
-        if (request.RecordingItemId is not null) return SaveRecordingItem(request);
+        if (request.RecordingItemId is not null)
+        {
+            return SaveRecordingItem(request);
+        }
 
         var comment = NormalizeComment(request.Comment);
 

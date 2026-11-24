@@ -10,7 +10,8 @@ public sealed record SessionLiveUpdateCursor(
     int MetricIndex,
     int MetricChannelCount,
     int AnnotationCount,
-    int AnalysisCount)
+    int AnalysisCount,
+    int TranscriptRevision = 0)
 {
     public SessionLiveUpdateCursor(
         int logIndex,

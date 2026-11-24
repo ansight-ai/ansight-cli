@@ -1,5 +1,5 @@
 using System.Net;
-using Ansight.Host.SimulatorAgent.OpenAi;
+using Ansight.Host.Transcription;
 
 namespace Ansight.Host.Explorer;
 
@@ -8,7 +8,11 @@ internal sealed partial class ExplorerServer
     private async Task<bool> TryHandleAnnotationTranscriptionAsync(HttpListenerRequest request, HttpListenerResponse response,
         string[] segments, bool isHead, CancellationToken cancellationToken)
     {
-        if (segments.Length is not (4 or 5) || segments[0] != "api" || segments[1] != "sessions" || segments[3] != "annotation-transcription")
+        var isTranscriptionRoute = segments.Length is 4 or 5
+            && segments[0] == "api"
+            && segments[1] == "sessions"
+            && segments[3] == "annotation-transcription";
+        if (!isTranscriptionRoute)
         {
             return false;
         }
@@ -19,7 +23,13 @@ internal sealed partial class ExplorerServer
         }
         if (segments.Length == 4 && request.HttpMethod is "GET" or "HEAD")
         {
-            await WriteJsonAsync(response, new { isConfigured = AnnotationTranscriber.IsInstalled(runtime.ApplicationPaths.ApplicationDataPath), isSupported = AnnotationTranscriber.IsSupported, model = AnnotationTranscriber.Model }, HttpStatusCode.OK, isHead, cancellationToken);
+            await WriteJsonAsync(response, new
+            {
+                isConfigured = AnnotationTranscriber.IsInstalled(runtime.ApplicationPaths.ApplicationDataPath),
+                isSupported = AnnotationTranscriber.IsSupported,
+                model = AnnotationTranscriber.Model,
+                supportsRecordingTranscript = true
+            }, HttpStatusCode.OK, isHead, cancellationToken).ConfigureAwait(false);
             return true;
         }
         if (request.HttpMethod != "POST")
@@ -32,7 +42,11 @@ internal sealed partial class ExplorerServer
         }
         if (segments.Length == 5)
         {
-            if (segments[4] != "prepare") return false;
+            if (segments[4] != "prepare")
+            {
+                return false;
+            }
+
             using var setupTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             setupTimeout.CancelAfter(TimeSpan.FromMinutes(10));
             await AnnotationTranscriber.PrepareAsync(runtime.ApplicationPaths.ApplicationDataPath, setupTimeout.Token);
@@ -62,4 +76,45 @@ internal sealed partial class ExplorerServer
         await WriteJsonAsync(response, new { text }, HttpStatusCode.OK, false, cancellationToken);
         return true;
     }
+    private async Task<bool> TryHandleRecordingTranscriptAsync(
+        HttpListenerRequest request,
+        HttpListenerResponse response,
+        string[] segments,
+        CancellationToken cancellationToken)
+    {
+        if (segments is not ["api", "sessions", var encodedSessionId, "recording-transcripts", var recordingId, var action])
+        {
+            return false;
+        }
+
+        var sessionId = Uri.UnescapeDataString(encodedSessionId);
+        if ((!isExplorer && sessionId != InitialSessionId) || !Guid.TryParse(recordingId, out var id))
+        {
+            throw new InvalidDataException("The recording session or ID is invalid.");
+        }
+
+        if (request.Headers["Origin"] is { } origin && origin != request.Url?.GetLeftPart(UriPartial.Authority))
+        {
+            throw new InvalidDataException("Transcript updates must originate from this local UI.");
+        }
+
+        OperationResult result;
+        switch (action)
+        {
+            case "segment":
+                var segment = await ReadJsonAsync<SessionTranscriptSegment>(request, cancellationToken).ConfigureAwait(false);
+                result = SessionRecordingTranscript.SaveSegment(runtime, sessionId, id, "Desktop microphone", segment);
+                break;
+            case "complete":
+                result = SessionRecordingTranscript.Complete(runtime, sessionId, id);
+                break;
+            default:
+                return false;
+        }
+
+        await WriteJsonAsync(response, new { result.IsSuccess, result.Message },
+            result.IsSuccess ? HttpStatusCode.OK : HttpStatusCode.BadRequest, false, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
 }

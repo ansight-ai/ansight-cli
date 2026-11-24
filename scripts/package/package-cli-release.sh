@@ -176,6 +176,10 @@ if [[ "${RID}" == osx-* ]]; then
     exit 1
   fi
   verify_macos_release_signature "${STAGING_DIR}/libAnsightAudioInjection.dylib"
+  if [[ "${RID}" == "osx-arm64" ]]; then
+    verify_macos_release_signature "${STAGING_DIR}/libmoonshine.dylib"
+    verify_macos_release_signature "${STAGING_DIR}/libonnxruntime.1.23.2.dylib"
+  fi
 fi
 
 if [[ "${RID}" == osx-* && -n "${NOTARYTOOL_PROFILE}" ]]; then

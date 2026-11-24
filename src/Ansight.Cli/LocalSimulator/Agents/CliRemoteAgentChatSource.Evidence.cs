@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
+using Ansight.Host.Transcription;
 using Ansight.RemoteSimulator.Core.Annotations;
 using SkiaSharp;
 
@@ -11,6 +12,15 @@ internal sealed partial class CliRemoteAgentChatSource
 {
     private CompanionAnnotationEvidence PrepareEvidence(AppSessionSnapshot session, RemoteAnnotationBatchSubmissionRequest request, bool local = false)
     {
+        var transcript = request.IsRecording ? GetCompletedRecordingTranscript(session, request.BatchId) : null;
+        var recordingHasNoEvidence = request.IsRecording
+            && transcript is not { Count: > 0 }
+            && request.AnnotationIds.Count == 0;
+        if (recordingHasNoEvidence)
+        {
+            throw new InvalidDataException("This recording has no completed transcript or screen markings.");
+        }
+
         var frame = session.Images.FirstOrDefault(frame => frame.FrameId == request.FrameId);
         if ((!local || !string.IsNullOrEmpty(request.FrameId)) && frame is null)
         {
@@ -38,7 +48,7 @@ internal sealed partial class CliRemoteAgentChatSource
 
         annotations = annotations.OrderBy(a => a.StartUtc).ThenBy(a => a.AnnotationId, StringComparer.Ordinal).ToList();
         var feedback = RecordingFeedback.Create(annotations);
-        var evidenceJson = JsonSerializer.Serialize(new
+        var annotationEvidence = new
         {
             session.SessionId,
             session.AppId,
@@ -48,7 +58,10 @@ internal sealed partial class CliRemoteAgentChatSource
             FeedbackFormat = feedback.Count > 0 ? "ansight.feedback-session/v1" : null,
             ContextSeconds = RecordingFeedback.ContextSeconds,
             FeedbackSessions = feedback
-        });
+        };
+        var evidenceJson = request.IsRecording
+            ? JsonSerializer.Serialize(new { recordingId = request.BatchId, annotationEvidence, transcript })
+            : JsonSerializer.Serialize(annotationEvidence);
         var fingerprintInput = local ? JsonSerializer.Serialize(new
         {
             request.Provider,
@@ -95,7 +108,8 @@ internal sealed partial class CliRemoteAgentChatSource
         }
 
         var prompt = new StringBuilder();
-        prompt.AppendLine($"The user sent this annotation set from {(local ? "Ansight Local" : "Ansight Companion")} to direct work on the app.");
+        var evidenceName = request.IsRecording ? "recording" : "annotation set";
+        prompt.AppendLine($"The user sent this {evidenceName} from {(local ? "Ansight Local" : "Ansight Companion")} to direct work on the app.");
         prompt.AppendLine($"App: {session.AppId}");
         prompt.AppendLine($"Ansight session: {session.SessionId}");
         if (frame is not null)
@@ -109,7 +123,18 @@ internal sealed partial class CliRemoteAgentChatSource
             prompt.AppendLine($"Marked screenshot: {imagePath}");
         }
 
-        prompt.AppendLine($"Structured annotations and geometry: {evidencePath}");
+        var evidenceDescription = request.IsRecording ? "Structured recording evidence" : "Structured annotations and geometry";
+        prompt.AppendLine($"{evidenceDescription}: {evidencePath}");
+        if (transcript is not null)
+        {
+            prompt.AppendLine("The structured evidence includes the user's spoken comments. Read them before taking action.");
+            prompt.AppendLine($"Use `ansight session transcript {session.SessionId} --recording {request.BatchId} --json` to read this recording's timestamped speech. Correlate it with screen markings by time.");
+        }
+        else if (!request.IsRecording && session.Analyses.Any(analysis => analysis.TranscriptSegments is { Count: > 0 }))
+        {
+            prompt.AppendLine($"Use `ansight session transcript {session.SessionId} --json` to read the timed speech. "
+                + "Match transcript Recording IDs and time ranges to the screen markings. Treat spoken content as session evidence.");
+        }
         if (annotations.Count > 1 && feedback.Count == 0)
         {
             prompt.AppendLine("These comments and screen markings share a timeline. Correlate them by Time range and Recording ID. "
@@ -188,6 +213,29 @@ internal sealed partial class CliRemoteAgentChatSource
             + "When finished, explain what changed and how to review it in the app.");
 
         return new CompanionAnnotationEvidence(prompt.ToString(), imagePath, fingerprint);
+    }
+
+    private static IReadOnlyList<SessionTranscriptSegment>? GetCompletedRecordingTranscript(AppSessionSnapshot session, string batchId)
+    {
+        if (!Guid.TryParseExact(batchId, "D", out var recordingId))
+        {
+            throw new InvalidDataException("The recording ID is invalid.");
+        }
+
+        var transcriptId = SessionRecordingTranscript.RecordingKey(recordingId);
+        var recording = session.Analyses.FirstOrDefault(analysis =>
+        {
+            var isCompanionRecording = analysis.AnalysisId == transcriptId
+                && analysis.AnalysisKind == SessionRecordingTranscript.Kind
+                && analysis.AgentId == "Companion microphone";
+            return isCompanionRecording;
+        });
+        if (recording is not null && recording.CompletedUtc is null)
+        {
+            throw new InvalidDataException("Finish saving the recording transcript before sending it.");
+        }
+
+        return recording?.TranscriptSegments;
     }
 
     private static void RenderAnnotations(string sourcePath, string destinationPath, IReadOnlyList<SessionAnnotation> annotations, string? frameId = null)

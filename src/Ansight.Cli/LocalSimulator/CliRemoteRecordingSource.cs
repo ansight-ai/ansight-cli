@@ -1,3 +1,4 @@
+using Ansight.Host.Transcription;
 using Ansight.Host.Runtime.Operations.Tools.SessionEvidence;
 using Ansight.Host.Utilities;
 using Ansight.RemoteSimulator.Core.Recording;
@@ -40,7 +41,9 @@ internal sealed partial class CliRemoteRecordingSource : IRemoteRecordingSource,
                 frame.FrameId, frame.CapturedAtUtc, frame.Width, frame.Height, ContentType(frame.Format), frame.ByteCount)).ToArray(),
             session.LogStreams.Select(stream => new RemoteRecordingLogStreamSummary(
                 stream.StreamId, stream.Kind, stream.DisplayName, stream.Status, Math.Max(stream.TotalEntryCount, stream.Entries.Count))).ToArray(),
-            session.MetricChannels.Select(Channel).ToArray());
+            session.MetricChannels.Select(Channel).ToArray(),
+            HasTranscript: session.Analyses.Any(analysis => analysis.AnalysisKind == SessionRecordingTranscript.Kind
+                && analysis.TranscriptSegments is { Count: > 0 }));
     }
 
     public async Task<RemoteRecordingFrame?> GetFrameAsync(string recordingId, string frameId, CancellationToken cancellationToken = default)

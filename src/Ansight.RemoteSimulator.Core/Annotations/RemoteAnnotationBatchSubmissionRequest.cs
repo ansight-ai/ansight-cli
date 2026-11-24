@@ -10,4 +10,5 @@ public sealed record RemoteAnnotationBatchSubmissionRequest(
     string? ChatTitle = null,
     string? ProjectId = null,
     bool StartNewTask = false,
-    bool QueueAfterCurrent = false);
+    bool QueueAfterCurrent = false,
+    bool IsRecording = false);

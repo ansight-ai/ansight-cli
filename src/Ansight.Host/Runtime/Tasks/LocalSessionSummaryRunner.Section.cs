@@ -11,7 +11,7 @@ internal static partial class LocalSessionSummaryRunner
         Do not infer actions before or after the supplied range. Distinguish visible outcomes from uncertain causes.
         """;
 
-    internal static AppSessionSnapshot SelectSection(AppSessionSnapshot snapshot, DateTimeOffset startUtc, DateTimeOffset endUtc)
+    internal static AppSessionSnapshot SelectSection(AppSessionSnapshot snapshot, DateTimeOffset startUtc, DateTimeOffset endUtc, bool allowEmpty = false)
     {
         if (startUtc == default || endUtc == default || endUtc <= startUtc)
         {
@@ -32,8 +32,9 @@ internal static partial class LocalSessionSummaryRunner
         var annotations = snapshot.Annotations.Where(item => InRange(item.StartUtc)
             && InRange(item.EndUtc ?? item.StartUtc)).ToArray();
 
-        if (logs.Length + images.Length + touches.Length + networkRequests.Length + visualTrees.Length
-            + events.Length + metrics.Length + annotations.Length + videos.Length == 0)
+        var hasEvidence = logs.Length + images.Length + touches.Length + networkRequests.Length + visualTrees.Length
+            + events.Length + metrics.Length + annotations.Length + videos.Length > 0;
+        if (!allowEmpty && !hasEvidence)
         {
             throw new ArgumentException("The selected section has no captured evidence to summarise.");
         }

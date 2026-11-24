@@ -656,6 +656,7 @@ public sealed partial class RemoteControlServer
 
                         return;
                     }
+                case "transcript.list":
                 case "network.list":
                 case "network.details":
                 case "artifacts.list":

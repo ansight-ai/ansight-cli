@@ -30,7 +30,7 @@ internal static class SessionCommands
             ? 3 : 2;
         // These inspection commands read the session directly instead of calling the operation dispatcher.
         using var activity = action is "show" or "logs" or "connectivity" or "network" or "requests" or "metrics"
-            or "images" or "screenshots" or "touches" or "trees" or "visual-trees" or "artifacts" or "annotations" or "analyses"
+            or "images" or "screenshots" or "touches" or "trees" or "visual-trees" or "artifacts" or "annotations" or "analyses" or "transcript"
             or "screenshot" or "artifact" or "telemetry"
             ? runtime.Activity.Begin("session." + action, "inspection", arguments.RequirePositional(
                 sessionPosition, "session identifier")) : null;
@@ -106,6 +106,7 @@ internal static class SessionCommands
                     .Where(annotation => !arguments.HasFlag("without-status") || string.IsNullOrWhiteSpace(annotation.Status))
                     .ToArray(),
                 cancellationToken),
+            "transcript" => await SessionTranscriptCommand.RunAsync(runtime, arguments, output, cancellationToken),
             "analyses" => await CollectionAsync(
                 runtime,
                 arguments,
@@ -163,7 +164,7 @@ internal static class SessionCommands
             "sanitize" or "sanitise" => await SanitizeAsync(runtime, arguments, output, cancellationToken),
             "import" => await ImportAsync(runtime, arguments, output, cancellationToken),
             _ => throw new CliUsageException(
-                $"Unknown session action '{action}'. Expected list, activity, show, logs, connectivity, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
+                $"Unknown session action '{action}'. Expected list, activity, show, logs, connectivity, network, metrics, telemetry, images, touches, trees, artifacts, annotations, analyses, transcript, extract, trim, normalize, annotation, analysis, screenshot, artifact, metadata, cache, delete, disconnect, serve, share, share-batch, summary, summary-local, url, export, sanitize, or import.")
         };
     }
 
@@ -1599,6 +1600,7 @@ internal static class SessionCommands
              ansight session telemetry analyze <session-id> [options]
              ansight session images|touches|trees|artifacts <session-id> [--limit <count>]
              ansight session annotations|analyses <session-id> [--limit <count>]
+             ansight session transcript <session-id> [--recording <id>] [--start <utc>] [--end <utc>] [--offset <count>] [--limit <count>] [--json]
              ansight session extract <session-id> (--annotation <id> | --start <utc> --end <utc>) [--name <name>]
              ansight session trim <session-id> --start <utc> --end <utc> --mode <cut|keep>
              ansight session normalize <session-id>

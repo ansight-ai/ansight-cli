@@ -8,4 +8,5 @@ public sealed record RemoteAnnotationBatchStartResult(
     string? FrameId = null,
     DateTimeOffset? FrameCapturedAtUtc = null,
     bool SupportsRecording = false,
-    DateTimeOffset? HostTimeUtc = null);
+    DateTimeOffset? HostTimeUtc = null,
+    bool SupportsTranscript = false);
