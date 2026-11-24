@@ -113,7 +113,8 @@ public sealed class LocalAnnotationAgentTests
         Assert.Contains("Keep the button visible", prompt);
         Assert.Contains("Move the filter lower", prompt);
         Assert.Contains("Recording ID: recording-1", prompt);
-        Assert.Contains("share a timeline", prompt);
+        Assert.Contains("ONE feedback session", prompt);
+        Assert.Contains("No screenshots are attached.", prompt);
         Assert.Equal(2, first.TaskLink.AnnotationIds.Count);
         Assert.Single(context.Codex.Calls, c => c.Method == (queue ? "queue" : "turn/start"));
     }

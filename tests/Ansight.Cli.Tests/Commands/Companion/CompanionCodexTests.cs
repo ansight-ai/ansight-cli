@@ -5,6 +5,42 @@ namespace Ansight.Cli.Tests.Commands.Companion;
 public sealed class CompanionCodexTests
 {
     [Theory]
+    [InlineData(true, "idle")]
+    [InlineData(false, "notLoaded")]
+    [InlineData(false, "idle")]
+    public async Task DesktopDeliveryReleasesNewChatsAndNeverStartsHiddenTurns(bool newChat, string status)
+    {
+        await using var context = await CompanionCodexTestContext.CreateAsync();
+        await context.LinkAsync();
+        context.Codex.UsesDesktopDelivery = true;
+        context.Codex.Status = status;
+        var result = await context.Source.SubmitAnnotationBatchAsync(context.Submission(newChat));
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal("queued", result.Status);
+        var methods = context.Codex.Calls.Select(c => c.Method).ToList();
+        Assert.DoesNotContain("turn/start", methods);
+        Assert.DoesNotContain("turn/steer", methods);
+        Assert.True(methods.IndexOf("queue") < methods.IndexOf("desktop/open"));
+        if (status != "notLoaded") Assert.True(methods.IndexOf("thread/unsubscribe") < methods.IndexOf("queue"));
+        if (newChat)
+        {
+            var start = Assert.Single(context.Codex.Calls, c => c.Method == "thread/start");
+            Assert.Equal(0, start.Parameters.GetProperty("config").GetProperty("thread_unload_delay_secs").GetInt32());
+            Assert.False(start.Parameters.TryGetProperty("approvalPolicy", out _));
+            Assert.False(start.Parameters.TryGetProperty("sandbox", out _));
+        }
+        await context.Source.SubmitAnnotationBatchAsync(context.Submission(newChat));
+        Assert.Single(context.Codex.Calls, c => c.Method == "queue");
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("/explicit-server.sock", true)]
+    public void DefaultQueueDoesNotResumeOnBackgroundDaemon(string? socket, bool expected)
+        => Assert.Equal(expected, CodexRpcConnectionFactory.ShouldResumeQueuedThread(socket));
+
+    [Theory]
     [InlineData("creating", "")]
     [InlineData("dispatching", "thread-1")]
     public async Task RestartDuringDelivery_ShowsUncertaintyEvenWhenCodexIsOffline(string status, string taskId)

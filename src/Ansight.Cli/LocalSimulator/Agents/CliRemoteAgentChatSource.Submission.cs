@@ -108,7 +108,10 @@ internal sealed partial class CliRemoteAgentChatSource
                     projectId = project.Id,
                     cwd = projectLink.WorkingDirectory,
                     runtimeWorkspaceRoots = project.Roots,
-                    ephemeral = false
+                    ephemeral = false,
+                    config = connections.UsesDesktopDelivery
+                        ? new Dictionary<string, object> { ["thread_unload_delay_secs"] = 0 }
+                        : null
                 }, cancellationToken).ConfigureAwait(false);
                 thread = created.GetProperty("thread");
                 receipt = SaveReceipt(receipt with
@@ -148,7 +151,32 @@ internal sealed partial class CliRemoteAgentChatSource
 
             var isUnloaded = task.Status == "notLoaded";
 
-            if (request.QueueAfterCurrent || isUnloaded)
+            if (connections.UsesDesktopDelivery && task.Status != "notLoaded")
+            {
+                // Never interrupt an existing run. Only release idle or newly-created
+                // threads before asking the desktop to consume the queued request.
+                if (!request.StartNewTask && task.Status == "active")
+                    throw new InvalidOperationException("This chat is still running outside the desktop. Open it in its current app before sending more work.");
+                if (!request.StartNewTask)
+                {
+                    await connection.CallAsync("thread/resume", new
+                    {
+                        threadId = task.SessionId,
+                        config = new Dictionary<string, object> { ["thread_unload_delay_secs"] = 0 }
+                    }, cancellationToken).ConfigureAwait(false);
+                }
+                await connection.CallAsync("thread/unsubscribe", new { threadId = task.SessionId }, cancellationToken).ConfigureAwait(false);
+                var released = false;
+                for (var attempt = 0; attempt < 30; attempt++)
+                {
+                    var state = await connection.CallAsync("thread/read", new { threadId = task.SessionId }, cancellationToken).ConfigureAwait(false);
+                    if (ParseThread(state.GetProperty("thread")).Status == "notLoaded") { released = true; break; }
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+                if (!released) throw new IOException("Codex has not released this chat to the desktop yet. No request was sent; retry shortly.");
+            }
+
+            if (connections.UsesDesktopDelivery || request.QueueAfterCurrent || isUnloaded)
             {
                 receipt = SaveReceipt(receipt with { Link = receipt.Link with { Status = "dispatching" } });
                 await connections.QueueAsync(task.SessionId, evidence.Prompt, cancellationToken).ConfigureAwait(false);
@@ -157,13 +185,26 @@ internal sealed partial class CliRemoteAgentChatSource
                     Link = receipt.Link with
                     {
                         Status = "queued",
-                        StatusMessage = isUnloaded
+                        StatusMessage = connections.UsesDesktopDelivery
+                            ? "Request queued for the desktop chat; approvals remain in Codex."
+                            : request.QueueAfterCurrent
+                            ? "Annotation queued in Codex. It will run after the current work finishes."
+                            : isUnloaded
                             ? "Annotations queued in Codex. Open the original chat if delivery stays queued."
-                            : "Annotations queued in Codex. They will run when the chat is ready.",
+                            : "Annotations queued in the original Codex task. Codex will continue it when available.",
                         UpdatedAtUtc = DateTimeOffset.UtcNow
                     }
                 };
                 SaveReceipt(receipt);
+                if (connections.UsesDesktopDelivery)
+                {
+                    try { await connections.OpenDesktopAsync(task.SessionId, cancellationToken).ConfigureAwait(false); }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        receipt = SaveReceipt(receipt with { Link = receipt.Link with
+                        { StatusMessage = "Request queued. Open this chat in Codex to continue: " + error.Message } });
+                    }
+                }
 
                 return ToSubmission(receipt.Link);
             }
