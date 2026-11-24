@@ -15,12 +15,13 @@ internal sealed class CodexRpcConnectionFactory : ICodexRpcConnectionFactory
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        // Queue without resuming so the Codex client that opens the chat can consume the message.
         start.ArgumentList.Add("queue");
         start.ArgumentList.Add("--thread");
         start.ArgumentList.Add(threadId);
         start.ArgumentList.Add("--message");
         start.ArgumentList.Add(prompt);
-        start.ArgumentList.Add("--resume");
+
         var configuredSocket = Environment.GetEnvironmentVariable("ANSIGHT_CODEX_SOCKET");
 
         if (!string.IsNullOrWhiteSpace(configuredSocket))

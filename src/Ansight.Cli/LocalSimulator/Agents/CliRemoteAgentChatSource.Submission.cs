@@ -146,7 +146,9 @@ internal sealed partial class CliRemoteAgentChatSource
                 }
             });
 
-            if (request.QueueAfterCurrent || task.Status == "notLoaded")
+            var isUnloaded = task.Status == "notLoaded";
+
+            if (request.QueueAfterCurrent || isUnloaded)
             {
                 receipt = SaveReceipt(receipt with { Link = receipt.Link with { Status = "dispatching" } });
                 await connections.QueueAsync(task.SessionId, evidence.Prompt, cancellationToken).ConfigureAwait(false);
@@ -155,9 +157,9 @@ internal sealed partial class CliRemoteAgentChatSource
                     Link = receipt.Link with
                     {
                         Status = "queued",
-                        StatusMessage = request.QueueAfterCurrent
-                            ? "Annotation queued in Codex. It will run after the current work finishes."
-                            : "Annotations queued in the original Codex task. Codex will continue it when available.",
+                        StatusMessage = isUnloaded
+                            ? "Annotations queued in Codex. Open the original chat if delivery stays queued."
+                            : "Annotations queued in Codex. They will run when the chat is ready.",
                         UpdatedAtUtc = DateTimeOffset.UtcNow
                     }
                 };
