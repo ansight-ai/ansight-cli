@@ -52,6 +52,11 @@ internal sealed class CliRemoteAppInspectionSource : IRemoteAppInspectionSource
                 operations.Add("files.download");
             }
 
+            if (toolIDs.Contains("files.begin_binary_download"))
+            {
+                operations.Add("files.capture");
+            }
+
             foreach (var operation in CliRemoteFileMutation.operations)
             {
                 if (toolIDs.Contains(operation.Value) && toolIDs.Contains("files.download_file"))
@@ -98,6 +103,47 @@ internal sealed class CliRemoteAppInspectionSource : IRemoteAppInspectionSource
         if (request.Operation == "artifacts.download")
         {
             return await DownloadArtifactAsync(snapshot, arguments, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (request.Operation == "files.capture")
+        {
+            var path = arguments["path"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return RemoteAppInspectionResult.Failure(HttpStatusCode.BadRequest, "A sandbox file path is required.");
+            }
+
+            var capture = await runtime.AppTools.CallForCompanionAsync(request.SessionId, "files.begin_binary_download",
+                new JsonObject
+                {
+                    ["root"] = arguments["root"]?.DeepClone(),
+                    ["path"] = path,
+                    ["chunkBytes"] = 64 * 1024,
+                    ["downloadId"] = $"companion-file-{Guid.NewGuid():N}"
+                }, request.RequestId, cancellationToken).ConfigureAwait(false);
+            if (!capture.Success || string.IsNullOrWhiteSpace(capture.ArtifactSnapshotId))
+            {
+                return RemoteAppInspectionResult.Failure(HttpStatusCode.BadGateway,
+                    capture.Success ? "The file transfer did not produce a retained file." : capture.Message);
+            }
+
+            var capturedSession = await runtime.Sessions.LoadSnapshotAsync(request.SessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var artifact = capturedSession?.ArtifactSnapshots.FirstOrDefault(item => item.SnapshotId == capture.ArtifactSnapshotId);
+            var entries = artifact?.Entries.Where(entry => entry.Kind != "directory").ToArray();
+            if (entries is not { Length: 1 })
+            {
+                return RemoteAppInspectionResult.Failure(HttpStatusCode.BadGateway, "The file transfer did not produce exactly one file.");
+            }
+
+            var entry = entries[0];
+            return Json(new
+            {
+                rootAlias = capture.ArtifactSnapshotId,
+                relativePath = entry.SnapshotRelativePath,
+                entry.Name,
+                entry.SizeBytes,
+                entry.MimeType
+            });
         }
 
         if (CliRemoteFileMutation.operations.ContainsKey(request.Operation))

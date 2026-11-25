@@ -1152,6 +1152,16 @@ public sealed partial class HeadlessHostDeviceDriver :
         string deviceIdentifier,
         CancellationToken cancellationToken)
     {
+        // wm size reports natural/override dimensions, not the currently rotated
+        // coordinate space used by uiautomator and input tap/swipe.
+        var viewport = await CreateAdbClient().RunAsync(
+            ["-s", deviceIdentifier, "shell", "dumpsys", "input"],
+            cancellationToken).ConfigureAwait(false);
+        if (viewport.IsSuccess && AndroidDisplayViewport.TryRead(viewport.StandardOutput, out var logicalSize))
+        {
+            return logicalSize;
+        }
+
         var result = await CreateAdbClient().RunAsync(
             ["-s", deviceIdentifier, "shell", "wm", "size"],
             cancellationToken).ConfigureAwait(false);
