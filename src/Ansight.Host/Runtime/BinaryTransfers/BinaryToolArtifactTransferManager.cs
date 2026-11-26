@@ -362,6 +362,21 @@ internal sealed class BinaryToolArtifactTransferManager : IDisposable
     {
         descriptor = null;
 
+        // Native Android keeps sandbox metadata on the result and transport
+        // metadata under transfer. Normalize the recognized file descriptor so
+        // retention, completion and cancellation use the same response identity.
+        if (string.Equals(toolId, FilesBeginBinaryDownloadToolId, StringComparison.Ordinal)
+            && result["transfer"] is JsonObject transfer
+            && result["deliveryMode"] is null
+            && string.Equals(ReadOptionalString(transfer, "deliveryMode"), "websocket_binary", StringComparison.Ordinal)
+            && string.Equals(ReadOptionalString(transfer, "wireProtocol"), BinaryFileTransferProtocol.ProtocolName, StringComparison.Ordinal))
+        {
+            foreach (var property in transfer)
+            {
+                result[property.Key] = property.Value?.DeepClone();
+            }
+        }
+
         if (
             !string.Equals(ReadOptionalString(result, "deliveryMode"), "websocket_binary", StringComparison.Ordinal) ||
             !string.Equals(ReadOptionalString(result, "wireProtocol"), BinaryFileTransferProtocol.ProtocolName, StringComparison.Ordinal))

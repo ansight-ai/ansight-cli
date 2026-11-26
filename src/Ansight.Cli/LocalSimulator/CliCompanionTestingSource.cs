@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ansight.Cli.Commands.App;
+using Ansight.Cli.Commands.Test;
 using Ansight.Host;
 using Ansight.Host.Workspaces;
 using Ansight.RemoteSimulator.Core.Devices;
@@ -215,7 +216,7 @@ internal sealed partial class CliCompanionTestingSource : IRemoteDeviceTestingSo
 
             var workspacePath = Path.Combine(runtime.BaseFolderPath, "companion-executions");
             preparation = await gateway.PrepareAsync(new WorkspaceTestRunPreparationRequest(
-                null, workspacePath, testId, testName, run.AppId, "gpt-6-luna",
+                WorkspaceTestTeamOptions.Resolve(CliArguments.Parse([])), workspacePath, testId, testName, run.AppId, "gpt-6-luna",
                 run.ExecutionType == "test" ? 1 : 0, instructions.Length, IsDefinition: false), token).ConfigureAwait(false);
 
             if (!preparation.IsSuccess)

@@ -252,8 +252,10 @@ public sealed class BinaryToolArtifactTransferManagerTests
         }
     }
 
-    [Fact]
-    public async Task FilesBeginBinaryDownload_BinaryFrames_CompletesRetainedArtifact()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FilesBeginBinaryDownload_BinaryFrames_CompletesRetainedArtifact(bool androidNestedTransfer)
     {
         using var manager = new BinaryToolArtifactTransferManager();
         var transferId = Guid.Parse("abcdef12-3456-7890-abcd-ef1234567890");
@@ -282,6 +284,18 @@ public sealed class BinaryToolArtifactTransferManagerTests
                 }
             }
         };
+
+        if (androidNestedTransfer)
+        {
+            var result = (JsonObject)envelope.Payload!["result"]!;
+            var transfer = new JsonObject();
+            foreach (var key in new[] { "fileName", "mimeType", "sizeBytes", "transferId", "deliveryMode", "wireProtocol", "status" })
+            {
+                transfer[key] = result[key]?.DeepClone();
+                result.Remove(key);
+            }
+            result["transfer"] = transfer;
+        }
 
         var registration = manager.TryRegister("sess_1", "app_1", envelope);
 
