@@ -934,7 +934,7 @@ internal static partial class HostCommands
            Important options:
              --pair <app-id>                  Start the host and show a terminal pairing QR
              --runner                         Poll and execute remote jobs in this resident host
-             --poll-seconds <n>               Runner queue interval; default 5 seconds
+             --poll-seconds <n>               Runner queue interval; default 60 seconds
              --skip-build-preflight           Skip the runner's repeated post-sync build check
              --name <name>                    Name the generated enrollment invitation
              --duration <duration>            Pairing lifetime, for example 15m or 1h
