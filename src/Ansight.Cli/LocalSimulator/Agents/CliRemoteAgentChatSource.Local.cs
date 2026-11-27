@@ -164,7 +164,10 @@ internal sealed partial class CliRemoteAgentChatSource
             var task = RunClaudeAsync(receipt, evidence, request.StartNewTask);
             localAgentTasks[receipt.Link.LinkId] = task;
             if (task.IsCompleted)
+            {
                 localAgentTasks.TryRemove(receipt.Link.LinkId, out _);
+            }
+
             return ToSubmission(receipt.Link);
         }
         catch (Exception error) when (!cancellationToken.IsCancellationRequested)

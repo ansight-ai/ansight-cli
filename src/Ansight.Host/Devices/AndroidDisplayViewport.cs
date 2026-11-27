@@ -11,13 +11,20 @@ internal static partial class AndroidDisplayViewport
         {
             if (!line.Contains("Viewport", StringComparison.Ordinal)
                 || line.Contains("isActive=[0]", StringComparison.Ordinal))
+            {
                 continue;
+            }
 
             var match = DefaultViewportPattern().Match(line);
-            if (match.Success
-                && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var width)
-                && int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var height)
-                && width > 0 && height > 0)
+            var width = 0;
+            var height = 0;
+            var hasValidDimensions = match.Success
+                && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out width)
+                && int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out height)
+                && width > 0
+                && height > 0;
+
+            if (hasValidDimensions)
             {
                 size = new HeadlessAndroidDisplaySize(width, height);
                 return true;

@@ -167,7 +167,11 @@ internal sealed class ScriptedCompanionCodex : ICodexRpcConnectionFactory, ICode
             throw DeliveryError;
         }
 
-        if (method == "thread/unsubscribe") Status = "notLoaded";
+        if (method == "thread/unsubscribe")
+        {
+            Status = "notLoaded";
+        }
+
         var project = new { id = "project-1", name = "My app", roots = new[] { new { path = root } } };
         object result = method switch
         {

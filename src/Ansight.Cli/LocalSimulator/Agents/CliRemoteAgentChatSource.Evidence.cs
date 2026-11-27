@@ -161,7 +161,10 @@ internal sealed partial class CliRemoteAgentChatSource
                 prompt.AppendLine(string.IsNullOrWhiteSpace(recording.Transcript) ? "[No speech recorded]" : recording.Transcript);
                 prompt.AppendLine("Timed speech (reference segments, not separate requests):");
                 foreach (var speech in recording.Speech)
+                {
                     prompt.AppendLine($"[{speech.StartUtc:O} – {speech.EndUtc:O}] {speech.AnnotationId}: {speech.Text}");
+                }
+
                 prompt.AppendLine("Linked screen markings:");
                 foreach (var marking in recording.Markings)
                 {

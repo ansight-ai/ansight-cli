@@ -106,7 +106,11 @@ public sealed class CompanionExplorationTests
             new SessionAnnotation { AnnotationId = "screen-wiggle", Source = "companion.exploration", CaptureGroupId = "batch-1",
                 StartUtc = start.AddSeconds(3), EndUtc = start.AddSeconds(4), Label = "Screen marking",
                 Geometry = context.Session.Annotations[0].Geometry }
-        }) Assert.True(context.Runtime.SessionEditing.UpsertAnnotation(context.Session.SessionId, annotation).IsSuccess);
+        })
+        {
+            Assert.True(context.Runtime.SessionEditing.UpsertAnnotation(context.Session.SessionId, annotation).IsSuccess);
+        }
+
         var result = await context.Source.SubmitAnnotationBatchAsync(context.Submission() with
             { AnnotationIds = ["speech-after", "screen-wiggle", "speech-before"] });
         Assert.True(result.IsSuccess, result.Message);

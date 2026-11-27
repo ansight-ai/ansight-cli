@@ -9,15 +9,28 @@ internal sealed class CodexRpcConnectionFactory : ICodexRpcConnectionFactory
 
     public async Task OpenDesktopAsync(string threadId, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(threadId, out var id)) throw new IOException("Codex returned an invalid chat ID.");
+        if (!Guid.TryParse(threadId, out var id))
+        {
+            throw new IOException("Codex returned an invalid chat ID.");
+        }
+
         var url = $"codex://threads/{id:D}";
         var start = OperatingSystem.IsMacOS() ? new ProcessStartInfo("/usr/bin/open")
             : OperatingSystem.IsWindows() ? new ProcessStartInfo(url) { UseShellExecute = true }
             : new ProcessStartInfo("xdg-open");
-        if (!OperatingSystem.IsWindows()) start.ArgumentList.Add(url);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            start.ArgumentList.Add(url);
+        }
+
         using var process = Process.Start(start) ?? throw new IOException("Could not open the chat in Codex.");
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        if (process.ExitCode != 0) throw new IOException("The request is queued. Open its chat in Codex to continue.");
+
+        if (process.ExitCode != 0)
+        {
+            throw new IOException("The request is queued. Open its chat in Codex to continue.");
+        }
     }
 
     internal static bool ShouldResumeQueuedThread(string? configuredSocket) => !string.IsNullOrWhiteSpace(configuredSocket);
@@ -40,7 +53,10 @@ internal sealed class CodexRpcConnectionFactory : ICodexRpcConnectionFactory
         var configuredSocket = Environment.GetEnvironmentVariable("ANSIGHT_CODEX_SOCKET");
         // The desktop owns default chats and their approval UI. Resuming on the
         // standalone daemon would lock those chats away from the desktop.
-        if (ShouldResumeQueuedThread(configuredSocket)) start.ArgumentList.Add("--resume");
+        if (ShouldResumeQueuedThread(configuredSocket))
+        {
+            start.ArgumentList.Add("--resume");
+        }
 
         if (!string.IsNullOrWhiteSpace(configuredSocket))
         {

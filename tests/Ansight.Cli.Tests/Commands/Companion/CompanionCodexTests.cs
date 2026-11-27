@@ -21,7 +21,12 @@ public sealed class CompanionCodexTests
         Assert.DoesNotContain("turn/start", methods);
         Assert.DoesNotContain("turn/steer", methods);
         Assert.True(methods.IndexOf("queue") < methods.IndexOf("desktop/open"));
-        if (status != "notLoaded") Assert.True(methods.IndexOf("thread/unsubscribe") < methods.IndexOf("queue"));
+
+        if (status != "notLoaded")
+        {
+            Assert.True(methods.IndexOf("thread/unsubscribe") < methods.IndexOf("queue"));
+        }
+
         if (newChat)
         {
             var start = Assert.Single(context.Codex.Calls, c => c.Method == "thread/start");

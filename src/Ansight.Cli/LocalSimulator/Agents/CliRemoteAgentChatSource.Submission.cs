@@ -156,7 +156,10 @@ internal sealed partial class CliRemoteAgentChatSource
                 // Never interrupt an existing run. Only release idle or newly-created
                 // threads before asking the desktop to consume the queued request.
                 if (!request.StartNewTask && task.Status == "active")
+                {
                     throw new InvalidOperationException("This chat is still running outside the desktop. Open it in its current app before sending more work.");
+                }
+
                 if (!request.StartNewTask)
                 {
                     await connection.CallAsync("thread/resume", new
@@ -170,13 +173,26 @@ internal sealed partial class CliRemoteAgentChatSource
                 for (var attempt = 0; attempt < 30; attempt++)
                 {
                     var state = await connection.CallAsync("thread/read", new { threadId = task.SessionId }, cancellationToken).ConfigureAwait(false);
-                    if (ParseThread(state.GetProperty("thread")).Status == "notLoaded") { released = true; break; }
+                    if (ParseThread(state.GetProperty("thread")).Status == "notLoaded")
+                    {
+                        released = true;
+                        break;
+                    }
+
                     await Task.Delay(100, cancellationToken).ConfigureAwait(false);
                 }
-                if (!released) throw new IOException("Codex has not released this chat to the desktop yet. No request was sent; retry shortly.");
+
+                if (!released)
+                {
+                    throw new IOException("Codex has not released this chat to the desktop yet. No request was sent; retry shortly.");
+                }
             }
 
-            if (connections.UsesDesktopDelivery || request.QueueAfterCurrent || isUnloaded)
+            var shouldQueueDelivery = connections.UsesDesktopDelivery
+                || request.QueueAfterCurrent
+                || isUnloaded;
+
+            if (shouldQueueDelivery)
             {
                 receipt = SaveReceipt(receipt with { Link = receipt.Link with { Status = "dispatching" } });
                 await connections.QueueAsync(task.SessionId, evidence.Prompt, cancellationToken).ConfigureAwait(false);

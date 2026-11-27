@@ -109,13 +109,37 @@ public sealed class ScrcpyVideoStreamTests
         using var wire = new MemoryStream();
         wire.Write(new byte[] { 0x68, 0x32, 0x36, 0x34 });
         WriteSession(wire, 460, 1024);
-        using (var config = CreatePacketStream(1UL << 62, [103, 104])) config.CopyTo(wire);
-        using (var key = CreatePacketStream((1UL << 61) | 123, [101])) key.CopyTo(wire);
-        using (var delta = CreatePacketStream(456, [1])) delta.CopyTo(wire);
+        using (var config = CreatePacketStream(1UL << 62, [103, 104]))
+        {
+            config.CopyTo(wire);
+        }
+
+        using (var key = CreatePacketStream((1UL << 61) | 123, [101]))
+        {
+            key.CopyTo(wire);
+        }
+
+        using (var delta = CreatePacketStream(456, [1]))
+        {
+            delta.CopyTo(wire);
+        }
+
         WriteSession(wire, 1024, 460);
-        using (var key = CreatePacketStream((1UL << 61) | 789, [102])) key.CopyTo(wire);
-        using (var config = CreatePacketStream(1UL << 62, [110, 111])) config.CopyTo(wire);
-        using (var key = CreatePacketStream((1UL << 61) | 999, [112])) key.CopyTo(wire);
+        using (var key = CreatePacketStream((1UL << 61) | 789, [102]))
+        {
+            key.CopyTo(wire);
+        }
+
+        using (var config = CreatePacketStream(1UL << 62, [110, 111]))
+        {
+            config.CopyTo(wire);
+        }
+
+        using (var key = CreatePacketStream((1UL << 61) | 999, [112]))
+        {
+            key.CopyTo(wire);
+        }
+
         wire.Position = 0;
         var header = new byte[12];
         await wire.ReadExactlyAsync(header);
