@@ -16,6 +16,19 @@ public sealed class DeviceCommandsTests
         Device("ios-phone", DevicePlatforms.Ios, "physical", "connected", isBooted: true, DeviceFormFactors.Tablet)
     ];
 
+    [Fact]
+    public void RenderInventory_IncludesPersistedUsageTimes()
+    {
+        var timestamp = DateTimeOffset.Parse("2026-11-27T01:00:00Z");
+        var device = devices[3] with { LastBootedUtc = timestamp, LastUsedUtc = timestamp.AddMinutes(5) };
+        var inventory = new DeviceInventory([], [device], []);
+
+        var rendered = DeviceCommands.RenderInventory(inventory, true, null, []);
+
+        Assert.Contains("Last booted: 2026-11-27 01:00:00Z", rendered);
+        Assert.Contains("Last used: 2026-11-27 01:05:00Z", rendered);
+    }
+
     [Theory]
     [InlineData("device")]
     [InlineData("devices")]

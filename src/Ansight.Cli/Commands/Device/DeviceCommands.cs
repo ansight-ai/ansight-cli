@@ -704,7 +704,9 @@ internal static class DeviceCommands
                     device.Kind,
                     device.Identifier,
                     device.State,
-                    device.Name
+                    device.Name,
+                    $"Last booted: {device.LastBootedUtc?.ToString("u") ?? "unknown"}",
+                    $"Last used: {device.LastUsedUtc?.ToString("u") ?? "never"}"
                 };
 
                 if (matchesByDeviceIdentifier.TryGetValue(device.Identifier, out var match))

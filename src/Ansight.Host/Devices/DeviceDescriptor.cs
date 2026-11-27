@@ -10,6 +10,10 @@ public sealed record DeviceDescriptor(
     bool IsAvailable,
     string Kind)
 {
+    public DateTimeOffset? LastBootedUtc { get; init; }
+
+    public DateTimeOffset? LastUsedUtc { get; init; }
+
     public bool IsPhysical => DeviceKinds.IsPhysical(Kind);
 
     public bool IsVirtual => DeviceKinds.IsVirtual(Kind);

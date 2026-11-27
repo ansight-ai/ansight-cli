@@ -6,12 +6,15 @@ public sealed class RoutedSimulatorInputSink : ISimulatorInputSink
 {
     private readonly IRemoteRuntimeSource runtimeSource;
     private readonly IReadOnlyDictionary<string, ISimulatorInputSink> sinksByPlatform;
+    private readonly Action<RemoteRuntimeDevice>? inputDelivered;
     private bool disposed;
 
     public RoutedSimulatorInputSink(
         IRemoteRuntimeSource runtimeSource,
-        IReadOnlyDictionary<string, ISimulatorInputSink> sinksByPlatform)
+        IReadOnlyDictionary<string, ISimulatorInputSink> sinksByPlatform,
+        Action<RemoteRuntimeDevice>? inputDelivered = null)
     {
+        this.inputDelivered = inputDelivered;
         this.runtimeSource = runtimeSource ?? throw new ArgumentNullException(nameof(runtimeSource));
         this.sinksByPlatform = sinksByPlatform ?? throw new ArgumentNullException(nameof(sinksByPlatform));
     }
@@ -29,22 +32,39 @@ public sealed class RoutedSimulatorInputSink : ISimulatorInputSink
     public Task<InputDeliveryResult> SendAsync(
         RemotePointerEvent pointerEvent,
         CancellationToken cancellationToken = default)
-        => ResolveSink(pointerEvent.DeviceUdid).SendAsync(pointerEvent, cancellationToken);
+        => TrackDeliveryAsync(pointerEvent.DeviceUdid, ResolveSink(pointerEvent.DeviceUdid).SendAsync(pointerEvent, cancellationToken));
 
     public Task<InputDeliveryResult> SendButtonAsync(
         RemoteButtonEvent buttonEvent,
         CancellationToken cancellationToken = default)
-        => ResolveSink(buttonEvent.DeviceUdid).SendButtonAsync(buttonEvent, cancellationToken);
+        => TrackDeliveryAsync(buttonEvent.DeviceUdid, ResolveSink(buttonEvent.DeviceUdid).SendButtonAsync(buttonEvent, cancellationToken));
 
     public Task<InputDeliveryResult> SendKeyAsync(
         RemoteKeyEvent keyEvent,
         CancellationToken cancellationToken = default)
-        => ResolveSink(keyEvent.DeviceUdid).SendKeyAsync(keyEvent, cancellationToken);
+        => TrackDeliveryAsync(keyEvent.DeviceUdid, ResolveSink(keyEvent.DeviceUdid).SendKeyAsync(keyEvent, cancellationToken));
 
     public Task<InputDeliveryResult> SendTextAsync(
         RemoteTextEvent textEvent,
         CancellationToken cancellationToken = default)
-        => ResolveSink(textEvent.DeviceUdid).SendTextAsync(textEvent, cancellationToken);
+        => TrackDeliveryAsync(textEvent.DeviceUdid, ResolveSink(textEvent.DeviceUdid).SendTextAsync(textEvent, cancellationToken));
+
+    private async Task<InputDeliveryResult> TrackDeliveryAsync(string identifier, Task<InputDeliveryResult> delivery)
+    {
+        var result = await delivery.ConfigureAwait(false);
+
+        if (result.IsSuccess && inputDelivered is not null)
+        {
+            var device = runtimeSource.Current.Devices.FirstOrDefault(device => string.Equals(device.Identifier, identifier, StringComparison.OrdinalIgnoreCase));
+
+            if (device is not null)
+            {
+                inputDelivered(device);
+            }
+        }
+
+        return result;
+    }
 
     public async ValueTask DisposeAsync()
     {

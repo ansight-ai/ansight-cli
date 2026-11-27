@@ -12,4 +12,5 @@ public sealed record RemoteRuntimeDevice(
     int? DisplayWidth = null,
     int? DisplayHeight = null,
     DateTimeOffset? LastBootedUtc = null,
-    string? BootIdentifier = null);
+    string? BootIdentifier = null,
+    DateTimeOffset? LastUsedUtc = null);

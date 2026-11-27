@@ -95,7 +95,9 @@ public sealed partial class HeadlessHostDeviceDriver :
                 device.State,
                 device.IsBooted,
                 applications,
-                device.Kind));
+                device.Kind,
+                device.LastBootedUtc,
+                device.LastUsedUtc));
         }
 
         return results;
@@ -562,7 +564,8 @@ public sealed partial class HeadlessHostDeviceDriver :
             static (device, _) => Task.FromResult(Success(
                 device.Platform == DevicePlatforms.Android ? AndroidBackend : IosBackend,
                 "The device input surface is ready.")),
-            cancellationToken);
+            cancellationToken,
+            recordUsage: false);
     }
 
     public Task<UiInputResult> TapAsync(
@@ -864,7 +867,8 @@ public sealed partial class HeadlessHostDeviceDriver :
     private async Task<UiInputResult> ExecuteInputAsync(
         string deviceIdentifier,
         Func<DeviceDescriptor, CancellationToken, Task<UiInputResult>> action,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool recordUsage = true)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
@@ -904,7 +908,14 @@ public sealed partial class HeadlessHostDeviceDriver :
                     .ConfigureAwait(false);
             }
 
-            return await action(device, cancellationToken).ConfigureAwait(false);
+            var result = await action(device, cancellationToken).ConfigureAwait(false);
+
+            if (recordUsage && result.IsSuccess)
+            {
+                await devices.RecordUsedAsync(device.Platform, device.Identifier).ConfigureAwait(false);
+            }
+
+            return result;
         }
         catch (Exception exception) when (IsSimulatorHidFailure(exception))
         {

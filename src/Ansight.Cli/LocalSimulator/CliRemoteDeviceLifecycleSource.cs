@@ -21,7 +21,9 @@ internal sealed class CliRemoteDeviceLifecycleSource : IRemoteDeviceInventorySou
                 device.Identifier,
                 device.Name,
                 device.Runtime,
-                device.Platform))
+                device.Platform,
+                device.LastBootedUtc,
+                device.LastUsedUtc))
             .ToArray();
 
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<RemoteInstalledApplication>>> ListInstalledApplicationsAsync(
@@ -47,7 +49,9 @@ internal sealed class CliRemoteDeviceLifecycleSource : IRemoteDeviceInventorySou
                     device.Identifier,
                     device.Name,
                     device.Runtime,
-                    device.Platform))
+                    device.Platform,
+                    device.LastBootedUtc,
+                    device.LastUsedUtc))
                 .ToArray(),
             devices.Where(static device => device.IsBooted)
                 .ToDictionary(

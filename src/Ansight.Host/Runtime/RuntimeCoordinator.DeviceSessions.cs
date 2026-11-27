@@ -266,6 +266,7 @@ public sealed partial class RuntimeCoordinator
             runtimeState.PublishRuntimeEvent(new RuntimeSessionCaptureEvent(DateTimeOffset.UtcNow,
                 RuntimeSessionCaptureEventKind.Started, sessionId, session.AppId, session.ClientName, "Capturing", "Host device capture started."));
             HostSessionEvents.Publish(runtimeState, sessionId, "run.started", "host.run.started");
+            await Devices.RecordUsedAsync(target.Platform, target.DeviceIdentifier).ConfigureAwait(false);
 
             if (watch is not null)
             {

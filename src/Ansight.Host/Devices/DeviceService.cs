@@ -16,6 +16,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     private const string IosEnrollmentEnvironmentVariable = "ANSIGHT_ENROLLMENT_PAYLOAD";
     internal const string IosSimulatorHidCapabilityName = "ios.simulator-hid";
     private readonly IosAudioRouteRecovery? iosAudioRecovery;
+    private readonly DeviceUsageStore usage;
     private readonly string? configuredAdbPath;
     private readonly string? configuredXcodePath;
     private readonly Task<IosDeviceCapabilities> iosDeviceCapabilitiesTask;
@@ -31,10 +32,14 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
     }
 
-    internal DeviceService(RuntimeOptions options, IosAudioRouteRecovery iosAudioRecovery)
+    internal DeviceService(
+        RuntimeOptions options,
+        IosAudioRouteRecovery iosAudioRecovery,
+        IApplicationPaths applicationPaths)
         : this(options)
     {
         this.iosAudioRecovery = iosAudioRecovery;
+        usage = new DeviceUsageStore(applicationPaths.ApplicationDataPath);
     }
 
     internal DeviceService(
@@ -43,6 +48,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(simulatorHidProbe);
+        usage = CreateUsageStore(options);
         configuredAdbPath = NormalizeOptionalPath(options.AdbPath);
         configuredXcodePath = NormalizeOptionalPath(options.XcodePath);
         iosDeviceCapabilitiesTask = ResolveIosDeviceCapabilitiesAsync(
@@ -56,12 +62,15 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(simulatorHidCapability);
+        usage = CreateUsageStore(options);
         configuredAdbPath = NormalizeOptionalPath(options.AdbPath);
         configuredXcodePath = NormalizeOptionalPath(options.XcodePath);
         iosDeviceCapabilitiesTask = Task.FromResult(new IosDeviceCapabilities(
             SimCtlToolResolution.NotFound("SimCtl resolution was not supplied by the test."),
             simulatorHidCapability));
     }
+
+    public DeviceUsageStore Usage => usage;
 
     public async Task<IReadOnlyList<DeviceCapability>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
@@ -303,7 +312,8 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                     device.IsAvailable,
                     "simulator")
                 {
-                    FormFactor = ResolveAppleFormFactor(device.Name, productType: null)
+                    FormFactor = ResolveAppleFormFactor(device.Name, productType: null),
+                    LastBootedUtc = device.LastBootedUtc
                 }));
             }
             catch (Exception exception) when (exception is IOException or InvalidOperationException)
@@ -345,6 +355,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         }
 
         var orderedDevices = devices
+            .Select(device => WithUsageHistory(device, warnings))
             .OrderBy(static device => device.Platform, StringComparer.Ordinal)
             .ThenByDescending(static device => device.IsBooted)
             .ThenBy(static device => device.Name, StringComparer.OrdinalIgnoreCase)
@@ -417,6 +428,8 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
                 var serial = await CreateAdbClient().WaitForEmulatorBootAsync(
                     normalizedIdentifier, TimeSpan.FromMinutes(2), cancellationToken).ConfigureAwait(false);
 
+                Usage.Update(normalizedPlatform, normalizedIdentifier, new DeviceUsageHistory(LastBootedUtc: DateTimeOffset.UtcNow));
+
                 return Success(
                     "start",
                     normalizedPlatform,
@@ -435,6 +448,8 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
 
             var simCtl = await CreateSimCtlClientAsync(cancellationToken).ConfigureAwait(false);
             await StartSimulatorAsync(simCtl, normalizedIdentifier, headless, cancellationToken).ConfigureAwait(false);
+
+            Usage.Update(normalizedPlatform, normalizedIdentifier, new DeviceUsageHistory(LastBootedUtc: DateTimeOffset.UtcNow));
 
             return Success("start", normalizedPlatform, normalizedIdentifier, "iOS Simulator booted.");
         }
@@ -1310,6 +1325,7 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
             }
 
             await File.WriteAllBytesAsync(fullOutputPath, bytes, cancellationToken).ConfigureAwait(false);
+            await RecordUsedAsync(normalizedPlatform, normalizedIdentifier).ConfigureAwait(false);
 
             return Success(
                 "screenshot",
@@ -1364,11 +1380,74 @@ public sealed class DeviceService : IDeviceService, IDeviceLocationService, IDev
         {
             var message = await action(normalizedPlatform, normalizedIdentifier).ConfigureAwait(false);
 
+            if (operation is "launch-app" or "tap" or "swipe" or "type-text" or "press-button")
+            {
+                await RecordUsedAsync(normalizedPlatform, normalizedIdentifier).ConfigureAwait(false);
+            }
+
             return Success(operation, normalizedPlatform, normalizedIdentifier, message);
         }
         catch (Exception exception) when (IsOperationFailure(exception))
         {
             return Failure(operation, normalizedPlatform, normalizedIdentifier, exception.Message);
+        }
+    }
+
+    private static DeviceUsageStore CreateUsageStore(RuntimeOptions options)
+    {
+        var basePath = string.IsNullOrWhiteSpace(options.BaseFolderPath)
+            ? ApplicationPathsFactory.ResolveDefaultBaseFolderPath()
+            : Path.GetFullPath(options.BaseFolderPath.Trim());
+
+        return new DeviceUsageStore(Path.Combine(basePath, "data"));
+    }
+
+    private DeviceDescriptor WithUsageHistory(DeviceDescriptor device, List<string> warnings)
+    {
+        var identifier = device.Platform == DevicePlatforms.Android && device.IsVirtual
+            ? device.Name
+            : device.Identifier;
+        var history = Usage.Update(device.Platform, identifier, new DeviceUsageHistory(device.LastBootedUtc));
+
+        if (Usage.Warning is { } warning)
+        {
+            warnings.Add(warning);
+        }
+
+        return device with { LastBootedUtc = history.LastBootedUtc, LastUsedUtc = history.LastUsedUtc };
+    }
+
+    public async Task RecordUsedAsync(string platform, string deviceIdentifier)
+    {
+        var timestamp = DateTimeOffset.UtcNow;
+        var identifier = deviceIdentifier;
+
+        if (platform == DevicePlatforms.Android && deviceIdentifier.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                identifier = await CreateAdbClient().GetEmulatorAvdNameAsync(deviceIdentifier, timeout.Token)
+                    .ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(identifier))
+                {
+                    return;
+                }
+            }
+            catch (Exception exception) when (IsOperationFailure(exception) || exception is OperationCanceledException)
+            {
+                Ansight.Infrastructure.Logging.Logger.Create().Warning($"Could not resolve device usage identity: {exception.Message}");
+
+                return;
+            }
+        }
+
+        Usage.Update(platform, identifier, new DeviceUsageHistory(LastUsedUtc: timestamp));
+
+        if (Usage.Warning is { } warning)
+        {
+            Ansight.Infrastructure.Logging.Logger.Create().Warning(warning);
         }
     }
 

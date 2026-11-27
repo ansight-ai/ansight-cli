@@ -8,4 +8,6 @@ public sealed record DeviceLifecycleDevice(
     string State,
     bool IsBooted,
     IReadOnlyList<DeviceLifecycleApplication> InstalledApplications,
-    string Kind = DeviceKinds.Unknown);
+    string Kind = DeviceKinds.Unknown,
+    DateTimeOffset? LastBootedUtc = null,
+    DateTimeOffset? LastUsedUtc = null);

@@ -106,7 +106,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
             this.operationDispatcher,
             ApplicationPaths);
         Ui = new UiAutomationService((name, arguments, correlationId) => this.operationDispatcher.CallToolAsync(name, arguments, correlationId));
-        Devices = new DeviceService(hostRuntimeOptions, new IosAudioRouteRecovery(ApplicationPaths.ApplicationDataPath));
+        Devices = new DeviceService(hostRuntimeOptions, new IosAudioRouteRecovery(ApplicationPaths.ApplicationDataPath), ApplicationPaths);
         operationDispatcher.ConfigureDevicePermissions(Devices, hostRuntimeOptions);
         audioInjectionEngine = new AudioInjectionEngine(runtimeState, appToolBridge, Devices, hostRuntimeOptions, ApplicationPaths);
         operationDispatcher.ConfigureAudioInjection(audioInjectionEngine);
@@ -217,7 +217,7 @@ public sealed partial class RuntimeCoordinator : IAsyncDisposable, IDisposable
         UserPreferences = composition.Get<IUserPreferences>();
         SimulatorAgent = new SimulatorAgentService(encryptedStorage, operationDispatcher, ApplicationPaths);
         Ui = new UiAutomationService((name, arguments, correlationId) => operationDispatcher.CallToolAsync(name, arguments, correlationId));
-        Devices = new DeviceService(options, new IosAudioRouteRecovery(ApplicationPaths.ApplicationDataPath));
+        Devices = new DeviceService(options, new IosAudioRouteRecovery(ApplicationPaths.ApplicationDataPath), ApplicationPaths);
         operationDispatcher.ConfigureDevicePermissions(Devices, options);
         audioInjectionEngine = new AudioInjectionEngine(runtimeState, appToolBridge, Devices, options, ApplicationPaths);
         operationDispatcher.ConfigureAudioInjection(audioInjectionEngine);

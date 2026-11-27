@@ -52,6 +52,7 @@ public sealed partial class RuntimeCoordinator
 
     private void HandleSessionUpdated(object? sender, AppSessionSnapshot snapshot)
     {
+        RecordLiveDeviceUsage(snapshot);
         SessionUpdated?.Invoke(this, snapshot);
     }
 

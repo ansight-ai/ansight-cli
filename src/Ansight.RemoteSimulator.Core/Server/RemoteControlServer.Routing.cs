@@ -918,6 +918,7 @@ public sealed partial class RemoteControlServer
             }
 
             var frame = await frameSource.CaptureAsync(deviceUdid, cancellationToken).ConfigureAwait(false);
+            deviceViewed?.Invoke(deviceUdid);
             await WriteResponseAsync(
                 stream,
                 HttpStatusCode.OK,

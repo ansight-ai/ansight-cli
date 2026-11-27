@@ -211,11 +211,11 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             throw new InvalidOperationException(string.Join(' ', startupMessages));
         }
 
-        var runtimeSource = runtimeSources.Count == 1
-            ? runtimeSources[0]
-            : new CompositeRemoteRuntimeSource(runtimeSources);
+        var runtimeSource = new CliDeviceUsageRuntimeSource(
+            runtimeSources.Count == 1 ? runtimeSources[0] : new CompositeRemoteRuntimeSource(runtimeSources),
+            runtime.Devices.Usage);
         var frameSource = new RoutedSimulatorFrameSource(runtimeSource, frameSources);
-        inputSink = new RoutedSimulatorInputSink(runtimeSource, inputSinks);
+        inputSink = new RoutedSimulatorInputSink(runtimeSource, inputSinks, runtimeSource.RecordUse);
 
         var hasWebRtcBackend = iosWebRtcFactory is not null || androidWebRtcFactory is not null;
         var webRtcFactory = hasWebRtcBackend
@@ -242,7 +242,8 @@ internal sealed class CliLocalSimulatorHost : IAsyncDisposable
             appInspectionSource: new CliRemoteAppInspectionSource(runtime, annotationSource),
             agentChatSource: runtime.LocalAnnotationAgents as CliRemoteAgentChatSource ?? new CliRemoteAgentChatSource(runtime),
             deviceLocationSource: locationSource,
-            deviceTestingSource: testingSource);
+            deviceTestingSource: testingSource,
+            deviceViewed: runtimeSource.RecordViewed);
         await server.StartAsync(cancellationToken).ConfigureAwait(false);
         reportStatus($"Companion simulator host is ready on local port {server.Port}. {string.Join(' ', startupMessages)}");
 

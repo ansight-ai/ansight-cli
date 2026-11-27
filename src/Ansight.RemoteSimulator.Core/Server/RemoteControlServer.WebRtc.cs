@@ -112,6 +112,8 @@ public sealed partial class RemoteControlServer
                 throw new UnauthorizedAccessException("The host disconnected this companion. Connect again to start a new session.");
             }
 
+            deviceViewed?.Invoke(deviceUdid);
+
             return new OfferResponse(sessionId, answer.Type, TerminateSdp(answer.Sdp), framesPerSecond,
                 grantedScopes.OrderBy(scope => scope, StringComparer.Ordinal).ToArray());
         }
@@ -459,6 +461,7 @@ public sealed partial class RemoteControlServer
             if (string.Equals(request.Operation, "live_frame", StringComparison.Ordinal))
             {
                 var liveFrame = await frameSource.CaptureAsync(session.DeviceUdid).ConfigureAwait(false);
+                deviceViewed?.Invoke(session.DeviceUdid);
                 await SendRecordingResponseAsync(
                     session,
                     request.RequestId,
